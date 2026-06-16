@@ -1,0 +1,7 @@
+-r base.txt
+
+coverage>=7.5,<8.0
+factory-boy>=3.3,<4.0
+faker>=25.0,<38.0
+pytest>=8.2,<9.0
+pytest-django>=4.8,<5.0
