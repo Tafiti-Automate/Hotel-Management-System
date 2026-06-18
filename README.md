@@ -1,96 +1,57 @@
-# Hotel Management System
+# Hotel Management ERP — Frontend
 
-Django + DRF backend scaffold for a hotel management system focused on procurement,
-inventory, approvals, vendors, finance, reports, notifications, and audit logs.
+Implementation of the **Stock Management** module for a Hotel Management ERP. React + Vite +
+TypeScript, with a CSS-variable theming system (light/dark, 6 accent colors, airy/compact density)
+ported from the original design prototype.
 
-## Backend layout
-
-```text
-hotel_erp_backend/
-├── apps/
-├── core/
-├── tests/
-├── media/
-├── static/
-├── manage.py
-└── requirements/
-```
-
-## Quick start
+## Getting started
 
 ```bash
-cd hotel_erp_backend
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements/dev.txt
-python manage.py migrate
-python manage.py runserver
+npm install
+npm run dev      # start the dev server (Vite)
+npm run build    # type-check + production build
+npm run preview  # preview the production build
 ```
 
-Primary API routes are available under `/api/v1/`, including:
+The app starts on the **Login** screen — click **Sign in** (credentials are prefilled) to reach
+the module **Launchpad**, then open **Stock Management**.
 
-- `/api/v1/vendors/`
-- `/api/v1/items/`
-- `/api/v1/requisitions/`
-- `/api/v1/approvals/`
-- `/api/v1/purchase-orders/`
-- `/api/v1/grns/`
-- `/api/v1/stores/`
-- `/api/v1/inventory-balances/`
-- `/api/v1/stock-transfers/`
-- `/api/v1/stock-adjustments/`
-- `/api/v1/store-requisitions/`
-- `/api/v1/stock-issues/`
-- `/api/v1/store-returns/`
-- `/api/v1/stock-counts/`
-- `/api/v1/reorder-rules/`
-- `/api/v1/customers/`
-- `/api/v1/sales/`
-- `/api/v1/cashflows/`
-- `/api/v1/reports/stock-summary/`
-- `/api/v1/reports/low-stock/`
-- `/api/v1/reports/expiry/`
-- `/api/v1/reports/consumption/`
-- `/api/v1/reports/procurement-summary/`
-- `/api/v1/reports/stock-card/`
+## What's implemented
 
-Workflow actions:
+- **Login** → **Launchpad** (module picker) → **App shell**
+- **App shell**: collapsible-group sidebar with property switcher + user footer, and a header with
+  breadcrumb, search, theme toggle, appearance popover (accent / theme / density) and notifications.
+- **Dashboard**: Overview / Procurement / Inventory tabs, KPI cards with sparklines, procurement
+  pipeline, recent activity, spend-by-category bars, PO status donut, and pending approvals.
+- **List views** (config-driven): Items, Categories, Units of Measure, Store Locations, Stock
+  Balances, Stock Ledgers, Inventory Batches, Requisitions, Approvals, Purchase Orders, Goods
+  Receipts, Suppliers — with search, create/edit (slide-in drawer) and delete (confirm dialog).
+- **Detail view**: requisition / purchase-order documents with line items, approval decision panel
+  (approve / reject) and an activity timeline.
+- **Reports**: report gallery + report viewer with filters, totals and PDF/Excel export buttons.
+- Toast notifications for create / edit / delete / approval actions.
 
-- `POST /api/v1/requisitions/{id}/submit/`
-- `POST /api/v1/requisitions/{id}/cancel/`
-- `POST /api/v1/approvals/{id}/approve/`
-- `POST /api/v1/approvals/{id}/reject/`
-- `POST /api/v1/grns/{id}/post-to-inventory/`
-- `POST /api/v1/grn-items/{id}/post-to-inventory/`
-- `POST /api/v1/store-requisitions/{id}/submit/`
-- `POST /api/v1/store-requisitions/{id}/approve/`
-- `POST /api/v1/store-requisitions/{id}/reject/`
-- `POST /api/v1/stock-issues/{id}/apply/`
-- `POST /api/v1/store-returns/{id}/apply/`
-- `POST /api/v1/stock-counts/{id}/populate/`
-- `POST /api/v1/stock-counts/{id}/submit/`
-- `POST /api/v1/stock-counts/{id}/approve/`
-- `POST /api/v1/stock-counts/{id}/apply/`
-- `POST /api/v1/stock-transfers/{id}/apply/`
-- `POST /api/v1/stock-adjustments/{id}/apply/`
-- `POST /api/v1/supplier-returns/{id}/apply/`
-- `POST /api/v1/sales/{id}/complete/`
+## Project structure
 
-Purchase requisitions support both department requisitions and hotel-level
-purchase requisitions. Department requisitions require a requester and
-department; hotel-level purchase requisitions can be raised for the hotel as a
-whole and routed through approval stages before a purchase order is created.
-
-Operational stock management includes department store requisitions, stock
-issues, department returns, supplier returns, stock counts, reorder rules,
-expiry reporting, consumption reporting, and stock valuation reporting.
-
-Create or refresh the standard hotel roles with:
-
-```bash
-python manage.py setup_hotel_roles
+```
+src/
+  App.tsx               Root: applies theme vars, routes between top-level screens
+  main.tsx              Entry point + AppProvider
+  index.css             Global styles, fonts, icon helper, hover utilities
+  state/AppContext.tsx  All app state, routing and actions
+  lib/
+    data.ts             Seed data, entity config, report definitions, helpers
+    theme.ts            Theme variables, accent map, money() + status chip helpers
+    reports.ts          Report table builder
+  components/           Icon, Sidebar, Header, FormDrawer, ConfirmDialog, Toast
+  screens/              Login, Launchpad, AppShell, Dashboard, ListView,
+                        DetailView, Reports, ReportView
 ```
 
-The command creates groups such as System Administrator, General Manager,
-Procurement Manager, Finance Controller, Stores Manager, Store Keeper,
-Department Head, Receiving Officer, and Auditor.
+## Notes
+
+- Data is in-memory (seeded from the prototype); create / edit / delete and approvals mutate it
+  for the session and reset on reload. Swap `lib/data.ts` + the actions in `state/AppContext.tsx`
+  for a real API when wiring up a backend.
+- Monetary values are stored in the prototype's base unit and rendered as UGX (`money()` in
+  `lib/theme.ts`).

@@ -1,0 +1,120 @@
+// Theme + formatting helpers ported from the prototype (DCLogic).
+
+export type Mode = 'light' | 'dark'
+export type AccentName = 'Violet' | 'Blue' | 'Emerald' | 'Brass' | 'Rose' | 'Slate'
+export type Density = 'Airy' | 'Compact'
+
+export const accentMap: Record<AccentName, string> = {
+  Violet: '#6E56F0',
+  Blue: '#2E6BE6',
+  Emerald: '#0E9F6E',
+  Brass: '#B8893B',
+  Rose: '#E0476B',
+  Slate: '#5B6472',
+}
+
+export const accentOrder: AccentName[] = ['Violet', 'Blue', 'Emerald', 'Brass', 'Rose', 'Slate']
+
+const LIGHT: Record<string, string> = {
+  '--bg': '#F5F6F8',
+  '--surface': '#FFFFFF',
+  '--surface-2': '#F4F4F6',
+  '--text': '#16161D',
+  '--text-muted': '#6B6B76',
+  '--text-faint': '#9A9AA3',
+  '--border': '#ECECEF',
+  '--border-2': '#E3E3E8',
+  '--shadow': '0 1px 2px rgba(16,17,33,.04),0 8px 24px rgba(16,17,33,.05)',
+  '--shadow-sm': '0 1px 2px rgba(16,17,33,.05)',
+}
+
+const DARK: Record<string, string> = {
+  '--bg': '#0C0C10',
+  '--surface': '#15151B',
+  '--surface-2': '#1E1E26',
+  '--text': '#F3F3F5',
+  '--text-muted': '#A0A0AA',
+  '--text-faint': '#6E6E78',
+  '--border': '#27272F',
+  '--border-2': '#33333D',
+  '--shadow': '0 1px 2px rgba(0,0,0,.4),0 12px 30px rgba(0,0,0,.4)',
+  '--shadow-sm': '0 1px 2px rgba(0,0,0,.4)',
+}
+
+// Static status colors (constant across light/dark in the prototype).
+const STATUS_VARS: Record<string, string> = {
+  '--good': '#16A34A',
+  '--good-soft': 'rgba(22,163,74,.12)',
+  '--warn': '#D97706',
+  '--warn-soft': 'rgba(217,119,6,.14)',
+  '--bad': '#DC2626',
+  '--bad-soft': 'rgba(220,38,38,.12)',
+}
+
+function hexA(h: string, a: number): string {
+  h = h.replace('#', '')
+  const n = parseInt(h, 16)
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`
+}
+
+function shade(h: string, p: number): string {
+  h = h.replace('#', '')
+  const n = parseInt(h, 16)
+  let r = (n >> 16) & 255
+  let g = (n >> 8) & 255
+  let b = n & 255
+  const f = 1 + p / 100
+  r = Math.max(0, Math.min(255, Math.round(r * f)))
+  g = Math.max(0, Math.min(255, Math.round(g * f)))
+  b = Math.max(0, Math.min(255, Math.round(b * f)))
+  return '#' + (16777216 + (r << 16) + (g << 8) + b).toString(16).slice(1)
+}
+
+export interface ThemeOptions {
+  mode: Mode
+  accentName: AccentName
+  density: Density
+}
+
+/** Build the full set of CSS custom properties for the root element. */
+export function themeVars({ mode, accentName, density }: ThemeOptions): Record<string, string> {
+  const accent = accentMap[accentName] || accentMap.Violet
+  const base = mode === 'dark' ? DARK : LIGHT
+  const airy = density !== 'Compact'
+  return {
+    ...base,
+    ...STATUS_VARS,
+    '--accent': accent,
+    '--accent-soft': hexA(accent, mode === 'dark' ? 0.24 : 0.1),
+    '--accent-strong': shade(accent, -14),
+    '--pad': airy ? '28px' : '18px',
+    '--gap': airy ? '20px' : '12px',
+  }
+}
+
+/** USD-denominated seed value formatted as UGX (prototype multiplies by 3700). */
+export function money(v: number | string | null | undefined): string {
+  const n = Number(v || 0) * 3700
+  return 'UGX ' + Math.round(n).toLocaleString()
+}
+
+/** Inline style string for a status chip, colored by its semantic meaning. */
+export function chipStyleFor(v: string): React.CSSProperties {
+  const good = ['OK', 'Active', 'Approved', 'Completed', 'Accepted', 'Inspected', 'In', 'Fresh']
+  const warn = ['Low', 'Pending', 'Draft', 'In transit', 'Awaiting GRN', 'On hold', 'Out', 'Expiring']
+  const bad = ['Critical', 'Rejected', 'Inactive']
+  let c = 'var(--accent)'
+  let b = 'var(--accent-soft)'
+  if (good.includes(v)) { c = 'var(--good)'; b = 'var(--good-soft)' }
+  else if (warn.includes(v)) { c = 'var(--warn)'; b = 'var(--warn-soft)' }
+  else if (bad.includes(v)) { c = 'var(--bad)'; b = 'var(--bad-soft)' }
+  return {
+    display: 'inline-block',
+    fontSize: 11,
+    fontWeight: 700,
+    padding: '3px 10px',
+    borderRadius: 20,
+    color: c,
+    background: b,
+  }
+}
