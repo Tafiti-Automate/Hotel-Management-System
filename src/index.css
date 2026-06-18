@@ -1,0 +1,57 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+#root { min-height: 100vh; }
+body {
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background: #F5F6F8;
+}
+
+/* Material Symbols icon helper */
+.ic {
+  font-family: 'Material Symbols Rounded';
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  user-select: none;
+  flex: none;
+}
+
+input::placeholder { color: var(--text-faint); }
+input, select, textarea { font-family: inherit; }
+select { appearance: none; -webkit-appearance: none; }
+::selection { background: rgba(110, 86, 240, .18); }
+
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(120, 120, 130, .30);
+  border-radius: 8px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-track { background: transparent; }
+
+@keyframes sk { 0% { opacity: .45 } 50% { opacity: .9 } 100% { opacity: .45 } }
+@keyframes slideIn { from { transform: translateX(100%) } to { transform: translateX(0) } }
+@keyframes pop { from { transform: translateY(8px) scale(.98); opacity: 0 } to { transform: none; opacity: 1 } }
+
+/* Hover utilities — replicate the prototype's style-hover behaviours. */
+.hover-surface2:hover { background: var(--surface-2) !important; }
+.hover-accent:hover { background: var(--accent-strong) !important; }
+.hover-border2:hover { border-color: var(--border-2) !important; }
+.hover-text:hover { color: var(--text) !important; }
+.hover-bright:hover { filter: brightness(.95); }
+.hover-lift:hover { transform: translateY(-3px); box-shadow: 0 16px 36px rgba(16, 17, 33, .1) !important; }
+.hover-card:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(16, 17, 33, .08) !important; border-color: var(--border-2) !important; }
+.hover-edit:hover { background: var(--accent-soft) !important; color: var(--accent) !important; }
+.hover-del:hover { background: var(--bad-soft) !important; color: var(--bad) !important; }
+.hover-logout:hover { background: var(--surface-2) !important; color: var(--bad) !important; }
+.hover-reject:hover { background: var(--bad-soft) !important; border-color: var(--bad) !important; }

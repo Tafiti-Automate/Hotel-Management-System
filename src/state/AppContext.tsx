@@ -1,0 +1,230 @@
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  seedData, cfg, nextId, itemStatus,
+  type EntityKey, type Row,
+} from '../lib/data'
+import type { AccentName, Density, Mode } from '../lib/theme'
+
+export type Screen = 'login' | 'launchpad' | 'app'
+export type Tab = 'overview' | 'procurement' | 'inventory'
+
+export interface User { name: string; role: string; id: string }
+
+interface FormTarget { entity: EntityKey; id: string | null }
+interface ConfirmTarget { entity: EntityKey; id: string; name: string }
+interface DetailTarget { entity: EntityKey; id: string; from: string }
+
+interface AppState {
+  screen: Screen
+  route: string
+  navActive: string
+  tab: Tab
+  mode: Mode
+  accentName: AccentName
+  density: Density
+  branchOpen: boolean
+  settingsOpen: boolean
+  currentBranch: string
+  crumb: string
+  searchTerm: string
+  form: FormTarget | null
+  confirm: ConfirmTarget | null
+  detail: DetailTarget | null
+  reportId: string | null
+  toast: string | null
+}
+
+export interface AppContextValue extends AppState {
+  user: User
+  data: Record<EntityKey, Row[]>
+  // navigation
+  enterLaunch: () => void
+  enterApp: () => void
+  logout: () => void
+  gotoModules: () => void
+  navTo: (route: string, label: string) => void
+  setTab: (tab: Tab) => void
+  // appearance
+  toggleMode: () => void
+  setMode: (mode: Mode) => void
+  setAccent: (accent: AccentName) => void
+  setDensity: (density: Density) => void
+  toggleBranch: () => void
+  selectBranch: (branch: string) => void
+  toggleSettings: () => void
+  closePop: () => void
+  // list / search
+  setSearchTerm: (term: string) => void
+  // forms + crud
+  openCreate: () => void
+  openEdit: (id: string) => void
+  closeForm: () => void
+  saveForm: (values: Row) => void
+  requestDelete: (id: string) => void
+  closeConfirm: () => void
+  doDelete: () => void
+  // detail / approvals
+  openDetail: (entity: EntityKey, id: string, from: string) => void
+  backFromDetail: () => void
+  approveReq: () => void
+  rejectReq: () => void
+  // reports
+  openReport: (id: string) => void
+  backFromReport: () => void
+  // toast
+  showToast: (msg: string) => void
+}
+
+const AppContext = createContext<AppContextValue | null>(null)
+
+export function useApp(): AppContextValue {
+  const ctx = useContext(AppContext)
+  if (!ctx) throw new Error('useApp must be used within AppProvider')
+  return ctx
+}
+
+export function AppProvider({ children }: { children: ReactNode }) {
+  const dataRef = useRef<Record<EntityKey, Row[]>>(seedData())
+  const [, forceTick] = useState(0)
+  const bumpData = useCallback(() => forceTick((n) => n + 1), [])
+  const toastTimer = useRef<ReturnType<typeof setTimeout>>()
+
+  const user: User = { name: 'Kwame Mensah', role: 'Store Manager', id: 'EMP-1042' }
+
+  const [state, setState] = useState<AppState>({
+    screen: 'login',
+    route: 'dashboard',
+    navActive: 'dashboard',
+    tab: 'overview',
+    mode: 'light',
+    accentName: 'Violet',
+    density: 'Airy',
+    branchOpen: false,
+    settingsOpen: false,
+    currentBranch: 'Grand Plaza Hotel',
+    crumb: 'Dashboard',
+    searchTerm: '',
+    form: null,
+    confirm: null,
+    detail: null,
+    reportId: null,
+    toast: null,
+  })
+
+  const patch = useCallback((p: Partial<AppState>) => setState((s) => ({ ...s, ...p })), [])
+
+  const showToast = useCallback((msg: string) => {
+    patch({ toast: msg })
+    clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => patch({ toast: null }), 2200)
+  }, [patch])
+
+  const saveForm = useCallback((values: Row) => {
+    setState((s) => {
+      const f = s.form
+      if (!f) return s
+      const arr = dataRef.current[f.entity]
+      if (f.id) {
+        const r = arr.find((x) => x.id === f.id)
+        if (r) {
+          Object.assign(r, values)
+          if (f.entity === 'items') r.status = itemStatus(r)
+        }
+      } else {
+        const nu: Row = { id: nextId(f.entity, dataRef.current), ...values }
+        if (f.entity === 'items') nu.status = itemStatus(nu)
+        if (f.entity === 'categories') { nu.itemsCount = 0; nu.parent = nu.parent || '—' }
+        if (f.entity === 'uoms') nu.itemsCount = 0
+        if (f.entity === 'locations') nu.itemsCount = 0
+        if (f.entity === 'suppliers') nu.rating = nu.rating || 4.0
+        arr.unshift(nu)
+      }
+      const created = !f.id ? (cfg[f.entity].singular || 'Record') + ' created' : 'Changes saved'
+      showToast(created)
+      return { ...s, form: null }
+    })
+    bumpData()
+  }, [bumpData, showToast])
+
+  const doDelete = useCallback(() => {
+    setState((s) => {
+      const c = s.confirm
+      if (c) {
+        const arr = dataRef.current[c.entity]
+        const i = arr.findIndex((x) => x.id === c.id)
+        if (i >= 0) arr.splice(i, 1)
+      }
+      return { ...s, confirm: null }
+    })
+    bumpData()
+    showToast('Record deleted')
+  }, [bumpData, showToast])
+
+  const approveReq = useCallback(() => {
+    setState((s) => {
+      const d = s.detail
+      if (!d) return s
+      const r = dataRef.current.requisitions.find((x) => x.id === d.id)
+      if (r) r.status = 'Approved'
+      showToast('Requisition ' + d.id + ' approved')
+      return { ...s, route: d.from || 'approvals', detail: null }
+    })
+    bumpData()
+  }, [bumpData, showToast])
+
+  const rejectReq = useCallback(() => {
+    setState((s) => {
+      const d = s.detail
+      if (!d) return s
+      const r = dataRef.current.requisitions.find((x) => x.id === d.id)
+      if (r) r.status = 'Rejected'
+      showToast('Requisition ' + d.id + ' rejected')
+      return { ...s, route: d.from || 'approvals', detail: null }
+    })
+    bumpData()
+  }, [bumpData, showToast])
+
+  const requestDelete = useCallback((id: string) => {
+    setState((s) => {
+      const row = dataRef.current[s.route as EntityKey]?.find((x) => x.id === id)
+      return { ...s, confirm: { entity: s.route as EntityKey, id, name: (row && (row.name || row.id)) || id } }
+    })
+  }, [])
+
+  const value = useMemo<AppContextValue>(() => ({
+    ...state,
+    user,
+    data: dataRef.current,
+    enterLaunch: () => patch({ screen: 'launchpad', branchOpen: false, settingsOpen: false }),
+    enterApp: () => patch({ screen: 'app', route: 'dashboard', navActive: 'dashboard', crumb: 'Dashboard' }),
+    logout: () => patch({ screen: 'login' }),
+    gotoModules: () => patch({ screen: 'launchpad' }),
+    navTo: (route, label) => patch({ route, navActive: route, crumb: label || '', searchTerm: '', detail: null }),
+    setTab: (tab) => patch({ tab }),
+    toggleMode: () => setState((s) => ({ ...s, mode: s.mode === 'dark' ? 'light' : 'dark' })),
+    setMode: (mode) => patch({ mode }),
+    setAccent: (accentName) => patch({ accentName }),
+    setDensity: (density) => patch({ density }),
+    toggleBranch: () => setState((s) => ({ ...s, branchOpen: !s.branchOpen, settingsOpen: false })),
+    selectBranch: (currentBranch) => patch({ currentBranch, branchOpen: false }),
+    toggleSettings: () => setState((s) => ({ ...s, settingsOpen: !s.settingsOpen, branchOpen: false })),
+    closePop: () => patch({ branchOpen: false, settingsOpen: false }),
+    setSearchTerm: (searchTerm) => patch({ searchTerm }),
+    openCreate: () => patch({ form: { entity: state.route as EntityKey, id: null } }),
+    openEdit: (id) => patch({ form: { entity: state.route as EntityKey, id } }),
+    closeForm: () => patch({ form: null }),
+    saveForm,
+    requestDelete,
+    closeConfirm: () => patch({ confirm: null }),
+    doDelete,
+    openDetail: (entity, id, from) => patch({ route: 'detail', detail: { entity, id, from } }),
+    backFromDetail: () => patch({ route: (state.detail && state.detail.from) || 'requisitions', detail: null }),
+    approveReq,
+    rejectReq,
+    openReport: (reportId) => patch({ route: 'reportview', reportId }),
+    backFromReport: () => patch({ route: 'reports', reportId: null }),
+    showToast,
+  }), [state, patch, saveForm, requestDelete, doDelete, approveReq, rejectReq, showToast])
+
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>
+}
