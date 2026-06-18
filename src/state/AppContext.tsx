@@ -1,8 +1,16 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   seedData, cfg, nextId, itemStatus,
   type EntityKey, type Row,
 } from '../lib/data'
+import {
+  decideRequisition,
+  deleteBackendRecord,
+  errorMessage,
+  fetchBackendData,
+  saveBackendRecord,
+  type ApiStatus,
+} from '../lib/api'
 import type { AccentName, Density, Mode } from '../lib/theme'
 
 export type Screen = 'login' | 'launchpad' | 'app'
@@ -32,11 +40,14 @@ interface AppState {
   detail: DetailTarget | null
   reportId: string | null
   toast: string | null
+  apiStatus: ApiStatus
+  apiMessage: string | null
 }
 
 export interface AppContextValue extends AppState {
   user: User
   data: Record<EntityKey, Row[]>
+  refreshData: () => void
   // navigation
   enterLaunch: () => void
   enterApp: () => void
@@ -88,6 +99,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [, forceTick] = useState(0)
   const bumpData = useCallback(() => forceTick((n) => n + 1), [])
   const toastTimer = useRef<ReturnType<typeof setTimeout>>()
+  const didInitialSync = useRef(false)
 
   const user: User = { name: 'Kwame Mensah', role: 'Store Manager', id: 'EMP-1042' }
 
@@ -109,6 +121,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     detail: null,
     reportId: null,
     toast: null,
+    apiStatus: 'idle',
+    apiMessage: null,
   })
 
   const patch = useCallback((p: Partial<AppState>) => setState((s) => ({ ...s, ...p })), [])
@@ -119,7 +133,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
     toastTimer.current = setTimeout(() => patch({ toast: null }), 2200)
   }, [patch])
 
+  const applyBackendData = useCallback((incoming: Partial<Record<EntityKey, Row[]>>) => {
+    let changed = false
+    const next = { ...dataRef.current }
+    ;(Object.keys(incoming) as EntityKey[]).forEach((key) => {
+      const rows = incoming[key]
+      if (rows && rows.length > 0) {
+        next[key] = rows
+        changed = true
+      }
+    })
+    if (changed) {
+      dataRef.current = next
+      bumpData()
+    }
+    return changed
+  }, [bumpData])
+
+  const refreshData = useCallback(async (silent = false) => {
+    patch({ apiStatus: 'loading', apiMessage: null })
+    try {
+      const result = await fetchBackendData()
+      const changed = applyBackendData(result.data)
+      const fallbackNote = changed ? 'Connected to backend' : 'Backend connected; demo data kept for empty tables'
+      patch({ apiStatus: 'live', apiMessage: result.warnings[0] || fallbackNote })
+      if (!silent) showToast('Backend synced')
+    } catch (error) {
+      patch({ apiStatus: 'offline', apiMessage: errorMessage(error) })
+      if (!silent) showToast('Using local demo data')
+    }
+  }, [applyBackendData, patch, showToast])
+
+  useEffect(() => {
+    if (state.screen === 'app' && !didInitialSync.current) {
+      didInitialSync.current = true
+      void refreshData(true)
+    }
+  }, [refreshData, state.screen])
+
   const saveForm = useCallback((values: Row) => {
+    const target = state.form
     setState((s) => {
       const f = s.form
       if (!f) return s
@@ -144,9 +197,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return { ...s, form: null }
     })
     bumpData()
-  }, [bumpData, showToast])
+
+    if (target) {
+      void saveBackendRecord(target.entity, target.id, values, dataRef.current)
+        .then(() => refreshData(true))
+        .catch((error) => {
+          patch({ apiStatus: 'offline', apiMessage: errorMessage(error) })
+          showToast('Saved locally; backend sync failed')
+        })
+    }
+  }, [bumpData, patch, refreshData, showToast, state.form])
 
   const doDelete = useCallback(() => {
+    const target = state.confirm
     setState((s) => {
       const c = s.confirm
       if (c) {
@@ -158,9 +221,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })
     bumpData()
     showToast('Record deleted')
-  }, [bumpData, showToast])
+
+    if (target) {
+      void deleteBackendRecord(target.entity, target.id)
+        .then(() => refreshData(true))
+        .catch((error) => {
+          patch({ apiStatus: 'offline', apiMessage: errorMessage(error) })
+          showToast('Deleted locally; backend sync failed')
+        })
+    }
+  }, [bumpData, patch, refreshData, showToast, state.confirm])
 
   const approveReq = useCallback(() => {
+    const target = state.detail
     setState((s) => {
       const d = s.detail
       if (!d) return s
@@ -170,9 +243,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return { ...s, route: d.from || 'approvals', detail: null }
     })
     bumpData()
-  }, [bumpData, showToast])
+
+    if (target) {
+      void decideRequisition(target.id, 'approve')
+        .then(() => refreshData(true))
+        .catch((error) => {
+          patch({ apiStatus: 'offline', apiMessage: errorMessage(error) })
+          showToast('Approved locally; backend sync failed')
+        })
+    }
+  }, [bumpData, patch, refreshData, showToast, state.detail])
 
   const rejectReq = useCallback(() => {
+    const target = state.detail
     setState((s) => {
       const d = s.detail
       if (!d) return s
@@ -182,7 +265,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return { ...s, route: d.from || 'approvals', detail: null }
     })
     bumpData()
-  }, [bumpData, showToast])
+
+    if (target) {
+      void decideRequisition(target.id, 'reject')
+        .then(() => refreshData(true))
+        .catch((error) => {
+          patch({ apiStatus: 'offline', apiMessage: errorMessage(error) })
+          showToast('Rejected locally; backend sync failed')
+        })
+    }
+  }, [bumpData, patch, refreshData, showToast, state.detail])
 
   const requestDelete = useCallback((id: string) => {
     setState((s) => {
@@ -195,6 +287,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ...state,
     user,
     data: dataRef.current,
+    refreshData: () => { void refreshData() },
     enterLaunch: () => patch({ screen: 'launchpad', branchOpen: false, settingsOpen: false }),
     enterApp: () => patch({ screen: 'app', route: 'dashboard', navActive: 'dashboard', crumb: 'Dashboard' }),
     logout: () => patch({ screen: 'login' }),
@@ -224,7 +317,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     openReport: (reportId) => patch({ route: 'reportview', reportId }),
     backFromReport: () => patch({ route: 'reports', reportId: null }),
     showToast,
-  }), [state, patch, saveForm, requestDelete, doDelete, approveReq, rejectReq, showToast])
+  }), [state, refreshData, patch, saveForm, requestDelete, doDelete, approveReq, rejectReq, showToast])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }

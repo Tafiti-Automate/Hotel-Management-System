@@ -13,6 +13,30 @@ npm run build    # type-check + production build
 npm run preview  # preview the production build
 ```
 
+## Run with the Django backend
+
+Start Django in one terminal:
+
+```bash
+cd hotel_erp_backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements/dev.txt
+python manage.py migrate
+python manage.py runserver 127.0.0.1:8000
+```
+
+Start React in another terminal:
+
+```bash
+npm install
+npm run dev
+```
+
+The frontend calls `/api/v1/...`; Vite proxies `/api` to `http://127.0.0.1:8000`.
+Set `VITE_BACKEND_URL=http://host:port` if Django runs somewhere else, or set
+`VITE_API_BASE_URL` if the API path itself is different.
+
 The app starts on the **Login** screen — click **Sign in** (credentials are prefilled) to reach
 the module **Launchpad**, then open **Stock Management**.
 
@@ -40,6 +64,7 @@ src/
   index.css             Global styles, fonts, icon helper, hover utilities
   state/AppContext.tsx  All app state, routing and actions
   lib/
+    api.ts              Backend API client + Django-to-frontend row mapper
     data.ts             Seed data, entity config, report definitions, helpers
     theme.ts            Theme variables, accent map, money() + status chip helpers
     reports.ts          Report table builder
@@ -50,8 +75,9 @@ src/
 
 ## Notes
 
-- Data is in-memory (seeded from the prototype); create / edit / delete and approvals mutate it
-  for the session and reset on reload. Swap `lib/data.ts` + the actions in `state/AppContext.tsx`
-  for a real API when wiring up a backend.
+- Data now syncs from Django when the backend is available. The original seed data remains as a
+  fallback for empty tables or offline development.
+- In `core.settings.dev`, the API uses `AllowAny` so the prototype login can talk to Django
+  during local development. Production settings keep the stricter permission configuration.
 - Monetary values are stored in the prototype's base unit and rendered as UGX (`money()` in
   `lib/theme.ts`).

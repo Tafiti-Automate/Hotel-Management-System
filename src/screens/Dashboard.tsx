@@ -90,6 +90,8 @@ export default function Dashboard() {
   const app = useApp()
   const tab = app.tab
   const showProcurement = tab === 'overview' || tab === 'procurement'
+  const syncColor = app.apiStatus === 'live' ? 'var(--good)' : app.apiStatus === 'loading' ? 'var(--warn)' : 'var(--bad)'
+  const syncText = app.apiStatus === 'live' ? 'Backend connected' : app.apiStatus === 'loading' ? 'Syncing backend' : 'Local demo data'
 
   const tabBtn = (key: Tab, label: string) => {
     const on = tab === key
@@ -118,8 +120,8 @@ export default function Dashboard() {
           {tabBtn('procurement', 'Procurement')}
           {tabBtn('inventory', 'Inventory')}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-faint)', fontWeight: 600 }}>
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--good)' }} />Synced just now
+        <div title={app.apiMessage || syncText} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-faint)', fontWeight: 600 }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: syncColor }} />{syncText}
         </div>
       </div>
 
