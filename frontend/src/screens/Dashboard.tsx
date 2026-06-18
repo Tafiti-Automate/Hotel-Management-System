@@ -1,7 +1,8 @@
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { useApp } from '../state/AppContext'
 import { Icon } from '../components/Icon'
 import type { Tab } from '../state/AppContext'
+import { money } from '../lib/theme'
 
 interface Badge { type: 'good' | 'muted' | 'bad'; icon?: string; text: string }
 interface Kpi {
@@ -14,50 +15,7 @@ interface Kpi {
   bad?: boolean
 }
 
-const kpis: Kpi[] = [
-  { icon: 'request_quote', label: 'Open Requisitions', value: '24', badge: { type: 'good', icon: 'arrow_upward', text: '5' }, line: '0,24 18,20 36,22 54,15 72,17 90,8 120,5' },
-  { icon: 'receipt_long', label: 'Pending POs', value: '9', badge: { type: 'muted', text: 'UGX 178M' }, line: '0,16 18,18 36,13 54,15 72,11 90,13 120,9' },
-  { icon: 'savings', label: 'Inventory Value', value: 'UGX 1.15B', badge: { type: 'good', icon: 'arrow_upward', text: '2.9%' }, line: '0,22 18,23 36,18 54,20 72,14 90,15 120,8' },
-  { icon: 'warning', iconBad: true, bad: true, label: 'Low-stock Items', value: '12', badge: { type: 'bad', icon: 'priority_high', text: 'Action' }, line: '0,8 18,11 36,9 54,15 72,14 90,20 120,24' },
-  { icon: 'move_to_inbox', label: 'GRNs This Week', value: '7', badge: { type: 'good', icon: 'arrow_upward', text: '2' }, line: '0,20 18,22 36,17 54,19 72,13 90,16 120,10' },
-  { icon: 'payments', label: 'Spend (MTD)', value: 'UGX 319M', badge: { type: 'good', icon: 'arrow_downward', text: '4.1%' }, line: '0,9 18,12 36,11 54,17 72,16 90,22 120,25' },
-]
-
-const pipeline = [
-  { icon: 'request_quote', label: 'Requisitions', value: 24 },
-  { icon: 'price_check', label: 'Quotations', value: 12 },
-  { icon: 'receipt_long', label: 'Orders', value: 9 },
-  { icon: 'move_to_inbox', label: 'Receipts', value: 7 },
-  { icon: 'fact_check', label: 'Inspections', value: 5 },
-]
-
-const activity = [
-  { icon: 'receipt_long', color: 'accent', html: <>Created <b style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 600 }}>PO-2041</b> for Fresh Foods Ltd</>, meta: 'admin · 14m ago' },
-  { icon: 'move_to_inbox', color: 'accent', html: <><b style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 600 }}>GRN-0188</b> received against PO-2039</>, meta: 'k.owusu · 1h ago' },
-  { icon: 'check_circle', color: 'good', html: <>Requisition <b style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 600 }}>REQ-3120</b> approved</>, meta: 'store manager · 2h ago' },
-  { icon: 'local_shipping', color: 'accent', html: <>New supplier <b>Sunrise Linens</b> added</>, meta: 'admin · 5h ago' },
-]
-
-const spend = [
-  { label: 'Food & Beverage', pct: 100, amt: 'UGX 119M' },
-  { label: 'Housekeeping', pct: 57, amt: 'UGX 68M' },
-  { label: 'Maintenance', pct: 40, amt: 'UGX 48M' },
-  { label: 'Linen & Laundry', pct: 30, amt: 'UGX 36M' },
-  { label: 'Amenities', pct: 24, amt: 'UGX 29M' },
-]
-
-const poLegend = [
-  { color: 'var(--accent)', label: 'Awaiting GRN', value: 4 },
-  { color: 'var(--good)', label: 'In transit', value: 2 },
-  { color: 'var(--warn)', label: 'Completed', value: 2 },
-  { color: 'var(--border-2)', label: 'Draft', value: 1 },
-]
-
-const approvals = [
-  { id: 'REQ-3125', total: 'UGX 15.5M', meta: 'Housekeeping · raised by J. Mensah' },
-  { id: 'REQ-3126', total: 'UGX 28.3M', meta: 'Food & Beverage · raised by K. Owusu' },
-  { id: 'REQ-3127', total: 'UGX 6.8M', meta: 'Maintenance · raised by A. Boateng' },
-]
+interface ActivityItem { icon: string; color: 'accent' | 'good'; html: ReactNode; meta: string }
 
 const card: CSSProperties = { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, boxShadow: 'var(--shadow)', padding: 18 }
 
@@ -91,7 +49,91 @@ export default function Dashboard() {
   const tab = app.tab
   const showProcurement = tab === 'overview' || tab === 'procurement'
   const syncColor = app.apiStatus === 'live' ? 'var(--good)' : app.apiStatus === 'loading' ? 'var(--warn)' : 'var(--bad)'
-  const syncText = app.apiStatus === 'live' ? 'Backend connected' : app.apiStatus === 'loading' ? 'Syncing backend' : 'Local demo data'
+  const syncText = app.apiStatus === 'live' ? 'Backend connected' : app.apiStatus === 'loading' ? 'Syncing backend' : 'Backend offline'
+  const flatLine = '0,18 18,18 36,18 54,18 72,18 90,18 120,18'
+  const pendingRequisitions = app.data.requisitions.filter((r) => r.status === 'Pending')
+  const activeOrders = app.data.orders.filter((o) => !['Completed', 'Cancelled'].includes(String(o.status)))
+  const inventoryValue = app.data.balances.reduce((sum, row) => sum + Number(row.value || 0), 0)
+  const lowStockItems = app.data.items.filter((item) => ['Low', 'Critical'].includes(String(item.status)))
+  const spendTotal = app.data.orders.reduce((sum, order) => sum + Number(order.total || 0), 0)
+
+  const kpis: Kpi[] = [
+    { icon: 'request_quote', label: 'Open Requisitions', value: String(pendingRequisitions.length), badge: { type: 'muted', text: `${app.data.requisitions.length} total` }, line: flatLine },
+    { icon: 'receipt_long', label: 'Pending POs', value: String(activeOrders.length), badge: { type: 'muted', text: money(spendTotal) }, line: flatLine },
+    { icon: 'savings', label: 'Inventory Value', value: money(inventoryValue), badge: { type: 'muted', text: `${app.data.balances.length} balances` }, line: flatLine },
+    { icon: 'warning', iconBad: lowStockItems.length > 0, bad: lowStockItems.length > 0, label: 'Low-stock Items', value: String(lowStockItems.length), badge: { type: lowStockItems.length > 0 ? 'bad' : 'muted', text: lowStockItems.length > 0 ? 'Action' : 'Clear' }, line: flatLine },
+    { icon: 'move_to_inbox', label: 'Goods Receipts', value: String(app.data.grns.length), badge: { type: 'muted', text: 'API' }, line: flatLine },
+    { icon: 'payments', label: 'Spend Total', value: money(spendTotal), badge: { type: 'muted', text: `${app.data.orders.length} POs` }, line: flatLine },
+  ]
+
+  const pipeline = [
+    { icon: 'request_quote', label: 'Requisitions', value: app.data.requisitions.length },
+    { icon: 'receipt_long', label: 'Orders', value: app.data.orders.length },
+    { icon: 'move_to_inbox', label: 'Receipts', value: app.data.grns.length },
+    { icon: 'inventory_2', label: 'Items', value: app.data.items.length },
+    { icon: 'local_shipping', label: 'Suppliers', value: app.data.suppliers.length },
+  ]
+
+  const activity: ActivityItem[] = [
+    ...app.data.orders.slice(0, 2).map((order) => ({
+      icon: 'receipt_long',
+      color: 'accent' as const,
+      html: <>Purchase order <b style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 600 }}>{order.id}</b> loaded</>,
+      meta: `${order.supplier || 'Supplier'} · ${order.date || 'No date'}`,
+    })),
+    ...app.data.grns.slice(0, 2).map((receipt) => ({
+      icon: 'move_to_inbox',
+      color: 'accent' as const,
+      html: <>Goods receipt <b style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 600 }}>{receipt.id}</b> loaded</>,
+      meta: `${receipt.supplier || 'Supplier'} · ${receipt.date || 'No date'}`,
+    })),
+    ...app.data.requisitions.slice(0, 2).map((req) => ({
+      icon: req.status === 'Approved' ? 'check_circle' : 'request_quote',
+      color: req.status === 'Approved' ? 'good' as const : 'accent' as const,
+      html: <>Requisition <b style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 600 }}>{req.id}</b> loaded</>,
+      meta: `${req.dept || 'Department'} · ${req.status || 'No status'}`,
+    })),
+  ].slice(0, 4)
+
+  if (activity.length === 0) {
+    activity.push({
+      icon: app.apiStatus === 'live' ? 'sync' : 'cloud_off',
+      color: 'accent',
+      html: app.apiStatus === 'live' ? <>Backend returned no activity records</> : <>No backend data loaded</>,
+      meta: app.apiMessage || syncText,
+    })
+  }
+
+  const spendBySupplier = new Map<string, number>()
+  app.data.orders.forEach((order) => {
+    const supplier = String(order.supplier || 'Unassigned')
+    spendBySupplier.set(supplier, (spendBySupplier.get(supplier) || 0) + Number(order.total || 0))
+  })
+  const maxSpend = Math.max(...Array.from(spendBySupplier.values()), 1)
+  const spend = Array.from(spendBySupplier.entries()).map(([label, value]) => ({
+    label,
+    pct: Math.round((value / maxSpend) * 100),
+    amt: money(value),
+  })).slice(0, 5)
+
+  const orderStatusCounts = new Map<string, number>()
+  app.data.orders.forEach((order) => {
+    const status = String(order.status || 'Draft')
+    orderStatusCounts.set(status, (orderStatusCounts.get(status) || 0) + 1)
+  })
+  const poLegend = ['Awaiting GRN', 'In transit', 'Completed', 'Draft'].map((label, index) => ({
+    color: ['var(--accent)', 'var(--good)', 'var(--warn)', 'var(--border-2)'][index],
+    label,
+    value: orderStatusCounts.get(label) || 0,
+  }))
+  const poDonut = app.data.orders.length > 0
+    ? 'conic-gradient(var(--accent) 0 45%,var(--good) 45% 70%,var(--warn) 70% 89%,var(--border-2) 89% 100%)'
+    : 'var(--surface-2)'
+  const approvals = pendingRequisitions.map((req) => ({
+    id: String(req.id),
+    total: money(req.total),
+    meta: `${req.dept || 'Department'} · raised by ${req.requester || 'Requester'}`,
+  }))
 
   const tabBtn = (key: Tab, label: string) => {
     const on = tab === key
@@ -151,7 +193,7 @@ export default function Dashboard() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', letterSpacing: '-.01em' }}>Procurement pipeline</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>From requisition to inspection — this month</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Live counts returned by the backend API</div>
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'stretch', gap: 6, marginTop: 18, overflowX: 'auto', paddingBottom: 4 }}>
@@ -199,10 +241,11 @@ export default function Dashboard() {
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) minmax(0,1fr)', gap: 'var(--gap)' }}>
             <div style={card}>
               <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 16 }}>
-                <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', letterSpacing: '-.01em' }}>Spend by category</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Total <b style={{ color: 'var(--text)', fontFamily: "'JetBrains Mono',monospace" }}>UGX 319M</b></div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', letterSpacing: '-.01em' }}>Spend by supplier</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Total <b style={{ color: 'var(--text)', fontFamily: "'JetBrains Mono',monospace" }}>{money(spendTotal)}</b></div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+                {spend.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>No purchase order spend returned by the backend.</div>}
                 {spend.map((s) => (
                   <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <span style={{ width: 118, fontSize: 12.5, color: 'var(--text-muted)', fontWeight: 600, flex: 'none' }}>{s.label}</span>
@@ -220,9 +263,9 @@ export default function Dashboard() {
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>By status</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginTop: 16 }}>
                 <div style={{ position: 'relative', width: 118, height: 118, flex: 'none' }}>
-                  <div style={{ width: 118, height: 118, borderRadius: '50%', background: 'conic-gradient(var(--accent) 0 45%,var(--good) 45% 70%,var(--warn) 70% 89%,var(--border-2) 89% 100%)' }} />
+                  <div style={{ width: 118, height: 118, borderRadius: '50%', background: poDonut }} />
                   <div style={{ position: 'absolute', inset: 13, borderRadius: '50%', background: 'var(--surface)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--shadow-sm)' }}>
-                    <span style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', lineHeight: 1 }}>9</span>
+                    <span style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', lineHeight: 1 }}>{app.data.orders.length}</span>
                     <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, marginTop: 1 }}>active</span>
                   </div>
                 </div>
@@ -246,11 +289,12 @@ export default function Dashboard() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                 <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', letterSpacing: '-.01em' }}>Pending approvals</div>
-                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', background: 'var(--accent-soft)', padding: '2px 9px', borderRadius: 20 }}>3 waiting</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', background: 'var(--accent-soft)', padding: '2px 9px', borderRadius: 20 }}>{approvals.length} waiting</span>
               </div>
               <button onClick={() => app.navTo('approvals', 'Approvals')} className="hover-surface2" style={{ border: '1px solid var(--border)', background: 'var(--surface)', cursor: 'pointer', font: 'inherit', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', padding: '6px 11px', borderRadius: 9 }}>View queue</button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 'var(--gap)' }}>
+              {approvals.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>No pending approvals returned by the backend.</div>}
               {approvals.map((a) => (
                 <div key={a.id} style={{ border: '1px solid var(--border)', borderRadius: 13, padding: 14, background: 'var(--surface-2)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>

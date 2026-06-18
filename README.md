@@ -1,12 +1,12 @@
-# Hotel Management ERP — Frontend
+# Hotel Management System
 
-Implementation of the **Stock Management** module for a Hotel Management ERP. React + Vite +
-TypeScript, with a CSS-variable theming system (light/dark, 6 accent colors, airy/compact density)
-ported from the original design prototype.
+Django + DRF backend and React + Vite frontend for a hotel management ERP focused on
+procurement, inventory, approvals, vendors, finance, reports, notifications, and audit logs.
 
 ## Getting started
 
 ```bash
+cd frontend
 npm install
 npm run dev      # start the dev server (Vite)
 npm run build    # type-check + production build
@@ -29,6 +29,7 @@ python manage.py runserver 127.0.0.1:8000
 Start React in another terminal:
 
 ```bash
+cd frontend
 npm install
 npm run dev
 ```
@@ -58,25 +59,34 @@ the module **Launchpad**, then open **Stock Management**.
 ## Project structure
 
 ```
-src/
-  App.tsx               Root: applies theme vars, routes between top-level screens
-  main.tsx              Entry point + AppProvider
-  index.css             Global styles, fonts, icon helper, hover utilities
-  state/AppContext.tsx  All app state, routing and actions
-  lib/
-    api.ts              Backend API client + Django-to-frontend row mapper
-    data.ts             Seed data, entity config, report definitions, helpers
-    theme.ts            Theme variables, accent map, money() + status chip helpers
-    reports.ts          Report table builder
-  components/           Icon, Sidebar, Header, FormDrawer, ConfirmDialog, Toast
-  screens/              Login, Launchpad, AppShell, Dashboard, ListView,
-                        DetailView, Reports, ReportView
+frontend/
+  index.html
+  package.json
+  vite.config.ts
+  src/
+    App.tsx               Root: applies theme vars, routes between top-level screens
+    main.tsx              Entry point + AppProvider
+    index.css             Global styles, fonts, icon helper, hover utilities
+    state/AppContext.tsx  All app state, routing and actions
+    lib/
+      api.ts              Backend API client + Django-to-frontend row mapper
+      data.ts             Entity config, report definitions, helpers
+      theme.ts            Theme variables, accent map, money() + status chip helpers
+      reports.ts          Report table builder
+    components/           Icon, Sidebar, Header, FormDrawer, ConfirmDialog, Toast
+    screens/              Login, Launchpad, AppShell, Dashboard, ListView,
+                          DetailView, Reports, ReportView
+hotel_erp_backend/
+  manage.py
+  apps/
+  core/
+  tests/
 ```
 
 ## Notes
 
-- Data now syncs from Django when the backend is available. The original seed data remains as a
-  fallback for empty tables or offline development.
+- Data syncs from Django when the backend is available. Empty backend tables render as empty
+  frontend tables, so the UI can be used to verify the live API connection.
 - In `core.settings.dev`, the API uses `AllowAny` so the prototype login can talk to Django
   during local development. Production settings keep the stricter permission configuration.
 - Monetary values are stored in the prototype's base unit and rendered as UGX (`money()` in

@@ -24,7 +24,7 @@ const groups: NavGroup[] = [
     heading: 'PROCUREMENT',
     items: [
       { route: 'requisitions', label: 'Requisitions', icon: 'request_quote' },
-      { route: 'approvals', label: 'Approvals', icon: 'approval', count: 3 },
+      { route: 'approvals', label: 'Approvals', icon: 'approval' },
       { route: 'orders', label: 'Purchase Orders', icon: 'receipt_long' },
       { route: 'grns', label: 'Goods Receipts', icon: 'move_to_inbox' },
       { route: 'suppliers', label: 'Suppliers', icon: 'local_shipping' },

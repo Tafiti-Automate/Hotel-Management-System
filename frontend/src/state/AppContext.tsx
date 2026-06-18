@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
-  seedData, cfg, nextId, itemStatus,
+  cfg, nextId, itemStatus,
   type EntityKey, type Row,
 } from '../lib/data'
 import {
@@ -87,6 +87,26 @@ export interface AppContextValue extends AppState {
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
+const entityKeys: EntityKey[] = [
+  'items',
+  'categories',
+  'uoms',
+  'locations',
+  'suppliers',
+  'balances',
+  'ledgers',
+  'batches',
+  'requisitions',
+  'orders',
+  'grns',
+]
+
+function emptyData(): Record<EntityKey, Row[]> {
+  return entityKeys.reduce((data, key) => {
+    data[key] = []
+    return data
+  }, {} as Record<EntityKey, Row[]>)
+}
 
 export function useApp(): AppContextValue {
   const ctx = useContext(AppContext)
@@ -95,7 +115,7 @@ export function useApp(): AppContextValue {
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const dataRef = useRef<Record<EntityKey, Row[]>>(seedData())
+  const dataRef = useRef<Record<EntityKey, Row[]>>(emptyData())
   const [, forceTick] = useState(0)
   const bumpData = useCallback(() => forceTick((n) => n + 1), [])
   const toastTimer = useRef<ReturnType<typeof setTimeout>>()
@@ -113,7 +133,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     density: 'Airy',
     branchOpen: false,
     settingsOpen: false,
-    currentBranch: 'Grand Plaza Hotel',
+    currentBranch: 'Backend Property',
     crumb: 'Dashboard',
     searchTerm: '',
     form: null,
@@ -134,35 +154,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [patch])
 
   const applyBackendData = useCallback((incoming: Partial<Record<EntityKey, Row[]>>) => {
-    let changed = false
-    const next = { ...dataRef.current }
-    ;(Object.keys(incoming) as EntityKey[]).forEach((key) => {
-      const rows = incoming[key]
-      if (rows && rows.length > 0) {
-        next[key] = rows
-        changed = true
-      }
+    const next = emptyData()
+    entityKeys.forEach((key) => {
+      next[key] = incoming[key] || []
     })
-    if (changed) {
-      dataRef.current = next
-      bumpData()
-    }
-    return changed
+    dataRef.current = next
+    bumpData()
   }, [bumpData])
 
   const refreshData = useCallback(async (silent = false) => {
     patch({ apiStatus: 'loading', apiMessage: null })
     try {
       const result = await fetchBackendData()
-      const changed = applyBackendData(result.data)
-      const fallbackNote = changed ? 'Connected to backend' : 'Backend connected; demo data kept for empty tables'
-      patch({ apiStatus: 'live', apiMessage: result.warnings[0] || fallbackNote })
+      applyBackendData(result.data)
+      const rowsLoaded = Object.values(result.data).reduce((sum, rows) => sum + (rows?.length || 0), 0)
+      patch({ apiStatus: 'live', apiMessage: result.warnings[0] || `Backend connected; ${rowsLoaded} records loaded` })
       if (!silent) showToast('Backend synced')
     } catch (error) {
+      dataRef.current = emptyData()
+      bumpData()
       patch({ apiStatus: 'offline', apiMessage: errorMessage(error) })
-      if (!silent) showToast('Using local demo data')
+      if (!silent) showToast('Backend unavailable')
     }
-  }, [applyBackendData, patch, showToast])
+  }, [applyBackendData, bumpData, patch, showToast])
 
   useEffect(() => {
     if (state.screen === 'app' && !didInitialSync.current) {
