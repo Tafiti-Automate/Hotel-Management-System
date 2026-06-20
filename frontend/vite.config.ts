@@ -7,6 +7,12 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    // `vite preview` (used by the Railway deployment) blocks unknown Host headers
+    // by default. Allow the deployed domain so the public URL isn't rejected.
+    preview: {
+      host: true,
+      allowedHosts: true,
+    },
     server: {
       port: 5173,
       open: true,
