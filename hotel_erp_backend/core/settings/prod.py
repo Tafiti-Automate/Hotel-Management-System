@@ -17,6 +17,17 @@ CSRF_TRUSTED_ORIGINS = [
     if origin.strip()
 ]
 
+# Railway injects RAILWAY_PUBLIC_DOMAIN for any service with a generated/custom
+# domain. Trust it automatically so the public URL (and /admin) works without
+# having to hardcode the domain in DJANGO_ALLOWED_HOSTS.
+RAILWAY_PUBLIC_DOMAIN = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "").strip()
+if RAILWAY_PUBLIC_DOMAIN:
+    if RAILWAY_PUBLIC_DOMAIN not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(RAILWAY_PUBLIC_DOMAIN)
+    railway_origin = f"https://{RAILWAY_PUBLIC_DOMAIN}"
+    if railway_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(railway_origin)
+
 SECURE_SSL_REDIRECT = os.environ.get("DJANGO_SECURE_SSL_REDIRECT", "True").lower() in {
     "1",
     "true",
