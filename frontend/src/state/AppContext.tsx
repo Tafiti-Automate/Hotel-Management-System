@@ -8,8 +8,13 @@ import {
   deleteBackendRecord,
   errorMessage,
   fetchBackendData,
+  getStoredUser,
+  getToken,
+  login as apiLogin,
+  logout as apiLogout,
   saveBackendRecord,
   type ApiStatus,
+  type AuthUser,
 } from '../lib/api'
 import type { AccentName, Density, Mode } from '../lib/theme'
 
@@ -48,6 +53,8 @@ export interface AppContextValue extends AppState {
   user: User
   data: Record<EntityKey, Row[]>
   refreshData: () => void
+  // auth
+  login: (username: string, password: string) => Promise<void>
   // navigation
   enterLaunch: () => void
   enterApp: () => void
@@ -121,10 +128,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const toastTimer = useRef<ReturnType<typeof setTimeout>>()
   const didInitialSync = useRef(false)
 
-  const user: User = { name: 'Kwame Mensah', role: 'Store Manager', id: 'EMP-1042' }
+  const GUEST: User = { name: 'Guest', role: '—', id: '' }
+  const toUser = (u: AuthUser | null): User => (u ? { name: u.name, role: u.role, id: u.id } : GUEST)
+  const storedUser = getStoredUser()
+  const [user, setUser] = useState<User>(toUser(storedUser))
+  const hasSession = Boolean(getToken() && storedUser)
 
   const [state, setState] = useState<AppState>({
-    screen: 'login',
+    screen: hasSession ? 'launchpad' : 'login',
     route: 'dashboard',
     navActive: 'dashboard',
     tab: 'overview',
@@ -302,9 +313,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     user,
     data: dataRef.current,
     refreshData: () => { void refreshData() },
+    login: async (username: string, password: string) => {
+      const authed = await apiLogin(username, password)
+      setUser(toUser(authed))
+      didInitialSync.current = false
+      patch({ screen: 'launchpad', branchOpen: false, settingsOpen: false })
+    },
     enterLaunch: () => patch({ screen: 'launchpad', branchOpen: false, settingsOpen: false }),
     enterApp: () => patch({ screen: 'app', route: 'dashboard', navActive: 'dashboard', crumb: 'Dashboard' }),
-    logout: () => patch({ screen: 'login' }),
+    logout: () => {
+      void apiLogout()
+      setUser(GUEST)
+      didInitialSync.current = false
+      dataRef.current = emptyData()
+      patch({ screen: 'login' })
+    },
     gotoModules: () => patch({ screen: 'launchpad' }),
     navTo: (route, label) => patch({ route, navActive: route, crumb: label || '', searchTerm: '', detail: null }),
     setTab: (tab) => patch({ tab }),
@@ -331,7 +354,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     openReport: (reportId) => patch({ route: 'reportview', reportId }),
     backFromReport: () => patch({ route: 'reports', reportId: null }),
     showToast,
-  }), [state, refreshData, patch, saveForm, requestDelete, doDelete, approveReq, rejectReq, showToast])
+  }), [state, user, refreshData, patch, saveForm, requestDelete, doDelete, approveReq, rejectReq, showToast])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }

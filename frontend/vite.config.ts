@@ -3,15 +3,25 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '')
-  const backendTarget = env.VITE_BACKEND_URL || 'http://127.0.0.1:8000'
+  // BACKEND_ORIGIN (runtime, read when the preview server boots) points the
+  // deployed proxy at the Django service; falls back to the dev backend.
+  const backendTarget = env.BACKEND_ORIGIN || env.VITE_BACKEND_URL || 'http://127.0.0.1:8000'
 
   return {
     plugins: [react()],
     // `vite preview` (used by the Railway deployment) blocks unknown Host headers
-    // by default. Allow the deployed domain so the public URL isn't rejected.
+    // by default. Allow the deployed domain, and proxy /api to the backend so the
+    // browser stays same-origin (no CORS needed).
     preview: {
       host: true,
       allowedHosts: true,
+      proxy: {
+        '/api': {
+          target: backendTarget,
+          changeOrigin: true,
+          secure: true,
+        },
+      },
     },
     server: {
       port: 5173,

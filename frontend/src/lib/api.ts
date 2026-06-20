@@ -42,6 +42,98 @@ function apiRoot(): string {
   return (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/+$/, '')
 }
 
+// ---- Auth (DRF token) ----------------------------------------------------
+
+export interface AuthUser {
+  id: string
+  name: string
+  role: string
+  username: string
+  is_staff?: boolean
+}
+
+const TOKEN_KEY = 'hms_token'
+const USER_KEY = 'hms_user'
+
+export function getToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY)
+  } catch {
+    return null
+  }
+}
+
+function setToken(value: string | null): void {
+  try {
+    if (value) localStorage.setItem(TOKEN_KEY, value)
+    else localStorage.removeItem(TOKEN_KEY)
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+export function getStoredUser(): AuthUser | null {
+  try {
+    const raw = localStorage.getItem(USER_KEY)
+    return raw ? (JSON.parse(raw) as AuthUser) : null
+  } catch {
+    return null
+  }
+}
+
+function setStoredUser(user: AuthUser | null): void {
+  try {
+    if (user) localStorage.setItem(USER_KEY, JSON.stringify(user))
+    else localStorage.removeItem(USER_KEY)
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+function authHeaders(): Record<string, string> {
+  const token = getToken()
+  return token ? { Authorization: `Token ${token}` } : {}
+}
+
+export async function login(username: string, password: string): Promise<AuthUser> {
+  const response = await fetch(`${apiRoot()}/auth/login/`, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  })
+
+  if (!response.ok) {
+    let detail = `Login failed (${response.status})`
+    try {
+      const body = await response.json()
+      if (body && typeof body.detail === 'string') detail = body.detail
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new Error(detail)
+  }
+
+  const body = (await response.json()) as { token: string; user: AuthUser }
+  setToken(body.token)
+  setStoredUser(body.user)
+  return body.user
+}
+
+export async function logout(): Promise<void> {
+  try {
+    await fetch(`${apiRoot()}/auth/logout/`, {
+      method: 'POST',
+      headers: { Accept: 'application/json', ...authHeaders() },
+    })
+  } catch {
+    /* best-effort server-side invalidation */
+  }
+  setToken(null)
+  setStoredUser(null)
+}
+
+// --------------------------------------------------------------------------
+
 function endpointUrl(path: string): string {
   if (/^https?:\/\//.test(path) || path.startsWith('/api/')) return path
 
@@ -70,7 +162,7 @@ async function readList(path: string): Promise<ApiRecord[]> {
 
   while (url && pages < 20) {
     pages += 1
-    const response = await fetch(url, { headers: { Accept: 'application/json' } })
+    const response = await fetch(url, { headers: { Accept: 'application/json', ...authHeaders() } })
     if (!response.ok) {
       throw new Error(`GET ${path} failed with ${response.status}`)
     }
@@ -293,6 +385,7 @@ async function sendJson(path: string, method: string, body?: Row): Promise<unkno
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
+      ...authHeaders(),
     },
     body: body ? JSON.stringify(body) : undefined,
   })
