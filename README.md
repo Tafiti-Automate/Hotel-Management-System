@@ -41,6 +41,34 @@ Set `VITE_BACKEND_URL=http://host:port` if Django runs somewhere else, or set
 The app starts on the **Login** screen — click **Sign in** (credentials are prefilled) to reach
 the module **Launchpad**, then open **Stock Management**.
 
+## Railway deployment
+
+The frontend service can stay rooted at `/frontend`. In production the React app calls
+`/api/v1/...` by default, so it expects the Django backend to be reachable on the same domain
+under `/api/v1`.
+
+For the Django backend service, create/use a Railway service from the same repo with root directory
+`/hotel_erp_backend`. The backend root includes `railway.json` and `requirements.txt` for Railway.
+Set these variables on the backend service:
+
+```text
+DJANGO_SECRET_KEY=<strong random secret>
+DJANGO_SETTINGS_MODULE=core.settings.prod
+DJANGO_CSRF_TRUSTED_ORIGINS=https://<your-railway-domain>
+```
+
+Attach a Railway Postgres database if possible; the backend will use Railway's `DATABASE_URL`
+automatically. After the first deploy, create a Django user/superuser in the backend service so the
+React login can exchange credentials for a DRF token. You can then sign in with either the username
+or employee code.
+
+If the backend gets a separate public URL instead of sharing the frontend domain, set this on the
+frontend service before building:
+
+```text
+VITE_API_BASE_URL=https://<backend-domain>/api/v1
+```
+
 ## What's implemented
 
 - **Login** → **Launchpad** (module picker) → **App shell**
