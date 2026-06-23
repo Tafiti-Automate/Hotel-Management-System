@@ -29,3 +29,26 @@ def test_setup_hotel_roles_creates_operational_groups():
     assert procurement_manager.permissions.filter(codename="change_purchaseorder").exists()
     assert procurement_manager.permissions.filter(codename="change_supplierreturn").exists()
     assert auditor.permissions.filter(codename="view_stockledger").exists()
+
+
+@pytest.mark.django_db
+def test_ensure_superuser_creates_and_updates_from_env(monkeypatch):
+    monkeypatch.setenv("DJANGO_SUPERUSER_USERNAME", "admin2")
+    monkeypatch.setenv("DJANGO_SUPERUSER_PASSWORD", "123")
+    monkeypatch.setenv("DJANGO_SUPERUSER_EMPLOYEE_CODE", "EMP-ADMIN2")
+    monkeypatch.setenv("DJANGO_SUPERUSER_EMAIL", "admin2@example.com")
+
+    call_command("ensure_superuser")
+
+    user = get_user_model().objects.get(username="admin2")
+    assert user.employee_code == "EMP-ADMIN2"
+    assert user.email == "admin2@example.com"
+    assert user.is_staff
+    assert user.is_superuser
+    assert user.check_password("123")
+
+    monkeypatch.setenv("DJANGO_SUPERUSER_PASSWORD", "new-password")
+    call_command("ensure_superuser")
+
+    user.refresh_from_db()
+    assert user.check_password("new-password")

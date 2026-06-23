@@ -55,12 +55,16 @@ Set these variables on the backend service:
 DJANGO_SECRET_KEY=<strong random secret>
 DJANGO_SETTINGS_MODULE=core.settings.prod
 DJANGO_CSRF_TRUSTED_ORIGINS=https://<your-railway-domain>
+DJANGO_SUPERUSER_USERNAME=admin2
+DJANGO_SUPERUSER_PASSWORD=123
+DJANGO_SUPERUSER_EMPLOYEE_CODE=EMP-ADMIN2
+DJANGO_SUPERUSER_EMAIL=admin2@example.com
 ```
 
 Attach a Railway Postgres database if possible; the backend will use Railway's `DATABASE_URL`
-automatically. After the first deploy, create a Django user/superuser in the backend service so the
-React login can exchange credentials for a DRF token. You can then sign in with either the username
-or employee code.
+automatically. When `DJANGO_SUPERUSER_USERNAME` and `DJANGO_SUPERUSER_PASSWORD` are set, Railway's
+start command creates/updates that superuser during deploy. You can then sign in with either the
+username or employee code.
 
 If the backend gets a separate public URL instead of sharing the frontend domain, set this on the
 frontend service before building:
