@@ -2,8 +2,10 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
+from rest_framework import status
 from rest_framework.viewsets import ModelViewSet
 
+from apps.employees.models import Employee
 from apps.procurement.models import (
     GoodsInspection,
     GoodsInspectionItem,
@@ -18,6 +20,7 @@ from apps.procurement.models import (
     VendorQuotation,
     VendorQuotationItem,
 )
+from apps.vendors.models import Supplier
 from apps.procurement.serializers import (
     GoodsInspectionItemSerializer,
     GoodsInspectionSerializer,
@@ -76,6 +79,43 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
         serializer = self.get_serializer(requisition)
         return Response(serializer.data)
 
+    @action(detail=True, methods=["post"], url_path="create-purchase-order")
+    def create_purchase_order(self, request, pk=None):
+        requisition = self.get_object()
+        try:
+            supplier = self._optional_object(Supplier, request.data.get("supplier"))
+            ordered_by = self._optional_object(Employee, request.data.get("ordered_by"))
+            store = None
+            if request.data.get("store"):
+                from apps.inventory.models import StoreLocation
+
+                store = self._optional_object(StoreLocation, request.data.get("store"))
+            if not ordered_by:
+                ordered_by = getattr(request.user, "employee_profile", None)
+
+            order = requisition.create_purchase_order(
+                supplier=supplier,
+                ordered_by=ordered_by,
+                store=store,
+                po_number=request.data.get("po_number", ""),
+                expected_date=request.data.get("expected_date") or None,
+                note=request.data.get("note", ""),
+                created_by=request.user if request.user.is_authenticated else None,
+            )
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+
+        serializer = PurchaseOrderSerializer(order, context=self.get_serializer_context())
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def _optional_object(self, model, pk):
+        if not pk:
+            return None
+        try:
+            return model.objects.get(pk=pk)
+        except model.DoesNotExist:
+            raise ValidationError({model._meta.model_name: "Selected record was not found."})
+
 
 class RequisitionItemViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = RequisitionItem.objects.select_related("requisition", "item")
@@ -94,11 +134,32 @@ class VendorQuotationViewSet(CreatedByModelMixin, ModelViewSet):
 
 
 class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
-    queryset = PurchaseOrder.objects.select_related("requisition", "supplier", "ordered_by", "store")
+    queryset = PurchaseOrder.objects.select_related("requisition", "supplier", "ordered_by", "store", "sent_by")
     serializer_class = PurchaseOrderSerializer
     filterset_fields = ("status", "requisition", "supplier", "ordered_by", "store")
     search_fields = ("po_number", "supplier__name", "ordered_by__user__employee_code", "store__name")
     ordering_fields = ("po_number", "status", "created_at")
+
+    @action(detail=True, methods=["post"])
+    def issue(self, request, pk=None):
+        order = self.get_object()
+        sent_by = None
+        if request.data.get("sent_by"):
+            try:
+                sent_by = Employee.objects.get(pk=request.data.get("sent_by"))
+            except Employee.DoesNotExist:
+                raise ValidationError({"sent_by": "Selected employee was not found."})
+        else:
+            sent_by = getattr(request.user, "employee_profile", None)
+        try:
+            order.issue(
+                sent_by=sent_by,
+                sent_to_email=request.data.get("sent_to_email", ""),
+            )
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        serializer = self.get_serializer(order)
+        return Response(serializer.data)
 
 
 class PurchaseOrderItemViewSet(CreatedByModelMixin, ModelViewSet):

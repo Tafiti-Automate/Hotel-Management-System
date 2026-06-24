@@ -114,6 +114,112 @@ class PurchaseRequisition(BaseModel):
             return PRStatus.FINANCE_APPROVED
         return PRStatus.DIRECTOR_APPROVED
 
+    def create_purchase_order(
+        self,
+        *,
+        supplier=None,
+        ordered_by=None,
+        store=None,
+        po_number="",
+        expected_date=None,
+        note="",
+        created_by=None,
+    ):
+        if self.status != PRStatus.APPROVED:
+            raise ValidationError("Purchase order can only be created from an approved requisition.")
+        if not ordered_by:
+            raise ValidationError("An ordering employee is required.")
+
+        supplier = supplier or self.preferred_supplier or self._selected_supplier()
+        if not supplier:
+            raise ValidationError("A supplier is required to create a purchase order.")
+
+        requisition_items = list(self.items.select_related("item").all())
+        if not requisition_items:
+            raise ValidationError("A purchase order requires at least one requisition item.")
+
+        with transaction.atomic():
+            order = PurchaseOrder.objects.create(
+                requisition=self,
+                supplier=supplier,
+                ordered_by=ordered_by,
+                store=store,
+                po_number=po_number,
+                expected_date=expected_date or self.expected_date,
+                note=note,
+                created_by=created_by,
+            )
+            for requisition_item in requisition_items:
+                quantity, unit, unit_cost = self._order_pricing_for_item(
+                    requisition_item,
+                    supplier,
+                )
+                PurchaseOrderItem.objects.create(
+                    purchase_order=order,
+                    item=requisition_item.item,
+                    unit=unit,
+                    quantity=quantity,
+                    unit_cost=unit_cost,
+                    created_by=created_by,
+                )
+            order.refresh_from_db()
+            return order
+
+    def _selected_supplier(self):
+        selected_quotes = (
+            VendorQuotation.objects.filter(
+                requisition=self,
+                items__selected=True,
+            )
+            .select_related("supplier")
+            .distinct()
+        )
+        if selected_quotes.count() == 1:
+            return selected_quotes.first().supplier
+        return None
+
+    def _order_pricing_for_item(self, requisition_item, supplier):
+        quotation_item = (
+            VendorQuotationItem.objects.filter(
+                requisition_item=requisition_item,
+                quotation__supplier=supplier,
+                selected=True,
+            )
+            .select_related("unit")
+            .order_by("unit_price")
+            .first()
+        )
+        if not quotation_item:
+            quotation_item = (
+                VendorQuotationItem.objects.filter(
+                    requisition_item=requisition_item,
+                    quotation__supplier=supplier,
+                )
+                .select_related("unit")
+                .order_by("unit_price")
+                .first()
+            )
+        if quotation_item:
+            return quotation_item.quantity, quotation_item.unit, quotation_item.unit_price
+
+        from apps.inventory.models import SupplierItemPrice
+
+        supplier_price = (
+            SupplierItemPrice.objects.filter(
+                supplier=supplier,
+                item=requisition_item.item,
+                is_active=True,
+            )
+            .select_related("unit")
+            .first()
+        )
+        if supplier_price:
+            return requisition_item.quantity, supplier_price.unit, supplier_price.unit_price
+
+        raise ValidationError(
+            f"No selected quotation or supplier price was found for {requisition_item.item}."
+        )
+
 
 class RequisitionItem(BaseModel):
     requisition = models.ForeignKey(
@@ -199,13 +305,22 @@ class PurchaseOrder(BaseModel):
         null=True,
         blank=True,
     )
-    po_number = models.CharField(max_length=50, unique=True)
+    po_number = models.CharField(max_length=50, unique=True, blank=True)
     status = models.CharField(
         max_length=30,
         choices=POStatus.choices,
         default=POStatus.DRAFT,
     )
     expected_date = models.DateField(null=True, blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    sent_by = models.ForeignKey(
+        "employees.Employee",
+        on_delete=models.SET_NULL,
+        related_name="sent_purchase_orders",
+        null=True,
+        blank=True,
+    )
+    sent_to_email = models.EmailField(blank=True)
     note = models.TextField(blank=True)
     total_amount = models.DecimalField(
         max_digits=15,
@@ -219,13 +334,33 @@ class PurchaseOrder(BaseModel):
     def __str__(self):
         return self.po_number
 
+    def save(self, *args, **kwargs):
+        if not self.po_number:
+            self.po_number = self.next_po_number()
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def next_po_number(cls):
+        prefix = f"PO-{timezone.localdate().year}"
+        last_order = cls.objects.filter(po_number__startswith=prefix).order_by("po_number").last()
+        next_number = 1
+        if last_order and last_order.po_number:
+            try:
+                next_number = int(last_order.po_number.split("-")[-1]) + 1
+            except (IndexError, ValueError):
+                next_number = 1
+        return f"{prefix}-{next_number:05d}"
+
     def clean(self):
         super().clean()
         if self.requisition_id and self.requisition.status != PRStatus.APPROVED:
             raise ValidationError("Purchase order can only be created from an approved requisition.")
 
     def update_total_amount(self):
-        self.total_amount = sum(item.line_total for item in self.items.all())
+        self.total_amount = sum(
+            (item.line_total for item in self.items.all()),
+            Decimal("0.00"),
+        ).quantize(Decimal("0.01"))
         self.save(update_fields=["total_amount", "updated_at"])
 
     def update_receipt_status(self):
@@ -238,11 +373,11 @@ class PurchaseOrder(BaseModel):
 
         received_total = sum(
             (
-                item.base_quantity
+                item.inventory_post_quantity()
                 for item in GoodsReceiptItem.objects.filter(
                     goods_receipt__purchase_order=self,
                     inventory_changes_applied=True,
-                )
+                ).select_related("goods_receipt")
             ),
             Decimal("0.00"),
         )
@@ -256,6 +391,19 @@ class PurchaseOrder(BaseModel):
         if self.status != status:
             self.status = status
             self.save(update_fields=["status", "updated_at"])
+
+    def issue(self, *, sent_by=None, sent_to_email=""):
+        if self.status != POStatus.DRAFT:
+            raise ValidationError("Only draft purchase orders can be sent to suppliers.")
+        self.full_clean()
+        if not self.items.exists():
+            raise ValidationError("Purchase order must include at least one item before sending.")
+
+        self.status = POStatus.ISSUED
+        self.sent_at = timezone.now()
+        self.sent_by = sent_by or self.sent_by
+        self.sent_to_email = sent_to_email or self.sent_to_email or self.supplier.email
+        self.save(update_fields=["status", "sent_at", "sent_by", "sent_to_email", "updated_at"])
 
 
 class PurchaseOrderItem(BaseModel):
@@ -341,6 +489,14 @@ class GoodsReceiptNote(BaseModel):
     def __str__(self):
         return f"GRN-{self.id}"
 
+    def clean(self):
+        super().clean()
+        if self.purchase_order_id and self.purchase_order.status not in (
+            POStatus.ISSUED,
+            POStatus.PARTIALLY_RECEIVED,
+        ):
+            raise ValidationError("Goods can only be received against a sent purchase order.")
+
     def post_to_inventory(self):
         receipt_items = list(
             self.items.select_related("purchase_order_item", "item", "store")
@@ -348,10 +504,11 @@ class GoodsReceiptNote(BaseModel):
         if not receipt_items:
             raise ValidationError("Goods receipt must include at least one item.")
 
-        for receipt_item in receipt_items:
-            receipt_item.post_to_inventory()
+        with transaction.atomic():
+            for receipt_item in receipt_items:
+                receipt_item.post_to_inventory()
 
-        self.purchase_order.update_receipt_status()
+            self.purchase_order.update_receipt_status()
 
 
 class GoodsReceiptItem(BaseModel):
@@ -450,20 +607,27 @@ class GoodsReceiptItem(BaseModel):
                 raise ValidationError("Goods receipt item has already been posted.")
             if not receipt_item.store_id:
                 raise ValidationError("Goods receipt item must have a store before posting.")
+            if receipt_item.goods_receipt.purchase_order.status not in (
+                POStatus.ISSUED,
+                POStatus.PARTIALLY_RECEIVED,
+            ):
+                raise ValidationError("Goods can only be posted against a sent purchase order.")
+
+            post_quantity = receipt_item.inventory_post_quantity(require_accepted=True)
 
             balance, _ = InventoryBalance.objects.select_for_update().get_or_create(
                 item=receipt_item.item,
                 store=receipt_item.store,
                 defaults={"quantity_in_stock": Decimal("0.00")},
             )
-            balance.quantity_in_stock += receipt_item.base_quantity
+            balance.quantity_in_stock += post_quantity
             balance.save(update_fields=["quantity_in_stock", "updated_at"])
 
             InventoryBatch.objects.create(
                 item=receipt_item.item,
                 store=receipt_item.store,
-                quantity=receipt_item.base_quantity,
-                remaining_quantity=receipt_item.base_quantity,
+                quantity=post_quantity,
+                remaining_quantity=post_quantity,
                 unit_cost=receipt_item.unit_cost,
                 expiry_date=receipt_item.expiry_date,
                 purchase_order_item=receipt_item.purchase_order_item,
@@ -472,7 +636,7 @@ class GoodsReceiptItem(BaseModel):
             StockLedger.objects.create(
                 item=receipt_item.item,
                 store=receipt_item.store,
-                quantity_in=receipt_item.base_quantity,
+                quantity_in=post_quantity,
                 reference_type=LedgerReferenceType.GOODS_RECEIPT,
                 reference_id=receipt_item.goods_receipt.id,
                 note=f"Received against {receipt_item.goods_receipt}",
@@ -483,6 +647,27 @@ class GoodsReceiptItem(BaseModel):
             receipt_item.save(update_fields=["inventory_changes_applied", "updated_at"])
             receipt_item.goods_receipt.purchase_order.update_receipt_status()
             self.inventory_changes_applied = True
+
+    def inventory_post_quantity(self, require_accepted=False):
+        try:
+            inspection = self.goods_receipt.inspection
+        except GoodsInspection.DoesNotExist:
+            inspection = None
+
+        if not inspection:
+            return self.base_quantity
+
+        inspection_item = inspection.items.filter(goods_receipt_item=self).first()
+        if not inspection_item:
+            raise ValidationError("Inspected receipts must include an inspection line before posting.")
+        if inspection_item.quantity_accepted <= Decimal("0.00"):
+            raise ValidationError("Only accepted inspection quantities can be posted to inventory.")
+        if require_accepted and inspection.status not in (
+            GoodsInspectionStatus.ACCEPTED,
+            GoodsInspectionStatus.PARTIALLY_ACCEPTED,
+        ):
+            raise ValidationError("Goods inspection must be accepted before posting to inventory.")
+        return inspection_item.quantity_accepted
 
     def __str__(self):
         return f"{self.goods_receipt} - {self.item} x {self.base_quantity}"

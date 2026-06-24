@@ -193,6 +193,29 @@ class ReorderRuleViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("item__name", "item__sku", "store__name", "preferred_supplier__name")
     ordering_fields = ("minimum_level", "reorder_quantity", "created_at")
 
+    @action(detail=True, methods=["post"], url_path="create-purchase-requisition")
+    def create_purchase_requisition(self, request, pk=None):
+        reorder_rule = self.get_object()
+        requester = getattr(request.user, "employee_profile", None)
+        department = requester.department if requester else None
+        try:
+            purchase_requisition = reorder_rule.create_purchase_requisition(
+                requester=requester,
+                department=department,
+                reason=request.data.get("reason", ""),
+                created_by=request.user if request.user.is_authenticated else None,
+            )
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+
+        from apps.procurement.serializers import PurchaseRequisitionSerializer
+
+        serializer = PurchaseRequisitionSerializer(
+            purchase_requisition,
+            context=self.get_serializer_context(),
+        )
+        return Response(serializer.data)
+
 
 class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = StoreRequisition.objects.select_related("department", "store", "requested_by", "approved_by")

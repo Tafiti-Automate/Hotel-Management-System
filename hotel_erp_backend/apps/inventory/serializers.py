@@ -194,10 +194,20 @@ class StockAdjustmentSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "created_at", "updated_at", "created_by")
 
 class ReorderRuleSerializer(serializers.ModelSerializer):
+    current_stock = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    needs_reorder = serializers.BooleanField(read_only=True)
+
     class Meta:
         model = ReorderRule
         fields = "__all__"
-        read_only_fields = ("id", "created_at", "updated_at", "created_by")
+        read_only_fields = (
+            "id",
+            "current_stock",
+            "needs_reorder",
+            "created_at",
+            "updated_at",
+            "created_by",
+        )
 
 
 class StoreRequisitionItemSerializer(serializers.ModelSerializer):

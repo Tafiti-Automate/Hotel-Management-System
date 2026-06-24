@@ -4,11 +4,7 @@ from core.mixins.models import BaseModel
 
 
 class Hotel(BaseModel):
-    """Parent hotel/company profile.
-
-    Supports both a single property hotel and a hotel group with many branches.
-    Branch/property records live in departments.Branch and point back to this model.
-    """
+    
 
     BUSINESS_TYPE_SINGLE = "single"
     BUSINESS_TYPE_GROUP = "group"

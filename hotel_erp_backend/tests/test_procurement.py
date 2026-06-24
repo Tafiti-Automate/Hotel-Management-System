@@ -17,6 +17,8 @@ from apps.inventory.models import (
     UnitOfMeasure,
 )
 from apps.procurement.models import (
+    GoodsInspection,
+    GoodsInspectionItem,
     GoodsReceiptItem,
     GoodsReceiptNote,
     PurchaseOrder,
@@ -24,7 +26,9 @@ from apps.procurement.models import (
     PurchaseRequisition,
     RequisitionItem,
     VendorQuotation,
+    VendorQuotationItem,
 )
+from apps.procurement.serializers import PurchaseOrderSerializer
 from apps.vendors.models import Supplier
 from core.constants.choices import POStatus, PRStatus
 
@@ -110,6 +114,7 @@ def test_goods_receipt_item_posts_received_stock_to_inventory():
         requester=employee,
         department=department,
         reason="Monthly kitchen restock",
+        status=PRStatus.APPROVED,
     )
     order = PurchaseOrder.objects.create(
         requisition=requisition,
@@ -125,6 +130,7 @@ def test_goods_receipt_item_posts_received_stock_to_inventory():
         quantity=Decimal("3.00"),
         unit_cost=Decimal("7000.00"),
     )
+    order.issue(sent_by=employee)
     receipt = GoodsReceiptNote.objects.create(
         purchase_order=order,
         received_by=employee,
@@ -180,3 +186,156 @@ def test_purchase_order_requires_approved_requisition_for_form_validation():
     requisition.status = PRStatus.APPROVED
     requisition.save(update_fields=["status", "updated_at"])
     order.full_clean()
+
+
+@pytest.mark.django_db
+def test_requisition_creates_purchase_order_from_selected_supplier_quote():
+    employee, department, supplier, item = create_procurement_context()
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        reason="Approved kitchen purchase",
+        status=PRStatus.APPROVED,
+    )
+    requisition_item = RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity=Decimal("4.00"),
+    )
+    quotation = VendorQuotation.objects.create(
+        requisition=requisition,
+        supplier=supplier,
+    )
+    VendorQuotationItem.objects.create(
+        quotation=quotation,
+        requisition_item=requisition_item,
+        quantity=Decimal("4.00"),
+        unit_price=Decimal("8000.00"),
+        selected=True,
+    )
+
+    order = requisition.create_purchase_order(ordered_by=employee)
+
+    order_item = order.items.get()
+    assert order.supplier == supplier
+    assert order.po_number.startswith("PO-")
+    assert order.status == POStatus.DRAFT
+    assert order.total_amount == Decimal("32000.00")
+    assert order_item.item == item
+    assert order_item.quantity == Decimal("4.00")
+    assert order_item.unit_cost == Decimal("8000.00")
+
+
+@pytest.mark.django_db
+def test_purchase_order_serializer_rejects_unapproved_requisition():
+    employee, department, supplier, item = create_procurement_context()
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        reason="Not approved yet",
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity=Decimal("1.00"),
+    )
+
+    serializer = PurchaseOrderSerializer(
+        data={
+            "requisition": str(requisition.id),
+            "supplier": str(supplier.id),
+            "ordered_by": str(employee.id),
+            "po_number": "PO-BLOCKED",
+        }
+    )
+
+    assert serializer.is_valid() is False
+    assert "requisition" in serializer.errors
+
+
+@pytest.mark.django_db
+def test_purchase_order_issue_tracks_supplier_send_details():
+    employee, department, supplier, item = create_procurement_context()
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        reason="Approved purchase",
+        status=PRStatus.APPROVED,
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition,
+        supplier=supplier,
+        ordered_by=employee,
+        po_number="PO-SEND-001",
+    )
+    PurchaseOrderItem.objects.create(
+        purchase_order=order,
+        item=item,
+        quantity=Decimal("2.00"),
+        unit_cost=Decimal("7000.00"),
+    )
+
+    order.issue(sent_by=employee)
+
+    order.refresh_from_db()
+    assert order.status == POStatus.ISSUED
+    assert order.sent_by == employee
+    assert order.sent_at is not None
+    assert order.sent_to_email == supplier.email
+
+
+@pytest.mark.django_db
+def test_inspected_receipt_posts_only_accepted_quantity_to_inventory():
+    employee, department, supplier, item = create_procurement_context()
+    branch = Branch.objects.create(name="Main Hotel")
+    store = StoreLocation.objects.create(branch=branch, name="Receiving Store")
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        reason="Approved inspected purchase",
+        status=PRStatus.APPROVED,
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition,
+        supplier=supplier,
+        ordered_by=employee,
+        store=store,
+        status=POStatus.ISSUED,
+        po_number="PO-INSPECT-001",
+    )
+    order_item = PurchaseOrderItem.objects.create(
+        purchase_order=order,
+        item=item,
+        quantity=Decimal("10.00"),
+        unit_cost=Decimal("5000.00"),
+    )
+    receipt = GoodsReceiptNote.objects.create(
+        purchase_order=order,
+        received_by=employee,
+    )
+    receipt_item = GoodsReceiptItem.objects.create(
+        goods_receipt=receipt,
+        purchase_order_item=order_item,
+        quantity_received=Decimal("10.00"),
+        unit_cost=Decimal("5000.00"),
+    )
+    inspection = GoodsInspection.objects.create(
+        goods_receipt=receipt,
+        inspected_by=employee,
+    )
+    GoodsInspectionItem.objects.create(
+        inspection=inspection,
+        goods_receipt_item=receipt_item,
+        quantity_received=Decimal("10.00"),
+        quantity_accepted=Decimal("7.00"),
+        quantity_rejected=Decimal("3.00"),
+        rejection_reason="Damaged packaging",
+    )
+
+    receipt_item.post_to_inventory()
+
+    order.refresh_from_db()
+    assert InventoryBalance.objects.get(item=item, store=store).quantity_in_stock == Decimal("7.00")
+    assert InventoryBatch.objects.get(item=item, store=store).remaining_quantity == Decimal("7.00")
+    assert StockLedger.objects.get(reference_id=receipt.id).quantity_in == Decimal("7.00")
+    assert order.status == POStatus.PARTIALLY_RECEIVED

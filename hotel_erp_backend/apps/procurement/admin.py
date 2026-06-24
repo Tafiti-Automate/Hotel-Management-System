@@ -119,13 +119,44 @@ class VendorQuotationAdmin(CreatedByAdminMixin, admin.ModelAdmin):
 
 @admin.register(PurchaseOrder)
 class PurchaseOrderAdmin(CreatedByAdminMixin, admin.ModelAdmin):
-    list_display = ("po_number", "supplier", "store", "ordered_by", "status", "total_amount", "created_at")
+    list_display = (
+        "po_number",
+        "supplier",
+        "store",
+        "ordered_by",
+        "status",
+        "sent_at",
+        "sent_to_email",
+        "total_amount",
+        "created_at",
+    )
     list_filter = ("status", "supplier", "store")
-    list_select_related = ("requisition", "supplier", "ordered_by", "store")
-    autocomplete_fields = ("requisition", "supplier", "ordered_by", "store")
-    search_fields = ("po_number", "supplier__name", "ordered_by__user__employee_code", "store__name")
+    list_select_related = ("requisition", "supplier", "ordered_by", "store", "sent_by")
+    autocomplete_fields = ("requisition", "supplier", "ordered_by", "store", "sent_by")
+    search_fields = (
+        "po_number",
+        "supplier__name",
+        "ordered_by__user__employee_code",
+        "store__name",
+        "sent_to_email",
+    )
+    readonly_fields = ("sent_at",)
     date_hierarchy = "created_at"
     inlines = [PurchaseOrderItemInline]
+    actions = ("issue_selected_orders",)
+
+    @admin.action(description="Send selected draft purchase orders to suppliers")
+    def issue_selected_orders(self, request, queryset):
+        issued = 0
+        employee = getattr(request.user, "employee_profile", None)
+        for order in queryset:
+            try:
+                order.issue(sent_by=employee)
+                issued += 1
+            except Exception as error:
+                self.message_user(request, f"{order}: {error}", level=messages.ERROR)
+        if issued:
+            self.message_user(request, f"Sent {issued} purchase order(s) to suppliers.")
 
 
 @admin.register(PurchaseOrderItem)

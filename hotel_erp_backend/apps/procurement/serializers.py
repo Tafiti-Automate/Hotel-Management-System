@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from core.constants.choices import PRStatus
+from core.constants.choices import POStatus, PRStatus
 from apps.procurement.models import (
     GoodsInspection,
     GoodsInspectionItem,
@@ -52,9 +52,9 @@ class RequisitionItemSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "total_amount", "created_at", "updated_at", "created_by")
 
     def validate_requisition(self, requisition):
-        if requisition.status != PRStatus.APPROVED:
+        if requisition.status not in (PRStatus.DRAFT, PRStatus.REJECTED):
             raise serializers.ValidationError(
-                "Purchase order can only be created from an approved requisition."
+                "Requisition items can only be changed while the requisition is draft or rejected."
             )
         return requisition
 
@@ -86,13 +86,33 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "po_number",
             "status",
             "expected_date",
+            "sent_at",
+            "sent_by",
+            "sent_to_email",
             "note",
             "total_amount",
             "created_at",
             "updated_at",
             "created_by",
         )
-        read_only_fields = ("id", "created_at", "updated_at", "created_by")
+        read_only_fields = (
+            "id",
+            "status",
+            "sent_at",
+            "sent_by",
+            "sent_to_email",
+            "total_amount",
+            "created_at",
+            "updated_at",
+            "created_by",
+        )
+
+    def validate_requisition(self, requisition):
+        if requisition.status != PRStatus.APPROVED:
+            raise serializers.ValidationError(
+                "Purchase order can only be created from an approved requisition."
+            )
+        return requisition
 
 
 class PurchaseOrderItemSerializer(serializers.ModelSerializer):
@@ -129,6 +149,13 @@ class GoodsReceiptNoteSerializer(serializers.ModelSerializer):
             "created_by",
         )
         read_only_fields = ("id", "created_at", "updated_at", "created_by")
+
+    def validate_purchase_order(self, purchase_order):
+        if purchase_order.status not in (POStatus.ISSUED, POStatus.PARTIALLY_RECEIVED):
+            raise serializers.ValidationError(
+                "Goods can only be received against a sent purchase order."
+            )
+        return purchase_order
 
 
 class GoodsReceiptItemSerializer(serializers.ModelSerializer):

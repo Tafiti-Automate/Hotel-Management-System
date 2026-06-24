@@ -12,6 +12,7 @@ from apps.inventory.models import (
     InventoryBalance,
     Item,
     ItemUnitPrice,
+    ReorderRule,
     StockCount,
     StockCountItem,
     StockIssue,
@@ -27,8 +28,9 @@ from apps.inventory.models import (
     SupplierItemPrice,
     UnitOfMeasure,
 )
+from apps.procurement.models import PurchaseRequisition
 from apps.vendors.models import Supplier
-from core.constants.choices import StockCountStatus, StoreRequisitionStatus
+from core.constants.choices import RequisitionType, StockCountStatus, StoreRequisitionStatus
 
 
 @pytest.mark.django_db
@@ -241,3 +243,47 @@ def test_stock_count_applies_variance_once():
 
     with pytest.raises(ValidationError):
         stock_count.apply_variances()
+
+
+@pytest.mark.django_db
+def test_reorder_rule_creates_hotel_purchase_requisition_when_stock_is_low():
+    department, employee, store, item = create_inventory_operations_context()
+    supplier = Supplier.objects.create(
+        name="Gas Supplier",
+        email="gas@example.com",
+        phone="+256700000004",
+        address="Kampala",
+        tin_number="TIN-004",
+        registration_number="REG-004",
+    )
+    rule = ReorderRule.objects.create(
+        item=item,
+        store=store,
+        minimum_level=Decimal("45.00"),
+        reorder_quantity=Decimal("25.00"),
+        preferred_supplier=supplier,
+    )
+
+    requisition = rule.create_purchase_requisition(
+        requester=employee,
+        department=department,
+    )
+
+    assert requisition.request_type == RequisitionType.HOTEL_PURCHASE
+    assert requisition.preferred_supplier == supplier
+    assert requisition.items.get().quantity == Decimal("25.00")
+    assert PurchaseRequisition.objects.filter(id=requisition.id).exists()
+
+
+@pytest.mark.django_db
+def test_reorder_rule_does_not_create_purchase_requisition_when_stock_is_enough():
+    department, employee, store, item = create_inventory_operations_context()
+    rule = ReorderRule.objects.create(
+        item=item,
+        store=store,
+        minimum_level=Decimal("20.00"),
+        reorder_quantity=Decimal("25.00"),
+    )
+
+    with pytest.raises(ValidationError):
+        rule.create_purchase_requisition(requester=employee, department=department)

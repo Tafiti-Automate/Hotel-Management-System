@@ -646,6 +646,53 @@ class ReorderRule(BaseModel):
         scope = self.store or "All stores"
         return f"{self.item} reorder rule - {scope}"
 
+    @property
+    def current_stock(self):
+        balances = InventoryBalance.objects.filter(item=self.item)
+        if self.store_id:
+            balances = balances.filter(store=self.store)
+        return sum(
+            (balance.quantity_in_stock for balance in balances),
+            Decimal("0.00"),
+        )
+
+    @property
+    def needs_reorder(self):
+        return self.is_active and self.current_stock <= self.minimum_level
+
+    def create_purchase_requisition(
+        self,
+        *,
+        requester=None,
+        department=None,
+        reason="",
+        created_by=None,
+    ):
+        if not self.is_active:
+            raise ValidationError("Inactive reorder rules cannot create purchase requisitions.")
+        if not self.needs_reorder:
+            raise ValidationError("Current stock is above the reorder minimum.")
+
+        from apps.procurement.models import PurchaseRequisition, RequisitionItem
+        from core.constants.choices import RequisitionType
+
+        scope = self.store.name if self.store_id else "all stores"
+        purchase_requisition = PurchaseRequisition.objects.create(
+            request_type=RequisitionType.HOTEL_PURCHASE,
+            requester=requester,
+            department=department,
+            preferred_supplier=self.preferred_supplier,
+            reason=reason or f"Low stock reorder for {self.item} at {scope}.",
+            created_by=created_by,
+        )
+        RequisitionItem.objects.create(
+            requisition=purchase_requisition,
+            item=self.item,
+            quantity=self.reorder_quantity,
+            created_by=created_by,
+        )
+        return purchase_requisition
+
 
 class StoreRequisition(BaseModel):
     requisition_no = models.CharField(max_length=50, unique=True, blank=True)
