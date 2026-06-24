@@ -21,6 +21,11 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: true,
         },
+        '/media': {
+          target: backendTarget,
+          changeOrigin: true,
+          secure: true,
+        },
       },
     },
     server: {
@@ -37,6 +42,10 @@ export default defineConfig(({ mode }) => {
       },
       proxy: {
         '/api': {
+          target: backendTarget,
+          changeOrigin: true,
+        },
+        '/media': {
           target: backendTarget,
           changeOrigin: true,
         },

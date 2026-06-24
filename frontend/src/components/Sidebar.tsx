@@ -31,6 +31,7 @@ const groups: NavGroup[] = [
     ],
   },
   { heading: 'INSIGHTS', items: [{ route: 'reports', label: 'Reports', icon: 'bar_chart' }] },
+  { heading: 'ADMINISTRATION', items: [{ route: 'hotel-profile', label: 'Hotel Profile', icon: 'domain' }] },
 ]
 
 export default function Sidebar() {

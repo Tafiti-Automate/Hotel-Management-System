@@ -52,6 +52,35 @@ export interface AuthUser {
   is_staff?: boolean
 }
 
+export interface HotelRecord {
+  id: string
+  name: string
+  legal_name: string
+  business_type: 'single' | 'group'
+  registration_number: string
+  tax_identification_number: string
+  email: string
+  phone: string
+  alternate_phone: string
+  website: string
+  logo: string | null
+  address: string
+  city: string
+  country: string
+  currency: string
+  timezone: string
+  is_active: boolean
+  branch_count: number
+  created_at: string
+  updated_at: string
+  created_by: string | null
+}
+
+export type HotelInput = Omit<
+  HotelRecord,
+  'id' | 'logo' | 'branch_count' | 'created_at' | 'updated_at' | 'created_by'
+>
+
 const TOKEN_KEY = 'hms_token'
 const USER_KEY = 'hms_user'
 
@@ -176,6 +205,51 @@ async function readList(path: string): Promise<ApiRecord[]> {
   }
 
   return rows
+}
+
+function apiErrorDetail(body: unknown, fallback: string): string {
+  if (!body || typeof body !== 'object') return fallback
+  const record = body as Record<string, unknown>
+  if (typeof record.detail === 'string') return record.detail
+
+  const messages = Object.entries(record).flatMap(([field, value]) => {
+    const items = Array.isArray(value) ? value : [value]
+    return items
+      .filter((item): item is string => typeof item === 'string')
+      .map((item) => `${field.replace(/_/g, ' ')}: ${item}`)
+  })
+  return messages.join(' ') || fallback
+}
+
+export async function fetchHotels(): Promise<HotelRecord[]> {
+  return (await readList('hotels')) as unknown as HotelRecord[]
+}
+
+export async function saveHotel(id: string | null, values: HotelInput, logo?: File | null): Promise<HotelRecord> {
+  const form = new FormData()
+  Object.entries(values).forEach(([key, value]) => {
+    form.append(key, typeof value === 'boolean' ? String(value) : value)
+  })
+  if (logo) form.append('logo', logo)
+
+  const method = id ? 'PATCH' : 'POST'
+  const response = await fetch(endpointUrl(id ? `hotels/${id}` : 'hotels'), {
+    method,
+    headers: { Accept: 'application/json', ...authHeaders() },
+    body: form,
+  })
+
+  if (!response.ok) {
+    let body: unknown = null
+    try {
+      body = await response.json()
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new Error(apiErrorDetail(body, `${method} hotels failed with ${response.status}`))
+  }
+
+  return response.json() as Promise<HotelRecord>
 }
 
 async function safeRead(path: string): Promise<ApiListResult> {

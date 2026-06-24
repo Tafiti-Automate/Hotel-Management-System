@@ -19,13 +19,14 @@ function segStyle(on: boolean): CSSProperties {
 
 export default function Header() {
   const app = useApp()
+  const isHotelProfile = app.route === 'hotel-profile'
 
   return (
     <header style={{ height: 62, flex: 'none', display: 'flex', alignItems: 'center', gap: 16, padding: '0 var(--pad)', borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, flex: 'none' }}>
         <Icon name="home" size={18} color="var(--text-faint)" />
         <span style={{ color: 'var(--text-faint)' }}>/</span>
-        <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Stock Management</span>
+        <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>{isHotelProfile ? 'Administration' : 'Stock Management'}</span>
         <span style={{ color: 'var(--text-faint)' }}>/</span>
         <span style={{ fontWeight: 700, color: 'var(--text)' }}>{app.crumb}</span>
       </div>
@@ -89,9 +90,11 @@ export default function Header() {
 
         <div style={{ width: 1, height: 24, background: 'var(--border)', margin: '0 2px' }} />
 
-        <button onClick={() => app.navTo('requisitions', 'Requisitions')} className="hover-accent" style={{ display: 'flex', alignItems: 'center', gap: 7, height: 38, padding: '0 15px', border: 'none', cursor: 'pointer', background: 'var(--accent)', color: '#fff', borderRadius: 11, font: 'inherit', fontSize: 13, fontWeight: 700, boxShadow: 'var(--shadow-sm)' }}>
-          <Icon name="add" size={18} weight={500} />New Requisition
-        </button>
+        {!isHotelProfile && (
+          <button onClick={() => app.navTo('requisitions', 'Requisitions')} className="hover-accent" style={{ display: 'flex', alignItems: 'center', gap: 7, height: 38, padding: '0 15px', border: 'none', cursor: 'pointer', background: 'var(--accent)', color: '#fff', borderRadius: 11, font: 'inherit', fontSize: 13, fontWeight: 700, boxShadow: 'var(--shadow-sm)' }}>
+            <Icon name="add" size={18} weight={500} />New Requisition
+          </button>
+        )}
       </div>
     </header>
   )

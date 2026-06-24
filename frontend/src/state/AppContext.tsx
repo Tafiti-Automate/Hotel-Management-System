@@ -21,7 +21,7 @@ import type { AccentName, Density, Mode } from '../lib/theme'
 export type Screen = 'login' | 'launchpad' | 'app'
 export type Tab = 'overview' | 'procurement' | 'inventory'
 
-export interface User { name: string; role: string; id: string }
+export interface User { name: string; role: string; id: string; isStaff: boolean }
 
 interface FormTarget { entity: EntityKey; id: string | null }
 interface ConfirmTarget { entity: EntityKey; id: string; name: string }
@@ -128,8 +128,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const toastTimer = useRef<ReturnType<typeof setTimeout>>()
   const didInitialSync = useRef(false)
 
-  const GUEST: User = { name: 'Guest', role: '—', id: '' }
-  const toUser = (u: AuthUser | null): User => (u ? { name: u.name, role: u.role, id: u.id } : GUEST)
+  const GUEST: User = { name: 'Guest', role: '—', id: '', isStaff: false }
+  const toUser = (u: AuthUser | null): User => (u ? { name: u.name, role: u.role, id: u.id, isStaff: Boolean(u.is_staff) } : GUEST)
   const storedUser = getStoredUser()
   const [user, setUser] = useState<User>(toUser(storedUser))
   const hasSession = Boolean(getToken() && storedUser)

@@ -6,6 +6,7 @@ import ListView from './ListView'
 import DetailView from './DetailView'
 import Reports from './Reports'
 import ReportView from './ReportView'
+import HotelProfile from './HotelProfile'
 
 const listRoutes: string[] = [
   'items', 'categories', 'uoms', 'locations', 'suppliers',
@@ -21,6 +22,7 @@ export default function AppShell() {
   else if (route === 'detail') content = <DetailView />
   else if (route === 'reports') content = <Reports />
   else if (route === 'reportview') content = <ReportView />
+  else if (route === 'hotel-profile') content = <HotelProfile />
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
