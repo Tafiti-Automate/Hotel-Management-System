@@ -5,7 +5,8 @@ export type Row = Record<string, any>
 export type EntityKey =
   | 'items' | 'categories' | 'uoms' | 'locations' | 'suppliers'
   | 'balances' | 'ledgers' | 'batches'
-  | 'requisitions' | 'orders' | 'grns'
+  | 'reorderRules' | 'storeRequisitions' | 'stockIssues' | 'storeReturns'
+  | 'requisitions' | 'orders' | 'grns' | 'inspections' | 'supplierReturns'
 
 export interface Line { item: string; qty: number; uom: string; unitCost: number }
 
@@ -167,6 +168,51 @@ export const cfg: Record<string, EntityConfig> = {
       { key: 'status', label: 'Status', w: '100px', kind: 'status', align: 'right' },
     ],
   },
+  reorderRules: {
+    title: 'Reorder Rules', sub: 'Low-stock triggers for hotel purchases', icon: 'notification_important',
+    cols: [
+      { key: 'item', label: 'Item', w: 'minmax(0,1.7fr)', kind: 'bold' },
+      { key: 'store', label: 'Store', w: '1.2fr', kind: 'text' },
+      { key: 'minimum', label: 'Minimum', w: '90px', kind: 'num', align: 'right' },
+      { key: 'onHand', label: 'On hand', w: '90px', kind: 'num', align: 'right' },
+      { key: 'reorderQty', label: 'Reorder qty', w: '110px', kind: 'num', align: 'right' },
+      { key: 'supplier', label: 'Supplier', w: '1.4fr', kind: 'text' },
+      { key: 'status', label: 'Status', w: '110px', kind: 'status', align: 'right' },
+    ],
+  },
+  storeRequisitions: {
+    title: 'Store Requisitions', sub: 'Departments requesting stock from stores', icon: 'assignment',
+    cols: [
+      { key: 'id', label: 'Request', w: '1.1fr', kind: 'mono' },
+      { key: 'department', label: 'Department', w: '1.3fr', kind: 'text' },
+      { key: 'store', label: 'Store', w: '1.2fr', kind: 'text' },
+      { key: 'requester', label: 'Requested by', w: '1.2fr', kind: 'text' },
+      { key: 'count', label: 'Items', w: '70px', kind: 'num', align: 'right' },
+      { key: 'status', label: 'Status', w: '130px', kind: 'status', align: 'right' },
+    ],
+  },
+  stockIssues: {
+    title: 'Stock Issues', sub: 'Approved store requests issued to departments', icon: 'outbox',
+    cols: [
+      { key: 'id', label: 'Issue', w: '1.1fr', kind: 'mono' },
+      { key: 'request', label: 'Request', w: '1.1fr', kind: 'mono' },
+      { key: 'store', label: 'Store', w: '1.2fr', kind: 'text' },
+      { key: 'issuedBy', label: 'Issued by', w: '1.2fr', kind: 'text' },
+      { key: 'count', label: 'Items', w: '70px', kind: 'num', align: 'right' },
+      { key: 'status', label: 'Status', w: '130px', kind: 'status', align: 'right' },
+    ],
+  },
+  storeReturns: {
+    title: 'Store Returns', sub: 'Unused department stock returned to stores', icon: 'assignment_return',
+    cols: [
+      { key: 'id', label: 'Return', w: '1.1fr', kind: 'mono' },
+      { key: 'department', label: 'Department', w: '1.3fr', kind: 'text' },
+      { key: 'store', label: 'Store', w: '1.2fr', kind: 'text' },
+      { key: 'receivedBy', label: 'Received by', w: '1.2fr', kind: 'text' },
+      { key: 'count', label: 'Items', w: '70px', kind: 'num', align: 'right' },
+      { key: 'status', label: 'Status', w: '130px', kind: 'status', align: 'right' },
+    ],
+  },
   requisitions: {
     title: 'Requisitions', sub: 'Purchase requisitions from departments', icon: 'request_quote', detail: true,
     cols: [
@@ -209,6 +255,28 @@ export const cfg: Record<string, EntityConfig> = {
       { key: 'po', label: 'PO', w: '1.1fr', kind: 'mono' },
       { key: 'supplier', label: 'Supplier', w: 'minmax(0,1.5fr)', kind: 'text' },
       { key: 'date', label: 'Date', w: '1.1fr', kind: 'text' },
+      { key: 'status', label: 'Status', w: '120px', kind: 'status', align: 'right' },
+    ],
+  },
+  inspections: {
+    title: 'Goods Inspections', sub: 'Accepted and rejected received goods', icon: 'fact_check',
+    cols: [
+      { key: 'id', label: 'Inspection', w: '1.1fr', kind: 'mono' },
+      { key: 'grn', label: 'GRN', w: '1.1fr', kind: 'mono' },
+      { key: 'inspectedBy', label: 'Inspected by', w: '1.2fr', kind: 'text' },
+      { key: 'date', label: 'Date', w: '1fr', kind: 'text' },
+      { key: 'deliveryNote', label: 'Delivery note', w: '1.2fr', kind: 'mono' },
+      { key: 'status', label: 'Status', w: '140px', kind: 'status', align: 'right' },
+    ],
+  },
+  supplierReturns: {
+    title: 'Supplier Returns', sub: 'Rejected or damaged goods returned to suppliers', icon: 'keyboard_return',
+    cols: [
+      { key: 'id', label: 'Return', w: '1.1fr', kind: 'mono' },
+      { key: 'supplier', label: 'Supplier', w: 'minmax(0,1.5fr)', kind: 'text' },
+      { key: 'store', label: 'Store', w: '1.2fr', kind: 'text' },
+      { key: 'returnedBy', label: 'Returned by', w: '1.2fr', kind: 'text' },
+      { key: 'date', label: 'Date', w: '1fr', kind: 'text' },
       { key: 'status', label: 'Status', w: '120px', kind: 'status', align: 'right' },
     ],
   },
