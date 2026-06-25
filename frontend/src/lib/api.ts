@@ -20,6 +20,11 @@ const endpoints = {
   vendors: 'vendors',
   ledgers: 'stock-ledger',
   batches: 'inventory-batches',
+  reorderRules: 'reorder-rules',
+  storeRequisitions: 'store-requisitions',
+  storeReqItems: 'store-requisition-items',
+  stockIssues: 'stock-issues',
+  stockIssueItems: 'stock-issue-items',
   requisitions: 'requisitions',
   reqItems: 'requisition-items',
   orders: 'purchase-orders',
@@ -37,6 +42,8 @@ const entityEndpoints: Partial<Record<EntityKey, string>> = {
   locations: 'stores',
   suppliers: 'vendors',
   requisitions: 'requisitions',
+  reorderRules: 'reorder-rules',
+  storeRequisitions: 'store-requisitions',
 }
 
 function apiRoot(): string {
@@ -288,6 +295,24 @@ function dateOnly(value: unknown): string {
   return text(value).slice(0, 10)
 }
 
+function toBackendBusinessType(value: unknown): string {
+  const raw = text(value).toLowerCase()
+  if (raw.includes('resale') || raw.includes('revenue')) return 'resale_revenue'
+  if (raw.includes('production')) return 'production_input'
+  if (raw.includes('asset')) return 'fixed_asset'
+  if (raw.includes('service')) return 'service_supply'
+  return raw || 'consumable_expense'
+}
+
+function fromBackendBusinessType(value: unknown): string {
+  const raw = text(value, 'consumable_expense')
+  if (raw === 'resale_revenue') return 'Resale / Revenue Item'
+  if (raw === 'production_input') return 'Production Input'
+  if (raw === 'fixed_asset') return 'Fixed Asset'
+  if (raw === 'service_supply') return 'Service Supply'
+  return 'Consumable / Operating Expense'
+}
+
 function titleCaseStatus(value: unknown): string {
   const raw = text(value, 'active').replace(/_/g, ' ')
   return raw.replace(/\w\S*/g, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
@@ -469,7 +494,39 @@ function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey
       unit: text(values.uom, 'Unit'),
       base_unit: unitId || null,
       reorder_level: num(values.reorder),
+      business_type: toBackendBusinessType(values.businessType),
       is_active: true,
+    }
+  }
+
+  if (entity === 'reorderRules') {
+    const itemId = findDataId(data, 'items', values.item)
+    if (!itemId) throw new Error('Choose an item before saving this reorder rule.')
+    const storeId = findDataId(data, 'locations', values.store)
+    const supplierId = findDataId(data, 'suppliers', values.supplier)
+    return {
+      item: itemId,
+      store: storeId || null,
+      minimum_level: num(values.minimum),
+      reorder_quantity: num(values.reorderQty),
+      preferred_supplier: supplierId || null,
+      is_active: text(values.status, 'Active') !== 'Inactive',
+    }
+  }
+
+  if (entity === 'storeRequisitions') {
+    const departmentId = findDataId(data, 'departments', values.department)
+    const storeId = findDataId(data, 'locations', values.store)
+    const requesterId = findDataId(data, 'employees', values.requester)
+    if (!departmentId) throw new Error('Choose a department before saving this store requisition.')
+    if (!storeId) throw new Error('Choose a store before saving this store requisition.')
+    if (!requesterId) throw new Error('Choose a requester before saving this store requisition.')
+    return {
+      department: departmentId,
+      store: storeId,
+      requested_by: requesterId,
+      required_date: text(values.required_date) || null,
+      purpose: text(values.purpose, 'Department stock request'),
     }
   }
 
@@ -584,6 +641,7 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
       name: text(row.name),
       sku: text(row.sku, `ITM-${String(index + 1).padStart(3, '0')}`),
       category: categoryNames.get(text(row.category)) || shortId(row.category),
+      businessType: fromBackendBusinessType(row.business_type),
       uom: unitNames.get(text(row.base_unit)) || text(row.unit),
       store: storeNames.get(text(balance?.store)) || '',
       onHand,
@@ -631,6 +689,46 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
     expiry: dateOnly(row.expiry_date),
     store: storeNames.get(text(row.store)) || shortId(row.store),
     status: expiryStatus(row.expiry_date, row.is_depleted),
+  }))
+
+  data.reorderRules = raw.reorderRules.map((row) => {
+    const itemId = text(row.item)
+    const storeId = text(row.store)
+    const balance = raw.balances.find((b) => text(b.item) === itemId && (!storeId || text(b.store) === storeId))
+    const onHand = num(balance?.quantity_in_stock)
+    const minimum = num(row.minimum_level)
+    return {
+      id: idOf(row),
+      item: itemNames.get(itemId) || shortId(itemId),
+      store: storeNames.get(storeId) || 'Default',
+      minimum,
+      onHand,
+      reorderQty: num(row.reorder_quantity),
+      supplier: supplierNames.get(text(row.preferred_supplier)) || '',
+      status: bool(row.is_active) ? (onHand <= minimum ? 'Low' : 'Active') : 'Inactive',
+    }
+  })
+
+  data.storeRequisitions = raw.storeRequisitions.map((row) => ({
+    id: text(row.requisition_no, idOf(row)),
+    apiId: idOf(row),
+    department: departmentNames.get(text(row.department)) || shortId(row.department),
+    store: storeNames.get(text(row.store)) || shortId(row.store),
+    requester: employeeNames.get(text(row.requested_by)) || shortId(row.requested_by),
+    required_date: dateOnly(row.required_date),
+    purpose: text(row.purpose),
+    count: (raw.storeReqItems || []).filter((item) => text(item.requisition) === idOf(row)).length,
+    status: titleCaseStatus(row.status),
+  }))
+
+  data.stockIssues = raw.stockIssues.map((row) => ({
+    id: text(row.issue_no, idOf(row)),
+    apiId: idOf(row),
+    request: shortId(row.requisition),
+    store: storeNames.get(text(row.store)) || shortId(row.store),
+    issuedBy: employeeNames.get(text(row.issued_by)) || shortId(row.issued_by),
+    count: (raw.stockIssueItems || []).filter((item) => text(item.issue) === idOf(row)).length,
+    status: bool(row.inventory_changes_applied) ? 'Applied' : 'Pending',
   }))
 
   const reqItemsByRequisition = groupBy(raw.reqItems, 'requisition')

@@ -55,8 +55,9 @@ export const cfg: Record<string, EntityConfig> = {
     cols: [
       { key: 'name', label: 'Item', w: 'minmax(0,1.7fr)', kind: 'bold' },
       { key: 'sku', label: 'SKU', w: '1fr', kind: 'mono' },
-      { key: 'category', label: 'Category', w: '1.2fr', kind: 'text' },
-      { key: 'store', label: 'Store', w: '1.2fr', kind: 'text' },
+      { key: 'category', label: 'Category', w: '1.1fr', kind: 'text' },
+      { key: 'businessType', label: 'Type', w: '1.15fr', kind: 'status' },
+      { key: 'store', label: 'Store', w: '1.1fr', kind: 'text' },
       { key: 'onHand', label: 'On hand', w: '90px', kind: 'num', align: 'right' },
       { key: 'reorder', label: 'Reorder', w: '90px', kind: 'num', align: 'right' },
       { key: 'unitCost', label: 'Unit cost', w: '100px', kind: 'money2', align: 'right' },
@@ -66,6 +67,7 @@ export const cfg: Record<string, EntityConfig> = {
       { key: 'name', label: 'Item name', type: 'text' },
       { key: 'sku', label: 'SKU', type: 'text' },
       { key: 'category', label: 'Category', type: 'select', opts: 'categories' },
+      { key: 'businessType', label: 'Business classification', type: 'select', opts: 'businessTypes' },
       { key: 'uom', label: 'Unit of measure', type: 'select', opts: 'uoms' },
       { key: 'store', label: 'Store location', type: 'select', opts: 'locations' },
       { key: 'onHand', label: 'On hand qty', type: 'number' },
@@ -170,7 +172,7 @@ export const cfg: Record<string, EntityConfig> = {
     ],
   },
   reorderRules: {
-    title: 'Reorder Rules', sub: 'Low-stock triggers for hotel purchases', icon: 'notification_important',
+    title: 'Reorder Rules', sub: 'Low-stock triggers for hotel purchases', icon: 'notification_important', add: 'Add rule', singular: 'Reorder Rule', editable: true,
     cols: [
       { key: 'item', label: 'Item', w: 'minmax(0,1.7fr)', kind: 'bold' },
       { key: 'store', label: 'Store', w: '1.2fr', kind: 'text' },
@@ -180,9 +182,16 @@ export const cfg: Record<string, EntityConfig> = {
       { key: 'supplier', label: 'Supplier', w: '1.4fr', kind: 'text' },
       { key: 'status', label: 'Status', w: '110px', kind: 'status', align: 'right' },
     ],
+    fields: [
+      { key: 'item', label: 'Item', type: 'select', opts: 'items' },
+      { key: 'store', label: 'Store', type: 'select', opts: 'locations' },
+      { key: 'minimum', label: 'Minimum stock level', type: 'number' },
+      { key: 'reorderQty', label: 'Reorder quantity', type: 'number' },
+      { key: 'supplier', label: 'Preferred supplier', type: 'select', opts: 'suppliers' },
+    ],
   },
   storeRequisitions: {
-    title: 'Store Requisitions', sub: 'Departments requesting stock from stores', icon: 'assignment',
+    title: 'Store Requisitions', sub: 'Departments requesting stock from stores', icon: 'assignment', add: 'New store request', singular: 'Store Requisition', editable: true, detail: true,
     cols: [
       { key: 'id', label: 'Request', w: '1.1fr', kind: 'mono' },
       { key: 'department', label: 'Department', w: '1.3fr', kind: 'text' },
@@ -191,9 +200,16 @@ export const cfg: Record<string, EntityConfig> = {
       { key: 'count', label: 'Items', w: '70px', kind: 'num', align: 'right' },
       { key: 'status', label: 'Status', w: '130px', kind: 'status', align: 'right' },
     ],
+    fields: [
+      { key: 'department', label: 'Department', type: 'select', opts: 'departments' },
+      { key: 'store', label: 'Store', type: 'select', opts: 'locations' },
+      { key: 'requester', label: 'Requested by', type: 'select', opts: 'employees' },
+      { key: 'required_date', label: 'Required date', type: 'date' },
+      { key: 'purpose', label: 'Purpose', type: 'textarea' },
+    ],
   },
   stockIssues: {
-    title: 'Stock Issues', sub: 'Approved store requests issued to departments', icon: 'outbox',
+    title: 'Stock Issues', sub: 'Approved store requests issued to departments', icon: 'outbox', detail: true,
     cols: [
       { key: 'id', label: 'Issue', w: '1.1fr', kind: 'mono' },
       { key: 'request', label: 'Request', w: '1.1fr', kind: 'mono' },
@@ -310,6 +326,8 @@ export function getOptions(key: string, data: Record<EntityKey, Row[]>): string[
   if (key === 'suppliers') return (data.suppliers || []).map((s) => s.name)
   if (key === 'departments') return (data.departments || []).map((d) => d.name)
   if (key === 'employees') return (data.employees || []).map((e) => e.name)
+  if (key === 'items') return (data.items || []).map((i) => i.name)
+  if (key === 'businessTypes') return ['Consumable / Operating Expense', 'Resale / Revenue Item', 'Production Input', 'Fixed Asset', 'Service Supply']
   if (key === 'reqTypes') return ['department', 'hotel_purchase']
   if (key === 'supStatus') return ['Active', 'On hold', 'Inactive']
   if (key === 'genStatus') return ['Active', 'Inactive']

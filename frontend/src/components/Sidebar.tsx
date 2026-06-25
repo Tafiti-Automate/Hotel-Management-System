@@ -18,6 +18,9 @@ const groups: NavGroup[] = [
       { route: 'balances', label: 'Stock Balances', icon: 'equalizer' },
       { route: 'ledgers', label: 'Stock Ledgers', icon: 'menu_book' },
       { route: 'batches', label: 'Inventory Batches', icon: 'layers' },
+      { route: 'reorderRules', label: 'Reorder Rules', icon: 'notification_important' },
+      { route: 'storeRequisitions', label: 'Store Requisitions', icon: 'assignment' },
+      { route: 'stockIssues', label: 'Stock Issues', icon: 'outbox' },
     ],
   },
   {
