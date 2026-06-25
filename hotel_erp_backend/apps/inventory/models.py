@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db import models, transaction
 
 from core.constants.choices import (
+    ItemBusinessType,
     LedgerReferenceType,
     StockAdjustmentStatus,
     StockCountStatus,
@@ -64,6 +65,12 @@ class Item(BaseModel):
         max_digits=12,
         decimal_places=2,
         validators=[validate_non_negative_decimal],
+    )
+    business_type = models.CharField(
+        max_length=30,
+        choices=ItemBusinessType.choices,
+        default=ItemBusinessType.CONSUMABLE_EXPENSE,
+        help_text="Classifies whether the item is an operating expense, revenue/resale item, production input, fixed asset, or service supply.",
     )
     is_active = models.BooleanField(default=True)
 

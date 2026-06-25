@@ -56,6 +56,7 @@ class ItemSerializer(serializers.ModelSerializer):
             "unit",
             "base_unit",
             "reorder_level",
+            "business_type",
             "is_active",
             "created_at",
             "updated_at",

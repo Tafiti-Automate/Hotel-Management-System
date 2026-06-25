@@ -1,6 +1,14 @@
 from django.db import models
 
 
+class ItemBusinessType(models.TextChoices):
+    CONSUMABLE_EXPENSE = "consumable_expense", "Consumable / Operating Expense"
+    RESALE_REVENUE = "resale_revenue", "Resale / Revenue Item"
+    PRODUCTION_INPUT = "production_input", "Production Input"
+    FIXED_ASSET = "fixed_asset", "Fixed Asset"
+    SERVICE_SUPPLY = "service_supply", "Service Supply"
+
+
 class PRStatus(models.TextChoices):
     DRAFT = "draft", "Draft"
     SUBMITTED = "submitted", "Submitted"
