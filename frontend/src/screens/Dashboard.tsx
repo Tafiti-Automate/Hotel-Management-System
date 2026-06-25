@@ -143,7 +143,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div>
+    <div className="dashboard-screen">
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 18 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: '-.025em', color: 'var(--text)' }}>Dashboard</h1>
@@ -188,7 +188,7 @@ export default function Dashboard() {
         </div>
 
         {/* Pipeline + Recent activity */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.9fr) minmax(0,320px)', gap: 'var(--gap)' }}>
+        <div className="dashboard-grid dashboard-grid-side" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.9fr) minmax(0,320px)', gap: 'var(--gap)' }}>
           <div style={card}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
               <div>
@@ -238,7 +238,7 @@ export default function Dashboard() {
 
         {/* Procurement group: spend by category + PO donut */}
         {showProcurement && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) minmax(0,1fr)', gap: 'var(--gap)' }}>
+          <div className="dashboard-grid dashboard-grid-two" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) minmax(0,1fr)', gap: 'var(--gap)' }}>
             <div style={card}>
               <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 16 }}>
                 <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', letterSpacing: '-.01em' }}>Spend by supplier</div>
@@ -247,12 +247,12 @@ export default function Dashboard() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
                 {spend.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>No purchase order spend returned by the backend.</div>}
                 {spend.map((s) => (
-                  <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <span style={{ width: 118, fontSize: 12.5, color: 'var(--text-muted)', fontWeight: 600, flex: 'none' }}>{s.label}</span>
+                  <div key={s.label} className="spend-row" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span className="spend-label" style={{ width: 118, fontSize: 12.5, color: 'var(--text-muted)', fontWeight: 600, flex: 'none' }}>{s.label}</span>
                     <div style={{ flex: 1, height: 9, background: 'var(--surface-2)', borderRadius: 6, overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${s.pct}%`, background: 'linear-gradient(90deg,var(--accent),var(--accent-strong))', borderRadius: 6 }} />
                     </div>
-                    <span style={{ width: 80, textAlign: 'right', fontSize: 12.5, fontWeight: 700, color: 'var(--text)', fontFamily: "'JetBrains Mono',monospace" }}>{s.amt}</span>
+                    <span className="spend-amount" style={{ width: 80, textAlign: 'right', fontSize: 12.5, fontWeight: 700, color: 'var(--text)', fontFamily: "'JetBrains Mono',monospace" }}>{s.amt}</span>
                   </div>
                 ))}
               </div>
@@ -261,7 +261,7 @@ export default function Dashboard() {
             <div style={card}>
               <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', letterSpacing: '-.01em' }}>Purchase orders</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>By status</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginTop: 16 }}>
+              <div className="po-status" style={{ display: 'flex', alignItems: 'center', gap: 18, marginTop: 16 }}>
                 <div style={{ position: 'relative', width: 118, height: 118, flex: 'none' }}>
                   <div style={{ width: 118, height: 118, borderRadius: '50%', background: poDonut }} />
                   <div style={{ position: 'absolute', inset: 13, borderRadius: '50%', background: 'var(--surface)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--shadow-sm)' }}>

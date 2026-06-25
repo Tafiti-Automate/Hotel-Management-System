@@ -74,7 +74,7 @@ export interface AppContextValue extends AppState {
   // list / search
   setSearchTerm: (term: string) => void
   // forms + crud
-  openCreate: () => void
+  openCreate: (entity?: EntityKey, label?: string) => void
   openEdit: (id: string) => void
   closeForm: () => void
   saveForm: (values: Row) => void
@@ -100,12 +100,20 @@ const entityKeys: EntityKey[] = [
   'uoms',
   'locations',
   'suppliers',
+  'departments',
+  'employees',
   'balances',
   'ledgers',
   'batches',
+  'reorderRules',
+  'storeRequisitions',
+  'stockIssues',
+  'storeReturns',
   'requisitions',
   'orders',
   'grns',
+  'inspections',
+  'supplierReturns',
 ]
 
 function emptyData(): Record<EntityKey, Row[]> {
@@ -215,6 +223,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (f.entity === 'uoms') nu.itemsCount = 0
         if (f.entity === 'locations') nu.itemsCount = 0
         if (f.entity === 'suppliers') nu.rating = nu.rating || 4.0
+        if (f.entity === 'requisitions') {
+          nu.date = nu.expected_date || new Date().toISOString().slice(0, 10)
+          nu.dept = nu.dept || (nu.request_type === 'hotel_purchase' ? 'Hotel purchase' : '—')
+          nu.status = 'Draft'
+          nu.lines = []
+          nu.count = 0
+          nu.total = 0
+        }
         arr.unshift(nu)
       }
       const created = !f.id ? (cfg[f.entity].singular || 'Record') + ' created' : 'Changes saved'
@@ -340,7 +356,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     toggleSettings: () => setState((s) => ({ ...s, settingsOpen: !s.settingsOpen, branchOpen: false })),
     closePop: () => patch({ branchOpen: false, settingsOpen: false }),
     setSearchTerm: (searchTerm) => patch({ searchTerm }),
-    openCreate: () => patch({ form: { entity: state.route as EntityKey, id: null } }),
+    openCreate: (entity, label) => {
+      const target = (typeof entity === 'string' ? entity : state.route) as EntityKey
+      const next: Partial<AppState> = {
+        form: { entity: target, id: null },
+        branchOpen: false,
+        settingsOpen: false,
+      }
+      if (typeof entity === 'string') {
+        next.route = target
+        next.navActive = target
+        next.crumb = label || cfg[target]?.title || ''
+        next.searchTerm = ''
+        next.detail = null
+      }
+      patch(next)
+    },
     openEdit: (id) => patch({ form: { entity: state.route as EntityKey, id } }),
     closeForm: () => patch({ form: null }),
     saveForm,

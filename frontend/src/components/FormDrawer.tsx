@@ -15,7 +15,8 @@ export default function FormDrawer() {
     const existing = f.id ? app.data[f.entity].find((x) => x.id === f.id) : null
     const seed: Row = {}
     conf.fields?.forEach((fd) => {
-      seed[fd.key] = existing && existing[fd.key] != null ? existing[fd.key] : ''
+      const fallback = fd.key === 'request_type' ? 'department' : ''
+      seed[fd.key] = existing && existing[fd.key] != null ? existing[fd.key] : fallback
     })
     setValues(seed)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -41,8 +42,8 @@ export default function FormDrawer() {
 
   return (
     <>
-      <div onClick={app.closeForm} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(16,17,33,.4)' }} />
-      <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 71, width: 440, maxWidth: '92vw', background: 'var(--surface)', boxShadow: '-12px 0 40px rgba(16,17,33,.18)', display: 'flex', flexDirection: 'column', animation: 'slideIn .22s ease' }}>
+      <div className="form-overlay" onClick={app.closeForm} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(16,17,33,.4)' }} />
+      <div className="form-drawer" style={{ position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 71, width: 440, maxWidth: '92vw', background: 'var(--surface)', boxShadow: '-12px 0 40px rgba(16,17,33,.18)', display: 'flex', flexDirection: 'column', animation: 'slideIn .22s ease' }}>
         <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)' }}>{title}</div>
           <button onClick={app.closeForm} className="hover-text" style={{ width: 32, height: 32, border: 'none', background: 'var(--surface-2)', borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-muted)' }}>
@@ -50,7 +51,7 @@ export default function FormDrawer() {
           </button>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div className="form-body" style={{ flex: 1, overflowY: 'auto', padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
           {fields.map((fd) => {
             const isSelect = fd.type === 'select'
             const numeric = fd.type === 'number'
@@ -65,11 +66,18 @@ export default function FormDrawer() {
                     </select>
                     <Icon name="expand_more" size={19} color="var(--text-faint)" style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
                   </div>
+                ) : fd.type === 'textarea' ? (
+                  <textarea
+                    value={values[fd.key] ?? ''}
+                    onChange={(e) => setVal(fd.key, e.target.value, false)}
+                    placeholder={fd.label}
+                    style={{ width: '100%', minHeight: 92, border: '1px solid var(--border)', background: 'var(--surface-2)', borderRadius: 10, padding: '11px 12px', fontSize: 13.5, color: 'var(--text)', outline: 'none', resize: 'vertical' }}
+                  />
                 ) : (
                   <input
                     value={values[fd.key] ?? ''}
                     onChange={(e) => setVal(fd.key, e.target.value, numeric)}
-                    type={fd.type === 'number' ? 'number' : 'text'}
+                    type={fd.type === 'number' ? 'number' : fd.type === 'date' ? 'date' : 'text'}
                     placeholder={fd.label}
                     style={{ width: '100%', height: 42, border: '1px solid var(--border)', background: 'var(--surface-2)', borderRadius: 10, padding: '0 12px', fontSize: 13.5, color: 'var(--text)', outline: 'none' }}
                   />
@@ -79,7 +87,7 @@ export default function FormDrawer() {
           })}
         </div>
 
-        <div style={{ padding: '16px 22px', borderTop: '1px solid var(--border)', display: 'flex', gap: 10 }}>
+        <div className="form-footer" style={{ padding: '16px 22px', borderTop: '1px solid var(--border)', display: 'flex', gap: 10 }}>
           <button onClick={app.closeForm} className="hover-surface2" style={{ flex: 1, height: 42, border: '1px solid var(--border)', cursor: 'pointer', background: 'var(--surface)', color: 'var(--text)', borderRadius: 11, font: 'inherit', fontSize: 13.5, fontWeight: 700 }}>Cancel</button>
           <button onClick={submit} className="hover-accent" style={{ flex: 1, height: 42, border: 'none', cursor: 'pointer', background: 'var(--accent)', color: '#fff', borderRadius: 11, font: 'inherit', fontSize: 13.5, fontWeight: 700 }}>Save</button>
         </div>

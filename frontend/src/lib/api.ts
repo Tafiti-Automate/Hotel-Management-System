@@ -36,6 +36,7 @@ const entityEndpoints: Partial<Record<EntityKey, string>> = {
   items: 'items',
   locations: 'stores',
   suppliers: 'vendors',
+  requisitions: 'requisitions',
 }
 
 function apiRoot(): string {
@@ -380,7 +381,7 @@ function itemLines(rows: ApiRecord[], itemNames: Map<string, string>, itemUnits:
 
 function findDataId(data: Record<EntityKey, Row[]>, entity: EntityKey, value: unknown): string {
   const display = text(value)
-  const row = data[entity].find((candidate) =>
+  const row = (data[entity] || []).find((candidate) =>
     text(candidate.id) === display ||
     text(candidate.name) === display ||
     text(candidate.abbr) === display ||
@@ -432,6 +433,31 @@ function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey
       base.registration_number = text(values.registration_number, `REG-${suffix}`)
     }
     return base
+  }
+
+  if (entity === 'requisitions') {
+    const requestType = text(values.request_type, 'department')
+    const departmentId = findDataId(data, 'departments', values.dept || values.department)
+    const requesterId = findDataId(data, 'employees', values.requester)
+    const supplierId = findDataId(data, 'suppliers', values.preferred_supplier || values.supplier)
+
+    if (requestType === 'department' && !departmentId) {
+      throw new Error('Choose a backend department before saving this requisition.')
+    }
+    if (requestType === 'department' && !requesterId) {
+      throw new Error('Choose a backend requester before saving this requisition.')
+    }
+
+    const payload: Row = {
+      request_type: requestType,
+      reason: text(values.reason, 'Purchase request'),
+      expected_date: text(values.expected_date) || null,
+      control_notes: text(values.control_notes),
+    }
+    if (departmentId) payload.department = departmentId
+    if (requesterId) payload.requester = requesterId
+    if (supplierId) payload.preferred_supplier = supplierId
+    return payload
   }
 
   if (entity === 'items') {
@@ -508,6 +534,15 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
   }))
 
   const data: Partial<Record<EntityKey, Row[]>> = {
+    departments: raw.departments.map((row) => ({
+      id: idOf(row),
+      name: text(row.name, shortId(row.id)),
+    })),
+    employees: raw.employees.map((row) => ({
+      id: idOf(row),
+      name: text(row.designation, shortId(row.id)),
+      department: departmentNames.get(text(row.department)) || shortId(row.department),
+    })),
     categories: raw.categories.map((row) => ({
       id: idOf(row),
       name: text(row.name),
@@ -608,8 +643,12 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
     return {
       id: idOf(row),
       date: dateOnly(row.created_at || row.expected_date),
+      request_type: text(row.request_type, 'department'),
       dept: departmentNames.get(text(row.department)) || titleCaseStatus(row.request_type),
       requester: employeeNames.get(text(row.requester)) || shortId(row.requester),
+      preferred_supplier: supplierNames.get(text(row.preferred_supplier)) || '',
+      expected_date: dateOnly(row.expected_date),
+      reason: text(row.reason),
       status: requisitionStatus(row.status),
       lines,
       count: lines.length,

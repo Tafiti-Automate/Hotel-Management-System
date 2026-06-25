@@ -49,8 +49,8 @@ export default function Sidebar() {
   }
 
   return (
-    <aside style={{ width: 266, flex: 'none', height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--surface)', borderRight: '1px solid var(--border)' }}>
-      <div style={{ padding: '16px 16px 12px', display: 'flex', alignItems: 'center', gap: 11 }}>
+    <aside className="sidebar" style={{ width: 266, flex: 'none', height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--surface)', borderRight: '1px solid var(--border)' }}>
+      <div className="sidebar-brand" style={{ padding: '16px 16px 12px', display: 'flex', alignItems: 'center', gap: 11 }}>
         <div style={{ width: 38, height: 38, borderRadius: 11, background: 'linear-gradient(135deg,var(--accent),var(--accent-strong))', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--shadow-sm)', flex: 'none' }}>
           <Icon name="inventory_2" size={21} color="#fff" fill weight={500} />
         </div>
@@ -61,7 +61,7 @@ export default function Sidebar() {
       </div>
 
       {/* Property switcher */}
-      <div style={{ padding: '2px 14px 12px', position: 'relative' }}>
+      <div className="sidebar-property" style={{ padding: '2px 14px 12px', position: 'relative' }}>
         <button onClick={app.toggleBranch} className="hover-border2" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 11, padding: '8px 10px', cursor: 'pointer', font: 'inherit' }}>
           <Icon name="apartment" size={18} color="var(--accent)" />
           <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
@@ -85,7 +85,7 @@ export default function Sidebar() {
         )}
       </div>
 
-      <nav style={{ flex: 1, overflowY: 'auto', padding: '0 14px 12px' }}>
+      <nav className="sidebar-nav" style={{ flex: 1, overflowY: 'auto', padding: '0 14px 12px' }}>
         {groups.map((g) => (
           <div key={g.heading}>
             <div style={{ padding: g.heading === 'OVERVIEW' ? '8px 10px 5px' : '14px 10px 5px', fontSize: 10, fontWeight: 800, letterSpacing: '.1em', color: 'var(--text-faint)' }}>{g.heading}</div>
@@ -105,7 +105,7 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      <div style={{ borderTop: '1px solid var(--border)', padding: '8px 10px' }}>
+      <div className="sidebar-footer" style={{ borderTop: '1px solid var(--border)', padding: '8px 10px' }}>
         <button onClick={app.gotoModules} className="hover-surface2" style={{ display: 'flex', alignItems: 'center', gap: 11, width: '100%', border: 'none', cursor: 'pointer', background: 'transparent', color: 'var(--text-muted)', font: 'inherit', fontSize: 13, fontWeight: 600, padding: '8px 10px', borderRadius: 10, textAlign: 'left' }}>
           <Icon name="apps" size={20} color="var(--text-faint)" />
           <span style={{ flex: 1 }}>Switch module</span>

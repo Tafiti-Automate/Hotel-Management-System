@@ -22,8 +22,8 @@ export default function Header() {
   const isHotelProfile = app.route === 'hotel-profile'
 
   return (
-    <header style={{ height: 62, flex: 'none', display: 'flex', alignItems: 'center', gap: 16, padding: '0 var(--pad)', borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, flex: 'none' }}>
+    <header className="app-header" style={{ height: 62, flex: 'none', display: 'flex', alignItems: 'center', gap: 16, padding: '0 var(--pad)', borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
+      <div className="header-crumb" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, flex: 'none' }}>
         <Icon name="home" size={18} color="var(--text-faint)" />
         <span style={{ color: 'var(--text-faint)' }}>/</span>
         <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>{isHotelProfile ? 'Administration' : 'Stock Management'}</span>
@@ -31,14 +31,14 @@ export default function Header() {
         <span style={{ fontWeight: 700, color: 'var(--text)' }}>{app.crumb}</span>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', justifyContent: 'center', minWidth: 0 }}>
+      <div className="header-search" style={{ flex: 1, display: 'flex', justifyContent: 'center', minWidth: 0 }}>
         <div style={{ position: 'relative', width: '100%', maxWidth: 400 }}>
           <Icon name="search" size={19} color="var(--text-faint)" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
           <input placeholder="Search items, POs, suppliers…" style={{ width: '100%', height: 38, border: '1px solid var(--border)', background: 'var(--surface-2)', borderRadius: 11, padding: '0 12px 0 38px', fontSize: 13, color: 'var(--text)', outline: 'none' }} />
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 'none' }}>
+      <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 'none' }}>
         <button onClick={app.toggleMode} title="Toggle theme" className="hover-surface2" style={iconBtn}>
           <Icon name={app.mode === 'dark' ? 'light_mode' : 'dark_mode'} size={19} />
         </button>
@@ -91,8 +91,8 @@ export default function Header() {
         <div style={{ width: 1, height: 24, background: 'var(--border)', margin: '0 2px' }} />
 
         {!isHotelProfile && (
-          <button onClick={() => app.navTo('requisitions', 'Requisitions')} className="hover-accent" style={{ display: 'flex', alignItems: 'center', gap: 7, height: 38, padding: '0 15px', border: 'none', cursor: 'pointer', background: 'var(--accent)', color: '#fff', borderRadius: 11, font: 'inherit', fontSize: 13, fontWeight: 700, boxShadow: 'var(--shadow-sm)' }}>
-            <Icon name="add" size={18} weight={500} />New Requisition
+          <button onClick={() => app.openCreate('requisitions', 'Requisitions')} className="header-new-requisition hover-accent" style={{ display: 'flex', alignItems: 'center', gap: 7, height: 38, padding: '0 15px', border: 'none', cursor: 'pointer', background: 'var(--accent)', color: '#fff', borderRadius: 11, font: 'inherit', fontSize: 13, fontWeight: 700, boxShadow: 'var(--shadow-sm)' }}>
+            <Icon name="add" size={18} weight={500} /><span className="button-label">New Requisition</span>
           </button>
         )}
       </div>

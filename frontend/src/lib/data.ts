@@ -4,6 +4,7 @@ export type Row = Record<string, any>
 
 export type EntityKey =
   | 'items' | 'categories' | 'uoms' | 'locations' | 'suppliers'
+  | 'departments' | 'employees'
   | 'balances' | 'ledgers' | 'batches'
   | 'reorderRules' | 'storeRequisitions' | 'stockIssues' | 'storeReturns'
   | 'requisitions' | 'orders' | 'grns' | 'inspections' | 'supplierReturns'
@@ -21,7 +22,7 @@ export interface ColumnDef {
 export interface FieldDef {
   key: string
   label: string
-  type: 'text' | 'number' | 'select'
+  type: 'text' | 'number' | 'select' | 'date' | 'textarea'
   opts?: string
 }
 
@@ -214,7 +215,7 @@ export const cfg: Record<string, EntityConfig> = {
     ],
   },
   requisitions: {
-    title: 'Requisitions', sub: 'Purchase requisitions from departments', icon: 'request_quote', detail: true,
+    title: 'Requisitions', sub: 'Purchase requisitions from departments', icon: 'request_quote', add: 'New requisition', singular: 'Requisition', prefix: 'PR-', editable: true, detail: true,
     cols: [
       { key: 'id', label: 'Requisition', w: '1.1fr', kind: 'mono' },
       { key: 'date', label: 'Date', w: '1fr', kind: 'text' },
@@ -223,6 +224,14 @@ export const cfg: Record<string, EntityConfig> = {
       { key: 'count', label: 'Items', w: '70px', kind: 'num', align: 'right' },
       { key: 'total', label: 'Total', w: '110px', kind: 'money', align: 'right' },
       { key: 'status', label: 'Status', w: '120px', kind: 'status', align: 'right' },
+    ],
+    fields: [
+      { key: 'request_type', label: 'Type', type: 'select', opts: 'reqTypes' },
+      { key: 'dept', label: 'Department', type: 'select', opts: 'departments' },
+      { key: 'requester', label: 'Requester', type: 'select', opts: 'employees' },
+      { key: 'preferred_supplier', label: 'Preferred supplier', type: 'select', opts: 'suppliers' },
+      { key: 'expected_date', label: 'Expected date', type: 'date' },
+      { key: 'reason', label: 'Reason', type: 'textarea' },
     ],
   },
   approvals: {
@@ -295,9 +304,13 @@ export const reports: ReportCard[] = [
 ]
 
 export function getOptions(key: string, data: Record<EntityKey, Row[]>): string[] {
-  if (key === 'categories') return data.categories.map((c) => c.name)
-  if (key === 'uoms') return data.uoms.map((u) => u.name)
-  if (key === 'locations') return data.locations.map((l) => l.name)
+  if (key === 'categories') return (data.categories || []).map((c) => c.name)
+  if (key === 'uoms') return (data.uoms || []).map((u) => u.name)
+  if (key === 'locations') return (data.locations || []).map((l) => l.name)
+  if (key === 'suppliers') return (data.suppliers || []).map((s) => s.name)
+  if (key === 'departments') return (data.departments || []).map((d) => d.name)
+  if (key === 'employees') return (data.employees || []).map((e) => e.name)
+  if (key === 'reqTypes') return ['department', 'hotel_purchase']
   if (key === 'supStatus') return ['Active', 'On hold', 'Inactive']
   if (key === 'genStatus') return ['Active', 'Inactive']
   return []

@@ -25,11 +25,11 @@ export default function AppShell() {
   else if (route === 'hotel-profile') content = <HotelProfile />
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+    <div className="app-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       <Sidebar />
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div className="app-main" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
         <Header />
-        <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--pad)' }}>{content}</div>
+        <div className="app-content" style={{ flex: 1, overflowY: 'auto', padding: 'var(--pad)' }}>{content}</div>
       </div>
     </div>
   )
