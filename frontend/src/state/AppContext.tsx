@@ -215,6 +215,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (r) {
           Object.assign(r, values)
           if (f.entity === 'items') r.status = itemStatus(r)
+          if (f.entity === 'requisitions' && values.request_type === 'hotel_purchase') {
+            r.dept = 'Hotel purchase'
+            r.requester = ''
+          }
         }
       } else {
         const nu: Row = { id: nextId(f.entity, dataRef.current), ...values }
@@ -225,7 +229,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (f.entity === 'suppliers') nu.rating = nu.rating || 4.0
         if (f.entity === 'requisitions') {
           nu.date = nu.expected_date || new Date().toISOString().slice(0, 10)
-          nu.dept = nu.dept || (nu.request_type === 'hotel_purchase' ? 'Hotel purchase' : '—')
+          if (nu.request_type === 'hotel_purchase') {
+            nu.dept = 'Hotel purchase'
+            nu.requester = ''
+          } else {
+            nu.dept = nu.dept || '—'
+          }
           nu.status = 'Draft'
           nu.lines = []
           nu.count = 0

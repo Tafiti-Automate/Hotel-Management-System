@@ -3,6 +3,12 @@ import { useApp } from '../state/AppContext'
 import { Icon } from './Icon'
 import { cfg, getOptions, type Row } from '../lib/data'
 
+function optionLabel(value: string): string {
+  if (value === 'hotel_purchase') return 'Hotel purchase'
+  if (value === 'department') return 'Department'
+  return value
+}
+
 export default function FormDrawer() {
   const app = useApp()
   const f = app.form
@@ -25,15 +31,24 @@ export default function FormDrawer() {
   if (!f) return null
   const conf = cfg[f.entity]
   const fields = conf.fields || []
+  const isHotelPurchase = f.entity === 'requisitions' && values.request_type === 'hotel_purchase'
+  const visibleFields = fields.filter((fd) => !(isHotelPurchase && ['dept', 'requester'].includes(fd.key)))
   const title = (f.id ? 'Edit ' : 'Add ') + (conf.singular || '')
 
   const setVal = (key: string, raw: string, numeric: boolean) =>
-    setValues((v) => ({ ...v, [key]: numeric ? Number(raw || 0) : raw }))
+    setValues((v) => {
+      const next = { ...v, [key]: numeric ? Number(raw || 0) : raw }
+      if (f.entity === 'requisitions' && key === 'request_type' && raw === 'hotel_purchase') {
+        next.dept = ''
+        next.requester = ''
+      }
+      return next
+    })
 
   const submit = () => {
     // Coerce numeric fields one more time on save (mirrors prototype).
     const out: Row = {}
-    fields.forEach((fd) => {
+    visibleFields.forEach((fd) => {
       const v = values[fd.key]
       out[fd.key] = fd.type === 'number' ? Number(v || 0) : v
     })
@@ -52,7 +67,7 @@ export default function FormDrawer() {
         </div>
 
         <div className="form-body" style={{ flex: 1, overflowY: 'auto', padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {fields.map((fd) => {
+          {visibleFields.map((fd) => {
             const isSelect = fd.type === 'select'
             const numeric = fd.type === 'number'
             return (
@@ -62,7 +77,7 @@ export default function FormDrawer() {
                   <div style={{ position: 'relative' }}>
                     <select value={values[fd.key] ?? ''} onChange={(e) => setVal(fd.key, e.target.value, false)} style={{ width: '100%', height: 42, border: '1px solid var(--border)', background: 'var(--surface-2)', borderRadius: 10, padding: '0 34px 0 12px', fontSize: 13.5, color: 'var(--text)', outline: 'none', cursor: 'pointer' }}>
                       <option value="" />
-                      {getOptions(fd.opts || '', app.data).map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                      {getOptions(fd.opts || '', app.data).map((opt) => <option key={opt} value={opt}>{optionLabel(opt)}</option>)}
                     </select>
                     <Icon name="expand_more" size={19} color="var(--text-faint)" style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
                   </div>
