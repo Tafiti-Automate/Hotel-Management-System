@@ -1,6 +1,15 @@
 from .base import *
 
 
+# Never fall back to an ephemeral SQLite database in production. Railway adds
+# this value to the Django service through a reference to the Postgres service.
+if not os.environ.get("DATABASE_URL"):
+    raise RuntimeError(
+        "DATABASE_URL is required in production. On Railway, add a reference "
+        "to the Postgres service's DATABASE_URL variable."
+    )
+
+
 DEBUG = False
 
 # Behind a TLS-terminating proxy (e.g. Railway), trust the forwarded protocol

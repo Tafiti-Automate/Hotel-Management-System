@@ -70,7 +70,7 @@ class Item(BaseModel):
         max_length=30,
         choices=ItemBusinessType.choices,
         default=ItemBusinessType.CONSUMABLE_EXPENSE,
-        help_text="Classifies whether the item is an operating expense, revenue/resale item, production input, fixed asset, or service supply.",
+        help_text="Classifies whether the item is an operating expense, revenue/resale item, fixed asset, or service supply.",
     )
     is_active = models.BooleanField(default=True)
 

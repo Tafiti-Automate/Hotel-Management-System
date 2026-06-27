@@ -87,7 +87,11 @@ if os.environ.get("DATABASE_URL"):
     import dj_database_url
 
     DATABASES = {
-        "default": dj_database_url.parse(os.environ["DATABASE_URL"], conn_max_age=600),
+        "default": dj_database_url.parse(
+            os.environ["DATABASE_URL"],
+            conn_max_age=600,
+            conn_health_checks=True,
+        ),
     }
 else:
     DATABASES = {
