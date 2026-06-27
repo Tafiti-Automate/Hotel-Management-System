@@ -157,16 +157,18 @@ export async function login(username: string, password: string): Promise<AuthUse
 }
 
 export async function logout(): Promise<void> {
+  const headers = { Accept: 'application/json', ...authHeaders() }
+  // End the browser session immediately even if the network request is slow.
+  setToken(null)
+  setStoredUser(null)
   try {
     await fetch(`${apiRoot()}/auth/logout/`, {
       method: 'POST',
-      headers: { Accept: 'application/json', ...authHeaders() },
+      headers,
     })
   } catch {
     /* best-effort server-side invalidation */
   }
-  setToken(null)
-  setStoredUser(null)
 }
 
 // --------------------------------------------------------------------------

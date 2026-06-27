@@ -3,7 +3,7 @@ import { useApp } from '../state/AppContext'
 import { Icon } from '../components/Icon'
 
 export default function Login() {
-  const { login } = useApp()
+  const { login, authMessage } = useApp()
   const [showPw, setShowPw] = useState(false)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -38,6 +38,12 @@ export default function Login() {
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 18, boxShadow: 'var(--shadow)', padding: 28 }}>
           <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: 'var(--text)', letterSpacing: '-.01em' }}>Sign in</h1>
           <p style={{ margin: '6px 0 22px', fontSize: 13, color: 'var(--text-muted)' }}>Enter your employee credentials to continue.</p>
+
+          {authMessage && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--accent-soft)', color: 'var(--accent)', borderRadius: 10, padding: '9px 12px', fontSize: 12.5, fontWeight: 600, marginBottom: 14 }}>
+              <Icon name="schedule" size={17} color="var(--accent)" />{authMessage}
+            </div>
+          )}
 
           <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 7 }}>Username or Employee ID</label>
           <div style={{ position: 'relative', marginBottom: 16 }}>

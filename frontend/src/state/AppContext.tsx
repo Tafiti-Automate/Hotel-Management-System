@@ -47,6 +47,7 @@ interface AppState {
   toast: string | null
   apiStatus: ApiStatus
   apiMessage: string | null
+  authMessage: string | null
 }
 
 export interface AppContextValue extends AppState {
@@ -94,6 +95,42 @@ export interface AppContextValue extends AppState {
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
+const GUEST: User = { name: 'Guest', role: '—', id: '', isStaff: false }
+const IDLE_TIMEOUT_MS = 5 * 60 * 1000
+const ACTIVITY_WRITE_INTERVAL_MS = 1000
+const LAST_ACTIVITY_KEY = 'hms_last_activity'
+
+function toUser(user: AuthUser | null): User {
+  return user
+    ? { name: user.name, role: user.role, id: user.id, isStaff: Boolean(user.is_staff) }
+    : GUEST
+}
+
+function readLastActivity(): number {
+  try {
+    const value = Number(localStorage.getItem(LAST_ACTIVITY_KEY))
+    return Number.isFinite(value) && value > 0 ? value : 0
+  } catch {
+    return 0
+  }
+}
+
+function writeLastActivity(timestamp: number): void {
+  try {
+    localStorage.setItem(LAST_ACTIVITY_KEY, String(timestamp))
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+function clearLastActivity(): void {
+  try {
+    localStorage.removeItem(LAST_ACTIVITY_KEY)
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 const entityKeys: EntityKey[] = [
   'items',
   'categories',
@@ -135,9 +172,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const bumpData = useCallback(() => forceTick((n) => n + 1), [])
   const toastTimer = useRef<ReturnType<typeof setTimeout>>()
   const didInitialSync = useRef(false)
+  const logoutRequest = useRef<Promise<void> | null>(null)
 
-  const GUEST: User = { name: 'Guest', role: '—', id: '', isStaff: false }
-  const toUser = (u: AuthUser | null): User => (u ? { name: u.name, role: u.role, id: u.id, isStaff: Boolean(u.is_staff) } : GUEST)
   const storedUser = getStoredUser()
   const [user, setUser] = useState<User>(toUser(storedUser))
   const hasSession = Boolean(getToken() && storedUser)
@@ -162,6 +198,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     toast: null,
     apiStatus: 'idle',
     apiMessage: null,
+    authMessage: null,
   })
 
   const patch = useCallback((p: Partial<AppState>) => setState((s) => ({ ...s, ...p })), [])
@@ -171,6 +208,103 @@ export function AppProvider({ children }: { children: ReactNode }) {
     clearTimeout(toastTimer.current)
     toastTimer.current = setTimeout(() => patch({ toast: null }), 2200)
   }, [patch])
+
+  const endSession = useCallback((authMessage: string | null = null) => {
+    clearLastActivity()
+    const request = apiLogout()
+    logoutRequest.current = request
+    void request.finally(() => {
+      if (logoutRequest.current === request) logoutRequest.current = null
+    })
+    setUser(GUEST)
+    didInitialSync.current = false
+    dataRef.current = emptyData()
+    clearTimeout(toastTimer.current)
+    setState((current) => ({
+      ...current,
+      screen: 'login',
+      route: 'dashboard',
+      navActive: 'dashboard',
+      branchOpen: false,
+      settingsOpen: false,
+      form: null,
+      confirm: null,
+      detail: null,
+      reportId: null,
+      toast: null,
+      apiStatus: 'idle',
+      apiMessage: null,
+      authMessage,
+    }))
+  }, [])
+
+  useEffect(() => {
+    if (state.screen === 'login' || !getToken()) return
+
+    let idleTimer: ReturnType<typeof setTimeout> | undefined
+    let lastActivityWrite = 0
+
+    const expireSession = () => {
+      endSession('You were signed out after 5 minutes of inactivity.')
+    }
+
+    const checkDeadline = () => {
+      const lastActivity = readLastActivity()
+      if (!lastActivity || Date.now() - lastActivity >= IDLE_TIMEOUT_MS) {
+        expireSession()
+        return
+      }
+      clearTimeout(idleTimer)
+      idleTimer = setTimeout(checkDeadline, IDLE_TIMEOUT_MS - (Date.now() - lastActivity))
+    }
+
+    const recordActivity = (event: Event) => {
+      if (!event.isTrusted) return
+      const now = Date.now()
+      const lastActivity = readLastActivity()
+      if (lastActivity && now - lastActivity >= IDLE_TIMEOUT_MS) {
+        expireSession()
+        return
+      }
+      if (now - lastActivityWrite < ACTIVITY_WRITE_INTERVAL_MS) return
+      lastActivityWrite = now
+      writeLastActivity(now)
+      clearTimeout(idleTimer)
+      idleTimer = setTimeout(checkDeadline, IDLE_TIMEOUT_MS)
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') checkDeadline()
+    }
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== LAST_ACTIVITY_KEY) return
+      if (event.newValue === null) {
+        endSession('Your session ended in another browser tab.')
+      } else {
+        checkDeadline()
+      }
+    }
+
+    if (!readLastActivity()) writeLastActivity(Date.now())
+    checkDeadline()
+
+    const activityEvents = ['pointerdown', 'pointermove', 'keydown', 'scroll', 'touchstart']
+    activityEvents.forEach((eventName) => {
+      window.addEventListener(eventName, recordActivity, { passive: true })
+    })
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('storage', handleStorage)
+
+    return () => {
+      clearTimeout(idleTimer)
+      activityEvents.forEach((eventName) => {
+        window.removeEventListener(eventName, recordActivity)
+      })
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('storage', handleStorage)
+    }
+  }, [endSession, state.screen])
 
   const applyBackendData = useCallback((incoming: Partial<Record<EntityKey, Row[]>>) => {
     const next = emptyData()
@@ -339,20 +473,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     data: dataRef.current,
     refreshData: () => { void refreshData() },
     login: async (username: string, password: string) => {
+      if (logoutRequest.current) await logoutRequest.current
       const authed = await apiLogin(username, password)
+      writeLastActivity(Date.now())
       setUser(toUser(authed))
       didInitialSync.current = false
-      patch({ screen: 'launchpad', branchOpen: false, settingsOpen: false })
+      patch({ screen: 'launchpad', branchOpen: false, settingsOpen: false, authMessage: null })
     },
     enterLaunch: () => patch({ screen: 'launchpad', branchOpen: false, settingsOpen: false }),
     enterApp: () => patch({ screen: 'app', route: 'dashboard', navActive: 'dashboard', crumb: 'Dashboard' }),
-    logout: () => {
-      void apiLogout()
-      setUser(GUEST)
-      didInitialSync.current = false
-      dataRef.current = emptyData()
-      patch({ screen: 'login' })
-    },
+    logout: () => endSession(),
     gotoModules: () => patch({ screen: 'launchpad' }),
     navTo: (route, label) => patch({ route, navActive: route, crumb: label || '', searchTerm: '', detail: null }),
     setTab: (tab) => patch({ tab }),
@@ -394,7 +524,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     openReport: (reportId) => patch({ route: 'reportview', reportId }),
     backFromReport: () => patch({ route: 'reports', reportId: null }),
     showToast,
-  }), [state, user, refreshData, patch, saveForm, requestDelete, doDelete, approveReq, rejectReq, showToast])
+  }), [state, user, refreshData, patch, endSession, saveForm, requestDelete, doDelete, approveReq, rejectReq, showToast])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }
