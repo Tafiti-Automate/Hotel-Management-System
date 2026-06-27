@@ -9,6 +9,23 @@ function optionLabel(value: string): string {
   return value
 }
 
+function categoryParentOptions(options: string[], categories: Row[], editingName: string): string[] {
+  if (!editingName) return options
+  const byName = new Map(categories.map((category) => [String(category.name), category]))
+
+  return options.filter((option) => {
+    let category = byName.get(option)
+    const visited = new Set<string>()
+    while (category && !visited.has(String(category.name))) {
+      const name = String(category.name)
+      if (name === editingName) return false
+      visited.add(name)
+      category = byName.get(String(category.parent))
+    }
+    return true
+  })
+}
+
 export default function FormDrawer() {
   const app = useApp()
   const f = app.form
@@ -34,6 +51,9 @@ export default function FormDrawer() {
   const isHotelPurchase = f.entity === 'requisitions' && values.request_type === 'hotel_purchase'
   const visibleFields = fields.filter((fd) => !(isHotelPurchase && ['dept', 'requester'].includes(fd.key)))
   const title = (f.id ? 'Edit ' : 'Add ') + (conf.singular || '')
+  const editingCategoryName = f.entity === 'categories' && f.id
+    ? String(app.data.categories.find((category) => category.id === f.id)?.name || '')
+    : ''
 
   const setVal = (key: string, raw: string, numeric: boolean) =>
     setValues((v) => {
@@ -70,6 +90,9 @@ export default function FormDrawer() {
           {visibleFields.map((fd) => {
             const isSelect = fd.type === 'select'
             const numeric = fd.type === 'number'
+            const options = fd.opts === 'categoryParents'
+              ? categoryParentOptions(getOptions(fd.opts, app.data), app.data.categories, editingCategoryName)
+              : getOptions(fd.opts || '', app.data)
             return (
               <div key={fd.key}>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 7 }}>{fd.label}</label>
@@ -77,7 +100,7 @@ export default function FormDrawer() {
                   <div style={{ position: 'relative' }}>
                     <select value={values[fd.key] ?? ''} onChange={(e) => setVal(fd.key, e.target.value, false)} style={{ width: '100%', height: 42, border: '1px solid var(--border)', background: 'var(--surface-2)', borderRadius: 10, padding: '0 34px 0 12px', fontSize: 13.5, color: 'var(--text)', outline: 'none', cursor: 'pointer' }}>
                       <option value="" />
-                      {getOptions(fd.opts || '', app.data).map((opt) => <option key={opt} value={opt}>{optionLabel(opt)}</option>)}
+                      {options.map((opt) => <option key={opt} value={opt}>{optionLabel(opt)}</option>)}
                     </select>
                     <Icon name="expand_more" size={19} color="var(--text-faint)" style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
                   </div>

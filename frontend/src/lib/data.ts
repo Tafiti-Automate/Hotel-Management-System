@@ -87,6 +87,8 @@ export const cfg: Record<string, EntityConfig> = {
     fields: [
       { key: 'name', label: 'Category name', type: 'text' },
       { key: 'code', label: 'Code', type: 'text' },
+      { key: 'parent', label: 'Parent category (optional)', type: 'select', opts: 'categoryParents' },
+      { key: 'description', label: 'Description', type: 'textarea' },
       { key: 'status', label: 'Status', type: 'select', opts: 'genStatus' },
     ],
   },
@@ -320,7 +322,7 @@ export const reports: ReportCard[] = [
 ]
 
 export function getOptions(key: string, data: Record<EntityKey, Row[]>): string[] {
-  if (key === 'categories') return (data.categories || []).map((c) => c.name)
+  if (key === 'categories' || key === 'categoryParents') return (data.categories || []).map((c) => c.name)
   if (key === 'uoms') return (data.uoms || []).map((u) => u.name)
   if (key === 'locations') return (data.locations || []).map((l) => l.name)
   if (key === 'suppliers') return (data.suppliers || []).map((s) => s.name)

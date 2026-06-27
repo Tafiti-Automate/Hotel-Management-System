@@ -421,9 +421,13 @@ function slug(value: unknown): string {
 
 function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey, Row[]>, isUpdate: boolean): Row {
   if (entity === 'categories') {
+    const parentId = findDataId(data, 'categories', values.parent)
     return {
       name: text(values.name),
+      code: text(values.code),
+      parent: parentId || null,
       description: text(values.description),
+      is_active: text(values.status, 'Active') !== 'Inactive',
     }
   }
 
@@ -575,7 +579,6 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
 
   const balanceByItem = firstBy(raw.balances, 'item')
   const balancesByStore = countBy(raw.balances, 'store')
-  const itemsByCategory = countBy(raw.items, 'category')
   const itemsByUnit = countBy(raw.items, 'base_unit')
   const priceByItem = firstBy(raw.prices, 'item')
   const itemPrice = new Map(Array.from(priceByItem.entries()).map(([itemId, row]) => [itemId, num(row.unit_price)]))
@@ -600,10 +603,12 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
     categories: raw.categories.map((row) => ({
       id: idOf(row),
       name: text(row.name),
-      code: makeCode(row.name, 'CAT'),
-      parent: '—',
-      itemsCount: itemsByCategory.get(idOf(row)) || 0,
-      status: 'Active',
+      code: text(row.code, makeCode(row.name, 'CAT')),
+      parent: text(row.parent_name) || categoryNames.get(text(row.parent)) || '—',
+      description: text(row.description),
+      childrenCount: num(row.children_count),
+      itemsCount: num(row.item_count),
+      status: activeStatus(row.is_active),
     })),
     uoms: raw.units.map((row) => ({
       id: idOf(row),
