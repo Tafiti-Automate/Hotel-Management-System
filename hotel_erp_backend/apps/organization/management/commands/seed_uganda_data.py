@@ -1,7 +1,9 @@
 import datetime
+import os
 import uuid
 from decimal import Decimal
-from django.core.management.base import BaseCommand
+from django.core.management import call_command
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -33,11 +35,53 @@ User = get_user_model()
 
 
 class Command(BaseCommand):
-    help = "Seeds the database with realistic Ugandan hotel data examples, setting the hotel name to 'text hotel'."
+    help = "Seed an empty database with realistic Ugandan hotel demo data."
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--hotel-name",
+            default=os.environ.get("SEED_HOTEL_NAME", "Demo Hotel"),
+            help="Name used for the sample hotel (default: Demo Hotel).",
+        )
+        parser.add_argument(
+            "--reset",
+            action="store_true",
+            help="Delete existing application data before recreating the demo data.",
+        )
 
     @transaction.atomic
     def handle(self, *args, **options):
-        self.stdout.write(self.style.WARNING("Starting database cleanup..."))
+        hotel_name = options["hotel_name"].strip()
+        if not hotel_name:
+            raise CommandError("--hotel-name cannot be empty.")
+
+        sample_password = os.environ.get("SEED_EMPLOYEE_PASSWORD", "").strip()
+        if sample_password and len(sample_password) < 12:
+            raise CommandError("SEED_EMPLOYEE_PASSWORD must contain at least 12 characters.")
+
+        has_application_data = any(
+            (
+                Hotel.objects.exists(),
+                Branch.objects.exists(),
+                Department.objects.exists(),
+                Supplier.objects.exists(),
+                Item.objects.exists(),
+                Customer.objects.exists(),
+                User.objects.filter(is_superuser=False).exists(),
+            )
+        )
+        if has_application_data and not options["reset"]:
+            raise CommandError(
+                "The database already contains application data; nothing was changed. "
+                "Use --reset only if you intentionally want to replace it with demo data."
+            )
+
+        if options["reset"]:
+            self.stdout.write(
+                self.style.WARNING("Reset requested: deleting existing application data...")
+            )
+        else:
+            self.stdout.write("Database is empty; preparing demo data...")
 
         # Delete all existing data to ensure clean seed
         # Delete reverse dependencies first to prevent PROTECT/CASCADE database errors
@@ -118,7 +162,11 @@ class Command(BaseCommand):
         # 7. Non-superuser accounts
         User.objects.filter(is_superuser=False).delete()
 
-        self.stdout.write(self.style.SUCCESS("Database successfully cleaned."))
+        if options["reset"]:
+            self.stdout.write(self.style.SUCCESS("Existing application data deleted."))
+
+        # Ensure the groups exist before assigning them to the sample employees.
+        call_command("setup_hotel_roles", verbosity=0)
 
         # Set default created_by to a superuser if available
         admin_user = User.objects.filter(is_superuser=True).first()
@@ -126,10 +174,10 @@ class Command(BaseCommand):
         # ==========================================
         # 1. CREATE HOTEL
         # ==========================================
-        self.stdout.write("Creating Hotel 'text hotel'...")
+        self.stdout.write(f"Creating hotel '{hotel_name}'...")
         hotel = Hotel.objects.create(
-            name="text hotel",
-            legal_name="Text Hotel Uganda Limited",
+            name=hotel_name,
+            legal_name=f"{hotel_name} Uganda Limited",
             business_type=Hotel.BUSINESS_TYPE_GROUP,
             registration_number="URSB-80020019283",
             tax_identification_number="1002938475",
@@ -152,7 +200,7 @@ class Command(BaseCommand):
         self.stdout.write("Creating Branches...")
         branch_kampala = Branch.objects.create(
             hotel=hotel,
-            name="text hotel Kampala",
+            name=f"{hotel_name} Kampala",
             branch_code="KLA",
             branch_type=Branch.BRANCH_TYPE_MAIN,
             location="Kampala Road, Kampala",
@@ -169,7 +217,7 @@ class Command(BaseCommand):
 
         branch_jinja = Branch.objects.create(
             hotel=hotel,
-            name="text hotel Jinja",
+            name=f"{hotel_name} Jinja",
             branch_code="JJA",
             branch_type=Branch.BRANCH_TYPE_BRANCH,
             location="Nile Crescent, Jinja",
@@ -337,7 +385,10 @@ class Command(BaseCommand):
                 employee_code=emp["employee_code"],
                 phone=emp["phone"]
             )
-            user.set_password("password123")
+            if sample_password:
+                user.set_password(sample_password)
+            else:
+                user.set_unusable_password()
             user.save()
 
             # Add user to role group if it exists
@@ -632,7 +683,7 @@ class Command(BaseCommand):
         # ==========================================
         self.stdout.write("Creating Supplier Item Prices...")
         SupplierItemPrice.objects.create(
-            supplier=supplier_fresh, # Just a placeholder link, or fresh dairy doesn't supply soap but we map to Mukwano
+            supplier=supplier_mukwano,
             item=item_soap,
             unit=uom_liters,
             unit_price=Decimal("18000.00"),
@@ -640,8 +691,6 @@ class Command(BaseCommand):
             is_active=True,
             created_by=admin_user
         )
-        # Fix Mukwano supplier mapping for soap
-        SupplierItemPrice.objects.filter(item=item_soap).update(supplier=supplier_mukwano)
 
         SupplierItemPrice.objects.create(
             supplier=supplier_kakira,
@@ -749,4 +798,13 @@ class Command(BaseCommand):
             created_by=admin_user
         )
 
-        self.stdout.write(self.style.SUCCESS("All database tables seeded successfully with Ugandan data!"))
+        password_note = (
+            "Sample employee logins use SEED_EMPLOYEE_PASSWORD."
+            if sample_password
+            else "Sample employee password logins are disabled."
+        )
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Demo data for '{hotel_name}' created successfully. {password_note}"
+            )
+        )
