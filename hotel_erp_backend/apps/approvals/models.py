@@ -40,7 +40,7 @@ class ApprovalWorkflow(BaseModel):
         if self.requisition.status in (PRStatus.DRAFT, PRStatus.CANCELLED):
             raise ValidationError("Requisition must be submitted before approval.")
         if self.requisition.status == PRStatus.APPROVED:
-            raise ValidationError("Requisition is already fully approved.")
+            raise ValidationError("Requisition is already fully approved")
         if self.status == ApprovalStatus.REJECTED:
             raise ValidationError("Rejected approval stages cannot be approved.")
 
