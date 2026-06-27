@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.db.models import Count
 from rest_framework import serializers
 
 from apps.inventory.models import (
@@ -29,10 +30,105 @@ from apps.inventory.models import (
 
 
 class CategorySerializer(serializers.ModelSerializer):
+    parent_name = serializers.CharField(source="parent.name", read_only=True)
+    children_count = serializers.SerializerMethodField()
+    item_count = serializers.SerializerMethodField()
+
     class Meta:
         model = Category
-        fields = ("id", "name", "description", "created_at", "updated_at", "created_by")
-        read_only_fields = ("id", "created_at", "updated_at", "created_by")
+        fields = (
+            "id",
+            "name",
+            "code",
+            "parent",
+            "parent_name",
+            "description",
+            "is_active",
+            "children_count",
+            "item_count",
+            "created_at",
+            "updated_at",
+            "created_by",
+        )
+        read_only_fields = (
+            "id",
+            "parent_name",
+            "children_count",
+            "item_count",
+            "created_at",
+            "updated_at",
+            "created_by",
+        )
+
+    def _category_stats(self):
+        if hasattr(self, "_cached_category_stats"):
+            return self._cached_category_stats
+
+        parent_by_id = dict(Category.objects.values_list("id", "parent_id"))
+        children_by_id = {category_id: [] for category_id in parent_by_id}
+        for category_id, parent_id in parent_by_id.items():
+            if parent_id in children_by_id:
+                children_by_id[parent_id].append(category_id)
+
+        direct_counts = dict(
+            Item.objects.values("category_id")
+            .annotate(total=Count("id"))
+            .values_list("category_id", "total")
+        )
+        totals = {}
+
+        def total_for(category_id, path=None):
+            if category_id in totals:
+                return totals[category_id]
+            path = set(path or ())
+            if category_id in path:
+                return direct_counts.get(category_id, 0)
+            path.add(category_id)
+            total = direct_counts.get(category_id, 0) + sum(
+                total_for(child_id, path) for child_id in children_by_id[category_id]
+            )
+            totals[category_id] = total
+            return total
+
+        for category_id in parent_by_id:
+            total_for(category_id)
+
+        self._cached_category_stats = (children_by_id, totals)
+        return self._cached_category_stats
+
+    def get_children_count(self, category):
+        children_by_id, _ = self._category_stats()
+        return len(children_by_id.get(category.id, ()))
+
+    def get_item_count(self, category):
+        _, totals = self._category_stats()
+        return totals.get(category.id, 0)
+
+    def validate_code(self, value):
+        code = value.strip().upper()
+        matching_codes = Category.objects.filter(code__iexact=code)
+        if self.instance:
+            matching_codes = matching_codes.exclude(pk=self.instance.pk)
+        if code and matching_codes.exists():
+            raise serializers.ValidationError("A category with this code already exists.")
+        return code
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        parent = attrs.get("parent", getattr(self.instance, "parent", None))
+        if not self.instance or not parent:
+            return attrs
+
+        ancestor = parent
+        visited = set()
+        while ancestor and ancestor.pk not in visited:
+            if ancestor.pk == self.instance.pk:
+                raise serializers.ValidationError(
+                    {"parent": "A category cannot be its own parent or descendant."}
+                )
+            visited.add(ancestor.pk)
+            ancestor = ancestor.parent
+        return attrs
 
 
 class UnitOfMeasureSerializer(serializers.ModelSerializer):

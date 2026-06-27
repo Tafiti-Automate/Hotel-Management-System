@@ -20,11 +20,61 @@ from core.validators.quantities import (
 
 class Category(BaseModel):
     name = models.CharField(max_length=100, unique=True)
+    code = models.CharField(max_length=30, unique=True, blank=True)
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        related_name="children",
+        null=True,
+        blank=True,
+    )
     description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
 
     class Meta(BaseModel.Meta):
         verbose_name_plural = "categories"
         ordering = ("name",)
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(id=models.F("parent_id")),
+                name="category_cannot_parent_itself",
+            )
+        ]
+
+    def clean(self):
+        super().clean()
+        ancestor = self.parent
+        visited = {self.pk}
+        while ancestor:
+            if ancestor.pk in visited:
+                raise ValidationError(
+                    {"parent": "A category cannot be its own parent or descendant."}
+                )
+            visited.add(ancestor.pk)
+            ancestor = ancestor.parent
+
+    @classmethod
+    def next_code(cls, name, exclude_id=None):
+        base = "".join(character for character in name.upper() if character.isalnum())[:3]
+        base = base or "CAT"
+        candidate = base
+        suffix = 2
+        existing = cls.objects.all()
+        if exclude_id:
+            existing = existing.exclude(pk=exclude_id)
+        while existing.filter(code=candidate).exists():
+            candidate = f"{base}-{suffix}"
+            suffix += 1
+        return candidate
+
+    def save(self, *args, **kwargs):
+        self.code = (
+            self.code.strip().upper()
+            if self.code
+            else self.next_code(self.name, exclude_id=self.pk)
+        )
+        self.clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name

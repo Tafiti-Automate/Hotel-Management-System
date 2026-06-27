@@ -139,6 +139,12 @@ class Command(BaseCommand):
         StoreLocation.objects.all().delete()
         ItemUnitPrice.objects.all().delete()
         Item.objects.all().delete()
+        while Category.objects.filter(parent__isnull=False).exists():
+            leaf_ids = Category.objects.filter(
+                parent__isnull=False,
+                children__isnull=True,
+            ).values_list("id", flat=True)
+            Category.objects.filter(id__in=leaf_ids).delete()
         Category.objects.all().delete()
         UnitOfMeasure.objects.all().delete()
 
@@ -558,6 +564,14 @@ class Command(BaseCommand):
         cat_amen = Category.objects.create(name="Guest Amenities", description="Shampoo, toothbrushes, shower caps, slippers", created_by=admin_user)
         cat_stat = Category.objects.create(name="Stationery", description="A4 papers, books, files, staplers, pens", created_by=admin_user)
 
+        cat_water = Category.objects.create(name="Water", parent=cat_bev, created_by=admin_user)
+        cat_soft_drinks = Category.objects.create(name="Soft Drinks", parent=cat_bev, created_by=admin_user)
+        cat_alcoholic = Category.objects.create(name="Alcoholic Beverages", parent=cat_bev, created_by=admin_user)
+        cat_sugar = Category.objects.create(name="Sugar & Sweeteners", parent=cat_dry, created_by=admin_user)
+        cat_cleaning = Category.objects.create(name="Cleaning Supplies", parent=cat_hsk, created_by=admin_user)
+        Category.objects.create(name="Toiletries", parent=cat_amen, created_by=admin_user)
+        cat_paper_products = Category.objects.create(name="Paper Products", parent=cat_stat, created_by=admin_user)
+
         uom_pcs = UnitOfMeasure.objects.create(name="Pieces", abbreviation="pcs", is_active=True, created_by=admin_user)
         uom_liters = UnitOfMeasure.objects.create(name="Liters", abbreviation="L", is_active=True, created_by=admin_user)
         uom_kgs = UnitOfMeasure.objects.create(name="Kilograms", abbreviation="kg", is_active=True, created_by=admin_user)
@@ -570,7 +584,7 @@ class Command(BaseCommand):
         self.stdout.write("Creating Items...")
         
         item_water = Item.objects.create(
-            category=cat_bev,
+            category=cat_water,
             name="Rwenzori Mineral Water 500ml",
             brand="Rwenzori",
             description="Uganda's premium drinking mineral water.",
@@ -583,7 +597,7 @@ class Command(BaseCommand):
         )
 
         item_cola = Item.objects.create(
-            category=cat_bev,
+            category=cat_soft_drinks,
             name="Coca Cola Soda 300ml",
             brand="Coca Cola",
             description="Classic carbonated soft drink.",
@@ -596,7 +610,7 @@ class Command(BaseCommand):
         )
 
         item_beer = Item.objects.create(
-            category=cat_bev,
+            category=cat_alcoholic,
             name="Nile Special Beer 500ml",
             brand="Nile Breweries",
             description="Award-winning Ugandan lager.",
@@ -609,7 +623,7 @@ class Command(BaseCommand):
         )
 
         item_sugar = Item.objects.create(
-            category=cat_dry,
+            category=cat_sugar,
             name="Kakira White Sugar 1kg",
             brand="Kakira",
             description="High-quality white sugar from Jinja.",
@@ -622,7 +636,7 @@ class Command(BaseCommand):
         )
 
         item_soap = Item.objects.create(
-            category=cat_hsk,
+            category=cat_cleaning,
             name="Mukwano Liquid Hand Soap 5L",
             brand="Mukwano",
             description="Antibacterial hand wash soap.",
@@ -635,7 +649,7 @@ class Command(BaseCommand):
         )
 
         item_paper = Item.objects.create(
-            category=cat_stat,
+            category=cat_paper_products,
             name="A4 Printing Paper Ream",
             brand="Double A",
             description="Standard 80gsm white printing paper ream.",

@@ -29,8 +29,11 @@ from core.mixins.admin import CreatedByAdminMixin
 
 @admin.register(Category)
 class CategoryAdmin(CreatedByAdminMixin, admin.ModelAdmin):
-    list_display = ("name", "created_at")
-    search_fields = ("name", "description")
+    list_display = ("name", "code", "parent", "is_active", "created_at")
+    list_filter = ("parent", "is_active")
+    list_select_related = ("parent",)
+    autocomplete_fields = ("parent",)
+    search_fields = ("name", "code", "description", "parent__name")
     date_hierarchy = "created_at"
 
 

@@ -31,6 +31,42 @@ from apps.inventory.models import (
 from apps.procurement.models import PurchaseRequisition
 from apps.vendors.models import Supplier
 from core.constants.choices import RequisitionType, StockCountStatus, StoreRequisitionStatus
+from apps.inventory.serializers import CategorySerializer
+
+
+@pytest.mark.django_db
+def test_category_hierarchy_reports_descendant_items_and_prevents_cycles():
+    beverages = Category.objects.create(name="Beverages")
+    soft_drinks = Category.objects.create(name="Soft Drinks", parent=beverages)
+    Item.objects.create(
+        category=soft_drinks,
+        name="Cola",
+        sku="COLA-001",
+        unit="bottle",
+        reorder_level=Decimal("10.00"),
+    )
+
+    rows = CategorySerializer([beverages, soft_drinks], many=True).data
+    root_row, child_row = rows
+
+    assert beverages.code == "BEV"
+    assert root_row["children_count"] == 1
+    assert root_row["item_count"] == 1
+    assert child_row["parent_name"] == "Beverages"
+    assert child_row["item_count"] == 1
+
+    beverages.parent = soft_drinks
+    with pytest.raises(ValidationError, match="own parent or descendant"):
+        beverages.save()
+    beverages.parent = None
+
+    serializer = CategorySerializer(
+        beverages,
+        data={"parent": str(soft_drinks.id)},
+        partial=True,
+    )
+    assert not serializer.is_valid()
+    assert "parent" in serializer.errors
 
 
 @pytest.mark.django_db

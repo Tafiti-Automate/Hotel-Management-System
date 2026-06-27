@@ -60,10 +60,11 @@ def raise_drf_validation_error(error):
 
 
 class CategoryViewSet(CreatedByModelMixin, ModelViewSet):
-    queryset = Category.objects.all()
+    queryset = Category.objects.select_related("parent")
     serializer_class = CategorySerializer
-    search_fields = ("name", "description")
-    ordering_fields = ("name", "created_at")
+    filterset_fields = ("parent", "is_active")
+    search_fields = ("name", "code", "description", "parent__name")
+    ordering_fields = ("name", "code", "parent__name", "created_at")
 
 
 class UnitOfMeasureViewSet(CreatedByModelMixin, ModelViewSet):
