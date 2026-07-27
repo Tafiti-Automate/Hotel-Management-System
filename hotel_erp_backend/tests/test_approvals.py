@@ -4,7 +4,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 
-from apps.approvals.models import ApprovalWorkflow
+from apps.approvals.models import ApprovalMatrixRule, ApprovalWorkflow
 from apps.departments.models import Department
 from apps.employees.models import Employee
 from apps.inventory.models import Category, Item
@@ -144,3 +144,63 @@ def test_hotel_purchase_requisition_passes_ordered_controls():
     final_stage.approve()
     requisition.refresh_from_db()
     assert requisition.status == PRStatus.APPROVED
+
+
+@pytest.mark.django_db
+def test_submission_builds_value_based_approval_route():
+    department = Department.objects.create(name="Food and Beverage")
+    user_model = get_user_model()
+    requester_user = user_model.objects.create_user(
+        username="chef", employee_code="EMP-CHEF", password="test-pass-123"
+    )
+    requester = Employee.objects.create(
+        user=requester_user, department=department, designation="Executive Chef"
+    )
+    approvers = []
+    for index, title in enumerate(("Department Head", "Finance Manager"), start=1):
+        user = user_model.objects.create_user(
+            username=f"matrix-{index}",
+            employee_code=f"EMP-MATRIX-{index}",
+            password="test-pass-123",
+        )
+        approvers.append(
+            Employee.objects.create(
+                user=user, department=department, designation=title
+            )
+        )
+        ApprovalMatrixRule.objects.create(
+            name="F&B purchasing",
+            document_type=ApprovalMatrixRule.DOCUMENT_PURCHASE_REQUISITION,
+            department=department,
+            minimum_amount=Decimal("0.00"),
+            maximum_amount=Decimal("1000000.00"),
+            stage=index,
+            stage_name=title,
+            approver=approvers[-1],
+        )
+
+    category = Category.objects.create(name="Fresh Food")
+    item = Item.objects.create(
+        category=category,
+        name="Fresh vegetables",
+        unit="kilogram",
+        reorder_level=Decimal("10.00"),
+    )
+    requisition = PurchaseRequisition.objects.create(
+        requester=requester,
+        department=department,
+        reason="Daily kitchen production",
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity=Decimal("20.00"),
+        estimated_unit_cost=Decimal("3000.00"),
+    )
+
+    requisition.submit()
+
+    steps = list(requisition.approval_workflow.order_by("stage"))
+    assert requisition.estimated_total == Decimal("60000.00")
+    assert [step.stage_name for step in steps] == ["Department Head", "Finance Manager"]
+    assert [step.approver for step in steps] == approvers

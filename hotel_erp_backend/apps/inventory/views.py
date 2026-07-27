@@ -4,8 +4,10 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
+from apps.employees.models import Employee
 from apps.inventory.models import (
     Category,
+    DepartmentConsumption,
     InventoryBalance,
     InventoryBatch,
     ReorderRule,
@@ -30,6 +32,7 @@ from apps.inventory.models import (
 )
 from apps.inventory.serializers import (
     CategorySerializer,
+    DepartmentConsumptionSerializer,
     InventoryBalanceSerializer,
     InventoryBatchSerializer,
     ReorderRuleSerializer,
@@ -53,10 +56,22 @@ from apps.inventory.serializers import (
     UnitOfMeasureSerializer,
 )
 from core.mixins.viewsets import CreatedByModelMixin
+from core.constants.choices import StoreRequisitionStatus
 
 
 def raise_drf_validation_error(error):
     raise ValidationError(getattr(error, "messages", str(error)))
+
+
+def enforce_readiness(readiness):
+    if readiness["blockers"]:
+        raise ValidationError(
+            {
+                "detail": "Complete the required steps before continuing.",
+                "blockers": readiness["blockers"],
+                "warnings": readiness["warnings"],
+            }
+        )
 
 
 class CategoryViewSet(CreatedByModelMixin, ModelViewSet):
@@ -110,9 +125,9 @@ class InventoryBalanceViewSet(CreatedByModelMixin, ModelViewSet):
 class SupplierItemPriceViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = SupplierItemPrice.objects.select_related("supplier", "item", "unit")
     serializer_class = SupplierItemPriceSerializer
-    filterset_fields = ("supplier", "item", "unit", "is_active")
-    search_fields = ("supplier__name", "item__name", "item__sku")
-    ordering_fields = ("unit_price", "created_at")
+    filterset_fields = ("supplier", "item", "unit", "is_preferred", "is_active")
+    search_fields = ("supplier__name", "item__name", "item__sku", "supplier_sku")
+    ordering_fields = ("unit_price", "lead_time_days", "minimum_order_quantity", "last_quoted_at", "created_at")
 
 
 class StockLedgerViewSet(CreatedByModelMixin, ModelViewSet):
@@ -142,6 +157,33 @@ class StockTransferViewSet(CreatedByModelMixin, ModelViewSet):
     filterset_fields = ("from_store", "to_store", "status", "requested_by", "approved_by")
     search_fields = ("from_store__name", "to_store__name", "note")
     ordering_fields = ("status", "required_date", "created_at")
+
+    @action(detail=True, methods=["post"])
+    def approve(self, request, pk=None):
+        transfer = self.get_object()
+        try:
+            transfer.approve(approved_by=getattr(request.user, "employee_profile", None))
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        return Response(self.get_serializer(transfer).data)
+
+    @action(detail=True, methods=["post"], url_path="dispatch")
+    def dispatch_transfer(self, request, pk=None):
+        transfer = self.get_object()
+        try:
+            transfer.dispatch(dispatched_by=getattr(request.user, "employee_profile", None))
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        return Response(self.get_serializer(transfer).data)
+
+    @action(detail=True, methods=["post"])
+    def receive(self, request, pk=None):
+        transfer = self.get_object()
+        try:
+            transfer.receive(received_by=getattr(request.user, "employee_profile", None))
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        return Response(self.get_serializer(transfer).data)
 
     @action(detail=True, methods=["post"])
     def apply(self, request, pk=None):
@@ -238,7 +280,10 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     def approve(self, request, pk=None):
         requisition = self.get_object()
         try:
-            requisition.approve(approved_by=getattr(request.user, "employee_profile", None))
+            requisition.approve(
+                approved_by=getattr(request.user, "employee_profile", None),
+                comments=request.data.get("comments", ""),
+            )
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
         return Response(self.get_serializer(requisition).data)
@@ -252,6 +297,15 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             raise_drf_validation_error(error)
         return Response(self.get_serializer(requisition).data)
 
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        requisition = self.get_object()
+        try:
+            requisition.cancel()
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        return Response(self.get_serializer(requisition).data)
+
 
 class StoreRequisitionItemViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = StoreRequisitionItem.objects.select_related("requisition", "item", "unit")
@@ -259,6 +313,14 @@ class StoreRequisitionItemViewSet(CreatedByModelMixin, ModelViewSet):
     filterset_fields = ("requisition", "item", "unit")
     search_fields = ("requisition__requisition_no", "item__name", "item__sku")
     ordering_fields = ("quantity_requested", "quantity_approved", "quantity_issued", "created_at")
+
+    def perform_destroy(self, instance):
+        if instance.requisition.status not in (
+            StoreRequisitionStatus.DRAFT,
+            StoreRequisitionStatus.REJECTED,
+        ):
+            raise ValidationError("Only draft or rejected store request lines can be removed.")
+        instance.delete()
 
 
 class StockIssueViewSet(CreatedByModelMixin, ModelViewSet):
@@ -268,13 +330,37 @@ class StockIssueViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("issue_no", "requisition__requisition_no", "store__name", "received_by_name")
     ordering_fields = ("issue_no", "issue_date", "created_at")
 
+    @action(detail=True, methods=["get"])
+    def readiness(self, request, pk=None):
+        return Response(self.get_object().posting_readiness())
+
     @action(detail=True, methods=["post"])
     def apply(self, request, pk=None):
         issue = self.get_object()
+        enforce_readiness(issue.posting_readiness())
         try:
             issue.apply_inventory_changes()
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
+        return Response(self.get_serializer(issue).data)
+
+    @action(detail=True, methods=["post"])
+    def acknowledge(self, request, pk=None):
+        issue = self.get_object()
+        if not issue.inventory_changes_applied:
+            raise ValidationError("Stock must be issued before the department can acknowledge receipt.")
+        received_by = None
+        if request.data.get("received_by"):
+            try:
+                received_by = Employee.objects.get(pk=request.data["received_by"])
+            except Employee.DoesNotExist:
+                raise ValidationError({"received_by": "Selected employee was not found."})
+        received_by_name = request.data.get("received_by_name", "").strip()
+        if not received_by and not received_by_name:
+            raise ValidationError("Select the receiving employee or enter the receiver's name.")
+        issue.received_by = received_by
+        issue.received_by_name = received_by_name or str(received_by)
+        issue.save(update_fields=("received_by", "received_by_name", "updated_at"))
         return Response(self.get_serializer(issue).data)
 
 
@@ -284,6 +370,16 @@ class StockIssueItemViewSet(CreatedByModelMixin, ModelViewSet):
     filterset_fields = ("issue", "requisition_item", "item", "unit")
     search_fields = ("issue__issue_no", "item__name", "item__sku")
     ordering_fields = ("quantity", "base_quantity", "created_at")
+
+
+class DepartmentConsumptionViewSet(CreatedByModelMixin, ModelViewSet):
+    queryset = DepartmentConsumption.objects.select_related(
+        "department", "item", "stock_issue_item", "goods_receipt_item"
+    )
+    serializer_class = DepartmentConsumptionSerializer
+    filterset_fields = ("department", "item", "consumed_on")
+    search_fields = ("department__name", "item__name", "item__sku", "purpose")
+    ordering_fields = ("consumed_on", "quantity", "unit_cost", "created_at")
 
 
 class StoreReturnViewSet(CreatedByModelMixin, ModelViewSet):
@@ -367,3 +463,29 @@ class StockCountItemViewSet(CreatedByModelMixin, ModelViewSet):
     filterset_fields = ("stock_count", "item")
     search_fields = ("stock_count__count_no", "item__name", "item__sku")
     ordering_fields = ("system_quantity", "physical_quantity", "created_at")
+    @action(detail=True, methods=["post"])
+    def submit(self, request, pk=None):
+        adjustment = self.get_object()
+        try:
+            adjustment.submit()
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        return Response(self.get_serializer(adjustment).data)
+
+    @action(detail=True, methods=["post"])
+    def approve(self, request, pk=None):
+        adjustment = self.get_object()
+        try:
+            adjustment.approve(approved_by=getattr(request.user, "employee_profile", None))
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        return Response(self.get_serializer(adjustment).data)
+
+    @action(detail=True, methods=["post"])
+    def reject(self, request, pk=None):
+        adjustment = self.get_object()
+        try:
+            adjustment.reject(reason=request.data.get("reason", ""))
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        return Response(self.get_serializer(adjustment).data)

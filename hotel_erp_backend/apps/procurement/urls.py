@@ -7,6 +7,8 @@ from apps.procurement.views import (
     GoodsReceiptNoteViewSet,
     PurchaseOrderViewSet,
     PurchaseOrderItemViewSet,
+    ProcurementAttachmentViewSet,
+    ProcurementCommunicationViewSet,
     PurchaseRequisitionViewSet,
     RequisitionItemViewSet,
     SupplierReturnItemViewSet,
@@ -29,5 +31,7 @@ router.register("goods-inspections", GoodsInspectionViewSet, basename="goods-ins
 router.register("goods-inspection-items", GoodsInspectionItemViewSet, basename="goods-inspection-item")
 router.register("supplier-returns", SupplierReturnViewSet, basename="supplier-return")
 router.register("supplier-return-items", SupplierReturnItemViewSet, basename="supplier-return-item")
+router.register("procurement-attachments", ProcurementAttachmentViewSet, basename="procurement-attachment")
+router.register("procurement-communications", ProcurementCommunicationViewSet, basename="procurement-communication")
 
 urlpatterns = router.urls

@@ -218,6 +218,7 @@ def test_store_requisition_issue_and_department_return_update_stock():
 
     requisition.submit()
     requisition.approve(approved_by=employee)
+    assert InventoryBalance.objects.get(item=item, store=store).quantity_reserved == Decimal("12.00")
     issue = StockIssue.objects.create(
         requisition=requisition,
         store=store,
@@ -234,7 +235,9 @@ def test_store_requisition_issue_and_department_return_update_stock():
     requisition_item.refresh_from_db()
     assert requisition.status == StoreRequisitionStatus.PARTIALLY_ISSUED
     assert requisition_item.quantity_issued == Decimal("10.00")
-    assert InventoryBalance.objects.get(item=item, store=store).quantity_in_stock == Decimal("30.00")
+    balance = InventoryBalance.objects.get(item=item, store=store)
+    assert balance.quantity_in_stock == Decimal("30.00")
+    assert balance.quantity_reserved == Decimal("2.00")
 
     store_return = StoreReturn.objects.create(
         department=department,

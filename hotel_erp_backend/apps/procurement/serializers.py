@@ -8,6 +8,8 @@ from apps.procurement.models import (
     GoodsReceiptNote,
     PurchaseOrder,
     PurchaseOrderItem,
+    ProcurementAttachment,
+    ProcurementCommunication,
     PurchaseRequisition,
     RequisitionItem,
     SupplierReturn,
@@ -18,6 +20,7 @@ from apps.procurement.models import (
 
 
 class PurchaseRequisitionSerializer(serializers.ModelSerializer):
+    estimated_total = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     class Meta:
         model = PurchaseRequisition
         fields = (
@@ -30,6 +33,7 @@ class PurchaseRequisitionSerializer(serializers.ModelSerializer):
             "reason",
             "expected_date",
             "control_notes",
+            "estimated_total",
             "created_at",
             "updated_at",
             "created_by",
@@ -38,6 +42,7 @@ class PurchaseRequisitionSerializer(serializers.ModelSerializer):
 
 
 class RequisitionItemSerializer(serializers.ModelSerializer):
+    estimated_total = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     class Meta:
         model = RequisitionItem
         fields = (
@@ -45,11 +50,13 @@ class RequisitionItemSerializer(serializers.ModelSerializer):
             "requisition",
             "item",
             "quantity",
+            "estimated_unit_cost",
+            "estimated_total",
             "created_at",
             "updated_at",
             "created_by",
         )
-        read_only_fields = ("id", "total_amount", "created_at", "updated_at", "created_by")
+        read_only_fields = ("id", "estimated_total", "created_at", "updated_at", "created_by")
 
     def validate_requisition(self, requisition):
         if requisition.status not in (PRStatus.DRAFT, PRStatus.REJECTED):
@@ -58,20 +65,58 @@ class RequisitionItemSerializer(serializers.ModelSerializer):
             )
         return requisition
 
+    def validate(self, attrs):
+        requisition = attrs.get("requisition") or getattr(self.instance, "requisition", None)
+        item = attrs.get("item") or getattr(self.instance, "item", None)
+        if requisition and requisition.status not in (PRStatus.DRAFT, PRStatus.REJECTED):
+            raise serializers.ValidationError(
+                "Requisition items can only be changed while the requisition is draft or rejected."
+            )
+        duplicate = RequisitionItem.objects.filter(requisition=requisition, item=item)
+        if self.instance:
+            duplicate = duplicate.exclude(pk=self.instance.pk)
+        if requisition and item and duplicate.exists():
+            raise serializers.ValidationError(
+                {"item": "This Article is already on the requisition. Edit the existing line instead."}
+            )
+        return attrs
+
 
 class VendorQuotationSerializer(serializers.ModelSerializer):
+    subtotal = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     class Meta:
         model = VendorQuotation
         fields = (
             "id",
             "requisition",
             "supplier",
+            "subtotal",
             "total_amount",
+            "tax_amount",
+            "transport_cost",
+            "discount_amount",
+            "payment_terms",
+            "delivery_date",
+            "valid_until",
+            "evaluation_score",
+            "evaluation_notes",
             "created_at",
             "updated_at",
             "created_by",
         )
-        read_only_fields = ("id", "created_at", "updated_at", "created_by")
+        read_only_fields = ("id", "subtotal", "total_amount", "created_at", "updated_at", "created_by")
+
+    def validate_requisition(self, requisition):
+        if requisition.status in (PRStatus.CANCELLED, PRStatus.REJECTED):
+            raise serializers.ValidationError(
+                "Quotations cannot be recorded for a cancelled or rejected requisition."
+            )
+        return requisition
+
+    def update(self, instance, validated_data):
+        instance = super().update(instance, validated_data)
+        instance.update_total_amount()
+        return instance
 
 
 class PurchaseOrderSerializer(serializers.ModelSerializer):
@@ -134,21 +179,36 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
             "created_by",
         )
 
+    def validate(self, attrs):
+        order = attrs.get("purchase_order") or getattr(self.instance, "purchase_order", None)
+        item = attrs.get("item") or getattr(self.instance, "item", None)
+        if order and order.status != POStatus.DRAFT:
+            raise serializers.ValidationError("LPO lines can only be changed while the LPO is draft.")
+        if order and item and not order.requisition.items.filter(item=item).exists():
+            raise serializers.ValidationError(
+                {"item": "This Article is not on the source requisition."}
+            )
+        return attrs
+
 
 class GoodsReceiptNoteSerializer(serializers.ModelSerializer):
     class Meta:
         model = GoodsReceiptNote
         fields = (
             "id",
+            "grn_number",
             "purchase_order",
             "received_by",
             "received_date",
+            "delivery_note_no",
             "note",
+            "posted_at",
+            "posted_by",
             "created_at",
             "updated_at",
             "created_by",
         )
-        read_only_fields = ("id", "created_at", "updated_at", "created_by")
+        read_only_fields = ("id", "grn_number", "posted_at", "posted_by", "created_at", "updated_at", "created_by")
 
     def validate_purchase_order(self, purchase_order):
         if purchase_order.status not in (POStatus.ISSUED, POStatus.PARTIALLY_RECEIVED):
@@ -172,6 +232,30 @@ class GoodsReceiptItemSerializer(serializers.ModelSerializer):
             "created_by",
         )
 
+    def validate(self, attrs):
+        receipt = attrs.get("goods_receipt") or getattr(self.instance, "goods_receipt", None)
+        order_line = attrs.get("purchase_order_item") or getattr(self.instance, "purchase_order_item", None)
+        if self.instance and self.instance.inventory_changes_applied:
+            raise serializers.ValidationError("Posted GRN lines cannot be changed.")
+        if receipt and order_line and order_line.purchase_order_id != receipt.purchase_order_id:
+            raise serializers.ValidationError(
+                {"purchase_order_item": "This LPO line does not belong to the selected goods receipt."}
+            )
+        quantity = attrs.get("quantity_received")
+        if receipt and order_line and quantity is not None:
+            existing = GoodsReceiptItem.objects.filter(
+                goods_receipt__purchase_order=receipt.purchase_order,
+                purchase_order_item=order_line,
+            )
+            if self.instance:
+                existing = existing.exclude(pk=self.instance.pk)
+            already_received = sum((line.quantity_received for line in existing), 0)
+            if already_received + quantity > order_line.quantity:
+                raise serializers.ValidationError(
+                    {"quantity_received": "Delivered quantity exceeds the remaining quantity on the LPO line."}
+                )
+        return attrs
+
 class VendorQuotationItemSerializer(serializers.ModelSerializer):
     line_total = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
 
@@ -180,12 +264,44 @@ class VendorQuotationItemSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ("id", "item", "line_total", "created_at", "updated_at", "created_by")
 
+    def validate(self, attrs):
+        quotation = attrs.get("quotation") or getattr(self.instance, "quotation", None)
+        requisition_item = attrs.get("requisition_item") or getattr(self.instance, "requisition_item", None)
+        if self.instance and self.instance.selected:
+            raise serializers.ValidationError(
+                "A selected winning quotation line cannot be changed. Reopen the evaluation first."
+            )
+        if quotation and requisition_item and requisition_item.requisition_id != quotation.requisition_id:
+            raise serializers.ValidationError(
+                {"requisition_item": "This line does not belong to the quotation's requisition."}
+            )
+        duplicate = VendorQuotationItem.objects.filter(
+            quotation=quotation,
+            requisition_item=requisition_item,
+        )
+        if self.instance:
+            duplicate = duplicate.exclude(pk=self.instance.pk)
+        if quotation and requisition_item and duplicate.exists():
+            raise serializers.ValidationError(
+                {"requisition_item": "This Article is already quoted by this supplier. Edit the existing line instead."}
+            )
+        return attrs
+
 
 class GoodsInspectionItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = GoodsInspectionItem
         fields = "__all__"
         read_only_fields = ("id", "item", "created_at", "updated_at", "created_by")
+
+    def validate(self, attrs):
+        inspection = attrs.get("inspection") or getattr(self.instance, "inspection", None)
+        receipt_item = attrs.get("goods_receipt_item") or getattr(self.instance, "goods_receipt_item", None)
+        if inspection and receipt_item and receipt_item.goods_receipt_id != inspection.goods_receipt_id:
+            raise serializers.ValidationError(
+                {"goods_receipt_item": "This line does not belong to the inspected goods receipt."}
+            )
+        return attrs
 
 
 class GoodsInspectionSerializer(serializers.ModelSerializer):
@@ -201,6 +317,15 @@ class SupplierReturnItemSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ("id", "base_quantity", "created_at", "updated_at", "created_by")
 
+    def validate(self, attrs):
+        supplier_return = attrs.get("supplier_return") or getattr(self.instance, "supplier_return", None)
+        item = attrs.get("item") or getattr(self.instance, "item", None)
+        if supplier_return and item and not supplier_return.goods_receipt.items.filter(item=item).exists():
+            raise serializers.ValidationError(
+                {"item": "Only Articles from the selected goods receipt can be returned."}
+            )
+        return attrs
+
 
 class SupplierReturnSerializer(serializers.ModelSerializer):
     class Meta:
@@ -214,4 +339,38 @@ class SupplierReturnSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "created_by",
+        )
+
+    def validate(self, attrs):
+        supplier = attrs.get("supplier") or getattr(self.instance, "supplier", None)
+        receipt = attrs.get("goods_receipt") or getattr(self.instance, "goods_receipt", None)
+        if supplier and receipt and receipt.purchase_order.supplier_id != supplier.id:
+            raise serializers.ValidationError(
+                {"supplier": "The supplier must match the supplier on the goods receipt's LPO."}
+            )
+        return attrs
+
+
+class ProcurementAttachmentSerializer(serializers.ModelSerializer):
+    uploaded_by = serializers.CharField(source="created_by.get_full_name", read_only=True)
+
+    class Meta:
+        model = ProcurementAttachment
+        fields = "__all__"
+        read_only_fields = (
+            "id", "original_name", "uploaded_by", "created_at", "updated_at", "created_by",
+        )
+
+    def create(self, validated_data):
+        uploaded_file = validated_data["file"]
+        validated_data["original_name"] = uploaded_file.name
+        return super().create(validated_data)
+
+
+class ProcurementCommunicationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProcurementCommunication
+        fields = "__all__"
+        read_only_fields = (
+            "id", "created_at", "updated_at", "created_by",
         )

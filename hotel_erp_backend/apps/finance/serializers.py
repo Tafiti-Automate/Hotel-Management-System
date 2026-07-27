@@ -8,6 +8,8 @@ from apps.finance.models import (
     Expense,
     ExpenseCategory,
     PaymentMethod,
+    SupplierInvoice,
+    SupplierPayment,
 )
 
 
@@ -73,3 +75,25 @@ class ExpenseSerializer(serializers.ModelSerializer):
         model = Expense
         fields = "__all__"
         read_only_fields = ("id", "created_at", "updated_at", "created_by")
+
+
+class SupplierInvoiceSerializer(serializers.ModelSerializer):
+    total_amount = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+    paid_amount = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+    balance_due = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = SupplierInvoice
+        fields = "__all__"
+        read_only_fields = (
+            "id", "status", "quantity_variance", "amount_variance", "match_notes",
+            "total_amount", "paid_amount", "balance_due", "created_at", "updated_at",
+            "created_by",
+        )
+
+
+class SupplierPaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SupplierPayment
+        fields = "__all__"
+        read_only_fields = ("id", "status", "created_at", "updated_at", "created_by")

@@ -5,6 +5,7 @@ from rest_framework import serializers
 
 from apps.inventory.models import (
     Category,
+    DepartmentConsumption,
     InventoryBalance,
     InventoryBatch,
     Item,
@@ -27,6 +28,7 @@ from apps.inventory.models import (
     SupplierItemPrice,
     UnitOfMeasure,
 )
+from core.constants.choices import StoreRequisitionStatus
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -152,6 +154,9 @@ class ItemSerializer(serializers.ModelSerializer):
             "unit",
             "base_unit",
             "reorder_level",
+            "maximum_level",
+            "batch_tracking",
+            "expiry_tracking",
             "business_type",
             "is_active",
             "created_at",
@@ -177,29 +182,69 @@ class StoreLocationSerializer(serializers.ModelSerializer):
 
 class InventoryBalanceSerializer(serializers.ModelSerializer):
     is_below_reorder = serializers.BooleanField(read_only=True)
+    available_quantity = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
 
     class Meta:
         model = InventoryBalance
         fields = "__all__"
-        read_only_fields = ("id", "is_below_reorder", "created_at", "updated_at", "created_by")
+        read_only_fields = ("id", "is_below_reorder", "available_quantity", "created_at", "updated_at", "created_by")
 
 
 class SupplierItemPriceSerializer(serializers.ModelSerializer):
+    supplier_name = serializers.CharField(source="supplier.name", read_only=True)
+    item_name = serializers.CharField(source="item.name", read_only=True)
+    item_sku = serializers.CharField(source="item.sku", read_only=True)
+    unit_name = serializers.CharField(source="unit.name", read_only=True)
+
     class Meta:
         model = SupplierItemPrice
         fields = (
             "id",
             "supplier",
+            "supplier_name",
             "item",
+            "item_name",
+            "item_sku",
             "unit",
+            "unit_name",
+            "supplier_sku",
             "unit_price",
+            "minimum_order_quantity",
             "lead_time_days",
+            "is_preferred",
+            "last_quoted_at",
             "is_active",
             "created_at",
             "updated_at",
             "created_by",
         )
-        read_only_fields = ("id", "created_at", "updated_at", "created_by")
+        read_only_fields = (
+            "id", "supplier_name", "item_name", "item_sku", "unit_name",
+            "created_at", "updated_at", "created_by",
+        )
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        item = attrs.get("item", getattr(self.instance, "item", None))
+        is_preferred = attrs.get(
+            "is_preferred", getattr(self.instance, "is_preferred", False)
+        )
+        is_active = attrs.get("is_active", getattr(self.instance, "is_active", True))
+        if item and is_preferred and is_active:
+            preferred = SupplierItemPrice.objects.filter(
+                item=item, is_preferred=True, is_active=True
+            )
+            if self.instance:
+                preferred = preferred.exclude(pk=self.instance.pk)
+            if preferred.exists():
+                raise serializers.ValidationError(
+                    {"is_preferred": "This article already has an active preferred supplier."}
+                )
+        instance = self.instance or SupplierItemPrice(**attrs)
+        for field, value in attrs.items():
+            setattr(instance, field, value)
+        instance.clean()
+        return attrs
 
 
 class StockLedgerSerializer(serializers.ModelSerializer):
@@ -322,6 +367,35 @@ class StoreRequisitionItemSerializer(serializers.ModelSerializer):
             "created_by",
         )
 
+    def validate(self, attrs):
+        requisition = attrs.get("requisition") or getattr(self.instance, "requisition", None)
+        item = attrs.get("item") or getattr(self.instance, "item", None)
+        if not requisition:
+            return attrs
+        if self.instance and requisition.status == StoreRequisitionStatus.SUBMITTED:
+            disallowed = set(attrs) - {"quantity_approved", "remarks"}
+            if disallowed:
+                raise serializers.ValidationError(
+                    "Only the approved quantity and decision comment can change during approval."
+                )
+        elif requisition.status not in (
+            StoreRequisitionStatus.DRAFT,
+            StoreRequisitionStatus.REJECTED,
+        ):
+            raise serializers.ValidationError(
+                "Store request lines can only be changed while draft or during submitted line approval."
+            )
+        duplicate = StoreRequisitionItem.objects.filter(
+            requisition=requisition, item=item, unit=attrs.get("unit", getattr(self.instance, "unit", None))
+        )
+        if self.instance:
+            duplicate = duplicate.exclude(pk=self.instance.pk)
+        if item and duplicate.exists():
+            raise serializers.ValidationError(
+                {"item": "This Article is already on the store request. Edit the existing line instead."}
+            )
+        return attrs
+
 
 class StoreRequisitionSerializer(serializers.ModelSerializer):
     class Meta:
@@ -366,6 +440,17 @@ class StoreReturnItemSerializer(serializers.ModelSerializer):
         model = StoreReturnItem
         fields = "__all__"
         read_only_fields = ("id", "base_quantity", "created_at", "updated_at", "created_by")
+
+
+class DepartmentConsumptionSerializer(serializers.ModelSerializer):
+    total_cost = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = DepartmentConsumption
+        fields = "__all__"
+        read_only_fields = (
+            "id", "total_cost", "created_at", "updated_at", "created_by",
+        )
 
 
 class StoreReturnSerializer(serializers.ModelSerializer):

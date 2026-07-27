@@ -2,6 +2,7 @@ from django.contrib import admin, messages
 
 from apps.inventory.models import (
     Category,
+    DepartmentConsumption,
     InventoryBalance,
     InventoryBatch,
     ReorderRule,
@@ -47,8 +48,8 @@ class UnitOfMeasureAdmin(CreatedByAdminMixin, admin.ModelAdmin):
 
 @admin.register(Item)
 class ItemAdmin(CreatedByAdminMixin, admin.ModelAdmin):
-    list_display = ("name", "sku", "category", "base_unit", "reorder_level", "is_active")
-    list_filter = ("category", "unit", "base_unit", "is_active")
+    list_display = ("name", "sku", "category", "base_unit", "reorder_level", "maximum_level", "is_active")
+    list_filter = ("category", "unit", "base_unit", "batch_tracking", "expiry_tracking", "is_active")
     list_select_related = ("category", "base_unit")
     autocomplete_fields = ("category", "base_unit")
     search_fields = ("name", "sku", "barcode", "brand", "category__name")
@@ -57,8 +58,8 @@ class ItemAdmin(CreatedByAdminMixin, admin.ModelAdmin):
 
 @admin.register(ItemUnitPrice)
 class ItemUnitPriceAdmin(CreatedByAdminMixin, admin.ModelAdmin):
-    list_display = ("item", "unit", "conversion_factor", "selling_price", "is_active")
-    list_filter = ("unit", "is_active")
+    list_display = ("item", "unit", "role", "conversion_factor", "selling_price", "is_active")
+    list_filter = ("role", "unit", "is_active")
     list_select_related = ("item", "unit")
     autocomplete_fields = ("item", "unit")
     search_fields = ("item__name", "item__sku", "unit__name")
@@ -87,8 +88,8 @@ class InventoryBalanceAdmin(CreatedByAdminMixin, admin.ModelAdmin):
 
 @admin.register(SupplierItemPrice)
 class SupplierItemPriceAdmin(CreatedByAdminMixin, admin.ModelAdmin):
-    list_display = ("supplier", "item", "unit", "unit_price", "lead_time_days", "is_active")
-    list_filter = ("supplier", "item", "unit", "is_active")
+    list_display = ("supplier", "item", "supplier_sku", "unit", "unit_price", "minimum_order_quantity", "lead_time_days", "is_preferred", "is_active")
+    list_filter = ("supplier", "item", "unit", "is_preferred", "is_active")
     list_select_related = ("supplier", "item", "unit")
     autocomplete_fields = ("supplier", "item", "unit")
     search_fields = ("supplier__name", "item__name", "item__sku")
@@ -310,6 +311,23 @@ class StockIssueItemAdmin(CreatedByAdminMixin, admin.ModelAdmin):
     list_select_related = ("issue", "requisition_item", "item", "unit")
     autocomplete_fields = ("issue", "requisition_item", "unit")
     search_fields = ("issue__issue_no", "item__name", "item__sku")
+
+
+@admin.register(DepartmentConsumption)
+class DepartmentConsumptionAdmin(CreatedByAdminMixin, admin.ModelAdmin):
+    list_display = (
+        "consumed_on", "department", "item", "quantity", "unit_cost", "total_cost",
+    )
+    list_filter = ("department", "item", "consumed_on")
+    list_select_related = (
+        "department", "item", "stock_issue_item", "goods_receipt_item",
+    )
+    autocomplete_fields = (
+        "department", "item", "stock_issue_item", "goods_receipt_item",
+    )
+    search_fields = ("department__name", "item__name", "item__sku", "purpose")
+    readonly_fields = ("total_cost",)
+    date_hierarchy = "consumed_on"
 
 
 class StoreReturnItemInline(admin.TabularInline):

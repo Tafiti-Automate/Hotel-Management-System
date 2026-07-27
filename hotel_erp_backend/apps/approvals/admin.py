@@ -1,12 +1,24 @@
 from django.contrib import admin, messages
 
-from apps.approvals.models import ApprovalWorkflow
+from apps.approvals.models import ApprovalMatrixRule, ApprovalWorkflow
 from core.mixins.admin import CreatedByAdminMixin
+
+
+@admin.register(ApprovalMatrixRule)
+class ApprovalMatrixRuleAdmin(CreatedByAdminMixin, admin.ModelAdmin):
+    list_display = (
+        "name", "document_type", "branch", "department", "minimum_amount",
+        "maximum_amount", "stage", "stage_name", "approver", "is_active",
+    )
+    list_filter = ("document_type", "branch", "department", "is_active")
+    list_select_related = ("branch", "department", "approver")
+    autocomplete_fields = ("branch", "department", "approver")
+    search_fields = ("name", "stage_name", "approver__user__employee_code")
 
 
 @admin.register(ApprovalWorkflow)
 class ApprovalWorkflowAdmin(CreatedByAdminMixin, admin.ModelAdmin):
-    list_display = ("requisition", "stage", "approver", "status", "updated_at")
+    list_display = ("requisition", "stage", "stage_name", "approver", "status", "updated_at")
     list_filter = ("status", "stage")
     list_select_related = ("requisition", "approver")
     autocomplete_fields = ("requisition", "approver")

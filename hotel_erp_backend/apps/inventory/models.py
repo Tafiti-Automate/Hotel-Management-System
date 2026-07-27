@@ -2,8 +2,10 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
+from django.utils import timezone
 
 from core.constants.choices import (
+    ArticleUnitRole,
     ItemBusinessType,
     LedgerReferenceType,
     StockAdjustmentStatus,
@@ -116,6 +118,16 @@ class Item(BaseModel):
         decimal_places=2,
         validators=[validate_non_negative_decimal],
     )
+    maximum_level = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[validate_non_negative_decimal],
+        help_text="Optional maximum stock holding in base units.",
+    )
+    batch_tracking = models.BooleanField(default=False)
+    expiry_tracking = models.BooleanField(default=False)
     business_type = models.CharField(
         max_length=30,
         choices=ItemBusinessType.choices,
@@ -149,6 +161,16 @@ class Item(BaseModel):
             self.sku = f"{prefix}-{next_number:04d}"
         super().save(*args, **kwargs)
 
+    def clean(self):
+        super().clean()
+        if (
+            self.maximum_level is not None
+            and self.maximum_level < self.reorder_level
+        ):
+            raise ValidationError(
+                {"maximum_level": "Maximum level cannot be lower than the reorder level."}
+            )
+
 
 class ItemUnitPrice(BaseModel):
     item = models.ForeignKey(
@@ -168,6 +190,11 @@ class ItemUnitPrice(BaseModel):
         validators=[validate_positive_decimal],
         help_text="Number of base units represented by one selected unit.",
     )
+    role = models.CharField(
+        max_length=20,
+        choices=ArticleUnitRole.choices,
+        default=ArticleUnitRole.ALTERNATE,
+    )
     selling_price = models.DecimalField(
         max_digits=15,
         decimal_places=2,
@@ -182,11 +209,24 @@ class ItemUnitPrice(BaseModel):
                 fields=("item", "unit"),
                 name="unique_item_unit_price",
             )
+            ,
+            models.UniqueConstraint(
+                fields=("item", "role"),
+                condition=models.Q(role__in=(ArticleUnitRole.PURCHASE, ArticleUnitRole.ISSUE)),
+                name="unique_primary_article_unit_role",
+            ),
         ]
         ordering = ("item__name", "conversion_factor")
 
     def __str__(self):
         return f"{self.item} - {self.unit} x {self.conversion_factor}"
+
+    def clean(self):
+        super().clean()
+        if self.role == ArticleUnitRole.BASE and self.conversion_factor != Decimal("1.0000"):
+            raise ValidationError(
+                {"conversion_factor": "The base unit conversion factor must be 1."}
+            )
 
 
 class StoreLocation(BaseModel):
@@ -234,6 +274,12 @@ class InventoryBalance(BaseModel):
         default=Decimal("0.00"),
         validators=[validate_non_negative_decimal],
     )
+    quantity_reserved = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[validate_non_negative_decimal],
+    )
     reorder_level = models.DecimalField(
         max_digits=12,
         decimal_places=2,
@@ -254,6 +300,10 @@ class InventoryBalance(BaseModel):
     @property
     def is_below_reorder(self):
         return self.quantity_in_stock <= self.reorder_level
+
+    @property
+    def available_quantity(self):
+        return max(self.quantity_in_stock - self.quantity_reserved, Decimal("0.00"))
 
     def __str__(self):
         return f"{self.item} @ {self.store}: {self.quantity_in_stock}"
@@ -277,12 +327,25 @@ class SupplierItemPrice(BaseModel):
         null=True,
         blank=True,
     )
+    supplier_sku = models.CharField(
+        max_length=80,
+        blank=True,
+        help_text="Supplier's own catalogue or product reference.",
+    )
     unit_price = models.DecimalField(
         max_digits=15,
         decimal_places=2,
         validators=[validate_positive_decimal],
     )
+    minimum_order_quantity = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("1.00"),
+        validators=[validate_positive_decimal],
+    )
     lead_time_days = models.PositiveIntegerField(default=0)
+    is_preferred = models.BooleanField(default=False)
+    last_quoted_at = models.DateField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
 
     class Meta(BaseModel.Meta):
@@ -290,12 +353,33 @@ class SupplierItemPrice(BaseModel):
             models.UniqueConstraint(
                 fields=("supplier", "item"),
                 name="unique_supplier_item_price",
-            )
+            ),
+            models.UniqueConstraint(
+                fields=("item",),
+                condition=models.Q(is_preferred=True, is_active=True),
+                name="unique_preferred_supplier_per_item",
+            ),
         ]
-        ordering = ("item__name", "supplier__name")
+        ordering = ("item__name", "-is_preferred", "supplier__name")
 
     def __str__(self):
         return f"{self.supplier} - {self.item}: {self.unit_price}"
+
+    def clean(self):
+        super().clean()
+        if self.unit_id and self.item_id:
+            valid_unit = (
+                self.item.base_unit_id == self.unit_id
+                or ItemUnitPrice.objects.filter(
+                    item_id=self.item_id,
+                    unit_id=self.unit_id,
+                    is_active=True,
+                ).exists()
+            )
+            if not valid_unit:
+                raise ValidationError(
+                    {"unit": "Choose the article base unit or an active configured purchase unit."}
+                )
 
 
 class StockLedger(BaseModel):
@@ -430,6 +514,17 @@ class StockTransfer(BaseModel):
     required_date = models.DateField(null=True, blank=True)
     note = models.TextField(blank=True)
     inventory_changes_applied = models.BooleanField(default=False)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    dispatched_by = models.ForeignKey(
+        "employees.Employee", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="dispatched_stock_transfers",
+    )
+    dispatched_at = models.DateTimeField(null=True, blank=True)
+    received_by = models.ForeignKey(
+        "employees.Employee", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="received_stock_transfers",
+    )
+    received_at = models.DateTimeField(null=True, blank=True)
 
     class Meta(BaseModel.Meta):
         ordering = ("-created_at",)
@@ -444,33 +539,47 @@ class StockTransfer(BaseModel):
             raise ValidationError("Source and destination stores must be different.")
 
     def apply_inventory_changes(self):
+        """Compatibility operation that dispatches and receives immediately."""
+        if self.status == StockTransferStatus.PENDING:
+            self.dispatch(require_approval=False)
+        self.receive()
+
+    def approve(self, approved_by=None):
+        if self.status != StockTransferStatus.PENDING:
+            raise ValidationError("Only a pending transfer can be approved.")
+        if not self.items.exists():
+            raise ValidationError("Add at least one item before approving the transfer.")
+        self.approved_by = approved_by or self.approved_by
+        if not self.approved_by_id:
+            raise ValidationError("An approving employee is required.")
+        self.approved_at = timezone.now()
+        self.save(update_fields=["approved_by", "approved_at", "updated_at"])
+
+    def dispatch(self, dispatched_by=None, require_approval=True):
         if self.inventory_changes_applied:
             raise ValidationError("Inventory changes have already been applied.")
+        if self.status != StockTransferStatus.PENDING:
+            raise ValidationError("Only a pending transfer can be dispatched.")
+        if require_approval and not self.approved_by_id:
+            raise ValidationError("The transfer must be approved before dispatch.")
 
         with transaction.atomic():
             transfer = StockTransfer.objects.select_for_update().get(pk=self.pk)
-            if transfer.inventory_changes_applied:
-                raise ValidationError("Inventory changes have already been applied.")
-
-            for item in transfer.items.select_related("item").all():
+            items = list(transfer.items.select_related("item").all())
+            if not items:
+                raise ValidationError("Add at least one item before dispatching the transfer.")
+            for item in items:
                 source_balance, _ = InventoryBalance.objects.select_for_update().get_or_create(
                     item=item.item,
                     store=transfer.from_store,
                     defaults={"quantity_in_stock": Decimal("0.00")},
                 )
-                destination_balance, _ = InventoryBalance.objects.select_for_update().get_or_create(
-                    item=item.item,
-                    store=transfer.to_store,
-                    defaults={"quantity_in_stock": Decimal("0.00")},
-                )
-                if source_balance.quantity_in_stock < item.base_quantity:
+                if source_balance.available_quantity < item.base_quantity:
                     raise ValidationError(
                         f"Insufficient stock for {item.item} in {transfer.from_store}."
                     )
                 source_balance.quantity_in_stock -= item.base_quantity
-                destination_balance.quantity_in_stock += item.base_quantity
                 source_balance.save(update_fields=["quantity_in_stock", "updated_at"])
-                destination_balance.save(update_fields=["quantity_in_stock", "updated_at"])
 
                 StockLedger.objects.create(
                     item=item.item,
@@ -481,6 +590,31 @@ class StockTransfer(BaseModel):
                     note=f"Transfer to {transfer.to_store}",
                     created_by=transfer.created_by,
                 )
+
+            transfer.status = StockTransferStatus.IN_TRANSIT
+            transfer.dispatched_by = dispatched_by or transfer.dispatched_by
+            transfer.dispatched_at = timezone.now()
+            transfer.save(update_fields=["status", "dispatched_by", "dispatched_at", "updated_at"])
+            self.status = StockTransferStatus.IN_TRANSIT
+
+    def receive(self, received_by=None):
+        if self.inventory_changes_applied:
+            raise ValidationError("Inventory changes have already been applied.")
+        if self.status != StockTransferStatus.IN_TRANSIT:
+            raise ValidationError("Only an in-transit transfer can be received.")
+
+        with transaction.atomic():
+            transfer = StockTransfer.objects.select_for_update().get(pk=self.pk)
+            if transfer.status != StockTransferStatus.IN_TRANSIT:
+                raise ValidationError("Only an in-transit transfer can be received.")
+            for item in transfer.items.select_related("item").all():
+                destination_balance, _ = InventoryBalance.objects.select_for_update().get_or_create(
+                    item=item.item,
+                    store=transfer.to_store,
+                    defaults={"quantity_in_stock": Decimal("0.00")},
+                )
+                destination_balance.quantity_in_stock += item.base_quantity
+                destination_balance.save(update_fields=["quantity_in_stock", "updated_at"])
                 StockLedger.objects.create(
                     item=item.item,
                     store=transfer.to_store,
@@ -493,7 +627,9 @@ class StockTransfer(BaseModel):
 
             transfer.inventory_changes_applied = True
             transfer.status = StockTransferStatus.COMPLETED
-            transfer.save(update_fields=["inventory_changes_applied", "status", "updated_at"])
+            transfer.received_by = received_by or transfer.received_by
+            transfer.received_at = timezone.now()
+            transfer.save(update_fields=["inventory_changes_applied", "status", "received_by", "received_at", "updated_at"])
             self.inventory_changes_applied = True
             self.status = StockTransferStatus.COMPLETED
 
@@ -576,13 +712,42 @@ class StockAdjustment(BaseModel):
         blank=True,
         related_name="approved_stock_adjustments",
     )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(blank=True)
 
     class Meta(BaseModel.Meta):
         ordering = ("-created_at",)
 
+    def submit(self):
+        if self.status != StockAdjustmentStatus.DRAFT:
+            raise ValidationError("Only a draft adjustment can be submitted.")
+        if not self.items.exists():
+            raise ValidationError("Add at least one adjustment line before submission.")
+        self.status = StockAdjustmentStatus.PENDING
+        self.save(update_fields=["status", "updated_at"])
+
+    def approve(self, approved_by=None):
+        if self.status != StockAdjustmentStatus.PENDING:
+            raise ValidationError("Only a pending adjustment can be approved.")
+        self.approved_by = approved_by or self.approved_by
+        if not self.approved_by_id:
+            raise ValidationError("An approving employee is required.")
+        self.approved_at = timezone.now()
+        self.status = StockAdjustmentStatus.APPROVED
+        self.save(update_fields=["approved_by", "approved_at", "status", "updated_at"])
+
+    def reject(self, reason=""):
+        if self.status != StockAdjustmentStatus.PENDING:
+            raise ValidationError("Only a pending adjustment can be rejected.")
+        self.rejection_reason = reason
+        self.status = StockAdjustmentStatus.CANCELLED
+        self.save(update_fields=["rejection_reason", "status", "updated_at"])
+
     def apply(self):
         if self.status == StockAdjustmentStatus.APPLIED:
             raise ValidationError("Stock adjustment has already been applied.")
+        if self.status != StockAdjustmentStatus.APPROVED:
+            raise ValidationError("Only an approved stock adjustment can be applied.")
 
         with transaction.atomic():
             adjustment = StockAdjustment.objects.select_for_update().get(pk=self.pk)
@@ -731,7 +896,29 @@ class ReorderRule(BaseModel):
             raise ValidationError("Current stock is above the reorder minimum.")
 
         from apps.procurement.models import PurchaseRequisition, RequisitionItem
-        from core.constants.choices import RequisitionType
+        from core.constants.choices import PRStatus, RequisitionType
+
+        if RequisitionItem.objects.filter(
+            item=self.item,
+            requisition__status__in=(
+                PRStatus.DRAFT,
+                PRStatus.SUBMITTED,
+                PRStatus.HOD_APPROVED,
+                PRStatus.PROCUREMENT_APPROVED,
+                PRStatus.FINANCE_APPROVED,
+                PRStatus.DIRECTOR_APPROVED,
+                PRStatus.APPROVED,
+            ),
+        ).exists():
+            raise ValidationError(
+                f"An open purchase requisition already exists for {self.item}."
+            )
+
+        supplier_price = SupplierItemPrice.objects.filter(
+            item=self.item,
+            supplier=self.preferred_supplier,
+            is_active=True,
+        ).first()
 
         scope = self.store.name if self.store_id else "all stores"
         purchase_requisition = PurchaseRequisition.objects.create(
@@ -746,6 +933,9 @@ class ReorderRule(BaseModel):
             requisition=purchase_requisition,
             item=self.item,
             quantity=self.reorder_quantity,
+            estimated_unit_cost=(
+                supplier_price.unit_price if supplier_price else Decimal("0.00")
+            ),
             created_by=created_by,
         )
         return purchase_requisition
@@ -784,6 +974,7 @@ class StoreRequisition(BaseModel):
     required_date = models.DateField(null=True, blank=True)
     purpose = models.TextField(blank=True)
     rejection_reason = models.TextField(blank=True)
+    approval_comments = models.TextField(blank=True)
     approved_at = models.DateTimeField(null=True, blank=True)
     issued_at = models.DateTimeField(null=True, blank=True)
 
@@ -819,21 +1010,47 @@ class StoreRequisition(BaseModel):
         self.status = StoreRequisitionStatus.SUBMITTED
         self.save(update_fields=["status", "updated_at"])
 
-    def approve(self, approved_by=None):
+    def approve(self, approved_by=None, comments=""):
         if self.status not in (StoreRequisitionStatus.SUBMITTED, StoreRequisitionStatus.PARTIALLY_APPROVED):
             raise ValidationError("Only submitted requisitions can be approved.")
         items = list(self.items.select_related("item", "unit").all())
         if not items:
             raise ValidationError("Store requisition must include at least one item.")
-        for line in items:
-            if line.quantity_approved <= Decimal("0.00"):
-                line.quantity_approved = line.base_quantity_requested
-                line.save(update_fields=["quantity_approved", "updated_at"])
-        from django.utils import timezone
-        self.approved_by = approved_by or self.approved_by
-        self.approved_at = timezone.now()
-        self.status = StoreRequisitionStatus.APPROVED
-        self.save(update_fields=["approved_by", "approved_at", "status", "updated_at"])
+        with transaction.atomic():
+            explicit_decisions = any(
+                line.quantity_approved > Decimal("0.00") for line in items
+            )
+            for line in items:
+                if not explicit_decisions:
+                    line.quantity_approved = line.base_quantity_requested
+                    line.save(update_fields=["quantity_approved", "updated_at"])
+                if line.quantity_approved <= Decimal("0.00"):
+                    continue
+                balance, _ = InventoryBalance.objects.select_for_update().get_or_create(
+                    item=line.item,
+                    store=self.store,
+                    defaults={"quantity_in_stock": Decimal("0.00")},
+                )
+                if balance.available_quantity < line.quantity_approved:
+                    raise ValidationError(
+                        f"Insufficient available stock to reserve {line.item}: "
+                        f"{balance.available_quantity} available, {line.quantity_approved} requested."
+                    )
+                balance.quantity_reserved += line.quantity_approved
+                balance.save(update_fields=["quantity_reserved", "updated_at"])
+            from django.utils import timezone
+            self.approved_by = approved_by or self.approved_by
+            self.approved_at = timezone.now()
+            self.approval_comments = comments
+            fully_approved = all(
+                line.quantity_approved == line.base_quantity_requested for line in items
+            )
+            self.status = (
+                StoreRequisitionStatus.APPROVED
+                if fully_approved
+                else StoreRequisitionStatus.PARTIALLY_APPROVED
+            )
+            self.save(update_fields=["approved_by", "approved_at", "approval_comments", "status", "updated_at"])
 
     def reject(self, reason=""):
         if self.status not in (StoreRequisitionStatus.SUBMITTED, StoreRequisitionStatus.PARTIALLY_APPROVED):
@@ -841,6 +1058,30 @@ class StoreRequisition(BaseModel):
         self.status = StoreRequisitionStatus.REJECTED
         self.rejection_reason = reason
         self.save(update_fields=["status", "rejection_reason", "updated_at"])
+
+    def cancel(self):
+        if self.status in (StoreRequisitionStatus.ISSUED, StoreRequisitionStatus.CANCELLED):
+            raise ValidationError("Issued or already-cancelled requisitions cannot be cancelled.")
+        with transaction.atomic():
+            if self.status in (
+                StoreRequisitionStatus.APPROVED,
+                StoreRequisitionStatus.PARTIALLY_APPROVED,
+                StoreRequisitionStatus.PARTIALLY_ISSUED,
+            ):
+                for line in self.items.select_related("item"):
+                    outstanding = line.outstanding_quantity
+                    if outstanding <= 0:
+                        continue
+                    balance = InventoryBalance.objects.select_for_update().filter(
+                        item=line.item, store=self.store
+                    ).first()
+                    if balance:
+                        balance.quantity_reserved = max(
+                            Decimal("0.00"), balance.quantity_reserved - outstanding
+                        )
+                        balance.save(update_fields=["quantity_reserved", "updated_at"])
+            self.status = StoreRequisitionStatus.CANCELLED
+            self.save(update_fields=["status", "updated_at"])
 
     def mark_issued_if_complete(self):
         items = list(self.items.all())
@@ -978,6 +1219,7 @@ class StockIssue(BaseModel):
         super().clean()
         if self.requisition_id and self.requisition.status not in (
             StoreRequisitionStatus.APPROVED,
+            StoreRequisitionStatus.PARTIALLY_APPROVED,
             StoreRequisitionStatus.PARTIALLY_ISSUED,
         ):
             raise ValidationError("Stock can only be issued against an approved requisition.")
@@ -1006,8 +1248,17 @@ class StockIssue(BaseModel):
 
             for line in issue_items:
                 balance = InventoryBalance.objects.select_for_update().get(item=line.item, store=issue.store)
+                issue_cost = self._consume_batches(
+                    item=line.item,
+                    store=issue.store,
+                    quantity=line.base_quantity,
+                )
                 balance.quantity_in_stock -= line.base_quantity
-                balance.save(update_fields=["quantity_in_stock", "updated_at"])
+                balance.quantity_reserved = max(
+                    Decimal("0.00"),
+                    balance.quantity_reserved - line.base_quantity,
+                )
+                balance.save(update_fields=["quantity_in_stock", "quantity_reserved", "updated_at"])
                 line.requisition_item.quantity_issued += line.base_quantity
                 line.requisition_item.save(update_fields=["quantity_issued", "updated_at"])
                 StockLedger.objects.create(
@@ -1019,10 +1270,70 @@ class StockIssue(BaseModel):
                     note=f"Stock issue {issue.issue_no} for {issue.requisition.requisition_no}",
                     created_by=issue.created_by,
                 )
+                DepartmentConsumption.objects.create(
+                    department=issue.requisition.department,
+                    stock_issue_item=line,
+                    item=line.item,
+                    quantity=line.base_quantity,
+                    unit_cost=(
+                        issue_cost / line.base_quantity
+                        if line.base_quantity
+                        else Decimal("0.00")
+                    ),
+                    purpose=issue.requisition.purpose,
+                    consumed_on=issue.issue_date,
+                    created_by=issue.created_by,
+                )
             issue.inventory_changes_applied = True
             issue.save(update_fields=["inventory_changes_applied", "updated_at"])
             issue.requisition.mark_issued_if_complete()
             self.inventory_changes_applied = True
+
+    def posting_readiness(self):
+        blockers = []
+        warnings = []
+        if self.inventory_changes_applied:
+            blockers.append("This stock issue has already been posted.")
+        if self.requisition.status not in (
+            StoreRequisitionStatus.APPROVED,
+            StoreRequisitionStatus.PARTIALLY_APPROVED,
+            StoreRequisitionStatus.PARTIALLY_ISSUED,
+        ):
+            blockers.append("The department requisition must be approved before stock is issued.")
+        lines = list(self.items.select_related("item", "requisition_item"))
+        if not lines:
+            blockers.append("Add at least one Article to the issue voucher.")
+        for line in lines:
+            balance = InventoryBalance.objects.filter(item=line.item, store=self.store).first()
+            available = balance.quantity_in_stock if balance else Decimal("0.00")
+            if available < line.base_quantity:
+                blockers.append(
+                    f"Insufficient {line.item} in {self.store}: {available} available, {line.base_quantity} required."
+                )
+            if line.base_quantity > line.requisition_item.outstanding_quantity:
+                blockers.append(f"{line.item} exceeds the outstanding approved quantity.")
+        if not self.received_by_id and not self.received_by_name:
+            warnings.append("The department receiver has not been recorded.")
+        return {"can_proceed": not blockers, "blockers": blockers, "warnings": warnings}
+
+    @staticmethod
+    def _consume_batches(*, item, store, quantity):
+        remaining = quantity
+        total_cost = Decimal("0.00")
+        batches = (
+            InventoryBatch.objects.select_for_update()
+            .filter(item=item, store=store, remaining_quantity__gt=0)
+            .order_by(models.F("expiry_date").asc(nulls_last=True), "received_date", "created_at")
+        )
+        for batch in batches:
+            if remaining <= 0:
+                break
+            consumed = min(batch.remaining_quantity, remaining)
+            batch.remaining_quantity -= consumed
+            batch.save(update_fields=("remaining_quantity", "updated_at"))
+            total_cost += consumed * batch.unit_cost
+            remaining -= consumed
+        return total_cost
 
 
 class StockIssueItem(BaseModel):
@@ -1079,6 +1390,64 @@ class StockIssueItem(BaseModel):
 
     def __str__(self):
         return f"{self.issue} - {self.item} x {self.base_quantity}"
+
+
+class DepartmentConsumption(BaseModel):
+    department = models.ForeignKey(
+        "departments.Department",
+        on_delete=models.PROTECT,
+        related_name="inventory_consumption",
+    )
+    stock_issue_item = models.OneToOneField(
+        StockIssueItem,
+        on_delete=models.PROTECT,
+        related_name="consumption_posting",
+        null=True,
+        blank=True,
+    )
+    goods_receipt_item = models.OneToOneField(
+        "procurement.GoodsReceiptItem",
+        on_delete=models.PROTECT,
+        related_name="direct_consumption_posting",
+        null=True,
+        blank=True,
+    )
+    item = models.ForeignKey(
+        Item,
+        on_delete=models.PROTECT,
+        related_name="department_consumption",
+    )
+    quantity = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[validate_positive_decimal],
+    )
+    unit_cost = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        validators=[validate_non_negative_decimal],
+    )
+    consumed_on = models.DateField()
+    purpose = models.TextField(blank=True)
+
+    class Meta(BaseModel.Meta):
+        ordering = ("-consumed_on", "-created_at")
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(stock_issue_item__isnull=False, goods_receipt_item__isnull=True)
+                    | models.Q(stock_issue_item__isnull=True, goods_receipt_item__isnull=False)
+                ),
+                name="consumption_has_one_source",
+            )
+        ]
+
+    @property
+    def total_cost(self):
+        return self.quantity * self.unit_cost
+
+    def __str__(self):
+        return f"{self.department}: {self.item} x {self.quantity}"
 
 
 class StoreReturn(BaseModel):

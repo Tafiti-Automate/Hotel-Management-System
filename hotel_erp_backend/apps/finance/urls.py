@@ -8,6 +8,8 @@ from apps.finance.views import (
     ExpenseCategoryViewSet,
     ExpenseViewSet,
     PaymentMethodViewSet,
+    SupplierInvoiceViewSet,
+    SupplierPaymentViewSet,
 )
 
 
@@ -19,5 +21,7 @@ router.register("bank-accounts", BankAccountViewSet, basename="bank-account")
 router.register("bank-transactions", BankTransactionViewSet, basename="bank-transaction")
 router.register("expense-categories", ExpenseCategoryViewSet, basename="expense-category")
 router.register("expenses", ExpenseViewSet, basename="expense")
+router.register("supplier-invoices", SupplierInvoiceViewSet, basename="supplier-invoice")
+router.register("supplier-payments", SupplierPaymentViewSet, basename="supplier-payment")
 
 urlpatterns = router.urls

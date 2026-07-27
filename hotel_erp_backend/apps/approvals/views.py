@@ -4,8 +4,8 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from apps.approvals.models import ApprovalWorkflow
-from apps.approvals.serializers import ApprovalWorkflowSerializer
+from apps.approvals.models import ApprovalMatrixRule, ApprovalWorkflow
+from apps.approvals.serializers import ApprovalMatrixRuleSerializer, ApprovalWorkflowSerializer
 from core.mixins.viewsets import CreatedByModelMixin
 
 
@@ -39,3 +39,13 @@ class ApprovalWorkflowViewSet(CreatedByModelMixin, ModelViewSet):
             raise_drf_validation_error(error)
         serializer = self.get_serializer(approval)
         return Response(serializer.data)
+
+
+class ApprovalMatrixRuleViewSet(CreatedByModelMixin, ModelViewSet):
+    queryset = ApprovalMatrixRule.objects.select_related(
+        "branch", "department", "approver"
+    )
+    serializer_class = ApprovalMatrixRuleSerializer
+    filterset_fields = ("document_type", "branch", "department", "stage", "is_active")
+    search_fields = ("name", "stage_name", "approver__user__employee_code")
+    ordering_fields = ("document_type", "minimum_amount", "maximum_amount", "stage")

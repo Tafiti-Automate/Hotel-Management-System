@@ -2,6 +2,7 @@ from rest_framework.routers import DefaultRouter
 
 from apps.inventory.views import (
     CategoryViewSet,
+    DepartmentConsumptionViewSet,
     InventoryBalanceViewSet,
     InventoryBatchViewSet,
     ReorderRuleViewSet,
@@ -46,6 +47,7 @@ router.register("store-requisitions", StoreRequisitionViewSet, basename="store-r
 router.register("store-requisition-items", StoreRequisitionItemViewSet, basename="store-requisition-item")
 router.register("stock-issues", StockIssueViewSet, basename="stock-issue")
 router.register("stock-issue-items", StockIssueItemViewSet, basename="stock-issue-item")
+router.register("department-consumption", DepartmentConsumptionViewSet, basename="department-consumption")
 router.register("store-returns", StoreReturnViewSet, basename="store-return")
 router.register("store-return-items", StoreReturnItemViewSet, basename="store-return-item")
 router.register("stock-counts", StockCountViewSet, basename="stock-count")

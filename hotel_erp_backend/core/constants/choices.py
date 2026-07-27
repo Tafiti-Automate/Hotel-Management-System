@@ -5,6 +5,14 @@ class ItemBusinessType(models.TextChoices):
     CONSUMABLE_EXPENSE = "consumable_expense", "Consumable / Operating Expense"
     RESALE_REVENUE = "resale_revenue", "Resale / Revenue Item"
     FIXED_ASSET = "fixed_asset", "Fixed Asset"
+    SERVICE = "service", "Service"
+
+
+class ArticleUnitRole(models.TextChoices):
+    BASE = "base", "Base unit"
+    PURCHASE = "purchase", "Purchase unit"
+    ISSUE = "issue", "Issue unit"
+    ALTERNATE = "alternate", "Alternate unit"
  
 
 

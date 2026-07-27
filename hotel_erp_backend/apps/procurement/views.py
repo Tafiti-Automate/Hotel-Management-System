@@ -1,4 +1,10 @@
+from decimal import Decimal
+
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
+from django.conf import settings
+from django.core.mail import send_mail
+from django.utils import timezone
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
@@ -13,6 +19,8 @@ from apps.procurement.models import (
     GoodsReceiptNote,
     PurchaseOrder,
     PurchaseOrderItem,
+    ProcurementAttachment,
+    ProcurementCommunication,
     PurchaseRequisition,
     RequisitionItem,
     SupplierReturn,
@@ -21,6 +29,7 @@ from apps.procurement.models import (
     VendorQuotationItem,
 )
 from apps.vendors.models import Supplier
+from core.constants.choices import POStatus, PRStatus
 from apps.procurement.serializers import (
     GoodsInspectionItemSerializer,
     GoodsInspectionSerializer,
@@ -28,6 +37,8 @@ from apps.procurement.serializers import (
     GoodsReceiptNoteSerializer,
     PurchaseOrderSerializer,
     PurchaseOrderItemSerializer,
+    ProcurementAttachmentSerializer,
+    ProcurementCommunicationSerializer,
     PurchaseRequisitionSerializer,
     RequisitionItemSerializer,
     SupplierReturnItemSerializer,
@@ -40,6 +51,17 @@ from core.mixins.viewsets import CreatedByModelMixin
 
 def raise_drf_validation_error(error):
     raise ValidationError(getattr(error, "messages", str(error)))
+
+
+def enforce_readiness(readiness):
+    if readiness["blockers"]:
+        raise ValidationError(
+            {
+                "detail": "Complete the required steps before continuing.",
+                "blockers": readiness["blockers"],
+                "warnings": readiness["warnings"],
+            }
+        )
 
 
 class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
@@ -59,9 +81,14 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     )
     ordering_fields = ("status", "created_at")
 
+    @action(detail=True, methods=["get"])
+    def readiness(self, request, pk=None):
+        return Response(self.get_object().submission_readiness())
+
     @action(detail=True, methods=["post"])
     def submit(self, request, pk=None):
         requisition = self.get_object()
+        enforce_readiness(requisition.submission_readiness())
         try:
             requisition.submit()
         except DjangoValidationError as error:
@@ -124,6 +151,13 @@ class RequisitionItemViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("item__name", "item__sku")
     ordering_fields = ("quantity", "created_at")
 
+    def perform_destroy(self, instance):
+        if instance.requisition.status not in (PRStatus.DRAFT, PRStatus.REJECTED):
+            raise ValidationError(
+                "Requisition lines can only be removed while the requisition is draft or rejected."
+            )
+        instance.delete()
+
 
 class VendorQuotationViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = VendorQuotation.objects.select_related("requisition", "supplier")
@@ -131,6 +165,52 @@ class VendorQuotationViewSet(CreatedByModelMixin, ModelViewSet):
     filterset_fields = ("requisition", "supplier")
     search_fields = ("supplier__name",)
     ordering_fields = ("total_amount", "created_at")
+
+    @action(detail=True, methods=["post"])
+    def award(self, request, pk=None):
+        quotation = self.get_object()
+        selection_reason = str(request.data.get("selection_reason", "")).strip()
+        if not selection_reason:
+            raise ValidationError(
+                {"selection_reason": "Record a written evaluation justification before selecting a winner."}
+            )
+        if quotation.valid_until and quotation.valid_until < timezone.localdate():
+            raise ValidationError("This supplier quotation has expired and cannot be selected.")
+        threshold = Decimal(str(settings.PROCUREMENT_QUOTATION_THRESHOLD))
+        required_quotes = settings.PROCUREMENT_MIN_QUOTATIONS
+        quotation_count = quotation.requisition.vendor_quotations.count()
+        if (
+            quotation.requisition.estimated_total >= threshold
+            and quotation_count < required_quotes
+        ):
+            raise ValidationError(
+                {
+                    "detail": "The quotation threshold requires competitive sourcing.",
+                    "blockers": [
+                        f"Enter at least {required_quotes} supplier quotations for requisitions "
+                        f"valued at or above {threshold}. Currently entered: {quotation_count}."
+                    ],
+                }
+            )
+        requisition_line_ids = set(quotation.requisition.items.values_list("id", flat=True))
+        quoted_line_ids = set(quotation.items.values_list("requisition_item_id", flat=True))
+        missing_count = len(requisition_line_ids - quoted_line_ids)
+        if missing_count:
+            raise ValidationError(
+                {
+                    "detail": "A winning quotation must price every requisition line.",
+                    "blockers": [f"Add prices for {missing_count} missing requisition line(s)."],
+                }
+            )
+        with transaction.atomic():
+            VendorQuotationItem.objects.filter(
+                quotation__requisition=quotation.requisition
+            ).update(selected=False, selection_reason="")
+            quotation.items.update(
+                selected=True,
+                selection_reason=selection_reason,
+            )
+        return Response(self.get_serializer(quotation).data)
 
 
 class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
@@ -140,9 +220,14 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("po_number", "supplier__name", "ordered_by__user__employee_code", "store__name")
     ordering_fields = ("po_number", "status", "created_at")
 
+    @action(detail=True, methods=["get"])
+    def readiness(self, request, pk=None):
+        return Response(self.get_object().issue_readiness())
+
     @action(detail=True, methods=["post"])
     def issue(self, request, pk=None):
         order = self.get_object()
+        enforce_readiness(order.issue_readiness())
         sent_by = None
         if request.data.get("sent_by"):
             try:
@@ -152,14 +237,90 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
         else:
             sent_by = getattr(request.user, "employee_profile", None)
         try:
-            order.issue(
-                sent_by=sent_by,
-                sent_to_email=request.data.get("sent_to_email", ""),
-            )
+            with transaction.atomic():
+                order.issue(
+                    sent_by=sent_by,
+                    sent_to_email=request.data.get("sent_to_email", ""),
+                )
+                send_mail(
+                    subject=f"Local Purchase Order {order.po_number}",
+                    message=(
+                        f"Please find purchase order {order.po_number} for "
+                        f"{order.total_amount}. Expected delivery: {order.expected_date or 'not specified'}."
+                    ),
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[order.sent_to_email],
+                    fail_silently=False,
+                )
+                order.email_status = "sent"
+                order.last_email_error = ""
+                order.save(update_fields=["email_status", "last_email_error", "updated_at"])
+                ProcurementCommunication.objects.create(
+                    purchase_order=order,
+                    supplier=order.supplier,
+                    recipient=order.sent_to_email,
+                    subject=f"Local Purchase Order {order.po_number}",
+                    status="sent",
+                    sent_at=timezone.now(),
+                    created_by=request.user if request.user.is_authenticated else None,
+                )
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
         serializer = self.get_serializer(order)
         return Response(serializer.data)
+
+    @action(detail=True, methods=["post"])
+    def resend(self, request, pk=None):
+        order = self.get_object()
+        if order.status == POStatus.DRAFT:
+            raise ValidationError("Issue the LPO before resending it.")
+        recipient = str(request.data.get("sent_to_email") or order.sent_to_email or order.supplier.email).strip()
+        if not recipient:
+            raise ValidationError("The supplier has no email address.")
+        communication = ProcurementCommunication.objects.create(
+            purchase_order=order, supplier=order.supplier, recipient=recipient,
+            subject=f"Local Purchase Order {order.po_number}", status="pending",
+            created_by=request.user if request.user.is_authenticated else None,
+        )
+        try:
+            send_mail(
+                subject=communication.subject,
+                message=f"Resent purchase order {order.po_number} for {order.total_amount}.",
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[recipient],
+                fail_silently=False,
+            )
+            communication.status = "sent"
+            communication.sent_at = timezone.now()
+            order.email_status = "sent"
+            order.last_email_error = ""
+        except Exception as error:
+            communication.status = "failed"
+            communication.error_message = str(error)
+            order.email_status = "failed"
+            order.last_email_error = str(error)
+            raise ValidationError(f"Email delivery failed: {error}")
+        finally:
+            communication.save(update_fields=["status", "sent_at", "error_message", "updated_at"])
+            order.save(update_fields=["email_status", "last_email_error", "updated_at"])
+        return Response(self.get_serializer(order).data)
+
+    @action(detail=True, methods=["post"])
+    def acknowledge(self, request, pk=None):
+        order = self.get_object()
+        try:
+            order.acknowledge(str(request.data.get("acknowledged_by", "")).strip())
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        ProcurementCommunication.objects.create(
+            purchase_order=order, supplier=order.supplier,
+            direction=ProcurementCommunication.DIRECTION_INBOUND,
+            recipient=order.supplier_acknowledged_by,
+            subject=f"Supplier acknowledgement for {order.po_number}",
+            status="received", sent_at=order.supplier_acknowledged_at,
+            created_by=request.user if request.user.is_authenticated else None,
+        )
+        return Response(self.get_serializer(order).data)
 
 
 class PurchaseOrderItemViewSet(CreatedByModelMixin, ModelViewSet):
@@ -169,6 +330,11 @@ class PurchaseOrderItemViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("purchase_order__po_number", "item__name", "item__sku", "unit__name")
     ordering_fields = ("quantity", "base_quantity", "unit_cost", "created_at")
 
+    def perform_destroy(self, instance):
+        if instance.purchase_order.status != POStatus.DRAFT:
+            raise ValidationError("LPO lines can only be removed while the LPO is draft.")
+        instance.delete()
+
 
 class GoodsReceiptNoteViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = GoodsReceiptNote.objects.select_related("purchase_order", "received_by")
@@ -177,11 +343,18 @@ class GoodsReceiptNoteViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("purchase_order__po_number", "received_by__user__employee_code")
     ordering_fields = ("received_date", "created_at")
 
+    @action(detail=True, methods=["get"])
+    def readiness(self, request, pk=None):
+        return Response(self.get_object().posting_readiness())
+
     @action(detail=True, methods=["post"], url_path="post-to-inventory")
     def post_to_inventory(self, request, pk=None):
         receipt = self.get_object()
+        enforce_readiness(receipt.posting_readiness())
         try:
-            receipt.post_to_inventory()
+            receipt.post_to_inventory(
+                posted_by=getattr(request.user, "employee_profile", None)
+            )
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
         serializer = self.get_serializer(receipt)
@@ -194,11 +367,19 @@ class GoodsReceiptItemViewSet(CreatedByModelMixin, ModelViewSet):
         "purchase_order_item",
         "item",
         "store",
+        "direct_issue_department",
     )
     serializer_class = GoodsReceiptItemSerializer
     filterset_fields = ("goods_receipt", "purchase_order_item", "item", "store", "expiry_date")
     search_fields = ("goods_receipt__purchase_order__po_number", "item__name", "item__sku", "store__name")
     ordering_fields = ("quantity_received", "base_quantity", "unit_cost", "created_at")
+
+    def perform_destroy(self, instance):
+        if instance.inventory_changes_applied:
+            raise ValidationError("Posted GRN lines cannot be removed.")
+        if GoodsInspectionItem.objects.filter(goods_receipt_item=instance).exists():
+            raise ValidationError("Remove the inspection decision before removing this GRN line.")
+        instance.delete()
 
     @action(detail=True, methods=["post"], url_path="post-to-inventory")
     def post_to_inventory(self, request, pk=None):
@@ -216,6 +397,13 @@ class VendorQuotationItemViewSet(CreatedByModelMixin, ModelViewSet):
     filterset_fields = ("quotation", "requisition_item", "item", "unit", "selected")
     search_fields = ("quotation__supplier__name", "item__name", "item__sku", "selection_reason")
     ordering_fields = ("quantity", "unit_price", "delivery_days", "created_at")
+
+    def perform_destroy(self, instance):
+        if instance.selected:
+            raise ValidationError("A selected winning quotation line cannot be removed.")
+        quotation = instance.quotation
+        instance.delete()
+        quotation.update_total_amount()
 
 
 class GoodsInspectionViewSet(CreatedByModelMixin, ModelViewSet):
@@ -245,7 +433,22 @@ class SupplierReturnViewSet(CreatedByModelMixin, ModelViewSet):
     def apply(self, request, pk=None):
         supplier_return = self.get_object()
         try:
-            supplier_return.apply_inventory_changes()
+            supplier_return.apply_inventory_changes(
+                dispatched_by=getattr(request.user, "employee_profile", None)
+            )
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        return Response(self.get_serializer(supplier_return).data)
+
+    @action(detail=True, methods=["post"])
+    def acknowledge(self, request, pk=None):
+        supplier_return = self.get_object()
+        try:
+            supplier_return.acknowledge(
+                acknowledged_by=str(request.data.get("acknowledged_by", "")).strip(),
+                credit_note_number=str(request.data.get("credit_note_number", "")).strip(),
+                replacement_expected_date=request.data.get("replacement_expected_date") or None,
+            )
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
         return Response(self.get_serializer(supplier_return).data)
@@ -257,3 +460,19 @@ class SupplierReturnItemViewSet(CreatedByModelMixin, ModelViewSet):
     filterset_fields = ("supplier_return", "item", "unit")
     search_fields = ("supplier_return__return_no", "item__name", "item__sku", "reason")
     ordering_fields = ("quantity", "base_quantity", "created_at")
+
+
+class ProcurementAttachmentViewSet(CreatedByModelMixin, ModelViewSet):
+    queryset = ProcurementAttachment.objects.select_related("created_by")
+    serializer_class = ProcurementAttachmentSerializer
+    filterset_fields = ("document_type", "document_id", "category")
+    search_fields = ("original_name", "note")
+    ordering_fields = ("created_at", "original_name")
+
+
+class ProcurementCommunicationViewSet(CreatedByModelMixin, ModelViewSet):
+    queryset = ProcurementCommunication.objects.select_related("purchase_order", "supplier", "created_by")
+    serializer_class = ProcurementCommunicationSerializer
+    filterset_fields = ("purchase_order", "supplier", "channel", "direction", "status")
+    search_fields = ("recipient", "subject", "error_message")
+    ordering_fields = ("created_at", "sent_at", "status")

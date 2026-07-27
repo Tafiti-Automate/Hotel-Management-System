@@ -126,9 +126,16 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "procurement@localhost")
+PROCUREMENT_MIN_QUOTATIONS = int(os.environ.get("PROCUREMENT_MIN_QUOTATIONS", "3"))
+PROCUREMENT_QUOTATION_THRESHOLD = float(
+    os.environ.get("PROCUREMENT_QUOTATION_THRESHOLD", "1000000")
+)
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
+    "EXCEPTION_HANDLER": "core.exceptions.api_exception_handler",
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.TokenAuthentication",
         "rest_framework.authentication.SessionAuthentication",

@@ -19,6 +19,13 @@ class EmployeeViewSet(CreatedByModelMixin, ModelViewSet):
     )
     ordering_fields = ("designation", "created_at", "department__name")
 
+    def perform_destroy(self, instance):
+        """Retain employment history while immediately disabling system access."""
+        instance.is_active = False
+        instance.save(update_fields=("is_active", "updated_at"))
+        instance.user.is_active = False
+        instance.user.save(update_fields=("is_active",))
+
 
 class DesignationViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = Designation.objects.select_related("department")

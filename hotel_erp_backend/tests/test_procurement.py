@@ -28,7 +28,7 @@ from apps.procurement.models import (
     VendorQuotation,
     VendorQuotationItem,
 )
-from apps.procurement.serializers import PurchaseOrderSerializer
+from apps.procurement.serializers import GoodsReceiptItemSerializer, PurchaseOrderItemSerializer, PurchaseOrderSerializer
 from apps.vendors.models import Supplier
 from core.constants.choices import POStatus, PRStatus
 
@@ -189,6 +189,44 @@ def test_purchase_order_requires_approved_requisition_for_form_validation():
 
 
 @pytest.mark.django_db
+def test_requisition_readiness_explains_missing_prerequisites():
+    employee, department, supplier, item = create_procurement_context()
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        reason="Controlled purchase request",
+    )
+
+    readiness = requisition.submission_readiness()
+
+    assert readiness["can_proceed"] is False
+    assert "Add at least one Article." in readiness["blockers"]
+    assert any("approval matrix" in blocker.lower() for blocker in readiness["blockers"])
+
+
+@pytest.mark.django_db
+def test_lpo_readiness_requires_approved_source_and_order_lines():
+    employee, department, supplier, item = create_procurement_context()
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        reason="Unapproved purchase",
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition,
+        supplier=supplier,
+        ordered_by=employee,
+        po_number="PO-GUARD-001",
+    )
+
+    readiness = order.issue_readiness()
+
+    assert readiness["can_proceed"] is False
+    assert "The source requisition must be fully approved." in readiness["blockers"]
+    assert "Add at least one Article to the LPO." in readiness["blockers"]
+
+
+@pytest.mark.django_db
 def test_requisition_creates_purchase_order_from_selected_supplier_quote():
     employee, department, supplier, item = create_procurement_context()
     requisition = PurchaseRequisition.objects.create(
@@ -224,6 +262,84 @@ def test_requisition_creates_purchase_order_from_selected_supplier_quote():
     assert order_item.item == item
     assert order_item.quantity == Decimal("4.00")
     assert order_item.unit_cost == Decimal("8000.00")
+
+
+@pytest.mark.django_db
+def test_lpo_line_cannot_use_article_outside_source_requisition():
+    employee, department, supplier, item = create_procurement_context()
+    other_item = Item.objects.create(
+        category=item.category,
+        name="Unrequested Article",
+        sku="UNR-001",
+        unit="each",
+        reorder_level=Decimal("1.00"),
+    )
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        reason="Approved purchase",
+        status=PRStatus.APPROVED,
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity=Decimal("2.00"),
+        estimated_unit_cost=Decimal("5000.00"),
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition,
+        supplier=supplier,
+        ordered_by=employee,
+    )
+    serializer = PurchaseOrderItemSerializer(
+        data={
+            "purchase_order": order.id,
+            "item": other_item.id,
+            "quantity": "1.00",
+            "unit_cost": "1000.00",
+        }
+    )
+
+    assert serializer.is_valid() is False
+    assert "not on the source requisition" in str(serializer.errors)
+
+
+@pytest.mark.django_db
+def test_grn_line_cannot_exceed_remaining_lpo_quantity():
+    employee, department, supplier, item = create_procurement_context()
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        reason="Approved purchase",
+        status=PRStatus.APPROVED,
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition,
+        supplier=supplier,
+        ordered_by=employee,
+        status=POStatus.ISSUED,
+    )
+    order_line = PurchaseOrderItem.objects.create(
+        purchase_order=order,
+        item=item,
+        quantity=Decimal("5.00"),
+        unit_cost=Decimal("1000.00"),
+    )
+    receipt = GoodsReceiptNote.objects.create(
+        purchase_order=order,
+        received_by=employee,
+    )
+    serializer = GoodsReceiptItemSerializer(
+        data={
+            "goods_receipt": receipt.id,
+            "purchase_order_item": order_line.id,
+            "quantity_received": "6.00",
+            "unit_cost": "1000.00",
+        }
+    )
+
+    assert serializer.is_valid() is False
+    assert "exceeds the remaining quantity" in str(serializer.errors)
 
 
 @pytest.mark.django_db

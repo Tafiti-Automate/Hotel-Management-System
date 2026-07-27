@@ -8,6 +8,8 @@ from apps.finance.models import (
     Expense,
     ExpenseCategory,
     PaymentMethod,
+    SupplierInvoice,
+    SupplierPayment,
 )
 from core.mixins.admin import CreatedByAdminMixin
 
@@ -71,3 +73,30 @@ class ExpenseAdmin(CreatedByAdminMixin, admin.ModelAdmin):
     autocomplete_fields = ("category", "store", "payment_method", "related_purchase", "related_cashflow")
     search_fields = ("reference", "description", "store__name", "category__name")
     date_hierarchy = "date"
+
+
+@admin.register(SupplierInvoice)
+class SupplierInvoiceAdmin(CreatedByAdminMixin, admin.ModelAdmin):
+    list_display = (
+        "invoice_number", "supplier", "purchase_order", "invoice_date",
+        "due_date", "total_amount", "status", "amount_variance",
+    )
+    list_filter = ("status", "supplier", "invoice_date", "due_date")
+    list_select_related = ("supplier", "purchase_order")
+    autocomplete_fields = ("supplier", "purchase_order")
+    search_fields = ("invoice_number", "supplier__name", "purchase_order__po_number")
+    readonly_fields = ("status", "quantity_variance", "amount_variance", "match_notes")
+    date_hierarchy = "invoice_date"
+
+
+@admin.register(SupplierPayment)
+class SupplierPaymentAdmin(CreatedByAdminMixin, admin.ModelAdmin):
+    list_display = (
+        "reference", "invoice", "amount", "payment_date", "payment_method", "status",
+    )
+    list_filter = ("status", "payment_method", "payment_date")
+    list_select_related = ("invoice", "payment_method", "bank_account")
+    autocomplete_fields = ("invoice", "payment_method", "bank_account")
+    search_fields = ("reference", "invoice__invoice_number", "invoice__supplier__name")
+    readonly_fields = ("status",)
+    date_hierarchy = "payment_date"
