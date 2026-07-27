@@ -6,7 +6,7 @@ export type Density = 'Airy' | 'Compact'
 
 export const accentMap: Record<AccentName, string> = {
   Violet: '#6E56F0',
-  Blue: '#2E6BE6',
+  Blue: '#2563EB',
   Emerald: '#0E9F6E',
   Brass: '#B8893B',
   Rose: '#E0476B',
@@ -16,16 +16,16 @@ export const accentMap: Record<AccentName, string> = {
 export const accentOrder: AccentName[] = ['Violet', 'Blue', 'Emerald', 'Brass', 'Rose', 'Slate']
 
 const LIGHT: Record<string, string> = {
-  '--bg': '#F5F6F8',
+  '--bg': '#F6F7F9',
   '--surface': '#FFFFFF',
-  '--surface-2': '#F4F4F6',
-  '--text': '#16161D',
-  '--text-muted': '#6B6B76',
-  '--text-faint': '#9A9AA3',
-  '--border': '#ECECEF',
-  '--border-2': '#E3E3E8',
-  '--shadow': '0 1px 2px rgba(16,17,33,.04),0 8px 24px rgba(16,17,33,.05)',
-  '--shadow-sm': '0 1px 2px rgba(16,17,33,.05)',
+  '--surface-2': '#F3F4F6',
+  '--text': '#111827',
+  '--text-muted': '#4B5563',
+  '--text-faint': '#7C8797',
+  '--border': '#E1E5EA',
+  '--border-2': '#CBD2DA',
+  '--shadow': '0 1px 2px rgba(15,23,42,.04),0 4px 12px rgba(15,23,42,.04)',
+  '--shadow-sm': '0 1px 2px rgba(15,23,42,.06)',
 }
 
 const DARK: Record<string, string> = {
@@ -87,15 +87,15 @@ export function themeVars({ mode, accentName, density }: ThemeOptions): Record<s
     '--accent': accent,
     '--accent-soft': hexA(accent, mode === 'dark' ? 0.24 : 0.1),
     '--accent-strong': shade(accent, -14),
-    '--pad': airy ? '28px' : '18px',
-    '--gap': airy ? '20px' : '12px',
+    '--pad': airy ? '24px' : '16px',
+    '--gap': airy ? '16px' : '10px',
   }
 }
 
-/** USD-denominated seed value formatted as UGX (prototype multiplies by 3700). */
+/** Format backend monetary values. The ERP stores amounts directly in UGX. */
 export function money(v: number | string | null | undefined): string {
-  const n = Number(v || 0) * 3700
-  return 'UGX ' + Math.round(n).toLocaleString()
+  const n = Number(v || 0)
+  return 'UGX ' + Math.round(Number.isFinite(n) ? n : 0).toLocaleString('en-UG')
 }
 
 /** Inline style string for a status chip, colored by its semantic meaning. */

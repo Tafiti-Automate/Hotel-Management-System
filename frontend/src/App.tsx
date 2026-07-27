@@ -6,6 +6,7 @@ import AppShell from './screens/AppShell'
 import FormDrawer from './components/FormDrawer'
 import ConfirmDialog from './components/ConfirmDialog'
 import Toast from './components/Toast'
+import WorkflowAlert from './components/WorkflowAlert'
 import type { CSSProperties } from 'react'
 
 export default function App() {
@@ -18,7 +19,7 @@ export default function App() {
     position: 'relative',
     background: 'var(--bg)',
     color: 'var(--text)',
-    fontFamily: "'Plus Jakarta Sans',system-ui,sans-serif",
+    fontFamily: "'Inter',system-ui,sans-serif",
   }
 
   return (
@@ -30,6 +31,7 @@ export default function App() {
       <FormDrawer />
       <ConfirmDialog />
       <Toast />
+      <WorkflowAlert />
     </div>
   )
 }

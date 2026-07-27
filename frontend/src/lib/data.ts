@@ -4,7 +4,8 @@ export type Row = Record<string, any>
 
 export type EntityKey =
   | 'items' | 'categories' | 'uoms' | 'locations' | 'suppliers'
-  | 'departments' | 'employees'
+  | 'supplierItems'
+  | 'departments' | 'employees' | 'branches'
   | 'balances' | 'ledgers' | 'batches'
   | 'reorderRules' | 'storeRequisitions' | 'stockIssues' | 'storeReturns'
   | 'requisitions' | 'orders' | 'grns' | 'inspections' | 'supplierReturns'
@@ -22,7 +23,7 @@ export interface ColumnDef {
 export interface FieldDef {
   key: string
   label: string
-  type: 'text' | 'number' | 'select' | 'date' | 'textarea'
+  type: 'text' | 'password' | 'number' | 'select' | 'date' | 'textarea'
   opts?: string
 }
 
@@ -47,8 +48,6 @@ export interface ReportCard {
   grp: string
 }
 
-export const branches = ['Backend Property']
-
 export const cfg: Record<string, EntityConfig> = {
   items: {
     title: 'Items', sub: 'All stock items across stores', icon: 'inventory_2', add: 'Add item', singular: 'Item', prefix: 'ITM-', editable: true,
@@ -69,10 +68,7 @@ export const cfg: Record<string, EntityConfig> = {
       { key: 'category', label: 'Category', type: 'select', opts: 'categories' },
       { key: 'businessType', label: 'Business classification', type: 'select', opts: 'businessTypes' },
       { key: 'uom', label: 'Unit of measure', type: 'select', opts: 'uoms' },
-      { key: 'store', label: 'Store location', type: 'select', opts: 'locations' },
-      { key: 'onHand', label: 'On hand qty', type: 'number' },
       { key: 'reorder', label: 'Reorder level', type: 'number' },
-      { key: 'unitCost', label: 'Unit cost ($)', type: 'number' },
     ],
   },
   categories: {
@@ -97,13 +93,11 @@ export const cfg: Record<string, EntityConfig> = {
     cols: [
       { key: 'name', label: 'Unit', w: 'minmax(0,1.6fr)', kind: 'bold' },
       { key: 'abbr', label: 'Abbreviation', w: '1.2fr', kind: 'mono' },
-      { key: 'code', label: 'Code', w: '1.2fr', kind: 'mono' },
       { key: 'itemsCount', label: 'Items', w: '110px', kind: 'num', align: 'right' },
     ],
     fields: [
       { key: 'name', label: 'Unit name', type: 'text' },
       { key: 'abbr', label: 'Abbreviation', type: 'text' },
-      { key: 'code', label: 'Code', type: 'text' },
     ],
   },
   locations: {
@@ -117,8 +111,8 @@ export const cfg: Record<string, EntityConfig> = {
     ],
     fields: [
       { key: 'name', label: 'Location name', type: 'text' },
-      { key: 'branch', label: 'Branch', type: 'text' },
-      { key: 'type', label: 'Type', type: 'text' },
+      { key: 'branch', label: 'Branch', type: 'select', opts: 'branches' },
+      { key: 'address', label: 'Address', type: 'textarea' },
       { key: 'status', label: 'Status', type: 'select', opts: 'genStatus' },
     ],
   },
@@ -128,16 +122,88 @@ export const cfg: Record<string, EntityConfig> = {
       { key: 'name', label: 'Supplier', w: 'minmax(0,1.5fr)', kind: 'bold' },
       { key: 'contact', label: 'Contact', w: '1.2fr', kind: 'text' },
       { key: 'phone', label: 'Phone', w: '1.3fr', kind: 'mono' },
-      { key: 'category', label: 'Category', w: '1.1fr', kind: 'text' },
-      { key: 'rating', label: 'Rating', w: '90px', kind: 'rating', align: 'right' },
+      { key: 'email', label: 'Email', w: 'minmax(0,1.4fr)', kind: 'text' },
+      { key: 'paymentTerms', label: 'Payment Terms', w: '1fr', kind: 'text' },
       { key: 'status', label: 'Status', w: '110px', kind: 'status', align: 'right' },
     ],
     fields: [
       { key: 'name', label: 'Supplier name', type: 'text' },
       { key: 'contact', label: 'Contact person', type: 'text' },
       { key: 'phone', label: 'Phone', type: 'text' },
-      { key: 'category', label: 'Category', type: 'select', opts: 'categories' },
+      { key: 'email', label: 'Email', type: 'text' },
+      { key: 'address', label: 'Address', type: 'textarea' },
+      { key: 'tinNumber', label: 'Tax identification number', type: 'text' },
+      { key: 'registrationNumber', label: 'Registration number', type: 'text' },
+      { key: 'paymentTerms', label: 'Payment terms', type: 'text' },
       { key: 'status', label: 'Status', type: 'select', opts: 'supStatus' },
+    ],
+  },
+  supplierItems: {
+    title: 'Supplier Catalogue', sub: 'Articles, prices and purchasing terms offered by suppliers', icon: 'contract', add: 'Attach article', singular: 'Supplier Article', editable: true,
+    cols: [
+      { key: 'supplier', label: 'Supplier', w: 'minmax(0,1.4fr)', kind: 'bold' },
+      { key: 'article', label: 'Article', w: 'minmax(0,1.5fr)', kind: 'text' },
+      { key: 'articleSku', label: 'Article SKU', w: '1fr', kind: 'mono' },
+      { key: 'supplierSku', label: 'Supplier Ref.', w: '1fr', kind: 'mono' },
+      { key: 'unit', label: 'Purchase Unit', w: '1fr', kind: 'text' },
+      { key: 'price', label: 'Quoted Price', w: '110px', kind: 'money2', align: 'right' },
+      { key: 'minimumOrder', label: 'Minimum', w: '85px', kind: 'num', align: 'right' },
+      { key: 'leadTime', label: 'Lead Days', w: '85px', kind: 'num', align: 'right' },
+      { key: 'preferred', label: 'Preference', w: '105px', kind: 'status', align: 'right' },
+      { key: 'status', label: 'Status', w: '90px', kind: 'status', align: 'right' },
+    ],
+    fields: [
+      { key: 'supplier', label: 'Supplier', type: 'select', opts: 'suppliers' },
+      { key: 'article', label: 'Article', type: 'select', opts: 'items' },
+      { key: 'unit', label: 'Purchase unit', type: 'select', opts: 'uoms' },
+      { key: 'supplierSku', label: 'Supplier catalogue reference', type: 'text' },
+      { key: 'price', label: 'Quoted unit price', type: 'number' },
+      { key: 'minimumOrder', label: 'Minimum order quantity', type: 'number' },
+      { key: 'leadTime', label: 'Lead time in days', type: 'number' },
+      { key: 'lastQuoted', label: 'Last quoted date', type: 'date' },
+      { key: 'preferred', label: 'Preferred supplier', type: 'select', opts: 'yesNo' },
+      { key: 'status', label: 'Status', type: 'select', opts: 'genStatus' },
+    ],
+  },
+  departments: {
+    title: 'Departments', sub: 'Hotel departments and operating cost centres', icon: 'account_tree', add: 'Add department', singular: 'Department', prefix: 'DEP-', editable: true,
+    cols: [
+      { key: 'name', label: 'Department', w: 'minmax(0,1.8fr)', kind: 'bold' },
+      { key: 'description', label: 'Description', w: 'minmax(0,2fr)', kind: 'text' },
+      { key: 'employeeCount', label: 'Employees', w: '100px', kind: 'num', align: 'right' },
+      { key: 'status', label: 'Status', w: '110px', kind: 'status', align: 'right' },
+    ],
+    fields: [
+      { key: 'name', label: 'Department name', type: 'text' },
+      { key: 'description', label: 'Purpose and responsibilities', type: 'textarea' },
+      { key: 'status', label: 'Status', type: 'select', opts: 'genStatus' },
+    ],
+  },
+  employees: {
+    title: 'Employees', sub: 'Employee profiles, assignments and system access', icon: 'badge', add: 'Register employee', singular: 'Employee', prefix: 'EMP-', editable: true,
+    cols: [
+      { key: 'name', label: 'Employee', w: 'minmax(0,1.6fr)', kind: 'bold' },
+      { key: 'employeeCode', label: 'Employee ID', w: '1fr', kind: 'mono' },
+      { key: 'department', label: 'Department', w: '1.2fr', kind: 'text' },
+      { key: 'designation', label: 'Job title', w: '1.3fr', kind: 'text' },
+      { key: 'contact', label: 'Contact', w: '1.1fr', kind: 'mono' },
+      { key: 'dateJoined', label: 'Joined', w: '1fr', kind: 'text' },
+      { key: 'status', label: 'Status', w: '100px', kind: 'status', align: 'right' },
+    ],
+    fields: [
+      { key: 'firstName', label: 'First name', type: 'text' },
+      { key: 'lastName', label: 'Last name', type: 'text' },
+      { key: 'employeeCode', label: 'Employee ID (auto if blank)', type: 'text' },
+      { key: 'email', label: 'Work email', type: 'text' },
+      { key: 'contact', label: 'Phone number', type: 'text' },
+      { key: 'branch', label: 'Branch', type: 'select', opts: 'branches' },
+      { key: 'department', label: 'Department', type: 'select', opts: 'departments' },
+      { key: 'designation', label: 'Job title', type: 'text' },
+      { key: 'gender', label: 'Gender', type: 'select', opts: 'gender' },
+      { key: 'dateJoined', label: 'Date joined', type: 'date' },
+      { key: 'address', label: 'Address', type: 'textarea' },
+      { key: 'password', label: 'Temporary password', type: 'password' },
+      { key: 'status', label: 'Employment status', type: 'select', opts: 'genStatus' },
     ],
   },
   balances: {
@@ -325,14 +391,17 @@ export function getOptions(key: string, data: Record<EntityKey, Row[]>): string[
   if (key === 'categories' || key === 'categoryParents') return (data.categories || []).map((c) => c.name)
   if (key === 'uoms') return (data.uoms || []).map((u) => u.name)
   if (key === 'locations') return (data.locations || []).map((l) => l.name)
+  if (key === 'branches') return (data.branches || []).map((branch) => branch.name)
   if (key === 'suppliers') return (data.suppliers || []).map((s) => s.name)
   if (key === 'departments') return (data.departments || []).map((d) => d.name)
   if (key === 'employees') return (data.employees || []).map((e) => e.name)
   if (key === 'items') return (data.items || []).map((i) => i.name)
-  if (key === 'businessTypes') return ['Consumable / Operating Expense', 'Resale / Revenue Item', 'Production Input', 'Fixed Asset', 'Service Supply']
+  if (key === 'businessTypes') return ['Consumable / Operating Expense', 'Resale / Revenue Item', 'Fixed Asset', 'Service']
   if (key === 'reqTypes') return ['department', 'hotel_purchase']
   if (key === 'supStatus') return ['Active', 'On hold', 'Inactive']
   if (key === 'genStatus') return ['Active', 'Inactive']
+  if (key === 'gender') return ['Female', 'Male', 'Other', 'Prefer not to say']
+  if (key === 'yesNo') return ['Yes', 'No']
   return []
 }
 
@@ -342,14 +411,4 @@ export function itemStatus(r: Row): string {
   if (ro > 0 && oh <= ro * 0.4) return 'Critical'
   if (oh <= ro) return 'Low'
   return 'OK'
-}
-
-export function nextId(entity: EntityKey, data: Record<EntityKey, Row[]>): string {
-  const p = cfg[entity].prefix || ''
-  let max = 0
-  data[entity].forEach((x) => {
-    const m = String(x.id).match(/(\d+)$/)
-    if (m) max = Math.max(max, +m[1])
-  })
-  return p + String(max + 1).padStart(3, '0')
 }

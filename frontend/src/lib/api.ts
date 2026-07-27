@@ -25,11 +25,14 @@ const endpoints = {
   storeReqItems: 'store-requisition-items',
   stockIssues: 'stock-issues',
   stockIssueItems: 'stock-issue-items',
+  storeReturns: 'store-returns',
   requisitions: 'requisitions',
   reqItems: 'requisition-items',
   orders: 'purchase-orders',
   orderItems: 'purchase-order-items',
   grns: 'grns',
+  inspections: 'goods-inspections',
+  supplierReturns: 'supplier-returns',
   departments: 'departments',
   employees: 'employees',
   branches: 'branches',
@@ -41,9 +44,12 @@ const entityEndpoints: Partial<Record<EntityKey, string>> = {
   items: 'items',
   locations: 'stores',
   suppliers: 'vendors',
+  supplierItems: 'supplier-item-prices',
   requisitions: 'requisitions',
   reorderRules: 'reorder-rules',
   storeRequisitions: 'store-requisitions',
+  departments: 'departments',
+  employees: 'employees',
 }
 
 function apiRoot(): string {
@@ -57,7 +63,11 @@ export interface AuthUser {
   name: string
   role: string
   username: string
+  branch_id?: string
+  branch_name?: string
   is_staff?: boolean
+  is_superuser?: boolean
+  permissions?: string[]
 }
 
 export interface HotelRecord {
@@ -220,7 +230,12 @@ async function readList(path: string): Promise<ApiRecord[]> {
 function apiErrorDetail(body: unknown, fallback: string): string {
   if (!body || typeof body !== 'object') return fallback
   const record = body as Record<string, unknown>
-  if (typeof record.detail === 'string') return record.detail
+  if (typeof record.detail === 'string') {
+    const blockers = Array.isArray(record.blockers)
+      ? record.blockers.filter((item): item is string => typeof item === 'string')
+      : []
+    return [record.detail, ...blockers].join('\n')
+  }
 
   const messages = Object.entries(record).flatMap(([field, value]) => {
     const items = Array.isArray(value) ? value : [value]
@@ -300,18 +315,16 @@ function dateOnly(value: unknown): string {
 function toBackendBusinessType(value: unknown): string {
   const raw = text(value).toLowerCase()
   if (raw.includes('resale') || raw.includes('revenue')) return 'resale_revenue'
-  if (raw.includes('production')) return 'production_input'
   if (raw.includes('asset')) return 'fixed_asset'
-  if (raw.includes('service')) return 'service_supply'
+  if (raw.includes('service')) return 'service'
   return raw || 'consumable_expense'
 }
 
 function fromBackendBusinessType(value: unknown): string {
   const raw = text(value, 'consumable_expense')
   if (raw === 'resale_revenue') return 'Resale / Revenue Item'
-  if (raw === 'production_input') return 'Production Input'
   if (raw === 'fixed_asset') return 'Fixed Asset'
-  if (raw === 'service_supply') return 'Service Supply'
+  if (raw === 'service') return 'Service'
   return 'Consumable / Operating Expense'
 }
 
@@ -338,14 +351,6 @@ function purchaseOrderStatus(value: unknown): string {
 
 function activeStatus(value: unknown): string {
   return bool(value) ? 'Active' : 'Inactive'
-}
-
-function makeCode(name: unknown, fallback: string): string {
-  const code = text(name)
-    .replace(/[^a-z0-9]/gi, '')
-    .slice(0, 3)
-    .toUpperCase()
-  return code || fallback
 }
 
 function mapById(rows: ApiRecord[], nameKey = 'name'): Map<string, string> {
@@ -400,7 +405,7 @@ function itemLines(rows: ApiRecord[], itemNames: Map<string, string>, itemUnits:
     return {
       item: itemNames.get(itemId) || shortId(itemId),
       qty,
-      uom: itemUnits.get(itemId) || 'Unit',
+      uom: itemUnits.get(itemId) || '',
       unitCost,
     }
   })
@@ -417,11 +422,7 @@ function findDataId(data: Record<EntityKey, Row[]>, entity: EntityKey, value: un
   return text(row?.id)
 }
 
-function slug(value: unknown): string {
-  return text(value, 'record').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'record'
-}
-
-function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey, Row[]>, isUpdate: boolean): Row {
+function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey, Row[]>): Row {
   if (entity === 'categories') {
     const parentId = findDataId(data, 'categories', values.parent)
     return {
@@ -436,34 +437,85 @@ function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey
   if (entity === 'uoms') {
     return {
       name: text(values.name),
-      abbreviation: text(values.abbr || values.code, makeCode(values.name, 'UOM')),
+      abbreviation: text(values.abbr),
       is_active: true,
     }
   }
 
   if (entity === 'locations') {
+    const branchId = findDataId(data, 'branches', values.branch)
+    if (!branchId) throw new Error('Choose a backend branch before saving this store location.')
     return {
       name: text(values.name),
-      address: text(values.address || values.branch),
+      branch: branchId,
+      address: text(values.address),
       is_active: text(values.status, 'Active') !== 'Inactive',
     }
   }
 
   if (entity === 'suppliers') {
-    const base: Row = {
+    return {
       name: text(values.name),
-      phone: text(values.phone, '+256000000000'),
+      phone: text(values.phone),
       contact_person: text(values.contact),
+      email: text(values.email),
+      address: text(values.address),
+      tin_number: text(values.tinNumber),
+      registration_number: text(values.registrationNumber),
+      payment_terms: text(values.paymentTerms),
       is_active: text(values.status, 'Active') === 'Active',
     }
-    if (!isUpdate) {
-      const suffix = `${slug(values.name)}-${Date.now()}`
-      base.email = text(values.email, `${suffix}@example.local`)
-      base.address = text(values.address, 'Not provided')
-      base.tin_number = text(values.tin_number, `TIN-${suffix}`)
-      base.registration_number = text(values.registration_number, `REG-${suffix}`)
+  }
+
+  if (entity === 'departments') {
+    return {
+      name: text(values.name),
+      description: text(values.description),
+      is_active: text(values.status, 'Active') !== 'Inactive',
     }
-    return base
+  }
+
+  if (entity === 'employees') {
+    const departmentId = findDataId(data, 'departments', values.department)
+    const branchId = findDataId(data, 'branches', values.branch)
+    if (!departmentId) throw new Error('Choose a backend department before registering this employee.')
+    const payload: Row = {
+      first_name: text(values.firstName),
+      last_name: text(values.lastName),
+      employee_code: text(values.employeeCode),
+      email: text(values.email),
+      user_phone: text(values.contact),
+      department: departmentId,
+      branch: branchId || null,
+      designation: text(values.designation),
+      gender: text(values.gender),
+      contact: text(values.contact),
+      address: text(values.address),
+      date_joined: text(values.dateJoined) || null,
+      is_active: text(values.status, 'Active') !== 'Inactive',
+    }
+    if (text(values.password)) payload.password = text(values.password)
+    return payload
+  }
+
+  if (entity === 'supplierItems') {
+    const supplierId = findDataId(data, 'suppliers', values.supplier)
+    const itemId = findDataId(data, 'items', values.article)
+    const unitId = findDataId(data, 'uoms', values.unit)
+    if (!supplierId) throw new Error('Choose a supplier before attaching an article.')
+    if (!itemId) throw new Error('Choose an article for this supplier.')
+    return {
+      supplier: supplierId,
+      item: itemId,
+      unit: unitId || null,
+      supplier_sku: text(values.supplierSku),
+      unit_price: num(values.price),
+      minimum_order_quantity: num(values.minimumOrder) || 1,
+      lead_time_days: num(values.leadTime),
+      last_quoted_at: text(values.lastQuoted) || null,
+      is_preferred: text(values.preferred, 'No') === 'Yes',
+      is_active: text(values.status, 'Active') !== 'Inactive',
+    }
   }
 
   if (entity === 'requisitions') {
@@ -497,7 +549,7 @@ function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey
       category: categoryId,
       name: text(values.name),
       sku: text(values.sku),
-      unit: text(values.uom, 'Unit'),
+      unit: text(values.uom),
       base_unit: unitId || null,
       reorder_level: num(values.reorder),
       business_type: toBackendBusinessType(values.businessType),
@@ -551,12 +603,33 @@ async function sendJson(path: string, method: string, body?: Row): Promise<unkno
   })
 
   if (!response.ok) {
-    const detail = await response.text()
-    throw new Error(`${method} ${path} failed with ${response.status}${detail ? `: ${detail.slice(0, 180)}` : ''}`)
+    let body: unknown = null
+    try {
+      body = await response.json()
+    } catch {
+      /* non-JSON response */
+    }
+    throw new Error(apiErrorDetail(body, `The operation could not be completed (${response.status}).`))
   }
 
   if (response.status === 204) return null
   return response.json()
+}
+
+export async function readBackendRecords(path: string): Promise<Row[]> {
+  return (await readList(path)) as Row[]
+}
+
+export async function createBackendRecord(path: string, body: Row): Promise<Row> {
+  return (await sendJson(path, 'POST', body)) as Row
+}
+
+export async function updateBackendRecord(path: string, id: string, body: Row): Promise<Row> {
+  return (await sendJson(`${path}/${id}`, 'PATCH', body)) as Row
+}
+
+export async function runBackendAction(path: string, id: string, action: string, body: Row = {}): Promise<Row> {
+  return (await sendJson(`${path}/${id}/${action}`, 'POST', body)) as Row
 }
 
 export async function fetchBackendData(): Promise<BackendDataResult> {
@@ -564,10 +637,11 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
     Object.entries(endpoints).map(async ([key, endpoint]) => [key, await safeRead(endpoint)] as const),
   )
 
-  const loaded = Object.fromEntries(entries) as Record<keyof typeof endpoints, ApiListResult>
-  const successful = entries.filter(([, result]) => !result.error)
-  if (successful.length === 0) {
-    throw new Error(loaded.categories.error || 'Backend API is unavailable.')
+  const errors = entries
+    .filter(([, result]) => result.error)
+    .map(([key, result]) => `${key}: ${result.error}`)
+  if (errors.length === entries.length) {
+    throw new Error(`Backend data could not be fully loaded. ${errors.join(' ')}`)
   }
 
   const raw = Object.fromEntries(entries.map(([key, result]) => [key, result.rows])) as Record<keyof typeof endpoints, ApiRecord[]>
@@ -577,7 +651,12 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
   const supplierNames = mapById(raw.vendors)
   const departmentNames = mapById(raw.departments)
   const branchNames = mapById(raw.branches)
-  const employeeNames = new Map(raw.employees.map((row) => [idOf(row), text(row.designation, shortId(row.id))]))
+  const employeeNames = new Map(raw.employees.map((row) => {
+    const fullName = `${text(row.first_name)} ${text(row.last_name)}`.trim()
+    return [idOf(row), fullName || text(row.designation, shortId(row.id))]
+  }))
+  const employeeBranches = new Map(raw.employees.map((row) => [idOf(row), text(row.branch)]))
+  const storeBranches = new Map(raw.stores.map((row) => [idOf(row), text(row.branch)]))
 
   const balanceByItem = firstBy(raw.balances, 'item')
   const balancesByStore = countBy(raw.balances, 'store')
@@ -588,24 +667,45 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
   const itemNames = mapById(raw.items)
   const itemUnits = new Map(raw.items.map((row) => {
     const itemId = idOf(row)
-    const unit = unitNames.get(text(row.base_unit)) || text(row.unit, 'Unit')
+    const unit = unitNames.get(text(row.base_unit)) || text(row.unit)
     return [itemId, unit]
   }))
 
   const data: Partial<Record<EntityKey, Row[]>> = {
+    branches: raw.branches.map((row) => ({
+      id: idOf(row),
+      name: text(row.name),
+      code: text(row.branch_code),
+      status: activeStatus(row.is_active),
+    })),
     departments: raw.departments.map((row) => ({
       id: idOf(row),
       name: text(row.name, shortId(row.id)),
+      description: text(row.description),
+      employeeCount: raw.employees.filter((employee) => text(employee.department) === idOf(row)).length,
+      status: activeStatus(row.is_active),
     })),
     employees: raw.employees.map((row) => ({
       id: idOf(row),
-      name: text(row.designation, shortId(row.id)),
-      department: departmentNames.get(text(row.department)) || shortId(row.department),
+      name: `${text(row.first_name)} ${text(row.last_name)}`.trim() || text(row.designation, shortId(row.id)),
+      firstName: text(row.first_name),
+      lastName: text(row.last_name),
+      employeeCode: text(row.employee_code),
+      email: text(row.email),
+      department: text(row.department_name) || departmentNames.get(text(row.department)) || shortId(row.department),
+      branch: text(row.branch_name) || branchNames.get(text(row.branch)) || '',
+      branchId: text(row.branch),
+      designation: text(row.designation),
+      gender: text(row.gender),
+      contact: text(row.contact) || text(row.user_phone),
+      address: text(row.address),
+      dateJoined: text(row.date_joined),
+      status: activeStatus(row.is_active),
     })),
     categories: raw.categories.map((row) => ({
       id: idOf(row),
       name: text(row.name),
-      code: text(row.code, makeCode(row.name, 'CAT')),
+      code: text(row.code),
       parent: text(row.parent_name) || categoryNames.get(text(row.parent)) || '—',
       description: text(row.description),
       childrenCount: num(row.children_count),
@@ -616,13 +716,13 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
       id: idOf(row),
       name: text(row.name),
       abbr: text(row.abbreviation),
-      code: makeCode(row.abbreviation || row.name, 'UOM'),
       itemsCount: itemsByUnit.get(idOf(row)) || 0,
     })),
     locations: raw.stores.map((row) => ({
       id: idOf(row),
       name: text(row.name),
-      branch: branchNames.get(text(row.branch)) || 'Main Property',
+      branch: branchNames.get(text(row.branch)) || '',
+      branchId: text(row.branch),
       type: bool(row.is_default) ? 'Default' : 'Store',
       itemsCount: balancesByStore.get(idOf(row)) || 0,
       status: activeStatus(row.is_active),
@@ -632,13 +732,30 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
       name: text(row.name),
       contact: text(row.contact_person),
       phone: text(row.phone),
-      category: 'Vendor',
-      rating: 4,
+      email: text(row.email),
+      address: text(row.address),
+      tinNumber: text(row.tin_number),
+      registrationNumber: text(row.registration_number),
+      paymentTerms: text(row.payment_terms),
+      status: activeStatus(row.is_active),
+    })),
+    supplierItems: raw.prices.map((row) => ({
+      id: idOf(row),
+      supplier: text(row.supplier_name) || supplierNames.get(text(row.supplier)) || shortId(row.supplier),
+      article: text(row.item_name) || itemNames.get(text(row.item)) || shortId(row.item),
+      articleSku: text(row.item_sku),
+      supplierSku: text(row.supplier_sku),
+      unit: text(row.unit_name) || unitNames.get(text(row.unit)) || '',
+      price: num(row.unit_price),
+      minimumOrder: num(row.minimum_order_quantity),
+      leadTime: num(row.lead_time_days),
+      lastQuoted: text(row.last_quoted_at),
+      preferred: bool(row.is_preferred) ? 'Preferred' : 'Alternative',
       status: activeStatus(row.is_active),
     })),
   }
 
-  data.items = raw.items.map((row, index) => {
+  data.items = raw.items.map((row) => {
     const itemId = idOf(row)
     const balance = balanceByItem.get(itemId)
     const onHand = num(balance?.quantity_in_stock)
@@ -646,7 +763,7 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
     const mapped: Row = {
       id: itemId,
       name: text(row.name),
-      sku: text(row.sku, `ITM-${String(index + 1).padStart(3, '0')}`),
+      sku: text(row.sku),
       category: categoryNames.get(text(row.category)) || shortId(row.category),
       businessType: fromBackendBusinessType(row.business_type),
       uom: unitNames.get(text(row.base_unit)) || text(row.unit),
@@ -666,11 +783,13 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
     return {
       id: idOf(row),
       item: itemNames.get(itemId) || shortId(itemId),
+      category: categoryNames.get(text(raw.items.find((item) => idOf(item) === itemId)?.category)) || '',
       store: storeNames.get(text(row.store)) || shortId(row.store),
       onHand,
-      reserved: 0,
-      available: onHand,
+      reserved: num(row.quantity_reserved),
+      available: num(row.available_quantity, onHand - num(row.quantity_reserved)),
       value: onHand * (itemPrice.get(itemId) || 0),
+      branchId: storeBranches.get(text(row.store)) || '',
     }
   })
 
@@ -685,6 +804,7 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
       qty: quantityIn || quantityOut,
       ref: `${titleCaseStatus(row.reference_type)} ${shortId(row.reference_id)}`,
       balance: num(row.net_quantity),
+      branchId: storeBranches.get(text(row.store)) || '',
     }
   })
 
@@ -696,6 +816,7 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
     expiry: dateOnly(row.expiry_date),
     store: storeNames.get(text(row.store)) || shortId(row.store),
     status: expiryStatus(row.expiry_date, row.is_depleted),
+    branchId: storeBranches.get(text(row.store)) || '',
   }))
 
   data.reorderRules = raw.reorderRules.map((row) => {
@@ -707,12 +828,13 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
     return {
       id: idOf(row),
       item: itemNames.get(itemId) || shortId(itemId),
-      store: storeNames.get(storeId) || 'Default',
+      store: storeNames.get(storeId) || '',
       minimum,
       onHand,
       reorderQty: num(row.reorder_quantity),
       supplier: supplierNames.get(text(row.preferred_supplier)) || '',
       status: bool(row.is_active) ? (onHand <= minimum ? 'Low' : 'Active') : 'Inactive',
+      branchId: storeBranches.get(storeId) || '',
     }
   })
 
@@ -726,6 +848,7 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
     purpose: text(row.purpose),
     count: (raw.storeReqItems || []).filter((item) => text(item.requisition) === idOf(row)).length,
     status: titleCaseStatus(row.status),
+    branchId: storeBranches.get(text(row.store)) || '',
   }))
 
   data.stockIssues = raw.stockIssues.map((row) => ({
@@ -736,6 +859,18 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
     issuedBy: employeeNames.get(text(row.issued_by)) || shortId(row.issued_by),
     count: (raw.stockIssueItems || []).filter((item) => text(item.issue) === idOf(row)).length,
     status: bool(row.inventory_changes_applied) ? 'Applied' : 'Pending',
+    branchId: storeBranches.get(text(row.store)) || '',
+  }))
+
+  data.storeReturns = raw.storeReturns.map((row) => ({
+    id: text(row.return_no, idOf(row)),
+    apiId: idOf(row),
+    department: departmentNames.get(text(row.department)) || shortId(row.department),
+    store: storeNames.get(text(row.store)) || shortId(row.store),
+    receivedBy: employeeNames.get(text(row.received_by)) || shortId(row.received_by),
+    date: dateOnly(row.return_date),
+    status: bool(row.inventory_changes_applied) ? 'Applied' : 'Pending',
+    branchId: storeBranches.get(text(row.store)) || '',
   }))
 
   const reqItemsByRequisition = groupBy(raw.reqItems, 'requisition')
@@ -755,6 +890,7 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
       lines,
       count: lines.length,
       total,
+      branchId: employeeBranches.get(text(row.requester)) || '',
     }
   })
 
@@ -771,6 +907,7 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
       lines,
       count: lines.length,
       total,
+      branchId: storeBranches.get(text(row.store)) || employeeBranches.get(text(row.ordered_by)) || '',
     }
   })
 
@@ -778,13 +915,40 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
   data.grns = raw.grns.map((row) => {
     const order = orderById.get(text(row.purchase_order))
     return {
-      id: idOf(row),
+      id: text(row.grn_number, idOf(row)),
+      apiId: idOf(row),
       po: order ? text(order.po_number, idOf(order)) : shortId(row.purchase_order),
       supplier: order ? supplierNames.get(text(order.supplier)) || shortId(order.supplier) : '',
       date: dateOnly(row.received_date || row.created_at),
       status: 'Received',
+      branchId: order ? storeBranches.get(text(order.store)) || '' : '',
     }
   })
+
+  data.inspections = raw.inspections.map((row) => ({
+    id: idOf(row),
+    grn: shortId(row.goods_receipt),
+    inspector: employeeNames.get(text(row.inspected_by)) || shortId(row.inspected_by),
+    date: dateOnly(row.inspection_date),
+    deliveryNote: text(row.delivery_note_no),
+    status: titleCaseStatus(row.status),
+    branchId: (() => {
+      const receipt = raw.grns.find((grn) => idOf(grn) === text(row.goods_receipt))
+      const order = receipt ? orderById.get(text(receipt.purchase_order)) : undefined
+      return order ? storeBranches.get(text(order.store)) || '' : ''
+    })(),
+  }))
+
+  data.supplierReturns = raw.supplierReturns.map((row) => ({
+    id: text(row.return_no, idOf(row)),
+    apiId: idOf(row),
+    supplier: supplierNames.get(text(row.supplier)) || shortId(row.supplier),
+    store: storeNames.get(text(row.store)) || shortId(row.store),
+    returnedBy: employeeNames.get(text(row.returned_by)) || shortId(row.returned_by),
+    date: dateOnly(row.return_date),
+    status: titleCaseStatus(row.status),
+    branchId: storeBranches.get(text(row.store)) || '',
+  }))
 
   return {
     data,
@@ -794,17 +958,45 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
 
 export async function saveBackendRecord(entity: EntityKey, id: string | null, values: Row, data: Record<EntityKey, Row[]>): Promise<void> {
   const endpoint = entityEndpoints[entity]
-  if (!endpoint) return
+  if (!endpoint) throw new Error(`Backend saving is not configured for ${entity}.`)
 
-  const payload = toBackendPayload(entity, values, data, Boolean(id))
+  const payload = toBackendPayload(entity, values, data)
   await sendJson(id ? `${endpoint}/${id}` : endpoint, id ? 'PATCH' : 'POST', payload)
 }
 
 export async function deleteBackendRecord(entity: EntityKey, id: string): Promise<void> {
   const endpoint = entityEndpoints[entity]
-  if (!endpoint) return
+  if (!endpoint) throw new Error(`Backend deletion is not configured for ${entity}.`)
 
   await sendJson(`${endpoint}/${id}`, 'DELETE')
+}
+
+export async function deleteBackendPath(path: string, id: string): Promise<void> {
+  await sendJson(`${path}/${id}`, 'DELETE')
+}
+
+export async function uploadProcurementAttachment(
+  documentType: string,
+  documentId: string,
+  category: string,
+  file: File,
+): Promise<Row> {
+  const form = new FormData()
+  form.append('document_type', documentType)
+  form.append('document_id', documentId)
+  form.append('category', category)
+  form.append('file', file)
+  const response = await fetch(endpointUrl('procurement-attachments'), {
+    method: 'POST',
+    headers: { Accept: 'application/json', ...authHeaders() },
+    body: form,
+  })
+  if (!response.ok) {
+    let body: unknown = null
+    try { body = await response.json() } catch { /* non-JSON response */ }
+    throw new Error(apiErrorDetail(body, `Upload failed (${response.status}).`))
+  }
+  return response.json() as Promise<Row>
 }
 
 export async function decideRequisition(requisitionId: string, decision: 'approve' | 'reject'): Promise<void> {

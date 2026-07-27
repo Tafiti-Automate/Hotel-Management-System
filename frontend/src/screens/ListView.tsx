@@ -1,132 +1,193 @@
-import type { CSSProperties } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { useApp } from '../state/AppContext'
 import { Icon } from '../components/Icon'
 import { cfg, type ColumnDef, type EntityKey, type Row } from '../lib/data'
 import { chipStyleFor, money } from '../lib/theme'
+import { helpText } from '../lib/help'
 
-function cellContent(c: ColumnDef, r: Row): { text: string; chip: boolean } {
-  const v = r[c.key]
-  if (c.kind === 'money' || c.kind === 'money2') return { text: money(v), chip: false }
-  if (c.kind === 'rating') return { text: '★ ' + v, chip: false }
-  if (c.kind === 'status') return { text: String(v ?? ''), chip: true }
-  return { text: String(v ?? ''), chip: false }
+function valueFor(column: ColumnDef, row: Row) {
+  const value = row[column.key]
+  if (column.kind === 'money' || column.kind === 'money2') return money(value)
+  if (column.kind === 'rating') return `★ ${value ?? '—'}`
+  return String(value ?? '—')
 }
 
-function cellStyle(c: ColumnDef): CSSProperties {
-  const s: CSSProperties = {
-    padding: '12px 10px', fontSize: 12.5, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden',
-    textOverflow: 'ellipsis', display: 'flex', alignItems: 'center',
-    justifyContent: c.align === 'right' ? 'flex-end' : undefined,
+function cellStyle(column: ColumnDef): CSSProperties {
+  const numeric = ['num', 'money', 'money2'].includes(column.kind)
+  return {
+    padding: '13px 12px', minWidth: 0, display: 'flex', alignItems: 'center',
+    justifyContent: column.align === 'right' ? 'flex-end' : undefined,
+    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+    color: column.kind === 'bold' || numeric ? 'var(--text)' : 'var(--text-muted)',
+    fontSize: column.kind === 'mono' ? 12 : 13,
+    fontWeight: column.kind === 'bold' || numeric ? 600 : 450,
+    fontFamily: column.kind === 'mono' || numeric ? "'JetBrains Mono',monospace" : undefined,
   }
-  if (c.kind === 'bold') { s.color = 'var(--text)'; s.fontWeight = 700 }
-  else if (c.kind === 'mono') { s.color = 'var(--text-muted)'; s.fontFamily = "'JetBrains Mono',monospace"; s.fontSize = 11.5 }
-  else if (c.kind === 'num' || c.kind === 'money' || c.kind === 'money2') { s.color = 'var(--text)'; s.fontWeight = 700; s.fontFamily = "'JetBrains Mono',monospace" }
-  else if (c.kind === 'rating') { s.color = 'var(--text)'; s.fontWeight = 700 }
-  else s.color = 'var(--text-muted)'
-  return s
 }
 
 export default function ListView() {
   const app = useApp()
   const route = app.route
-  const conf = cfg[route]
-  if (!conf) return null
+  const config = cfg[route]
+  if (!config) return null
 
-  const srcKey = (route === 'approvals' ? 'requisitions' : route) as EntityKey
-  let data = (app.data[srcKey] || []).slice()
-  if (route === 'approvals') data = data.filter((r) => r.status === 'Pending')
-
-  const term = (app.searchTerm || '').toLowerCase()
-  if (term) data = data.filter((r) => conf.cols.some((c) => String(r[c.key]).toLowerCase().includes(term)))
-
-  const grid = conf.cols.map((c) => c.w).join(' ') + ' 96px'
-  const headStyle = (c: ColumnDef): CSSProperties => ({
-    padding: '9px 10px', fontSize: 10, fontWeight: 700, letterSpacing: '.05em', color: 'var(--text-faint)',
-    textTransform: 'uppercase', display: 'flex', alignItems: 'center',
-    justifyContent: c.align === 'right' ? 'flex-end' : undefined,
+  const source = (route === 'approvals' ? 'requisitions' : route) as EntityKey
+  const permissionModel: Partial<Record<EntityKey, string>> = {
+    items: 'inventory.item', categories: 'inventory.category', uoms: 'inventory.unitofmeasure',
+    locations: 'inventory.storelocation', suppliers: 'vendors.supplier',
+    supplierItems: 'inventory.supplieritemprice', departments: 'departments.department',
+    employees: 'employees.employee', requisitions: 'procurement.purchaserequisition',
+    reorderRules: 'inventory.reorderrule', storeRequisitions: 'inventory.storerequisition',
+  }
+  const permissionName = permissionModel[source]
+  const hasPermissionMetadata = app.user.permissions.length > 0
+  const canAdd = !permissionName || app.user.isSuperuser || app.user.permissions.includes(`${permissionName.split('.')[0]}.add_${permissionName.split('.')[1]}`) || (!hasPermissionMetadata && app.user.isStaff)
+  const canChange = !permissionName || app.user.isSuperuser || app.user.permissions.includes(`${permissionName.split('.')[0]}.change_${permissionName.split('.')[1]}`) || (!hasPermissionMetadata && app.user.isStaff)
+  const canDelete = !permissionName || app.user.isSuperuser || app.user.permissions.includes(`${permissionName.split('.')[0]}.delete_${permissionName.split('.')[1]}`) || (!hasPermissionMetadata && app.user.isStaff)
+  const [sortKey, setSortKey] = useState('')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [page, setPage] = useState(1)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [columnsOpen, setColumnsOpen] = useState(false)
+  const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set())
+  let rows = [...(app.data[source] || [])]
+  if (route === 'approvals') rows = rows.filter((row) => row.status === 'Pending')
+  const term = app.searchTerm.toLowerCase()
+  if (term) rows = rows.filter((row) => config.cols.some((column) => String(row[column.key] ?? '').toLowerCase().includes(term)))
+  if (statusFilter) rows = rows.filter((row) => String(row.status || '') === statusFilter)
+  if (sortKey) rows.sort((a, b) => {
+    const left = a[sortKey]
+    const right = b[sortKey]
+    const result = typeof left === 'number' && typeof right === 'number'
+      ? left - right
+      : String(left ?? '').localeCompare(String(right ?? ''), undefined, { numeric: true })
+    return sortDirection === 'asc' ? result : -result
   })
 
-  const onRowClick = (id: string) => {
+  const visibleColumns = config.cols.filter((column) => !hiddenColumns.has(column.key))
+  const columns = `36px ${visibleColumns.map((column) => column.w).join(' ')} 96px`
+  const pageSize = 25
+  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize))
+  const pageRows = rows.slice((page - 1) * pageSize, page * pageSize)
+  const statuses = useMemo(() => Array.from(new Set((app.data[source] || []).map((row) => String(row.status || '')).filter(Boolean))).sort(), [app.data, source])
+  const unfilteredRows = app.data[source] || []
+  const branchLabel = app.currentBranch ? ` for ${app.currentBranch}` : ''
+  const emptyMessage = route === 'approvals' && unfilteredRows.length
+    ? `There are no requisitions awaiting approval${branchLabel}.`
+    : statusFilter
+      ? `No records match the selected status${branchLabel}.`
+      : `No ${config.title.toLowerCase()} are available${branchLabel}.`
+  useEffect(() => { setPage(1); setSelected(new Set()) }, [route, term, statusFilter])
+  useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
+
+  const exportRows = (records: Row[]) => {
+    const quote = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`
+    const csv = [visibleColumns.map((column) => quote(column.label)).join(','), ...records.map((row) => visibleColumns.map((column) => quote(row[column.key])).join(','))].join('\n')
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    link.download = `${route}-${new Date().toISOString().slice(0, 10)}.csv`
+    link.click()
+    URL.revokeObjectURL(link.href)
+  }
+  const toggleSort = (key: string) => {
+    if (sortKey === key) setSortDirection((direction) => direction === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDirection('asc') }
+  }
+  const saveView = () => {
+    localStorage.setItem(`hms-view-${route}`, JSON.stringify({ statusFilter, hiddenColumns: Array.from(hiddenColumns), sortKey, sortDirection }))
+    app.showToast('Current table view saved')
+  }
+  const loadSavedView = () => {
+    const raw = localStorage.getItem(`hms-view-${route}`)
+    if (!raw) { app.showToast('No saved view for this table'); return }
+    const view = JSON.parse(raw)
+    setStatusFilter(view.statusFilter || ''); setHiddenColumns(new Set(view.hiddenColumns || [])); setSortKey(view.sortKey || ''); setSortDirection(view.sortDirection || 'asc')
+    app.showToast('Saved view applied')
+  }
+  const openRow = (id: string) => {
     if (route === 'requisitions' || route === 'approvals') app.openDetail('requisitions', id, route)
     else if (route === 'orders') app.openDetail('orders', id, 'orders')
   }
 
   return (
     <div className="list-view">
-      <div className="list-toolbar" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 18 }}>
-        <div className="list-title" style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
-          <div style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
-            <Icon name={conf.icon} size={23} color="var(--accent)" />
-          </div>
-          <div>
-            <h1 style={{ margin: 0, fontSize: 23, fontWeight: 800, letterSpacing: '-.02em', color: 'var(--text)' }}>{conf.title}</h1>
-            <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>{conf.sub}</p>
-          </div>
+      <div className="list-toolbar" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
+        <div>
+          <h1 style={{ margin: 0, color: 'var(--text)', fontSize: 24, fontWeight: 650, letterSpacing: '-.025em' }}>{config.title}</h1>
+          <p style={{ margin: '5px 0 0', color: 'var(--text-muted)', fontSize: 13.5 }}>{config.sub}</p>
         </div>
-        <div className="list-actions" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div className="list-search" style={{ position: 'relative' }}>
-            <Icon name="search" size={18} color="var(--text-faint)" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)' }} />
-            <input value={app.searchTerm} onChange={(e) => app.setSearchTerm(e.target.value)} placeholder="Search…" style={{ width: 210, height: 38, border: '1px solid var(--border)', background: 'var(--surface)', borderRadius: 10, padding: '0 12px 0 36px', fontSize: 13, color: 'var(--text)', outline: 'none' }} />
-          </div>
-          {conf.editable && (
-            <button onClick={() => app.openCreate()} className="hover-accent" style={{ display: 'flex', alignItems: 'center', gap: 7, height: 38, padding: '0 15px', border: 'none', cursor: 'pointer', background: 'var(--accent)', color: '#fff', borderRadius: 10, font: 'inherit', fontSize: 13, fontWeight: 700, boxShadow: 'var(--shadow-sm)' }}>
-              <Icon name="add" size={18} />{conf.add}
-            </button>
-          )}
+        <div className="list-actions" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button onClick={() => exportRows(rows)} style={secondaryAction}><Icon name="download" size={17} />Export CSV</button>
+          {config.editable && canAdd && <button onClick={() => app.openCreate()} className="hover-accent" style={primaryAction}><Icon name="add" size={18} color="#fff" />{config.add}</button>}
         </div>
       </div>
 
-      <div className="data-table" style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, boxShadow: 'var(--shadow)', overflow: 'hidden' }}>
-        <div className="data-head" style={{ display: 'grid', gridTemplateColumns: grid, borderBottom: '1px solid var(--border)', padding: '0 8px' }}>
-          {conf.cols.map((c) => <div key={c.key} style={headStyle(c)}>{c.label}</div>)}
+      <div className="table-command-bar" style={{ minHeight: 50, display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: 'var(--surface)', border: '1px solid var(--border)', borderBottom: 0, borderRadius: '8px 8px 0 0' }}>
+        <div className="list-search" style={{ position: 'relative' }}>
+          <Icon name="search" size={18} color="var(--text-faint)" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
+          <input value={app.searchTerm} onChange={(event) => app.setSearchTerm(event.target.value)} placeholder={`Search ${config.title.toLowerCase()}`} style={{ width: 280, height: 34, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', padding: '0 11px 0 34px', color: 'var(--text)', fontSize: 12.5, outline: 'none' }} />
+        </div>
+        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} style={{ height: 34, border: '1px solid var(--border)', borderRadius: 5, padding: '0 8px', background: 'var(--surface)', color: 'var(--text-muted)', fontSize: 12 }}><option value="">All statuses</option>{statuses.map((status) => <option key={status}>{status}</option>)}</select>
+        <button onClick={saveView} className="hover-surface2" style={commandAction}><Icon name="bookmark_add" size={17} />Save view</button>
+        <button onClick={loadSavedView} className="hover-surface2" style={commandAction}><Icon name="bookmarks" size={17} />Saved view</button>
+        <span style={{ flex: 1 }} />
+        <button title="Export selected records" disabled={!selected.size} onClick={() => exportRows(rows.filter((row) => selected.has(row.id)))} className="hover-surface2" style={{ ...iconCommand, opacity: selected.size ? 1 : .4 }}><Icon name="download_for_offline" size={19} /></button>
+        <div style={{ position: 'relative' }}><button title="Choose columns" onClick={() => setColumnsOpen((open) => !open)} className="hover-surface2" style={iconCommand}><Icon name="view_column" size={18} /></button>{columnsOpen && <div style={{ position: 'absolute', right: 0, top: 36, zIndex: 10, width: 210, padding: 8, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 7, boxShadow: 'var(--shadow)' }}>{config.cols.map((column) => <label key={column.key} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 7, fontSize: 11.5, color: 'var(--text-muted)' }}><input type="checkbox" checked={!hiddenColumns.has(column.key)} onChange={() => setHiddenColumns((current) => { const next = new Set(current); next.has(column.key) ? next.delete(column.key) : next.add(column.key); return next })} />{column.label}</label>)}</div>}</div>
+        <button title="Refresh" onClick={app.refreshData} className="hover-surface2" style={iconCommand}><Icon name="refresh" size={18} /></button>
+      </div>
+
+      <div className="data-table" style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
+        <div className="data-head" style={{ display: 'grid', gridTemplateColumns: columns, padding: '0 8px', background: '#F8F9FB', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, zIndex: 2 }}>
+          <div style={{ display: 'grid', placeItems: 'center' }}><input type="checkbox" checked={pageRows.length > 0 && pageRows.every((row) => selected.has(row.id))} onChange={(event) => setSelected((current) => { const next = new Set(current); pageRows.forEach((row) => event.target.checked ? next.add(row.id) : next.delete(row.id)); return next })} /></div>
+          {visibleColumns.map((column) => <button title={helpText(column.label)} onClick={() => toggleSort(column.key)} key={column.key} style={{ padding: '11px 12px', border: 0, background: 'transparent', color: 'var(--text-muted)', fontSize: 10.5, fontWeight: 650, letterSpacing: '.045em', textTransform: 'uppercase', display: 'flex', gap: 4, justifyContent: column.align === 'right' ? 'flex-end' : undefined, cursor: 'pointer' }}>{column.label}{helpText(column.label) && <Icon name="info" size={13} color="var(--text-faint)" />}{sortKey === column.key && <Icon name={sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward'} size={13} />}</button>)}
           <div />
         </div>
 
-        {data.map((r) => (
-          <div key={r.id} onClick={() => conf.detail && onRowClick(r.id)} className="data-row hover-surface2" style={{ display: 'grid', gridTemplateColumns: grid, alignItems: 'center', borderBottom: '1px solid var(--border)', padding: '0 8px', cursor: conf.detail ? 'pointer' : 'default' }}>
-            {conf.cols.map((c, index) => {
-              const { text, chip } = cellContent(c, r)
-              return (
-                <div key={c.key} className="data-cell" data-label={c.label} data-primary={index === 0 ? 'true' : undefined} style={cellStyle(c)}>
-                  {chip ? <span style={chipStyleFor(text)}>{text}</span> : text}
-                </div>
-              )
+        {pageRows.map((row) => (
+          <div key={row.id} onClick={() => config.detail && openRow(row.id)} className="data-row hover-surface2" style={{ minHeight: 50, display: 'grid', gridTemplateColumns: columns, alignItems: 'center', padding: '0 8px', borderBottom: '1px solid var(--border)', cursor: config.detail ? 'pointer' : 'default' }}>
+            <div style={{ display: 'grid', placeItems: 'center' }}><input type="checkbox" checked={selected.has(row.id)} onClick={(event) => event.stopPropagation()} onChange={(event) => setSelected((current) => { const next = new Set(current); event.target.checked ? next.add(row.id) : next.delete(row.id); return next })} /></div>
+            {visibleColumns.map((column, index) => {
+              const value = valueFor(column, row)
+              return <div key={column.key} className="data-cell" data-label={column.label} data-primary={index === 0 ? 'true' : undefined} style={cellStyle(column)}>{column.kind === 'status' ? <span style={chipStyleFor(value)}>{value}</span> : value}</div>
             })}
-            <div className="data-actions" style={{ padding: '10px 8px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
-              {conf.detail && <Icon name="chevron_right" size={18} color="var(--text-faint)" />}
-              {conf.editable && (
-                <>
-                  <button onClick={(e) => { e.stopPropagation(); app.openEdit(r.id) }} title="Edit" className="hover-edit" style={iconActionStyle}>
-                    <Icon name="edit" size={17} />
-                  </button>
-                  <button onClick={(e) => { e.stopPropagation(); app.requestDelete(r.id) }} title="Delete" className="hover-del" style={iconActionStyle}>
-                    <Icon name="delete" size={17} />
-                  </button>
-                </>
-              )}
+            <div className="data-actions" style={{ padding: '8px', display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
+              {config.detail && <Icon name="chevron_right" size={18} color="var(--text-faint)" />}
+              {config.editable && <>
+                {canChange &&
+                <button onClick={(event) => { event.stopPropagation(); app.openEdit(row.id) }} title="Edit" className="hover-edit" style={iconAction}><Icon name="edit" size={17} /></button>
+                }
+                {canDelete &&
+                <button onClick={(event) => { event.stopPropagation(); app.requestDelete(row.id) }} title="Deactivate or delete" className="hover-del" style={iconAction}><Icon name="delete" size={17} /></button>
+                }
+              </>}
             </div>
           </div>
         ))}
 
-        <div className="list-footer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 18px', fontSize: 12, color: 'var(--text-muted)' }}>
-          <span>Showing <b style={{ color: 'var(--text)' }}>{data.length}</b> records</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <button style={pagerStyle}><Icon name="chevron_left" size={17} /></button>
-            <span style={{ padding: '0 6px', fontWeight: 700, color: 'var(--text)' }}>1</span>
-            <button style={pagerStyle}><Icon name="chevron_right" size={17} /></button>
+        {!rows.length && (
+          <div style={{ padding: 44, textAlign: 'center', color: 'var(--text-faint)', fontSize: 13 }}>
+            {app.apiStatus === 'loading' && 'Loading records from the backend…'}
+            {app.apiStatus === 'offline' && <>
+              <div style={{ color: 'var(--bad)', marginBottom: 10 }}>{app.apiMessage || 'The backend is unavailable.'}</div>
+              <button onClick={app.refreshData} style={secondaryAction}><Icon name="refresh" size={17} />Retry connection</button>
+            </>}
+            {app.apiStatus === 'live' && (term ? 'No records match the current search.' : emptyMessage)}
+            {app.apiStatus === 'idle' && 'Waiting for the backend connection…'}
           </div>
+        )}
+        <div className="list-footer" style={{ minHeight: 48, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 18px', background: '#FBFCFD', color: 'var(--text-muted)', fontSize: 12 }}>
+          <span><b style={{ color: 'var(--text)', fontWeight: 600 }}>{rows.length}</b> records · {selected.size} selected</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><button disabled={page === 1} onClick={() => setPage((value) => Math.max(1, value - 1))} style={pager}><Icon name="chevron_left" size={17} /></button><span style={{ padding: '0 7px', color: 'var(--text)', fontWeight: 600 }}>{page} / {pageCount}</span><button disabled={page === pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))} style={pager}><Icon name="chevron_right" size={17} /></button></div>
         </div>
       </div>
     </div>
   )
 }
 
-const iconActionStyle: CSSProperties = {
-  width: 30, height: 30, border: 'none', background: 'transparent', borderRadius: 8,
-  display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-faint)',
-}
-
-const pagerStyle: CSSProperties = {
-  width: 30, height: 30, border: '1px solid var(--border)', background: 'var(--surface)', borderRadius: 8,
-  cursor: 'pointer', color: 'var(--text-faint)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-}
+const primaryAction: CSSProperties = { height: 38, display: 'flex', alignItems: 'center', gap: 7, border: 0, borderRadius: 6, padding: '0 14px', background: 'var(--accent)', color: '#fff', cursor: 'pointer', font: 'inherit', fontSize: 12.5, fontWeight: 600 }
+const secondaryAction: CSSProperties = { height: 38, display: 'flex', alignItems: 'center', gap: 7, border: '1px solid var(--border)', borderRadius: 6, padding: '0 12px', background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer', font: 'inherit', fontSize: 12.5, fontWeight: 500 }
+const commandAction: CSSProperties = { height: 34, display: 'flex', alignItems: 'center', gap: 6, border: 0, borderRadius: 5, padding: '0 9px', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', font: 'inherit', fontSize: 12, fontWeight: 500 }
+const iconCommand: CSSProperties = { width: 32, height: 32, display: 'grid', placeItems: 'center', border: 0, borderRadius: 5, background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer' }
+const iconAction: CSSProperties = { width: 30, height: 30, display: 'grid', placeItems: 'center', border: 0, borderRadius: 5, background: 'transparent', color: 'var(--text-faint)', cursor: 'pointer' }
+const pager: CSSProperties = { width: 30, height: 30, display: 'grid', placeItems: 'center', border: '1px solid var(--border)', borderRadius: 5, background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer' }

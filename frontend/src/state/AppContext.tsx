@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
-  cfg, nextId, itemStatus,
+  cfg,
   type EntityKey, type Row,
 } from '../lib/data'
 import {
@@ -17,15 +17,18 @@ import {
   type AuthUser,
 } from '../lib/api'
 import type { AccentName, Density, Mode } from '../lib/theme'
+import { canAccessModule, canAccessRoute, canSwitchModules, operationsLandingFor } from '../lib/access'
 
 export type Screen = 'login' | 'launchpad' | 'app'
 export type Tab = 'overview' | 'procurement' | 'inventory'
+export type ActiveModule = 'operations' | 'hr'
 
-export interface User { name: string; role: string; id: string; isStaff: boolean }
+export interface User { name: string; role: string; id: string; branchId: string; branchName: string; isStaff: boolean; isSuperuser: boolean; permissions: string[] }
 
 interface FormTarget { entity: EntityKey; id: string | null }
 interface ConfirmTarget { entity: EntityKey; id: string; name: string }
 interface DetailTarget { entity: EntityKey; id: string; from: string }
+interface WorkflowAlert { title: string; message: string }
 
 interface AppState {
   screen: Screen
@@ -45,7 +48,9 @@ interface AppState {
   detail: DetailTarget | null
   reportId: string | null
   toast: string | null
+  workflowAlert: WorkflowAlert | null
   apiStatus: ApiStatus
+  activeModule: ActiveModule
   apiMessage: string | null
   authMessage: string | null
 }
@@ -59,6 +64,7 @@ export interface AppContextValue extends AppState {
   // navigation
   enterLaunch: () => void
   enterApp: () => void
+  enterHR: () => void
   logout: () => void
   gotoModules: () => void
   navTo: (route: string, label: string) => void
@@ -92,17 +98,19 @@ export interface AppContextValue extends AppState {
   backFromReport: () => void
   // toast
   showToast: (msg: string) => void
+  showWorkflowAlert: (title: string, message: string) => void
+  closeWorkflowAlert: () => void
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
-const GUEST: User = { name: 'Guest', role: '—', id: '', isStaff: false }
+const GUEST: User = { name: 'Guest', role: '—', id: '', branchId: '', branchName: '', isStaff: false, isSuperuser: false, permissions: [] }
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000
 const ACTIVITY_WRITE_INTERVAL_MS = 1000
 const LAST_ACTIVITY_KEY = 'hms_last_activity'
 
 function toUser(user: AuthUser | null): User {
   return user
-    ? { name: user.name, role: user.role, id: user.id, isStaff: Boolean(user.is_staff) }
+    ? { name: user.name, role: user.role, id: user.id, branchId: user.branch_id || '', branchName: user.branch_name || '', isStaff: Boolean(user.is_staff), isSuperuser: Boolean(user.is_superuser), permissions: user.permissions || [] }
     : GUEST
 }
 
@@ -132,11 +140,13 @@ function clearLastActivity(): void {
 }
 
 const entityKeys: EntityKey[] = [
+  'branches',
   'items',
   'categories',
   'uoms',
   'locations',
   'suppliers',
+  'supplierItems',
   'departments',
   'employees',
   'balances',
@@ -168,35 +178,40 @@ export function useApp(): AppContextValue {
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const dataRef = useRef<Record<EntityKey, Row[]>>(emptyData())
-  const [, forceTick] = useState(0)
+  const [dataVersion, forceTick] = useState(0)
   const bumpData = useCallback(() => forceTick((n) => n + 1), [])
   const toastTimer = useRef<ReturnType<typeof setTimeout>>()
   const didInitialSync = useRef(false)
   const logoutRequest = useRef<Promise<void> | null>(null)
 
   const storedUser = getStoredUser()
-  const [user, setUser] = useState<User>(toUser(storedUser))
+  const initialUser = toUser(storedUser)
+  const [user, setUser] = useState<User>(initialUser)
   const hasSession = Boolean(getToken() && storedUser)
+  const initialLanding = operationsLandingFor(initialUser)
+  const showInitialLaunchpad = hasSession && canSwitchModules(initialUser)
 
   const [state, setState] = useState<AppState>({
-    screen: hasSession ? 'launchpad' : 'login',
-    route: 'dashboard',
-    navActive: 'dashboard',
+    screen: hasSession ? (showInitialLaunchpad ? 'launchpad' : 'app') : 'login',
+    route: initialLanding.route,
+    navActive: initialLanding.route,
     tab: 'overview',
     mode: 'light',
-    accentName: 'Violet',
+    accentName: 'Blue',
     density: 'Airy',
     branchOpen: false,
     settingsOpen: false,
-    currentBranch: 'Backend Property',
-    crumb: 'Dashboard',
+    currentBranch: '',
+    crumb: initialLanding.crumb,
     searchTerm: '',
     form: null,
     confirm: null,
     detail: null,
     reportId: null,
     toast: null,
+    workflowAlert: null,
     apiStatus: 'idle',
+    activeModule: 'operations',
     apiMessage: null,
     authMessage: null,
   })
@@ -207,6 +222,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     patch({ toast: msg })
     clearTimeout(toastTimer.current)
     toastTimer.current = setTimeout(() => patch({ toast: null }), 2200)
+  }, [patch])
+
+  const showWorkflowAlert = useCallback((title: string, message: string) => {
+    patch({ workflowAlert: { title, message } })
   }, [patch])
 
   const endSession = useCallback((authMessage: string | null = null) => {
@@ -225,6 +244,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       screen: 'login',
       route: 'dashboard',
       navActive: 'dashboard',
+      currentBranch: '',
       branchOpen: false,
       settingsOpen: false,
       form: null,
@@ -312,8 +332,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
       next[key] = incoming[key] || []
     })
     dataRef.current = next
+    setState((current) => {
+      const backendBranches = next.branches || []
+      const branchExists = backendBranches.some((branch) => branch.name === current.currentBranch)
+      const employeeBranch = backendBranches.find((branch) =>
+        (user.branchId && String(branch.id) === user.branchId) ||
+        (user.branchName && branch.name === user.branchName),
+      )
+      const branchScopedEntities: EntityKey[] = [
+        'locations', 'employees', 'balances', 'ledgers', 'batches', 'reorderRules',
+        'storeRequisitions', 'stockIssues', 'storeReturns', 'requisitions', 'orders',
+        'grns', 'inspections', 'supplierReturns',
+      ]
+      const busiestBranch = backendBranches
+        .map((branch) => ({
+          branch,
+          records: branchScopedEntities.reduce(
+            (total, entity) => total + (next[entity] || []).filter((row) => String(row.branchId || '') === String(branch.id)).length,
+            0,
+          ),
+        }))
+        .sort((left, right) => right.records - left.records)[0]?.branch
+      return {
+        ...current,
+        currentBranch: branchExists
+          ? current.currentBranch
+          : String(employeeBranch?.name || busiestBranch?.name || backendBranches[0]?.name || ''),
+      }
+    })
     bumpData()
-  }, [bumpData])
+  }, [bumpData, user.branchId, user.branchName])
 
   const refreshData = useCallback(async (silent = false) => {
     patch({ apiStatus: 'loading', apiMessage: null })
@@ -321,12 +369,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const result = await fetchBackendData()
       applyBackendData(result.data)
       const rowsLoaded = Object.values(result.data).reduce((sum, rows) => sum + (rows?.length || 0), 0)
-      patch({ apiStatus: 'live', apiMessage: result.warnings[0] || `Backend connected; ${rowsLoaded} records loaded` })
+      const operationalWarning = result.warnings.find((warning) => !/\b(401|403)\b/.test(warning))
+      patch({ apiStatus: 'live', apiMessage: operationalWarning || `Backend connected; ${rowsLoaded} accessible records loaded` })
       if (!silent) showToast('Backend synced')
     } catch (error) {
       dataRef.current = emptyData()
       bumpData()
-      patch({ apiStatus: 'offline', apiMessage: errorMessage(error) })
+      patch({ apiStatus: 'offline', apiMessage: errorMessage(error), currentBranch: '' })
       if (!silent) showToast('Backend unavailable')
     }
   }, [applyBackendData, bumpData, patch, showToast])
@@ -340,125 +389,61 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const saveForm = useCallback((values: Row) => {
     const target = state.form
-    setState((s) => {
-      const f = s.form
-      if (!f) return s
-      const arr = dataRef.current[f.entity]
-      if (f.id) {
-        const r = arr.find((x) => x.id === f.id)
-        if (r) {
-          Object.assign(r, values)
-          if (f.entity === 'items') r.status = itemStatus(r)
-          if (f.entity === 'requisitions' && values.request_type === 'hotel_purchase') {
-            r.dept = 'Hotel purchase'
-            r.requester = ''
-          }
-        }
-      } else {
-        const nu: Row = { id: nextId(f.entity, dataRef.current), ...values }
-        if (f.entity === 'items') nu.status = itemStatus(nu)
-        if (f.entity === 'categories') { nu.itemsCount = 0; nu.parent = nu.parent || '—' }
-        if (f.entity === 'uoms') nu.itemsCount = 0
-        if (f.entity === 'locations') nu.itemsCount = 0
-        if (f.entity === 'suppliers') nu.rating = nu.rating || 4.0
-        if (f.entity === 'requisitions') {
-          nu.date = nu.expected_date || new Date().toISOString().slice(0, 10)
-          if (nu.request_type === 'hotel_purchase') {
-            nu.dept = 'Hotel purchase'
-            nu.requester = ''
-          } else {
-            nu.dept = nu.dept || '—'
-          }
-          nu.status = 'Draft'
-          nu.lines = []
-          nu.count = 0
-          nu.total = 0
-        }
-        arr.unshift(nu)
-      }
-      const created = !f.id ? (cfg[f.entity].singular || 'Record') + ' created' : 'Changes saved'
-      showToast(created)
-      return { ...s, form: null }
-    })
-    bumpData()
-
-    if (target) {
-      void saveBackendRecord(target.entity, target.id, values, dataRef.current)
-        .then(() => refreshData(true))
-        .catch((error) => {
-          patch({ apiStatus: 'offline', apiMessage: errorMessage(error) })
-          showToast('Saved locally; backend sync failed')
-        })
-    }
-  }, [bumpData, patch, refreshData, showToast, state.form])
+    if (!target) return
+    const row = target.id
+      ? dataRef.current[target.entity].find((record) => record.id === target.id)
+      : null
+    const backendId = target.id ? String(row?.apiId || target.id) : null
+    void saveBackendRecord(target.entity, backendId, values, dataRef.current)
+      .then(async () => {
+        await refreshData(true)
+        patch({ form: null })
+        showToast(target.id ? 'Changes saved to the backend' : `${cfg[target.entity].singular || 'Record'} created`)
+      })
+      .catch((error) => {
+        showWorkflowAlert('Cannot save this record', errorMessage(error))
+      })
+  }, [patch, refreshData, showToast, showWorkflowAlert, state.form])
 
   const doDelete = useCallback(() => {
     const target = state.confirm
-    setState((s) => {
-      const c = s.confirm
-      if (c) {
-        const arr = dataRef.current[c.entity]
-        const i = arr.findIndex((x) => x.id === c.id)
-        if (i >= 0) arr.splice(i, 1)
-      }
-      return { ...s, confirm: null }
-    })
-    bumpData()
-    showToast('Record deleted')
-
-    if (target) {
-      void deleteBackendRecord(target.entity, target.id)
-        .then(() => refreshData(true))
-        .catch((error) => {
-          patch({ apiStatus: 'offline', apiMessage: errorMessage(error) })
-          showToast('Deleted locally; backend sync failed')
-        })
-    }
-  }, [bumpData, patch, refreshData, showToast, state.confirm])
+    if (!target) return
+    const row = dataRef.current[target.entity].find((record) => record.id === target.id)
+    const backendId = String(row?.apiId || target.id)
+    patch({ confirm: null })
+    void deleteBackendRecord(target.entity, backendId)
+      .then(async () => {
+        await refreshData(true)
+        showToast('Backend record removed')
+      })
+      .catch((error) => {
+        showWorkflowAlert('Cannot remove this record', errorMessage(error))
+      })
+  }, [patch, refreshData, showToast, showWorkflowAlert, state.confirm])
 
   const approveReq = useCallback(() => {
     const target = state.detail
-    setState((s) => {
-      const d = s.detail
-      if (!d) return s
-      const r = dataRef.current.requisitions.find((x) => x.id === d.id)
-      if (r) r.status = 'Approved'
-      showToast('Requisition ' + d.id + ' approved')
-      return { ...s, route: d.from || 'approvals', detail: null }
-    })
-    bumpData()
-
-    if (target) {
-      void decideRequisition(target.id, 'approve')
-        .then(() => refreshData(true))
-        .catch((error) => {
-          patch({ apiStatus: 'offline', apiMessage: errorMessage(error) })
-          showToast('Approved locally; backend sync failed')
-        })
-    }
-  }, [bumpData, patch, refreshData, showToast, state.detail])
+    if (!target) return
+    void decideRequisition(target.id, 'approve')
+      .then(async () => {
+        await refreshData(true)
+        patch({ route: target.from || 'approvals', detail: null })
+        showToast(`Requisition ${target.id} approved`)
+      })
+      .catch((error) => showWorkflowAlert('Approval blocked', errorMessage(error)))
+  }, [patch, refreshData, showToast, showWorkflowAlert, state.detail])
 
   const rejectReq = useCallback(() => {
     const target = state.detail
-    setState((s) => {
-      const d = s.detail
-      if (!d) return s
-      const r = dataRef.current.requisitions.find((x) => x.id === d.id)
-      if (r) r.status = 'Rejected'
-      showToast('Requisition ' + d.id + ' rejected')
-      return { ...s, route: d.from || 'approvals', detail: null }
-    })
-    bumpData()
-
-    if (target) {
-      void decideRequisition(target.id, 'reject')
-        .then(() => refreshData(true))
-        .catch((error) => {
-          patch({ apiStatus: 'offline', apiMessage: errorMessage(error) })
-          showToast('Rejected locally; backend sync failed')
-        })
-    }
-  }, [bumpData, patch, refreshData, showToast, state.detail])
+    if (!target) return
+    void decideRequisition(target.id, 'reject')
+      .then(async () => {
+        await refreshData(true)
+        patch({ route: target.from || 'approvals', detail: null })
+        showToast(`Requisition ${target.id} rejected`)
+      })
+      .catch((error) => showWorkflowAlert('Rejection blocked', errorMessage(error)))
+  }, [patch, refreshData, showToast, showWorkflowAlert, state.detail])
 
   const requestDelete = useCallback((id: string) => {
     setState((s) => {
@@ -467,24 +452,80 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
+  const scopedData = useMemo(() => {
+    if (!state.currentBranch) return dataRef.current
+    const selected = dataRef.current.branches.find((branch) => branch.name === state.currentBranch)
+    const branchId = String(selected?.id || '')
+    if (!branchId) return dataRef.current
+    const scoped = { ...dataRef.current }
+    const branchEntities: EntityKey[] = [
+      'locations', 'employees', 'balances', 'ledgers', 'batches', 'reorderRules',
+      'storeRequisitions', 'stockIssues', 'storeReturns', 'requisitions', 'orders',
+      'grns', 'inspections', 'supplierReturns',
+    ]
+    branchEntities.forEach((entity) => {
+      scoped[entity] = dataRef.current[entity].filter((row) => String(row.branchId || '') === branchId)
+    })
+    return scoped
+  }, [dataVersion, state.currentBranch])
+
   const value = useMemo<AppContextValue>(() => ({
     ...state,
     user,
-    data: dataRef.current,
+    data: scopedData,
     refreshData: () => { void refreshData() },
     login: async (username: string, password: string) => {
       if (logoutRequest.current) await logoutRequest.current
       const authed = await apiLogin(username, password)
+      const signedInUser = toUser(authed)
       writeLastActivity(Date.now())
-      setUser(toUser(authed))
+      setUser(signedInUser)
       didInitialSync.current = false
-      patch({ screen: 'launchpad', branchOpen: false, settingsOpen: false, authMessage: null })
+      const landing = operationsLandingFor(signedInUser)
+      patch({
+        screen: canSwitchModules(signedInUser) ? 'launchpad' : 'app',
+        activeModule: 'operations',
+        route: landing.route,
+        navActive: landing.route,
+        crumb: landing.crumb,
+        branchOpen: false,
+        settingsOpen: false,
+        authMessage: null,
+      })
     },
-    enterLaunch: () => patch({ screen: 'launchpad', branchOpen: false, settingsOpen: false }),
-    enterApp: () => patch({ screen: 'app', route: 'dashboard', navActive: 'dashboard', crumb: 'Dashboard' }),
+    enterLaunch: () => {
+      const landing = operationsLandingFor(user)
+      patch(canSwitchModules(user)
+        ? { screen: 'launchpad', branchOpen: false, settingsOpen: false }
+        : { screen: 'app', activeModule: 'operations', route: landing.route, navActive: landing.route, crumb: landing.crumb, branchOpen: false, settingsOpen: false })
+    },
+    enterApp: () => {
+      const landing = operationsLandingFor(user)
+      patch({ screen: 'app', activeModule: 'operations', route: landing.route, navActive: landing.route, crumb: landing.crumb })
+    },
+    enterHR: () => {
+      if (!canAccessModule(user, 'hr')) {
+        showWorkflowAlert('Access restricted', `Human Resources is not part of the ${user.role} role.`)
+        return
+      }
+      patch({ screen: 'app', activeModule: 'hr', route: 'hr-dashboard', navActive: 'hr-dashboard', crumb: 'People overview' })
+    },
     logout: () => endSession(),
-    gotoModules: () => patch({ screen: 'launchpad' }),
-    navTo: (route, label) => patch({ route, navActive: route, crumb: label || '', searchTerm: '', detail: null }),
+    gotoModules: () => {
+      if (canSwitchModules(user)) {
+        patch({ screen: 'launchpad' })
+        return
+      }
+      const landing = operationsLandingFor(user)
+      patch({ screen: 'app', activeModule: 'operations', route: landing.route, navActive: landing.route, crumb: landing.crumb })
+    },
+    navTo: (route, label) => {
+      if (!canAccessRoute(user, route)) {
+        showWorkflowAlert('Access restricted', `${label || 'This area'} is not available to the ${user.role} role.`)
+        return
+      }
+      patch({ route, navActive: route, crumb: label || '', searchTerm: '', detail: null })
+    },
     setTab: (tab) => patch({ tab }),
     toggleMode: () => setState((s) => ({ ...s, mode: s.mode === 'dark' ? 'light' : 'dark' })),
     setMode: (mode) => patch({ mode }),
@@ -524,7 +565,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     openReport: (reportId) => patch({ route: 'reportview', reportId }),
     backFromReport: () => patch({ route: 'reports', reportId: null }),
     showToast,
-  }), [state, user, refreshData, patch, endSession, saveForm, requestDelete, doDelete, approveReq, rejectReq, showToast])
+    showWorkflowAlert,
+    closeWorkflowAlert: () => patch({ workflowAlert: null }),
+  }), [state, user, scopedData, refreshData, patch, endSession, saveForm, requestDelete, doDelete, approveReq, rejectReq, showToast, showWorkflowAlert])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }

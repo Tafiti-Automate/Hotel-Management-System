@@ -7,22 +7,43 @@ import DetailView from './DetailView'
 import Reports from './Reports'
 import ReportView from './ReportView'
 import HotelProfile from './HotelProfile'
+import WorkflowHub from './WorkflowHub'
+import HRDashboard from './HRDashboard'
+import ProcurementWorkbench from './ProcurementWorkbench'
+import FinanceWorkbench from './FinanceWorkbench'
+import InventoryWorkbench from './InventoryWorkbench'
+import AuditLog from './AuditLog'
+import StoresDashboard from './StoresDashboard'
+import { canAccessRoute, isStoresManager } from '../lib/access'
 
 const listRoutes: string[] = [
   'items', 'categories', 'uoms', 'locations', 'suppliers',
   'balances', 'ledgers', 'batches', 'requisitions', 'approvals', 'orders', 'grns',
+  'reorderRules', 'storeRequisitions', 'stockIssues', 'storeReturns', 'inspections',
+  'supplierReturns',
+  'employees', 'departments',
+  'supplierItems',
 ]
 
 export default function AppShell() {
-  const { route } = useApp()
+  const app = useApp()
+  const { route } = app
 
   let content: React.ReactNode = null
-  if (route === 'dashboard') content = <Dashboard />
+  if (!canAccessRoute(app.user, route)) content = isStoresManager(app.user) ? <StoresDashboard /> : <Dashboard />
+  else if (route === 'dashboard') content = isStoresManager(app.user) ? <StoresDashboard /> : <Dashboard />
+  else if (route === 'hr-dashboard') content = <HRDashboard />
+  else if (route === 'workflow-procure') content = <ProcurementWorkbench />
+  else if (route === 'workflow-stores') content = <InventoryWorkbench />
+  else if (route === 'workflow-consume') content = <InventoryWorkbench />
+  else if (route === 'workflow-pay') content = <FinanceWorkbench />
+  else if (route === 'workflow-configure') content = <WorkflowHub kind="configure" />
   else if (listRoutes.includes(route)) content = <ListView />
   else if (route === 'detail') content = <DetailView />
   else if (route === 'reports') content = <Reports />
   else if (route === 'reportview') content = <ReportView />
   else if (route === 'hotel-profile') content = <HotelProfile />
+  else if (route === 'audit-log') content = <AuditLog />
 
   return (
     <div className="app-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>

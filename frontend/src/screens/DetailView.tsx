@@ -22,6 +22,26 @@ export default function DetailView() {
   const lines: Line[] = r.lines || []
   const isPending = isReq && r.status === 'Pending'
   const decided = isReq && (r.status === 'Approved' || r.status === 'Rejected')
+  const canDecide = app.user.isSuperuser || app.user.permissions.includes('approvals.change_approvalworkflow')
+  const prerequisites = isReq ? [
+    { label: 'At least one Article has been added', met: lines.length > 0 },
+    { label: 'Every line has a positive quantity', met: lines.length > 0 && lines.every((line) => Number(line.qty) > 0) },
+    { label: 'Estimated prices and total are available', met: Number(r.total || 0) > 0 },
+    { label: 'Department and requester are assigned', met: Boolean(r.dept && r.requester) },
+    { label: 'Requisition has reached an approval stage', met: r.status === 'Pending' || decided },
+  ] : [
+    { label: 'Purchase order contains at least one Article', met: lines.length > 0 },
+    { label: 'Supplier is assigned', met: Boolean(r.supplier) },
+    { label: 'Order has a positive value', met: Number(r.total || 0) > 0 },
+  ]
+  const blockers = prerequisites.filter((item) => !item.met)
+  const guardedApprove = () => {
+    if (blockers.length) {
+      app.showWorkflowAlert('Approval prerequisites are incomplete', blockers.map((item) => item.label).join('. '))
+      return
+    }
+    app.approveReq()
+  }
 
   const f1label = isReq ? 'Department' : 'Supplier'
   const f1 = isReq ? r.dept : r.supplier
@@ -79,12 +99,20 @@ export default function DetailView() {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-          {isPending && (
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, boxShadow: 'var(--shadow)', padding: 18 }}>
+          {blockers.length > 0 && <div style={{ background: 'var(--surface)', border: '1px solid rgba(217,119,6,.35)', borderRadius: 8, boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
+            <div style={{ padding: '13px 15px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Icon name="warning" size={18} color="var(--warn)" />
+              <div><div style={{ color: 'var(--text)', fontSize: 12.5, fontWeight: 650 }}>Operation readiness</div><div style={{ color: 'var(--text-faint)', fontSize: 10.5, marginTop: 2 }}>{blockers.length} requirement{blockers.length === 1 ? '' : 's'} outstanding</div></div>
+            </div>
+            <div style={{ padding: '8px 15px' }}>{prerequisites.filter((item) => !item.met).map((item) => <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', color: 'var(--text)', fontSize: 11.5 }}><Icon name="radio_button_unchecked" size={16} color="var(--warn)" />{item.label}</div>)}</div>
+          </div>}
+
+          {isPending && canDecide && (
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: 'var(--shadow-sm)', padding: 18 }}>
               <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>Approval decision</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 14 }}>Review the requisition and record your decision. This will notify the requester.</div>
               <textarea placeholder="Add a comment (optional)…" style={{ width: '100%', height: 74, border: '1px solid var(--border)', background: 'var(--surface-2)', borderRadius: 10, padding: 10, fontSize: 12.5, color: 'var(--text)', outline: 'none', resize: 'none', marginBottom: 12 }} />
-              <button onClick={app.approveReq} className="hover-bright" style={{ width: '100%', height: 42, border: 'none', cursor: 'pointer', background: 'var(--good)', color: '#fff', borderRadius: 11, font: 'inherit', fontSize: 13.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, marginBottom: 9 }}>
+              <button onClick={guardedApprove} className="hover-bright" style={{ width: '100%', height: 42, border: 'none', cursor: blockers.length ? 'not-allowed' : 'pointer', opacity: blockers.length ? .6 : 1, background: 'var(--good)', color: '#fff', borderRadius: 6, font: 'inherit', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, marginBottom: 9 }}>
                 <Icon name="check_circle" size={19} />Approve
               </button>
               <button onClick={app.rejectReq} className="hover-reject" style={{ width: '100%', height: 42, border: '1px solid var(--border)', cursor: 'pointer', background: 'var(--surface)', color: 'var(--bad)', borderRadius: 11, font: 'inherit', fontSize: 13.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
@@ -117,8 +145,8 @@ export default function DetailView() {
             <div style={{ display: 'flex', gap: 10 }}>
               <span style={{ color: 'var(--text-faint)', background: 'var(--surface-2)', width: 26, height: 26, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}><Icon name="hourglass_top" size={15} color="var(--text-faint)" /></span>
               <div>
-                <div style={{ fontSize: 12, color: 'var(--text)', fontWeight: 600 }}>Awaiting decision</div>
-                <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>Store Manager</div>
+                <div style={{ fontSize: 12, color: 'var(--text)', fontWeight: 600 }}>Awaiting assigned approver</div>
+                <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>Purchase approval workflow</div>
               </div>
             </div>
           </div>
