@@ -52,19 +52,39 @@ For the Django backend service, create/use a Railway service from the same repo 
 Set these variables on the backend service:
 
 ```text
+DATABASE_URL=${{Postgres.DATABASE_URL}}
 DJANGO_SECRET_KEY=<strong random secret>
 DJANGO_SETTINGS_MODULE=core.settings.prod
 DJANGO_CSRF_TRUSTED_ORIGINS=https://<your-railway-domain>
 DJANGO_SUPERUSER_USERNAME=admin2
-DJANGO_SUPERUSER_PASSWORD=123
+DJANGO_SUPERUSER_PASSWORD=<strong initial admin password>
 DJANGO_SUPERUSER_EMPLOYEE_CODE=EMP-ADMIN2
 DJANGO_SUPERUSER_EMAIL=admin2@example.com
 ```
 
-Attach a Railway Postgres database if possible; the backend will use Railway's `DATABASE_URL`
-automatically. When `DJANGO_SUPERUSER_USERNAME` and `DJANGO_SUPERUSER_PASSWORD` are set, Railway's
-start command creates/updates that superuser during deploy. You can then sign in with either the
-username or employee code.
+`DATABASE_URL` must be added to the **Django backend service**, not edited on the Postgres service:
+open the backend service's **Variables** tab, choose **New Variable** -> **Add Reference**, and select
+`Postgres.DATABASE_URL`. If the database service has a different name, Railway generates the
+corresponding `${{ServiceName.DATABASE_URL}}` value for you. Deploy the staged changes afterward.
+
+The backend reads this connection URL through `dj-database-url`, and the Railway start command runs
+all Django migrations before Gunicorn starts. When `DJANGO_SUPERUSER_USERNAME` and
+`DJANGO_SUPERUSER_PASSWORD` are set, the same command creates/updates that superuser during deploy.
+You can then sign in with either the username or employee code.
+
+### Add demo data to Railway
+
+After the backend deployment is active, open an SSH session to that backend service and run:
+
+```bash
+python manage.py seed_uganda_data --settings=core.settings.prod --hotel-name="My Hotel"
+```
+
+The command creates sample branches, departments, employees, payment methods, suppliers, inventory,
+stock balances, and customers. It refuses to modify a populated database. Sample employee password
+logins are disabled by default; use the Railway variable `SEED_EMPLOYEE_PASSWORD` (at least 12
+characters) if those accounts need to sign in. To intentionally delete existing application data
+and rebuild the demo dataset, add `--reset` to the command.
 
 If the backend gets a separate public URL instead of sharing the frontend domain, set this on the
 frontend service before building:
