@@ -123,11 +123,7 @@ class Sale(BaseModel):
         from apps.inventory.models import InventoryBalance, StockLedger
 
         with transaction.atomic():
-            sale = (
-                Sale.objects.select_for_update()
-                .select_related("customer", "store", "payment_method")
-                .get(pk=self.pk)
-            )
+            sale = Sale.objects.select_for_update().get(pk=self.pk)
             if sale.inventory_changes_applied:
                 raise ValidationError("Sale has already been completed.")
             if sale.is_cancelled:

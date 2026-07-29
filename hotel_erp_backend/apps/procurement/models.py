@@ -802,7 +802,6 @@ class GoodsReceiptItem(BaseModel):
                     "goods_receipt__purchase_order",
                     "purchase_order_item",
                     "item",
-                    "store",
                 )
                 .get(pk=self.pk)
             )
