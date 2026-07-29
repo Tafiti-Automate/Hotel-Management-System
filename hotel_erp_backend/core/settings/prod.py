@@ -78,7 +78,7 @@ if (
 # CORS
 # ---------------------------------------------------------
 
-DEFAULT_FRONTEND_ORIGIN = "https://hotel-management-syste-five-livid.vercel.app"
+DEFAULT_FRONTEND_ORIGIN = "https://hotel-management-system-five-livid.vercel.app"
 
 CORS_ALLOWED_ORIGINS = [
     origin.strip()
