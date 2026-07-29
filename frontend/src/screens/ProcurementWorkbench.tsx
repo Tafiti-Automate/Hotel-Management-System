@@ -22,6 +22,34 @@ const paths = {
   history: 'audit-logs',
 } as const
 
+const pathViewPermissions: Record<keyof typeof paths, string> = {
+  requisitions: 'procurement.view_purchaserequisition',
+  requisitionItems: 'procurement.view_requisitionitem',
+  approvals: 'approvals.view_approvalworkflow',
+  quotations: 'procurement.view_vendorquotation',
+  quotationItems: 'procurement.view_vendorquotationitem',
+  orders: 'procurement.view_purchaseorder',
+  orderItems: 'procurement.view_purchaseorderitem',
+  receipts: 'procurement.view_goodsreceiptnote',
+  receiptItems: 'procurement.view_goodsreceiptitem',
+  inspections: 'procurement.view_goodsinspection',
+  inspectionItems: 'procurement.view_goodsinspectionitem',
+  returns: 'procurement.view_supplierreturn',
+  returnItems: 'procurement.view_supplierreturnitem',
+  attachments: 'procurement.view_procurementattachment',
+  communications: 'procurement.view_procurementcommunication',
+  history: 'audit_logs.view_auditlog',
+}
+
+const stagePermissions: Record<Stage, { view: string; change: string }> = {
+  request: { view: 'procurement.view_purchaserequisition', change: 'procurement.change_purchaserequisition' },
+  quote: { view: 'procurement.view_vendorquotation', change: 'procurement.change_vendorquotation' },
+  lpo: { view: 'procurement.view_purchaseorder', change: 'procurement.change_purchaseorder' },
+  receipt: { view: 'procurement.view_goodsreceiptnote', change: 'procurement.change_goodsreceiptnote' },
+  inspect: { view: 'procurement.view_goodsinspection', change: 'procurement.change_goodsinspection' },
+  return: { view: 'procurement.view_supplierreturn', change: 'procurement.change_supplierreturn' },
+}
+
 const empty: Datasets = Object.fromEntries(Object.keys(paths).map((key) => [key, []]))
 
 function id(value: unknown) { return String(value || '') }
@@ -36,6 +64,10 @@ export default function ProcurementWorkbench() {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [selectedRecord, setSelectedRecord] = useState<Row | null>(null)
+  const can = useCallback(
+    (permission: string) => app.user.isSuperuser || app.user.permissions.includes(permission),
+    [app.user.isSuperuser, app.user.permissions],
+  )
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -43,6 +75,8 @@ export default function ProcurementWorkbench() {
     try {
       const optional = new Set(['attachments', 'communications', 'history'])
       const entries = await Promise.all(Object.entries(paths).map(async ([key, path]) => {
+        const typedKey = key as keyof typeof paths
+        if (!can(pathViewPermissions[typedKey])) return [key, []]
         try { return [key, await readBackendRecords(path)] }
         catch (error) {
           if (optional.has(key)) return [key, []]
@@ -55,7 +89,7 @@ export default function ProcurementWorkbench() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [can])
 
   useEffect(() => { void load() }, [load])
   useEffect(() => { setForm({}); setMessage(''); setSelectedRecord(null) }, [stage])
@@ -115,11 +149,15 @@ export default function ProcurementWorkbench() {
   const orderLabel = (row: Row) => `${id(row.po_number) || id(row.id).slice(0, 8)} · ${names.suppliers.get(id(row.supplier)) || 'Supplier'}`
   const receiptLabel = (row: Row) => id(row.grn_number) || `GRN-${id(row.id).slice(0, 8).toUpperCase()}`
 
-  const tabs: Array<[Stage, string, string]> = [
+  const tabs: Array<[Stage, string, string]> = ([
     ['request', '1', 'Requisition lines'], ['quote', '2', 'Quotation comparison'],
     ['lpo', '3', 'LPO'], ['receipt', '4', 'Goods receipt'],
     ['inspect', '5', 'Inspection'], ['return', '6', 'Supplier return'],
-  ]
+  ] as Array<[Stage, string, string]>).filter(([key]) => can(stagePermissions[key].view))
+  useEffect(() => {
+    if (tabs.length && !tabs.some(([key]) => key === stage)) setStage(tabs[0][0])
+  }, [stage, tabs])
+  const canChangeStage = can(stagePermissions[stage].change)
   const metrics = useMemo(() => {
     const openOrders = scopedData.orders.filter((order) => ['issued', 'partially_received'].includes(id(order.status)))
     const overdue = openOrders.filter((order) => order.expected_date && new Date(id(order.expected_date)) < new Date())
@@ -169,12 +207,13 @@ export default function ProcurementWorkbench() {
             <StageTable stage={stage} data={scopedData} names={names} onSelect={setSelectedRecord} />
           </section>
           <aside style={{ ...card, padding: 18 }}>
-            {stage === 'request' && <RequestPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel }} items={app.data.items} />}
-            {stage === 'quote' && <QuotePanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, names }} suppliers={app.data.suppliers} units={app.data.uoms} />}
-            {stage === 'lpo' && <LpoPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, orderLabel, names }} suppliers={app.data.suppliers} employees={app.data.employees} stores={app.data.locations} units={app.data.uoms} />}
-            {stage === 'receipt' && <ReceiptPanel {...{ data: scopedData, form, setForm, busy, run, orderLabel, receiptLabel, names }} employees={app.data.employees} stores={app.data.locations} />}
-            {stage === 'inspect' && <InspectionPanel {...{ data: scopedData, form, setForm, busy, run, receiptLabel, names }} employees={app.data.employees} />}
-            {stage === 'return' && <ReturnPanel {...{ data: scopedData, form, setForm, busy, run, receiptLabel, names }} employees={app.data.employees} stores={app.data.locations} />}
+            {!canChangeStage && <ReadOnlyStage />}
+            {canChangeStage && stage === 'request' && <RequestPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel }} items={app.data.items} />}
+            {canChangeStage && stage === 'quote' && <QuotePanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, names }} suppliers={app.data.suppliers} units={app.data.uoms} />}
+            {canChangeStage && stage === 'lpo' && <LpoPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, orderLabel, names }} suppliers={app.data.suppliers} employees={app.data.employees} stores={app.data.locations} units={app.data.uoms} />}
+            {canChangeStage && stage === 'receipt' && <ReceiptPanel {...{ data: scopedData, form, setForm, busy, run, orderLabel, receiptLabel, names }} employees={app.data.employees} stores={app.data.locations} />}
+            {canChangeStage && stage === 'inspect' && <InspectionPanel {...{ data: scopedData, form, setForm, busy, run, receiptLabel, names }} employees={app.data.employees} />}
+            {canChangeStage && stage === 'return' && <ReturnPanel {...{ data: scopedData, form, setForm, busy, run, receiptLabel, names }} employees={app.data.employees} stores={app.data.locations} />}
           </aside>
         </div>
       )}
@@ -585,6 +624,12 @@ function ProcurementRecordDrawer({ stage, row, data, names, onClose, onChanged }
 
 function Panel({ title, note, children }: { title: string; note: string; children: ReactNode }) {
   return <><div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>{title}</div><div style={{ fontSize: 11.5, lineHeight: 1.5, color: 'var(--text-faint)', margin: '4px 0 16px' }}>{note}</div>{children}</>
+}
+
+function ReadOnlyStage() {
+  return <Panel title="Read-only access" note="Your role can review records at this stage but cannot create, edit or post them.">
+    <div style={{ padding: 12, borderRadius: 6, color: 'var(--text-muted)', background: 'var(--surface-2)', fontSize: 11.5 }}>Select a record on the left to inspect its controlled document and history.</div>
+  </Panel>
 }
 function Field({ label, children }: { label: string; children: ReactNode }) { return <label style={{ display: 'block', marginBottom: 11 }}><HelpLabel label={label} style={labelStyle} />{children}</label> }
 function Two({ children }: { children: ReactNode }) { return <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9 }}>{children}</div> }

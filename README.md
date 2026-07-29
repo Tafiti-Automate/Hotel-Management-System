@@ -3,6 +3,9 @@
 Django + DRF backend and React + Vite frontend for a hotel management ERP focused on
 procurement, inventory, approvals, vendors, finance, reports, notifications, and audit logs.
 
+For a screen-by-screen Uganda demo and operator walkthrough, see
+[PRESENTATION_GUIDE.md](PRESENTATION_GUIDE.md).
+
 ## Getting started
 
 ```bash

@@ -73,6 +73,8 @@ ROLE_SPECS = {
                 "purchaseorderitem",
                 "purchaserequisition",
                 "requisitionitem",
+                "goodsreceiptitem",
+                "goodsreceiptnote",
                 "supplierreturn",
                 "vendorquotation",
             ],

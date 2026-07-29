@@ -18,6 +18,38 @@ const inventoryPaths = {
   batches: 'inventory-batches',
   balances: 'inventory-balances',
 }
+
+const pathViewPermissions: Record<keyof typeof inventoryPaths, string> = {
+  requests: 'inventory.view_storerequisition',
+  requestItems: 'inventory.view_storerequisitionitem',
+  issues: 'inventory.view_stockissue',
+  issueItems: 'inventory.view_stockissueitem',
+  transfers: 'inventory.view_stocktransfer',
+  transferItems: 'inventory.view_stocktransferitem',
+  adjustments: 'inventory.view_stockadjustment',
+  adjustmentItems: 'inventory.view_stockadjustmentitem',
+  counts: 'inventory.view_stockcount',
+  countItems: 'inventory.view_stockcountitem',
+  returns: 'inventory.view_storereturn',
+  returnItems: 'inventory.view_storereturnitem',
+  consumption: 'inventory.view_departmentconsumption',
+  reorder: 'inventory.view_reorderrule',
+  batches: 'inventory.view_inventorybatch',
+  balances: 'inventory.view_inventorybalance',
+}
+
+const tabPermissions: Record<Tab, { view: string; change?: string }> = {
+  requests: { view: 'inventory.view_storerequisition', change: 'inventory.change_storerequisition' },
+  issues: { view: 'inventory.view_stockissue', change: 'inventory.change_stockissue' },
+  transfers: { view: 'inventory.view_stocktransfer', change: 'inventory.change_stocktransfer' },
+  adjustments: { view: 'inventory.view_stockadjustment', change: 'inventory.change_stockadjustment' },
+  counts: { view: 'inventory.view_stockcount', change: 'inventory.change_stockcount' },
+  returns: { view: 'inventory.view_storereturn', change: 'inventory.change_storereturn' },
+  reorder: { view: 'inventory.view_reorderrule', change: 'inventory.change_reorderrule' },
+  batches: { view: 'inventory.view_inventorybatch' },
+  consumption: { view: 'inventory.view_departmentconsumption' },
+}
+
 const blank = Object.fromEntries(Object.keys(inventoryPaths).map((key) => [key, []])) as Record<string, Row[]>
 const id = (value: unknown) => String(value || '')
 const num = (value: unknown) => Number(value || 0)
@@ -31,11 +63,21 @@ export default function InventoryWorkbench() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [selectedRecord, setSelectedRecord] = useState<Row | null>(null)
+  const can = useCallback(
+    (permission: string) => app.user.isSuperuser || app.user.permissions.includes(permission),
+    [app.user.isSuperuser, app.user.permissions],
+  )
   const load = useCallback(async () => {
     setLoading(true); setError('')
-    try { setData(Object.fromEntries(await Promise.all(Object.entries(inventoryPaths).map(async ([key, path]) => [key, await readBackendRecords(path)])))) }
+    try {
+      const entries = await Promise.all(Object.entries(inventoryPaths).map(async ([key, path]) => {
+        const typedKey = key as keyof typeof inventoryPaths
+        return can(pathViewPermissions[typedKey]) ? [key, await readBackendRecords(path)] : [key, []]
+      }))
+      setData(Object.fromEntries(entries))
+    }
     catch (reason) { setError(errorMessage(reason)) } finally { setLoading(false) }
-  }, [])
+  }, [can])
   useEffect(() => { void load() }, [load])
   useEffect(() => { setForm({}); setError(''); setSelectedRecord(null) }, [tab])
   const scopedData = useMemo(() => {
@@ -71,13 +113,18 @@ export default function InventoryWorkbench() {
     catch (reason) { const detail = errorMessage(reason); setError(detail); app.showWorkflowAlert('Inventory operation blocked', detail) }
     finally { setBusy(false) }
   }
-  const tabs: Array<[Tab, string, string]> = [
+  const tabs: Array<[Tab, string, string]> = ([
     ['requests', 'assignment', 'Store requests'], ['issues', 'outbox', 'Pick & issue'],
     ['transfers', 'sync_alt', 'Transfers'], ['adjustments', 'tune', 'Adjustments'],
     ['counts', 'inventory', 'Stock counts'], ['returns', 'assignment_return', 'Returns'],
     ['reorder', 'notification_important', 'Reorder queue'], ['batches', 'deployed_code', 'Batches & expiry'],
     ['consumption', 'monitoring', 'Consumption'],
-  ]
+  ] as Array<[Tab, string, string]>).filter(([key]) => can(tabPermissions[key].view))
+  useEffect(() => {
+    if (tabs.length && !tabs.some(([key]) => key === tab)) setTab(tabs[0][0])
+  }, [tab, tabs])
+  const changePermission = tabPermissions[tab].change
+  const canChangeTab = Boolean(changePermission && can(changePermission))
   const common = { app, data: scopedData, form, setForm, busy, execute }
   return <div style={{ maxWidth: 1460, margin: '0 auto' }}>
     <section style={{ ...card, padding: 20, display: 'flex', alignItems: 'center', gap: 13, marginBottom: 15 }}><span style={hero}><Icon name="warehouse" size={24} color="#fff" /></span><div><div style={eyebrow}>STORES & CONSUMPTION</div><h1 style={{ margin: '3px 0', fontSize: 23 }}>Inventory movement workbench</h1><div style={muted}>Request, approve, issue, acknowledge, return, transfer, adjust and count stock with backend controls.</div></div><button onClick={() => void load()} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button></section>
@@ -86,13 +133,14 @@ export default function InventoryWorkbench() {
     {loading ? <div style={{ ...card, padding: 50, textAlign: 'center', color: 'var(--text-faint)' }}>Loading inventory controls…</div> : <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) minmax(350px,.7fr)', gap: 16, alignItems: 'start' }}>
       <Records tab={tab} data={scopedData} app={app} onSelect={setSelectedRecord} />
       <aside style={{ ...card, padding: 18 }}>
-        {tab === 'requests' && <RequestPanel {...common} />}
-        {tab === 'issues' && <IssuePanel {...common} />}
-        {tab === 'transfers' && <TransferPanel {...common} />}
-        {tab === 'adjustments' && <AdjustmentPanel {...common} />}
-        {tab === 'counts' && <CountPanel {...common} />}
-        {tab === 'returns' && <ReturnPanel {...common} />}
-        {tab === 'reorder' && <ReorderPanel {...common} />}
+        {!canChangeTab && !['batches', 'consumption'].includes(tab) && <ReadOnlyPanel title="Read-only access" note="Your role can review these records but cannot create, approve or post them." />}
+        {canChangeTab && tab === 'requests' && <RequestPanel {...common} />}
+        {canChangeTab && tab === 'issues' && <IssuePanel {...common} />}
+        {canChangeTab && tab === 'transfers' && <TransferPanel {...common} />}
+        {canChangeTab && tab === 'adjustments' && <AdjustmentPanel {...common} />}
+        {canChangeTab && tab === 'counts' && <CountPanel {...common} />}
+        {canChangeTab && tab === 'returns' && <ReturnPanel {...common} />}
+        {canChangeTab && tab === 'reorder' && <ReorderPanel {...common} />}
         {tab === 'batches' && <ReadOnlyPanel title="Batch and expiry visibility" note="FEFO allocation uses these batches automatically. Open a row to inspect its store, expiry and remaining quantity." />}
         {tab === 'consumption' && <ReadOnlyPanel title="Department consumption" note="Posted issues and direct supplier receipts appear here with their cost allocation." />}
       </aside>

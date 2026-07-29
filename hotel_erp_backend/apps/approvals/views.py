@@ -1,6 +1,7 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
@@ -20,9 +21,19 @@ class ApprovalWorkflowViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("comments", "approver__user__employee_code")
     ordering_fields = ("stage", "status", "created_at")
 
+    @staticmethod
+    def enforce_assigned_approver(request, approval):
+        if request.user.is_superuser:
+            return
+        if approval.approver.user_id != request.user.id:
+            raise PermissionDenied(
+                "Only the employee assigned to this approval stage can record its decision."
+            )
+
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
         approval = self.get_object()
+        self.enforce_assigned_approver(request, approval)
         try:
             approval.approve(comments=request.data.get("comments", ""))
         except DjangoValidationError as error:
@@ -33,6 +44,7 @@ class ApprovalWorkflowViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
         approval = self.get_object()
+        self.enforce_assigned_approver(request, approval)
         try:
             approval.reject(comments=request.data.get("comments", ""))
         except DjangoValidationError as error:

@@ -2,7 +2,9 @@ from decimal import Decimal
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
+from django.core.management import call_command
 
 from apps.approvals.models import ApprovalMatrixRule, ApprovalWorkflow
 from apps.departments.models import Department
@@ -204,3 +206,78 @@ def test_submission_builds_value_based_approval_route():
     assert requisition.estimated_total == Decimal("60000.00")
     assert [step.stage_name for step in steps] == ["Department Head", "Finance Manager"]
     assert [step.approver for step in steps] == approvers
+
+
+@pytest.mark.django_db
+def test_only_assigned_employee_can_decide_approval(client):
+    call_command("setup_hotel_roles", verbosity=0)
+    department = Department.objects.create(name="Rooms Division")
+    user_model = get_user_model()
+    assigned_user = user_model.objects.create_user(
+        username="assigned-hod",
+        employee_code="EMP-ASSIGNED",
+        password="test-pass-123",
+    )
+    other_user = user_model.objects.create_user(
+        username="other-hod",
+        employee_code="EMP-OTHER",
+        password="test-pass-123",
+    )
+    department_head = Group.objects.get(name="Department Head")
+    assigned_user.groups.add(department_head)
+    other_user.groups.add(department_head)
+    assigned_employee = Employee.objects.create(
+        user=assigned_user,
+        department=department,
+        designation="Executive Housekeeper",
+    )
+    requester = Employee.objects.create(
+        user=other_user,
+        department=department,
+        designation="Rooms Manager",
+    )
+    category = Category.objects.create(name="Guest Supplies")
+    item = Item.objects.create(
+        category=category,
+        name="Guest soap",
+        sku="SOAP-TEST",
+        unit="piece",
+        reorder_level=Decimal("5.00"),
+    )
+    requisition = PurchaseRequisition.objects.create(
+        requester=requester,
+        department=department,
+        reason="Replenish guest soap",
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity=Decimal("10.00"),
+        estimated_unit_cost=Decimal("1000.00"),
+    )
+    approval = ApprovalWorkflow.objects.create(
+        requisition=requisition,
+        approver=assigned_employee,
+        stage=1,
+    )
+    requisition.submit()
+
+    client.force_login(other_user)
+    denied = client.post(
+        f"/api/v1/approvals/{approval.pk}/approve/",
+        {"comments": "Not my assigned stage"},
+        content_type="application/json",
+    )
+    assert denied.status_code == 403
+    approval.refresh_from_db()
+    assert approval.status == "pending"
+
+    client.force_login(assigned_user)
+    allowed = client.post(
+        f"/api/v1/approvals/{approval.pk}/approve/",
+        {"comments": "Assigned review complete"},
+        content_type="application/json",
+    )
+    assert allowed.status_code == 200
+    approval.refresh_from_db()
+    assert approval.status == "approved"

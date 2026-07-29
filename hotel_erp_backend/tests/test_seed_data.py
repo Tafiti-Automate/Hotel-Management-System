@@ -104,3 +104,37 @@ def test_seed_presentation_data_builds_connected_uganda_workflows(monkeypatch):
     assert Employee.objects.count() == counts["employees"]
     assert PurchaseRequisition.objects.count() == counts["requisitions"]
     assert Sale.objects.count() == counts["sales"]
+
+    account_specs = (
+        ("anankya", "Store Keeper", "DEMO_STORE_KEEPER_PASSWORD", "Store-Test-Password-01!"),
+        (
+            "esther.nambasa",
+            "Department Head",
+            "DEMO_DEPARTMENT_HEAD_PASSWORD",
+            "Department-Test-Password-02!",
+        ),
+        (
+            "grace.nakato",
+            "General Manager",
+            "DEMO_GENERAL_MANAGER_PASSWORD",
+            "Manager-Test-Password-03!",
+        ),
+        (
+            "daniel.okello",
+            "Procurement Manager",
+            "DEMO_PROCUREMENT_MANAGER_PASSWORD",
+            "Procurement-Test-Password-04!",
+        ),
+    )
+    for _, _, variable_name, password in account_specs:
+        monkeypatch.setenv(variable_name, password)
+
+    call_command("enable_presentation_accounts", verbosity=0)
+
+    for username, role, _, password in account_specs:
+        user = get_user_model().objects.get(username=username)
+        assert user.check_password(password)
+        assert list(user.groups.values_list("name", flat=True)) == [role]
+        assert not user.is_staff
+        assert not user.is_superuser
+        assert not user.user_permissions.exists()
