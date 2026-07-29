@@ -60,7 +60,7 @@ export interface AppContextValue extends AppState {
   data: Record<EntityKey, Row[]>
   refreshData: () => void
   // auth
-  login: (username: string, password: string) => Promise<void>
+  login: (username: string, password: string, remember?: boolean) => Promise<void>
   // navigation
   enterLaunch: () => void
   enterApp: () => void
@@ -474,9 +474,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     user,
     data: scopedData,
     refreshData: () => { void refreshData() },
-    login: async (username: string, password: string) => {
+    login: async (username: string, password: string, remember = true) => {
       if (logoutRequest.current) await logoutRequest.current
-      const authed = await apiLogin(username, password)
+      const authed = await apiLogin(username, password, remember)
       const signedInUser = toUser(authed)
       writeLastActivity(Date.now())
       setUser(signedInUser)

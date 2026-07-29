@@ -102,39 +102,46 @@ export type HotelInput = Omit<
 const TOKEN_KEY = 'hms_token'
 const USER_KEY = 'hms_user'
 
-export function getToken(): string | null {
+function readAuthValue(key: string): string | null {
   try {
-    return localStorage.getItem(TOKEN_KEY)
+    return sessionStorage.getItem(key) || localStorage.getItem(key)
   } catch {
     return null
   }
 }
 
-function setToken(value: string | null): void {
+function writeAuthValue(key: string, value: string | null, remember = true): void {
   try {
-    if (value) localStorage.setItem(TOKEN_KEY, value)
-    else localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(key)
+    sessionStorage.removeItem(key)
+    if (value) {
+      const storage = remember ? localStorage : sessionStorage
+      storage.setItem(key, value)
+    }
   } catch {
     /* storage unavailable */
   }
 }
 
+export function getToken(): string | null {
+  return readAuthValue(TOKEN_KEY)
+}
+
+function setToken(value: string | null, remember = true): void {
+  writeAuthValue(TOKEN_KEY, value, remember)
+}
+
 export function getStoredUser(): AuthUser | null {
   try {
-    const raw = localStorage.getItem(USER_KEY)
+    const raw = readAuthValue(USER_KEY)
     return raw ? (JSON.parse(raw) as AuthUser) : null
   } catch {
     return null
   }
 }
 
-function setStoredUser(user: AuthUser | null): void {
-  try {
-    if (user) localStorage.setItem(USER_KEY, JSON.stringify(user))
-    else localStorage.removeItem(USER_KEY)
-  } catch {
-    /* storage unavailable */
-  }
+function setStoredUser(user: AuthUser | null, remember = true): void {
+  writeAuthValue(USER_KEY, user ? JSON.stringify(user) : null, remember)
 }
 
 function authHeaders(): Record<string, string> {
@@ -142,7 +149,7 @@ function authHeaders(): Record<string, string> {
   return token ? { Authorization: `Token ${token}` } : {}
 }
 
-export async function login(username: string, password: string): Promise<AuthUser> {
+export async function login(username: string, password: string, remember = true): Promise<AuthUser> {
   const response = await fetch(`${apiRoot()}/auth/login/`, {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
@@ -161,8 +168,8 @@ export async function login(username: string, password: string): Promise<AuthUse
   }
 
   const body = (await response.json()) as { token: string; user: AuthUser }
-  setToken(body.token)
-  setStoredUser(body.user)
+  setToken(body.token, remember)
+  setStoredUser(body.user, remember)
   return body.user
 }
 
