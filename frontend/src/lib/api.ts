@@ -94,6 +94,16 @@ export interface HotelRecord {
   created_by: string | null
 }
 
+export interface NotificationRecord {
+  id: string
+  employee: string
+  title: string
+  message: string
+  is_read: boolean
+  created_at: string
+  updated_at: string
+}
+
 export type HotelInput = Omit<
   HotelRecord,
   'id' | 'logo' | 'branch_count' | 'created_at' | 'updated_at' | 'created_by'
@@ -232,6 +242,32 @@ async function readList(path: string): Promise<ApiRecord[]> {
   }
 
   return rows
+}
+
+export async function fetchNotifications(): Promise<NotificationRecord[]> {
+  return (await readList('notifications?ordering=is_read,-created_at')) as unknown as NotificationRecord[]
+}
+
+async function postNotificationAction(path: string): Promise<Response> {
+  const response = await fetch(endpointUrl(path), {
+    method: 'POST',
+    headers: { Accept: 'application/json', ...authHeaders() },
+  })
+  if (!response.ok) {
+    throw new Error(`POST ${path} failed with ${response.status}`)
+  }
+  return response
+}
+
+export async function markNotificationRead(id: string): Promise<NotificationRecord> {
+  const response = await postNotificationAction(`notifications/${id}/mark-read`)
+  return response.json() as Promise<NotificationRecord>
+}
+
+export async function markAllNotificationsRead(): Promise<number> {
+  const response = await postNotificationAction('notifications/mark-all-read')
+  const body = (await response.json()) as { updated?: number }
+  return Number(body.updated || 0)
 }
 
 function apiErrorDetail(body: unknown, fallback: string): string {
