@@ -8,8 +8,17 @@ from django.core.management.base import CommandError
 from apps.customers.models import Customer
 from apps.departments.models import Branch, Department
 from apps.employees.models import Employee
-from apps.inventory.models import InventoryBalance, Item
+from apps.finance.models import SupplierInvoice
+from apps.inventory.models import InventoryBalance, Item, StockIssue, StockTransfer
+from apps.notifications.models import Notification
 from apps.organization.models import Hotel
+from apps.procurement.models import (
+    GoodsReceiptNote,
+    PurchaseOrder,
+    PurchaseRequisition,
+    VendorQuotation,
+)
+from apps.sales.models import Sale
 from apps.vendors.models import Supplier
 
 
@@ -55,3 +64,43 @@ def test_seed_uganda_data_reset_replaces_existing_demo_data(monkeypatch):
     assert get_user_model().objects.get(username="jokello").check_password(
         "sample-pass-123"
     )
+
+
+@pytest.mark.django_db
+def test_seed_presentation_data_builds_connected_uganda_workflows(monkeypatch):
+    monkeypatch.setenv("SEED_EMPLOYEE_PASSWORD", "sample-pass-123")
+    output = StringIO()
+
+    call_command(
+        "seed_presentation_data",
+        hotel_name="Pearl Presentation Hotel",
+        stdout=output,
+    )
+
+    assert Hotel.objects.get().name == "Pearl Presentation Hotel"
+    assert Branch.objects.count() == 2
+    assert Employee.objects.count() == 13
+    assert Supplier.objects.count() == 6
+    assert PurchaseRequisition.objects.count() == 2
+    assert VendorQuotation.objects.count() == 3
+    assert PurchaseOrder.objects.count() == 1
+    assert GoodsReceiptNote.objects.count() == 1
+    assert SupplierInvoice.objects.get().status == SupplierInvoice.STATUS_PAID
+    assert StockIssue.objects.count() == 1
+    assert StockTransfer.objects.count() == 1
+    assert Sale.objects.count() == 2
+    assert Notification.objects.count() == 4
+    assert get_user_model().objects.get(username="grace.nakato").check_password(
+        "sample-pass-123"
+    )
+    assert "created successfully" in output.getvalue()
+
+    counts = {
+        "employees": Employee.objects.count(),
+        "requisitions": PurchaseRequisition.objects.count(),
+        "sales": Sale.objects.count(),
+    }
+    call_command("seed_presentation_data", verbosity=0)
+    assert Employee.objects.count() == counts["employees"]
+    assert PurchaseRequisition.objects.count() == counts["requisitions"]
+    assert Sale.objects.count() == counts["sales"]

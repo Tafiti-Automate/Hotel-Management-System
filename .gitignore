@@ -24,3 +24,5 @@ staticfiles/
 
 # Design source bundle (kept local, not uploaded)
 project/
+.vercel
+.env*

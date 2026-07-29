@@ -72,19 +72,32 @@ all Django migrations before Gunicorn starts. When `DJANGO_SUPERUSER_USERNAME` a
 `DJANGO_SUPERUSER_PASSWORD` are set, the same command creates/updates that superuser during deploy.
 You can then sign in with either the username or employee code.
 
-### Add demo data to Railway
+### Add Uganda presentation data
 
-After the backend deployment is active, open an SSH session to that backend service and run:
+The presentation seed builds a coherent, Uganda-based hotel story across procurement, approvals,
+stores, inventory, finance, sales, suppliers, notifications, and audit history:
 
 ```bash
-python manage.py seed_uganda_data --settings=core.settings.prod --hotel-name="My Hotel"
+python manage.py seed_presentation_data \
+  --settings=core.settings.prod \
+  --hotel-name="Pearl of Africa Grand Hotel"
 ```
 
-The command creates sample branches, departments, employees, payment methods, suppliers, inventory,
-stock balances, and customers. It refuses to modify a populated database. Sample employee password
-logins are disabled by default; use the Railway variable `SEED_EMPLOYEE_PASSWORD` (at least 12
-characters) if those accounts need to sign in. To intentionally delete existing application data
-and rebuild the demo dataset, add `--reset` to the command.
+On Railway, run it in an SSH session to the backend service. On Vercel, link the
+`hotel_erp_backend` directory to the backend project and run it with the production environment:
+
+```bash
+vercel env run -e production -- \
+  .venv/bin/python manage.py seed_presentation_data \
+  --settings=core.settings.prod \
+  --hotel-name="Pearl of Africa Grand Hotel"
+```
+
+The command refuses to modify a populated database. Seeded staff password logins are disabled by
+default; set `SEED_EMPLOYEE_PASSWORD` to a strong value of at least 12 characters if the role-based
+demo accounts must sign in. The existing Django superuser remains available for a complete
+presentation. Adding `--reset` intentionally deletes existing application data for that hotel, so
+only use it after taking a database backup.
 
 If the backend gets a separate public URL instead of sharing the frontend domain, set this on the
 frontend service before building:

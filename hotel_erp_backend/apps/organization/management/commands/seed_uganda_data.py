@@ -27,7 +27,7 @@ from apps.finance.models import (
 from apps.sales.models import Sale, SaleItem
 from apps.notifications.models import Notification
 from apps.audit_logs.models import AuditLog
-from apps.approvals.models import ApprovalWorkflow
+from apps.approvals.models import ApprovalMatrixRule, ApprovalWorkflow
 
 from core.constants.choices import ItemBusinessType, LedgerReferenceType
 
@@ -90,6 +90,7 @@ class Command(BaseCommand):
         AuditLog.objects.all().delete()
         Notification.objects.all().delete()
         ApprovalWorkflow.objects.all().delete()
+        ApprovalMatrixRule.objects.all().delete()
 
         # 2. Sales and customer billing
         SaleItem.objects.all().delete()
@@ -100,11 +101,17 @@ class Command(BaseCommand):
         Customer.objects.all().delete()
 
         # 3. Procurement and suppliers
+        from apps.finance.models import SupplierInvoice, SupplierPayment
+        SupplierPayment.objects.all().delete()
+        SupplierInvoice.objects.all().delete()
         from apps.procurement.models import (
             PurchaseRequisition, RequisitionItem, VendorQuotation, VendorQuotationItem,
             PurchaseOrder, PurchaseOrderItem, GoodsReceiptNote, GoodsReceiptItem,
-            GoodsInspection, GoodsInspectionItem, SupplierReturn, SupplierReturnItem
+            GoodsInspection, GoodsInspectionItem, SupplierReturn, SupplierReturnItem,
+            ProcurementAttachment, ProcurementCommunication,
         )
+        ProcurementCommunication.objects.all().delete()
+        ProcurementAttachment.objects.all().delete()
         SupplierReturnItem.objects.all().delete()
         SupplierReturn.objects.all().delete()
         GoodsInspectionItem.objects.all().delete()
@@ -123,6 +130,8 @@ class Command(BaseCommand):
         StockCount.objects.all().delete()
         StoreReturnItem.objects.all().delete()
         StoreReturn.objects.all().delete()
+        from apps.inventory.models import DepartmentConsumption
+        DepartmentConsumption.objects.all().delete()
         StockIssueItem.objects.all().delete()
         StockIssue.objects.all().delete()
         StoreRequisitionItem.objects.all().delete()
