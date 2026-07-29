@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { useApp } from '../state/AppContext'
 import { Icon } from '../components/Icon'
 import type { Line } from '../lib/data'
@@ -12,6 +12,7 @@ const lineHead: CSSProperties = { padding: '9px 12px', fontSize: 10.5, fontWeigh
 
 export default function DetailView() {
   const app = useApp()
+  const [decisionComment, setDecisionComment] = useState('')
   const d = app.detail
   if (!d) return null
   const r = app.data[d.entity].find((x) => x.id === d.id)
@@ -22,7 +23,9 @@ export default function DetailView() {
   const lines: Line[] = r.lines || []
   const isPending = isReq && r.status === 'Pending'
   const decided = isReq && (r.status === 'Approved' || r.status === 'Rejected')
-  const canDecide = app.user.isSuperuser || app.user.permissions.includes('approvals.change_approvalworkflow')
+  const canDecide = Boolean(r.approvalActionable) && (
+    app.user.isSuperuser || app.user.permissions.includes('approvals.change_approvalworkflow')
+  )
   const prerequisites = isReq ? [
     { label: 'At least one Article has been added', met: lines.length > 0 },
     { label: 'Every line has a positive quantity', met: lines.length > 0 && lines.every((line) => Number(line.qty) > 0) },
@@ -40,7 +43,18 @@ export default function DetailView() {
       app.showWorkflowAlert('Approval prerequisites are incomplete', blockers.map((item) => item.label).join('. '))
       return
     }
-    app.approveReq()
+    app.approveReq(decisionComment)
+  }
+  const guardedDecision = (decision: 'reject' | 'return') => {
+    if (!decisionComment.trim()) {
+      app.showWorkflowAlert(
+        decision === 'reject' ? 'Rejection reason required' : 'Correction instructions required',
+        'Add a clear comment so the requester knows why the requisition cannot continue.',
+      )
+      return
+    }
+    if (decision === 'reject') app.rejectReq(decisionComment)
+    else app.returnReq(decisionComment)
   }
 
   const f1label = isReq ? 'Department' : 'Supplier'
@@ -110,12 +124,15 @@ export default function DetailView() {
           {isPending && canDecide && (
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: 'var(--shadow-sm)', padding: 18 }}>
               <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>Approval decision</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 14 }}>Review the requisition and record your decision. This will notify the requester.</div>
-              <textarea placeholder="Add a comment (optional)…" style={{ width: '100%', height: 74, border: '1px solid var(--border)', background: 'var(--surface-2)', borderRadius: 10, padding: 10, fontSize: 12.5, color: 'var(--text)', outline: 'none', resize: 'none', marginBottom: 12 }} />
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 14 }}>Review the requisition and record your decision. Comments are retained in the audit history.</div>
+              <textarea value={decisionComment} onChange={(event) => setDecisionComment(event.target.value)} placeholder="Decision comment…" style={{ width: '100%', height: 74, border: '1px solid var(--border)', background: 'var(--surface-2)', borderRadius: 10, padding: 10, fontSize: 12.5, color: 'var(--text)', outline: 'none', resize: 'none', marginBottom: 12 }} />
               <button onClick={guardedApprove} className="hover-bright" style={{ width: '100%', height: 42, border: 'none', cursor: blockers.length ? 'not-allowed' : 'pointer', opacity: blockers.length ? .6 : 1, background: 'var(--good)', color: '#fff', borderRadius: 6, font: 'inherit', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, marginBottom: 9 }}>
                 <Icon name="check_circle" size={19} />Approve
               </button>
-              <button onClick={app.rejectReq} className="hover-reject" style={{ width: '100%', height: 42, border: '1px solid var(--border)', cursor: 'pointer', background: 'var(--surface)', color: 'var(--bad)', borderRadius: 11, font: 'inherit', fontSize: 13.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
+              <button onClick={() => guardedDecision('return')} className="hover-surface2" style={{ width: '100%', height: 42, border: '1px solid var(--border)', cursor: 'pointer', background: 'var(--surface)', color: 'var(--warn)', borderRadius: 11, font: 'inherit', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, marginBottom: 9 }}>
+                <Icon name="assignment_return" size={19} />Return for correction
+              </button>
+              <button onClick={() => guardedDecision('reject')} className="hover-reject" style={{ width: '100%', height: 42, border: '1px solid var(--border)', cursor: 'pointer', background: 'var(--surface)', color: 'var(--bad)', borderRadius: 11, font: 'inherit', fontSize: 13.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
                 <Icon name="cancel" size={19} />Reject
               </button>
             </div>

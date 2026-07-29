@@ -91,8 +91,9 @@ export interface AppContextValue extends AppState {
   // detail / approvals
   openDetail: (entity: EntityKey, id: string, from: string) => void
   backFromDetail: () => void
-  approveReq: () => void
-  rejectReq: () => void
+  approveReq: (comments?: string) => void
+  rejectReq: (comments: string) => void
+  returnReq: (comments: string) => void
   // reports
   openReport: (id: string) => void
   backFromReport: () => void
@@ -421,10 +422,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       })
   }, [patch, refreshData, showToast, showWorkflowAlert, state.confirm])
 
-  const approveReq = useCallback(() => {
+  const approveReq = useCallback((comments = '') => {
     const target = state.detail
     if (!target) return
-    void decideRequisition(target.id, 'approve')
+    const row = dataRef.current.requisitions.find((record) => record.id === target.id)
+    const backendId = String(row?.apiId || target.id)
+    void decideRequisition(backendId, 'approve', comments)
       .then(async () => {
         await refreshData(true)
         patch({ route: target.from || 'approvals', detail: null })
@@ -433,16 +436,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .catch((error) => showWorkflowAlert('Approval blocked', errorMessage(error)))
   }, [patch, refreshData, showToast, showWorkflowAlert, state.detail])
 
-  const rejectReq = useCallback(() => {
+  const rejectReq = useCallback((comments: string) => {
     const target = state.detail
     if (!target) return
-    void decideRequisition(target.id, 'reject')
+    const row = dataRef.current.requisitions.find((record) => record.id === target.id)
+    const backendId = String(row?.apiId || target.id)
+    void decideRequisition(backendId, 'reject', comments)
       .then(async () => {
         await refreshData(true)
         patch({ route: target.from || 'approvals', detail: null })
         showToast(`Requisition ${target.id} rejected`)
       })
       .catch((error) => showWorkflowAlert('Rejection blocked', errorMessage(error)))
+  }, [patch, refreshData, showToast, showWorkflowAlert, state.detail])
+
+  const returnReq = useCallback((comments: string) => {
+    const target = state.detail
+    if (!target) return
+    const row = dataRef.current.requisitions.find((record) => record.id === target.id)
+    const backendId = String(row?.apiId || target.id)
+    void decideRequisition(backendId, 'return-for-correction', comments)
+      .then(async () => {
+        await refreshData(true)
+        patch({ route: target.from || 'approvals', detail: null })
+        showToast(`Requisition ${target.id} returned for correction`)
+      })
+      .catch((error) => showWorkflowAlert('Return blocked', errorMessage(error)))
   }, [patch, refreshData, showToast, showWorkflowAlert, state.detail])
 
   const requestDelete = useCallback((id: string) => {
@@ -562,12 +581,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     backFromDetail: () => patch({ route: (state.detail && state.detail.from) || 'requisitions', detail: null }),
     approveReq,
     rejectReq,
+    returnReq,
     openReport: (reportId) => patch({ route: 'reportview', reportId }),
     backFromReport: () => patch({ route: 'reports', reportId: null }),
     showToast,
     showWorkflowAlert,
     closeWorkflowAlert: () => patch({ workflowAlert: null }),
-  }), [state, user, scopedData, refreshData, patch, endSession, saveForm, requestDelete, doDelete, approveReq, rejectReq, showToast, showWorkflowAlert])
+  }), [state, user, scopedData, refreshData, patch, endSession, saveForm, requestDelete, doDelete, approveReq, rejectReq, returnReq, showToast, showWorkflowAlert])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }

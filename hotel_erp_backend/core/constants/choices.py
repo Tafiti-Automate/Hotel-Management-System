@@ -19,11 +19,17 @@ class ArticleUnitRole(models.TextChoices):
 class PRStatus(models.TextChoices):
     DRAFT = "draft", "Draft"
     SUBMITTED = "submitted", "Submitted"
+    RETURNED = "returned", "Returned for correction"
     HOD_APPROVED = "hod_approved", "Head of Department Approved"
     PROCUREMENT_APPROVED = "procurement_approved", "Procurement Approved"
     FINANCE_APPROVED = "finance_approved", "Finance Approved"
     DIRECTOR_APPROVED = "director_approved", "Director Approved"
     APPROVED = "approved", "Approved"
+    PARTIALLY_ORDERED = "partially_ordered", "Partially Ordered"
+    ORDERED = "ordered", "Fully Ordered"
+    PARTIALLY_RECEIVED = "partially_received", "Partially Received"
+    FULFILLED = "fulfilled", "Fulfilled"
+    CLOSED = "closed", "Closed"
     REJECTED = "rejected", "Rejected"
     CANCELLED = "cancelled", "Cancelled"
 
@@ -37,6 +43,7 @@ class ApprovalStatus(models.TextChoices):
     PENDING = "pending", "Pending"
     APPROVED = "approved", "Approved"
     REJECTED = "rejected", "Rejected"
+    RETURNED = "returned", "Returned for correction"
     SKIPPED = "skipped", "Skipped"
 
 

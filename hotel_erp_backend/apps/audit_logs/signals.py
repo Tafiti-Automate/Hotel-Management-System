@@ -46,11 +46,12 @@ def audit_approval_decision(sender, instance, created, **kwargs):
     if created or instance.status not in (
         ApprovalStatus.APPROVED,
         ApprovalStatus.REJECTED,
+        ApprovalStatus.RETURNED,
         ApprovalStatus.SKIPPED,
     ):
         return
     AuditLog.objects.create(
-        actor=instance.approver.user,
+        actor=instance.decided_by or instance.approver.user,
         action=f"approval_{instance.status}",
         entity_type="approvals.ApprovalWorkflow",
         entity_id=instance.id,
@@ -61,7 +62,7 @@ def audit_approval_decision(sender, instance, created, **kwargs):
             "approver_id": str(instance.approver_id),
             "comments": instance.comments,
         },
-        created_by=instance.approver.user,
+        created_by=instance.decided_by or instance.approver.user,
     )
 
 

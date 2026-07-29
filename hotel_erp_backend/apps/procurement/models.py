@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db import transaction
@@ -10,7 +11,62 @@ from core.mixins.models import BaseModel
 from core.validators.quantities import validate_non_negative_decimal, validate_positive_decimal
 
 
+class RequisitionSequence(BaseModel):
+    """Concurrency-safe sequence used for readable purchase requisition numbers."""
+
+    scope = models.CharField(max_length=30)
+    year = models.PositiveIntegerField()
+    current_value = models.PositiveIntegerField(default=0)
+
+    class Meta(BaseModel.Meta):
+        constraints = [
+            models.UniqueConstraint(
+                fields=("scope", "year"),
+                name="unique_requisition_sequence_scope_year",
+            )
+        ]
+        ordering = ("scope", "-year")
+
+    def __str__(self):
+        return f"{self.scope}-{self.year}: {self.current_value}"
+
+    @classmethod
+    def next_reference(cls, branch=None):
+        scope = "HOTEL"
+        if branch:
+            scope = (branch.branch_code or str(branch.pk)[:8]).strip().upper()
+        year = timezone.localdate().year
+        with transaction.atomic():
+            sequence, _ = cls.objects.select_for_update().get_or_create(
+                scope=scope,
+                year=year,
+            )
+            sequence.current_value += 1
+            sequence.save(update_fields=["current_value", "updated_at"])
+        return f"PR-{scope}-{year}-{sequence.current_value:05d}"
+
+
 class PurchaseRequisition(BaseModel):
+    requisition_number = models.CharField(
+        max_length=60,
+        unique=True,
+        blank=True,
+        db_index=True,
+    )
+    hotel = models.ForeignKey(
+        "organization.Hotel",
+        on_delete=models.PROTECT,
+        related_name="purchase_requisitions",
+        null=True,
+        blank=True,
+    )
+    branch = models.ForeignKey(
+        "departments.Branch",
+        on_delete=models.PROTECT,
+        related_name="purchase_requisitions",
+        null=True,
+        blank=True,
+    )
     request_type = models.CharField(
         max_length=30,
         choices=RequisitionType.choices,
@@ -45,12 +101,31 @@ class PurchaseRequisition(BaseModel):
     reason = models.TextField()
     expected_date = models.DateField(null=True, blank=True)
     control_notes = models.TextField(blank=True)
+    currency = models.CharField(max_length=10, default="UGX")
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    rejected_at = models.DateTimeField(null=True, blank=True)
+    returned_at = models.DateTimeField(null=True, blank=True)
+    fulfilled_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta(BaseModel.Meta):
         ordering = ("-created_at",)
 
     def __str__(self):
-        return f"PR-{self.id} ({self.get_request_type_display()})"
+        return f"{self.requisition_number or f'PR-{self.id}'} ({self.get_request_type_display()})"
+
+    def save(self, *args, **kwargs):
+        if not self.branch_id and self.requester_id:
+            self.branch = self.requester.branch
+        if not self.hotel_id and self.branch_id:
+            self.hotel = self.branch.hotel
+        if self.hotel_id and (not self.currency or self.currency == "UGX"):
+            self.currency = self.hotel.currency or "UGX"
+        if not self.requisition_number:
+            self.requisition_number = RequisitionSequence.next_reference(self.branch)
+        super().save(*args, **kwargs)
 
     def clean(self):
         super().clean()
@@ -60,23 +135,67 @@ class PurchaseRequisition(BaseModel):
                 errors["requester"] = "Department requisitions require a requester."
             if not self.department_id:
                 errors["department"] = "Department requisitions require a department."
+            if (
+                self.requester_id
+                and self.department_id
+                and self.requester.department_id != self.department_id
+            ):
+                errors["requester"] = "The requester must belong to the selected department."
+            if (
+                self.requester_id
+                and self.branch_id
+                and self.requester.branch_id
+                and self.requester.branch_id != self.branch_id
+            ):
+                errors["branch"] = "The selected branch must match the requester's branch."
         if errors:
             raise ValidationError(errors)
 
-    def submit(self):
-        if self.status not in (PRStatus.DRAFT, PRStatus.REJECTED):
-            raise ValidationError("Only draft or rejected requisitions can be submitted.")
+    @property
+    def editable(self):
+        return self.status in (PRStatus.DRAFT, PRStatus.REJECTED, PRStatus.RETURNED)
+
+    def submit(self, actor=None):
+        if not self.editable:
+            raise ValidationError(
+                "Only draft, rejected, or returned requisitions can be submitted."
+            )
         self.full_clean()
         if not self.items.exists():
             raise ValidationError("A requisition must include at least one item before submission.")
-        if not self.approval_workflow.exists():
+        if self.status in (PRStatus.REJECTED, PRStatus.RETURNED):
+            self.approval_workflow.update(
+                status="pending",
+                comments="",
+                decided_at=None,
+                decided_by=None,
+            )
+        elif not self.approval_workflow.exists():
             self.generate_approval_workflow()
         if not self.approval_workflow.exists():
             raise ValidationError(
                 "No approval matrix matches this requisition. Configure an approval route before submission."
             )
+        previous_status = self.status
         self.status = PRStatus.SUBMITTED
-        self.save(update_fields=["status", "updated_at"])
+        self.submitted_at = timezone.now()
+        self.rejected_at = None
+        self.returned_at = None
+        self.save(
+            update_fields=[
+                "status",
+                "submitted_at",
+                "rejected_at",
+                "returned_at",
+                "updated_at",
+            ]
+        )
+        self.record_history(
+            action="submitted",
+            previous_status=previous_status,
+            actor=actor,
+        )
+        self.notify_workflow_participants(actor=actor)
 
     @property
     def estimated_total(self):
@@ -103,12 +222,21 @@ class PurchaseRequisition(BaseModel):
         if not self.approval_workflow.exists():
             from apps.approvals.models import ApprovalMatrixRule
 
-            if not ApprovalMatrixRule.matching_requisition_rules(self).exists():
+            rules = ApprovalMatrixRule.matching_requisition_rules(self)
+            if not rules:
                 blockers.append(
                     f"No approval matrix matches this requisition value ({self.estimated_total})."
                 )
+            else:
+                for rule in rules:
+                    try:
+                        rule.resolve_approver(self)
+                    except ValidationError as error:
+                        blockers.extend(error.messages)
         if not self.expected_date:
             warnings.append("No required delivery date has been entered.")
+        if not self.branch_id:
+            warnings.append("No property branch is assigned to this requisition.")
         return {"can_proceed": not blockers, "blockers": blockers, "warnings": warnings}
 
     def generate_approval_workflow(self):
@@ -122,7 +250,7 @@ class PurchaseRequisition(BaseModel):
             return [
                 ApprovalWorkflow.objects.create(
                     requisition=self,
-                    approver=rule.approver,
+                    approver=rule.resolve_approver(self),
                     stage=rule.stage,
                     stage_name=rule.stage_name,
                     matrix_rule=rule,
@@ -131,13 +259,28 @@ class PurchaseRequisition(BaseModel):
                 for rule in rules
             ]
 
-    def cancel(self):
-        if self.status == PRStatus.APPROVED:
-            raise ValidationError("Approved requisitions cannot be cancelled.")
+    def cancel(self, actor=None, comments=""):
+        if self.status in (
+            PRStatus.APPROVED,
+            PRStatus.PARTIALLY_ORDERED,
+            PRStatus.ORDERED,
+            PRStatus.PARTIALLY_RECEIVED,
+            PRStatus.FULFILLED,
+            PRStatus.CLOSED,
+        ):
+            raise ValidationError("Approved or fulfilled requisitions cannot be cancelled.")
+        previous_status = self.status
         self.status = PRStatus.CANCELLED
-        self.save(update_fields=["status", "updated_at"])
+        self.cancelled_at = timezone.now()
+        self.save(update_fields=["status", "cancelled_at", "updated_at"])
+        self.record_history(
+            action="cancelled",
+            previous_status=previous_status,
+            actor=actor,
+            comments=comments,
+        )
 
-    def sync_approval_status(self):
+    def sync_approval_status(self, actor=None, comments=""):
         approval_steps = list(self.approval_workflow.order_by("stage"))
         if not approval_steps:
             return
@@ -145,22 +288,139 @@ class PurchaseRequisition(BaseModel):
         from core.constants.choices import ApprovalStatus
 
         if any(step.status == ApprovalStatus.REJECTED for step in approval_steps):
-            self.status = PRStatus.REJECTED
-            self.save(update_fields=["status", "updated_at"])
+            self._set_status(
+                PRStatus.REJECTED,
+                action="rejected",
+                actor=actor,
+                comments=comments,
+                timestamp_field="rejected_at",
+            )
+            self.notify_workflow_participants(actor=actor)
+            return
+
+        if any(step.status == ApprovalStatus.RETURNED for step in approval_steps):
+            self._set_status(
+                PRStatus.RETURNED,
+                action="returned_for_correction",
+                actor=actor,
+                comments=comments,
+                timestamp_field="returned_at",
+            )
+            self.notify_workflow_participants(actor=actor)
             return
 
         completed_statuses = (ApprovalStatus.APPROVED, ApprovalStatus.SKIPPED)
         if all(step.status in completed_statuses for step in approval_steps):
-            self.status = PRStatus.APPROVED
-            self.save(update_fields=["status", "updated_at"])
+            self.items.filter(approved_quantity__isnull=True).update(
+                approved_quantity=models.F("quantity")
+            )
+            self._set_status(
+                PRStatus.APPROVED,
+                action="fully_approved",
+                actor=actor,
+                comments=comments,
+                timestamp_field="approved_at",
+            )
+            self.notify_workflow_participants(actor=actor)
             return
 
         completed_steps = [
             step.stage for step in approval_steps if step.status in completed_statuses
         ]
         if completed_steps:
-            self.status = self._status_for_completed_stage(max(completed_steps))
-            self.save(update_fields=["status", "updated_at"])
+            self._set_status(
+                self._status_for_completed_stage(max(completed_steps)),
+                action="approval_stage_completed",
+                actor=actor,
+                comments=comments,
+            )
+            self.notify_workflow_participants(actor=actor)
+
+    def _set_status(
+        self,
+        status,
+        *,
+        action,
+        actor=None,
+        comments="",
+        timestamp_field=None,
+    ):
+        previous_status = self.status
+        if previous_status == status:
+            return
+        self.status = status
+        update_fields = ["status", "updated_at"]
+        if timestamp_field:
+            setattr(self, timestamp_field, timezone.now())
+            update_fields.append(timestamp_field)
+        self.save(update_fields=update_fields)
+        self.record_history(
+            action=action,
+            previous_status=previous_status,
+            actor=actor,
+            comments=comments,
+        )
+
+    def record_history(
+        self,
+        *,
+        action,
+        previous_status="",
+        actor=None,
+        comments="",
+        metadata=None,
+    ):
+        return RequisitionHistory.objects.create(
+            requisition=self,
+            action=action,
+            previous_status=previous_status,
+            new_status=self.status,
+            performed_by=actor,
+            comments=comments,
+            metadata=metadata or {},
+            created_by=actor,
+        )
+
+    def notify_workflow_participants(self, actor=None):
+        from apps.notifications.models import Notification
+        from core.constants.choices import ApprovalStatus
+
+        if self.status in (PRStatus.REJECTED, PRStatus.RETURNED):
+            if self.requester_id:
+                Notification.objects.create(
+                    employee=self.requester,
+                    title=f"{self.requisition_number} {self.get_status_display()}",
+                    message=(
+                        f"Your purchase requisition is now "
+                        f"{self.get_status_display().lower()}. Open it to review the decision comments."
+                    ),
+                    created_by=actor,
+                )
+            return
+        if self.status == PRStatus.APPROVED:
+            if self.requester_id:
+                Notification.objects.create(
+                    employee=self.requester,
+                    title=f"{self.requisition_number} approved",
+                    message="The purchase requisition completed all approval stages.",
+                    created_by=actor,
+                )
+            return
+        next_step = (
+            self.approval_workflow.filter(status=ApprovalStatus.PENDING)
+            .order_by("stage")
+            .first()
+        )
+        if next_step:
+            Notification.objects.create(
+                employee=next_step.approver,
+                title=f"{self.requisition_number} requires approval",
+                message=(
+                    f"{next_step.stage_name or f'Stage {next_step.stage}'} is ready "
+                    f"for your decision."
+                ),
+                created_by=actor,
+            )
 
     def _status_for_completed_stage(self, stage):
         if stage <= 1:
@@ -182,7 +442,7 @@ class PurchaseRequisition(BaseModel):
         note="",
         created_by=None,
     ):
-        if self.status != PRStatus.APPROVED:
+        if self.status not in (PRStatus.APPROVED, PRStatus.PARTIALLY_ORDERED):
             raise ValidationError("Purchase order can only be created from an approved requisition.")
         if not ordered_by:
             raise ValidationError("An ordering employee is required.")
@@ -207,10 +467,13 @@ class PurchaseRequisition(BaseModel):
                 created_by=created_by,
             )
             for requisition_item in requisition_items:
-                quantity, unit, unit_cost = self._order_pricing_for_item(
+                pricing = self._order_pricing_for_item(
                     requisition_item,
                     supplier,
                 )
+                if not pricing:
+                    continue
+                quantity, unit, unit_cost = pricing
                 PurchaseOrderItem.objects.create(
                     purchase_order=order,
                     item=requisition_item.item,
@@ -219,6 +482,9 @@ class PurchaseRequisition(BaseModel):
                     unit_cost=unit_cost,
                     created_by=created_by,
                 )
+            if not order.items.exists():
+                order.delete()
+                raise ValidationError("All approved requisition quantities have already been ordered.")
             order.refresh_from_db()
             return order
 
@@ -236,6 +502,9 @@ class PurchaseRequisition(BaseModel):
         return None
 
     def _order_pricing_for_item(self, requisition_item, supplier):
+        remaining_base_quantity = requisition_item.remaining_order_quantity
+        if remaining_base_quantity <= Decimal("0.00"):
+            return None
         quotation_item = (
             VendorQuotationItem.objects.filter(
                 requisition_item=requisition_item,
@@ -255,9 +524,14 @@ class PurchaseRequisition(BaseModel):
                 .select_related("unit")
                 .order_by("unit_price")
                 .first()
-            )
+        )
         if quotation_item:
-            return quotation_item.quantity, quotation_item.unit, quotation_item.unit_price
+            conversion = requisition_item.conversion_factor_for_unit(quotation_item.unit)
+            return (
+                (remaining_base_quantity / conversion).quantize(Decimal("0.01")),
+                quotation_item.unit,
+                quotation_item.unit_price,
+            )
 
         from apps.inventory.models import SupplierItemPrice
 
@@ -271,10 +545,76 @@ class PurchaseRequisition(BaseModel):
             .first()
         )
         if supplier_price:
-            return requisition_item.quantity, supplier_price.unit, supplier_price.unit_price
+            conversion = requisition_item.conversion_factor_for_unit(supplier_price.unit)
+            return (
+                (remaining_base_quantity / conversion).quantize(Decimal("0.01")),
+                supplier_price.unit,
+                supplier_price.unit_price,
+            )
 
         raise ValidationError(
             f"No selected quotation or supplier price was found for {requisition_item.item}."
+        )
+
+    def sync_fulfillment_status(self, actor=None):
+        if self.status in (
+            PRStatus.DRAFT,
+            PRStatus.SUBMITTED,
+            PRStatus.RETURNED,
+            PRStatus.HOD_APPROVED,
+            PRStatus.PROCUREMENT_APPROVED,
+            PRStatus.FINANCE_APPROVED,
+            PRStatus.DIRECTOR_APPROVED,
+            PRStatus.REJECTED,
+            PRStatus.CANCELLED,
+            PRStatus.CLOSED,
+        ):
+            return
+        lines = list(self.items.all())
+        required = sum(
+            (line.approved_base_quantity for line in lines),
+            Decimal("0.00"),
+        )
+        ordered = sum(
+            (line.ordered_quantity for line in lines),
+            Decimal("0.00"),
+        )
+        received = sum(
+            (line.received_quantity for line in lines),
+            Decimal("0.00"),
+        )
+        if required > 0 and received >= required:
+            next_status = PRStatus.FULFILLED
+            timestamp_field = "fulfilled_at"
+        elif received > 0:
+            next_status = PRStatus.PARTIALLY_RECEIVED
+            timestamp_field = None
+        elif required > 0 and ordered >= required:
+            next_status = PRStatus.ORDERED
+            timestamp_field = None
+        elif ordered > 0:
+            next_status = PRStatus.PARTIALLY_ORDERED
+            timestamp_field = None
+        else:
+            next_status = PRStatus.APPROVED
+            timestamp_field = None
+        self._set_status(
+            next_status,
+            action="fulfillment_status_updated",
+            actor=actor,
+            timestamp_field=timestamp_field,
+            comments=f"Ordered {ordered}; received {received}; approved {required}.",
+        )
+
+    def close(self, actor=None, comments=""):
+        if self.status != PRStatus.FULFILLED:
+            raise ValidationError("Only a fulfilled requisition can be closed.")
+        self._set_status(
+            PRStatus.CLOSED,
+            action="closed",
+            actor=actor,
+            comments=comments,
+            timestamp_field="closed_at",
         )
 
 
@@ -289,9 +629,24 @@ class RequisitionItem(BaseModel):
         on_delete=models.PROTECT,
         related_name="requisition_items",
     )
+    description = models.CharField(max_length=255, blank=True)
+    unit = models.ForeignKey(
+        "inventory.UnitOfMeasure",
+        on_delete=models.PROTECT,
+        related_name="requisition_items",
+        null=True,
+        blank=True,
+    )
     quantity = models.DecimalField(
         max_digits=12,
         decimal_places=2,
+        validators=[validate_positive_decimal],
+    )
+    approved_quantity = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
         validators=[validate_positive_decimal],
     )
     estimated_unit_cost = models.DecimalField(
@@ -316,6 +671,116 @@ class RequisitionItem(BaseModel):
     @property
     def estimated_total(self):
         return self.quantity * self.estimated_unit_cost
+
+    def clean(self):
+        super().clean()
+        if (
+            self.approved_quantity is not None
+            and self.approved_quantity > self.quantity
+        ):
+            raise ValidationError(
+                {"approved_quantity": "Approved quantity cannot exceed the requested quantity."}
+            )
+
+    def save(self, *args, **kwargs):
+        if not self.description and self.item_id:
+            self.description = self.item.name
+        if not self.unit_id and self.item_id:
+            self.unit = self.item.base_unit
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def conversion_factor_for_unit(self, unit):
+        if not unit:
+            return Decimal("1.0000")
+        if self.item.base_unit_id == unit.id:
+            return Decimal("1.0000")
+        from apps.inventory.models import ItemUnitPrice
+
+        configured_unit = ItemUnitPrice.objects.filter(
+            item=self.item,
+            unit=unit,
+            is_active=True,
+        ).first()
+        return configured_unit.conversion_factor if configured_unit else Decimal("1.0000")
+
+    def base_quantity_for(self, quantity):
+        return (quantity or Decimal("0.00")) * self.conversion_factor_for_unit(self.unit)
+
+    @property
+    def requested_base_quantity(self):
+        return self.base_quantity_for(self.quantity)
+
+    @property
+    def approved_base_quantity(self):
+        quantity = self.approved_quantity
+        if quantity is None:
+            quantity = self.quantity
+        return self.base_quantity_for(quantity)
+
+    @property
+    def ordered_quantity(self):
+        return sum(
+            (
+                line.base_quantity
+                for line in self.item.purchase_order_items.filter(
+                    purchase_order__requisition=self.requisition,
+                    purchase_order__status__in=(
+                        POStatus.ISSUED,
+                        POStatus.PARTIALLY_RECEIVED,
+                        POStatus.RECEIVED,
+                    ),
+                )
+            ),
+            Decimal("0.00"),
+        )
+
+    @property
+    def received_quantity(self):
+        return sum(
+            (
+                line.inventory_post_quantity()
+                for line in GoodsReceiptItem.objects.filter(
+                    purchase_order_item__purchase_order__requisition=self.requisition,
+                    item=self.item,
+                    inventory_changes_applied=True,
+                )
+            ),
+            Decimal("0.00"),
+        )
+
+    @property
+    def remaining_order_quantity(self):
+        return max(
+            self.approved_base_quantity - self.ordered_quantity,
+            Decimal("0.00"),
+        )
+
+
+class RequisitionHistory(BaseModel):
+    requisition = models.ForeignKey(
+        PurchaseRequisition,
+        on_delete=models.CASCADE,
+        related_name="history",
+    )
+    action = models.CharField(max_length=100)
+    previous_status = models.CharField(max_length=30, blank=True)
+    new_status = models.CharField(max_length=30, blank=True)
+    performed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="requisition_history_events",
+        null=True,
+        blank=True,
+    )
+    comments = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta(BaseModel.Meta):
+        ordering = ("created_at",)
+
+    def __str__(self):
+        return f"{self.requisition.requisition_number}: {self.action}"
 
 
 class VendorQuotation(BaseModel):
@@ -455,7 +920,10 @@ class PurchaseOrder(BaseModel):
 
     def clean(self):
         super().clean()
-        if self.requisition_id and self.requisition.status != PRStatus.APPROVED:
+        if self.requisition_id and self.requisition.status not in (
+            PRStatus.APPROVED,
+            PRStatus.PARTIALLY_ORDERED,
+        ):
             raise ValidationError("Purchase order can only be created from an approved requisition.")
 
     def update_total_amount(self):
@@ -493,6 +961,7 @@ class PurchaseOrder(BaseModel):
         if self.status != status:
             self.status = status
             self.save(update_fields=["status", "updated_at"])
+        self.requisition.sync_fulfillment_status()
 
     def issue(self, *, sent_by=None, sent_to_email=""):
         if self.status != POStatus.DRAFT:
@@ -506,6 +975,9 @@ class PurchaseOrder(BaseModel):
         self.sent_by = sent_by or self.sent_by
         self.sent_to_email = sent_to_email or self.sent_to_email or self.supplier.email
         self.save(update_fields=["status", "sent_at", "sent_by", "sent_to_email", "updated_at"])
+        self.requisition.sync_fulfillment_status(
+            actor=self.sent_by.user if self.sent_by_id else None
+        )
 
     def acknowledge(self, acknowledged_by):
         if self.status not in (POStatus.ISSUED, POStatus.PARTIALLY_RECEIVED, POStatus.RECEIVED):
@@ -521,12 +993,39 @@ class PurchaseOrder(BaseModel):
         warnings = []
         if self.status != POStatus.DRAFT:
             blockers.append("Only a draft LPO can be sent to a supplier.")
-        if self.requisition.status != PRStatus.APPROVED:
+        if self.requisition.status not in (
+            PRStatus.APPROVED,
+            PRStatus.PARTIALLY_ORDERED,
+        ):
             blockers.append("The source requisition must be fully approved.")
         if not self.supplier_id:
             blockers.append("Assign a supplier.")
         if not self.items.exists():
             blockers.append("Add at least one Article to the LPO.")
+        for order_line in self.items.select_related("item"):
+            requisition_line = self.requisition.items.filter(item=order_line.item).first()
+            if not requisition_line:
+                blockers.append(f"{order_line.item} is not on the source requisition.")
+                continue
+            ordered_elsewhere = sum(
+                (
+                    line.base_quantity
+                    for line in PurchaseOrderItem.objects.filter(
+                        purchase_order__requisition=self.requisition,
+                        item=order_line.item,
+                        purchase_order__status__in=(
+                            POStatus.ISSUED,
+                            POStatus.PARTIALLY_RECEIVED,
+                            POStatus.RECEIVED,
+                        ),
+                    ).exclude(purchase_order=self)
+                ),
+                Decimal("0.00"),
+            )
+            if ordered_elsewhere + order_line.base_quantity > requisition_line.approved_base_quantity:
+                blockers.append(
+                    f"{order_line.item} exceeds the remaining approved requisition quantity."
+                )
         if not self.store_id:
             warnings.append(
                 "No receiving store is assigned; receipt lines must use direct department issue."

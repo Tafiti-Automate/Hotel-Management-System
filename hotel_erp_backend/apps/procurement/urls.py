@@ -10,6 +10,7 @@ from apps.procurement.views import (
     ProcurementAttachmentViewSet,
     ProcurementCommunicationViewSet,
     PurchaseRequisitionViewSet,
+    RequisitionHistoryViewSet,
     RequisitionItemViewSet,
     SupplierReturnItemViewSet,
     SupplierReturnViewSet,
@@ -21,6 +22,7 @@ from apps.procurement.views import (
 router = DefaultRouter()
 router.register("requisitions", PurchaseRequisitionViewSet, basename="requisition")
 router.register("requisition-items", RequisitionItemViewSet, basename="requisition-item")
+router.register("requisition-history", RequisitionHistoryViewSet, basename="requisition-history")
 router.register("quotations", VendorQuotationViewSet, basename="quotation")
 router.register("quotation-items", VendorQuotationItemViewSet, basename="quotation-item")
 router.register("purchase-orders", PurchaseOrderViewSet, basename="purchase-order")

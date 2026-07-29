@@ -28,6 +28,7 @@ const endpoints = {
   storeReturns: 'store-returns',
   requisitions: 'requisitions',
   reqItems: 'requisition-items',
+  approvals: 'approvals',
   orders: 'purchase-orders',
   orderItems: 'purchase-order-items',
   grns: 'grns',
@@ -564,6 +565,7 @@ function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey
   if (entity === 'requisitions') {
     const requestType = text(values.request_type, 'department')
     const supplierId = findDataId(data, 'suppliers', values.preferred_supplier || values.supplier)
+    const branchId = findDataId(data, 'branches', values.branch)
 
     const payload: Row = {
       request_type: requestType,
@@ -571,6 +573,7 @@ function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey
       expected_date: text(values.expected_date) || null,
       control_notes: text(values.control_notes),
     }
+    if (branchId) payload.branch = branchId
     if (requestType === 'department') {
       const departmentId = findDataId(data, 'departments', values.dept || values.department)
       const requesterId = findDataId(data, 'employees', values.requester)
@@ -921,19 +924,27 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
     const lines = itemLines(reqItemsByRequisition.get(idOf(row)) || [], itemNames, itemUnits, itemPrice)
     const total = lines.reduce((sum, line) => sum + line.qty * line.unitCost, 0)
     return {
-      id: idOf(row),
+      id: text(row.requisition_number, idOf(row)),
+      apiId: idOf(row),
       date: dateOnly(row.created_at || row.expected_date),
       request_type: text(row.request_type, 'department'),
+      branch: branchNames.get(text(row.branch)) || '',
       dept: departmentNames.get(text(row.department)) || titleCaseStatus(row.request_type),
       requester: employeeNames.get(text(row.requester)) || shortId(row.requester),
       preferred_supplier: supplierNames.get(text(row.preferred_supplier)) || '',
       expected_date: dateOnly(row.expected_date),
       reason: text(row.reason),
       status: requisitionStatus(row.status),
+      approvalActionable: raw.approvals.some(
+        (approval) =>
+          text(approval.requisition) === idOf(row)
+          && text(approval.status) === 'pending'
+          && bool(approval.is_actionable),
+      ),
       lines,
       count: lines.length,
       total,
-      branchId: employeeBranches.get(text(row.requester)) || '',
+      branchId: text(row.branch) || employeeBranches.get(text(row.requester)) || '',
     }
   })
 
@@ -1062,10 +1073,14 @@ export async function downloadProcurementAttachment(id: string, originalName: st
   window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1_000)
 }
 
-export async function decideRequisition(requisitionId: string, decision: 'approve' | 'reject'): Promise<void> {
+export async function decideRequisition(
+  requisitionId: string,
+  decision: 'approve' | 'reject' | 'return-for-correction',
+  comments = '',
+): Promise<void> {
   const approvals = await readList(`approvals?requisition=${encodeURIComponent(requisitionId)}&status=pending`)
   const approval = approvals.sort((a, b) => num(a.stage) - num(b.stage))[0]
   if (!approval) throw new Error('No pending approval workflow was found for this requisition.')
 
-  await sendJson(`approvals/${idOf(approval)}/${decision}`, 'POST', { comments: '' })
+  await sendJson(`approvals/${idOf(approval)}/${decision}`, 'POST', { comments })
 }

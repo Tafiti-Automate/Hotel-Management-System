@@ -8,22 +8,42 @@ from core.mixins.admin import CreatedByAdminMixin
 class ApprovalMatrixRuleAdmin(CreatedByAdminMixin, admin.ModelAdmin):
     list_display = (
         "name", "document_type", "branch", "department", "minimum_amount",
-        "maximum_amount", "stage", "stage_name", "approver", "is_active",
+        "maximum_amount", "stage", "stage_name", "assignment_type", "approver",
+        "approver_role", "is_active",
     )
-    list_filter = ("document_type", "branch", "department", "is_active")
-    list_select_related = ("branch", "department", "approver")
-    autocomplete_fields = ("branch", "department", "approver")
-    search_fields = ("name", "stage_name", "approver__user__employee_code")
+    list_filter = (
+        "document_type",
+        "branch",
+        "department",
+        "assignment_type",
+        "is_active",
+    )
+    list_select_related = ("branch", "department", "approver", "approver_role")
+    autocomplete_fields = ("branch", "department", "approver", "approver_role")
+    search_fields = (
+        "name",
+        "stage_name",
+        "approver__user__employee_code",
+        "approver_role__name",
+    )
 
 
 @admin.register(ApprovalWorkflow)
 class ApprovalWorkflowAdmin(CreatedByAdminMixin, admin.ModelAdmin):
-    list_display = ("requisition", "stage", "stage_name", "approver", "status", "updated_at")
+    list_display = (
+        "requisition",
+        "stage",
+        "stage_name",
+        "approver",
+        "status",
+        "decided_by",
+        "decided_at",
+    )
     list_filter = ("status", "stage")
     list_select_related = ("requisition", "approver")
     autocomplete_fields = ("requisition", "approver")
     search_fields = ("requisition__id", "approver__user__employee_code", "comments")
-    readonly_fields = ("status",)
+    readonly_fields = ("status", "decided_by", "decided_at")
     date_hierarchy = "created_at"
     actions = ("approve_selected_stages", "reject_selected_stages")
 
@@ -32,7 +52,7 @@ class ApprovalWorkflowAdmin(CreatedByAdminMixin, admin.ModelAdmin):
         approved = 0
         for approval in queryset.order_by("requisition", "stage"):
             try:
-                approval.approve()
+                approval.approve(decided_by=request.user)
                 approved += 1
             except Exception as error:
                 self.message_user(request, f"{approval}: {error}", level=messages.ERROR)
@@ -44,7 +64,10 @@ class ApprovalWorkflowAdmin(CreatedByAdminMixin, admin.ModelAdmin):
         rejected = 0
         for approval in queryset:
             try:
-                approval.reject()
+                approval.reject(
+                    comments="Rejected from Django administration.",
+                    decided_by=request.user,
+                )
                 rejected += 1
             except Exception as error:
                 self.message_user(request, f"{approval}: {error}", level=messages.ERROR)

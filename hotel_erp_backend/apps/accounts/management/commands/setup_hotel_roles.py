@@ -32,8 +32,10 @@ ROLE_SPECS = {
             ],
             "inventory": ["supplieritemprice", "reorderrule"],
         },
-        "view": {
+        "change": {
             "approvals": ["approvalworkflow"],
+        },
+        "view": {
             "departments": ["department", "branch"],
             "employees": ["employee"],
             "inventory": [
@@ -45,7 +47,11 @@ ROLE_SPECS = {
                 "storelocation",
                 "unitofmeasure",
             ],
-            "procurement": ["goodsreceiptitem", "goodsreceiptnote"],
+            "procurement": [
+                "goodsreceiptitem",
+                "goodsreceiptnote",
+                "requisitionhistory",
+            ],
         },
     },
     "Finance Controller": {
@@ -74,6 +80,7 @@ ROLE_SPECS = {
                 "purchaseorderitem",
                 "purchaserequisition",
                 "requisitionitem",
+                "requisitionhistory",
                 "goodsreceiptitem",
                 "goodsreceiptnote",
                 "supplierreturn",
@@ -172,7 +179,12 @@ ROLE_SPECS = {
             "departments": ["department"],
             "employees": ["employee"],
             "inventory": ["inventorybalance", "item", "stockledger", "storelocation", "unitofmeasure"],
-            "procurement": ["purchaseorder", "purchaserequisition", "requisitionitem"],
+            "procurement": [
+                "purchaseorder",
+                "purchaserequisition",
+                "requisitionitem",
+                "requisitionhistory",
+            ],
         },
     },
     "Receiving Officer": {

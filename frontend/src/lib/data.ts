@@ -311,6 +311,7 @@ export const cfg: Record<string, EntityConfig> = {
     ],
     fields: [
       { key: 'request_type', label: 'Type', type: 'select', opts: 'reqTypes' },
+      { key: 'branch', label: 'Property branch', type: 'select', opts: 'branches' },
       { key: 'dept', label: 'Department', type: 'select', opts: 'departments' },
       { key: 'requester', label: 'Requester', type: 'select', opts: 'employees' },
       { key: 'preferred_supplier', label: 'Preferred supplier', type: 'select', opts: 'suppliers' },

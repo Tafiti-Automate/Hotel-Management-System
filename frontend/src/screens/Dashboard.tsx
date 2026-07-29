@@ -8,7 +8,7 @@ const panel: CSSProperties = { background: 'var(--surface)', border: '1px solid 
 export default function Dashboard() {
   const app = useApp()
   const requisitions = app.data.requisitions
-  const pending = requisitions.filter((row) => !['Approved', 'Rejected', 'Cancelled'].includes(String(row.status)))
+  const pending = requisitions.filter((row) => Boolean(row.approvalActionable))
   const lowStock = app.data.items.filter((row) => ['Low', 'Critical'].includes(String(row.status)))
   const expiring = app.data.batches.filter((row) => String(row.status) === 'Expiring')
   const todaysReceipts = app.data.grns.filter((row) => String(row.date) === new Date().toISOString().slice(0, 10))

@@ -81,6 +81,7 @@ def test_setup_hotel_roles_creates_operational_groups():
     assert procurement_manager.permissions.filter(codename="change_supplierreturn").exists()
     assert procurement_manager.permissions.filter(codename="view_goodsreceiptnote").exists()
     assert procurement_manager.permissions.filter(codename="view_goodsreceiptitem").exists()
+    assert procurement_manager.permissions.filter(codename="change_approvalworkflow").exists()
     assert not procurement_manager.permissions.filter(codename="change_goodsreceiptnote").exists()
     assert not procurement_manager.permissions.filter(codename="view_supplierinvoice").exists()
     assert auditor.permissions.filter(codename="view_stockledger").exists()

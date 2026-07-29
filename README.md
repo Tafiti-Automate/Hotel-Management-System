@@ -109,6 +109,13 @@ frontend service before building:
 VITE_API_BASE_URL=https://<backend-domain>/api/v1
 ```
 
+### Vercel backend migrations
+
+The backend's [`vercel.json`](hotel_erp_backend/vercel.json) runs pending Django migrations,
+refreshes the hotel role permissions, and executes Django's system check during every Vercel
+production build. Vercel only promotes the new deployment when all three commands succeed, so
+schema changes are applied before the matching backend starts serving production traffic.
+
 ## What's implemented
 
 - **Login** → **Launchpad** (module picker) → **App shell**

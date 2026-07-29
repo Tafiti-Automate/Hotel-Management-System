@@ -20,6 +20,7 @@ const paths = {
   attachments: 'procurement-attachments',
   communications: 'procurement-communications',
   history: 'audit-logs',
+  requisitionHistory: 'requisition-history',
 } as const
 
 const pathViewPermissions: Record<keyof typeof paths, string> = {
@@ -39,6 +40,7 @@ const pathViewPermissions: Record<keyof typeof paths, string> = {
   attachments: 'procurement.view_procurementattachment',
   communications: 'procurement.view_procurementcommunication',
   history: 'audit_logs.view_auditlog',
+  requisitionHistory: 'procurement.view_requisitionhistory',
 }
 
 const stagePermissions: Record<Stage, { view: string; change: string }> = {
@@ -79,7 +81,7 @@ export default function ProcurementWorkbench() {
     setLoading(true)
     setMessage('')
     try {
-      const optional = new Set(['attachments', 'communications', 'history'])
+      const optional = new Set(['attachments', 'communications', 'history', 'requisitionHistory'])
       const entries = await Promise.all(Object.entries(paths).map(async ([key, path]) => {
         const typedKey = key as keyof typeof paths
         if (!can(pathViewPermissions[typedKey])) return [key, []]
@@ -108,6 +110,7 @@ export default function ProcurementWorkbench() {
     const requisitions = new Set(next.requisitions.map((row) => id(row.id)))
     next.requisitionItems = data.requisitionItems.filter((row) => requisitions.has(id(row.requisition)))
     next.approvals = data.approvals.filter((row) => requisitions.has(id(row.requisition)))
+    next.requisitionHistory = data.requisitionHistory.filter((row) => requisitions.has(id(row.requisition)))
     next.quotations = data.quotations.filter((row) => requisitions.has(id(row.requisition)))
     const quotations = new Set(next.quotations.map((row) => id(row.id)))
     next.quotationItems = data.quotationItems.filter((row) => quotations.has(id(row.quotation)))
@@ -151,7 +154,7 @@ export default function ProcurementWorkbench() {
     units: new Map(app.data.uoms.map((row) => [id(row.id), id(row.name)])),
   }), [app.data])
 
-  const requisitionLabel = (row: Row) => `PR-${id(row.id).slice(0, 8).toUpperCase()} · ${id(row.reason)}`
+  const requisitionLabel = (row: Row) => `${id(row.requisition_number) || `PR-${id(row.id).slice(0, 8).toUpperCase()}`} · ${id(row.reason)}`
   const orderLabel = (row: Row) => `${id(row.po_number) || id(row.id).slice(0, 8)} · ${names.suppliers.get(id(row.supplier)) || 'Supplier'}`
   const receiptLabel = (row: Row) => id(row.grn_number) || `GRN-${id(row.id).slice(0, 8).toUpperCase()}`
 
@@ -234,7 +237,7 @@ function Metric({ label, value, icon, tone = 'accent' }: { label: string; value:
 }
 
 function RequestPanel({ data, form, setForm, busy, run, requisitionLabel, items }: any) {
-  const drafts = data.requisitions.filter((row: Row) => ['draft', 'rejected'].includes(id(row.status)))
+  const drafts = data.requisitions.filter((row: Row) => ['draft', 'rejected', 'returned'].includes(id(row.status)))
   const lines = data.requisitionItems.filter((row: Row) => id(row.requisition) === id(form.requisition))
   const editing = lines.find((row: Row) => id(row.id) === id(form.requestLine))
   const duplicate = !editing && lines.some((row: Row) => id(row.item) === id(form.item))
@@ -287,7 +290,7 @@ function QuotePanel({ data, form, setForm, busy, run, requisitionLabel, names, s
 }
 
 function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel, names, suppliers, employees, stores, units }: any) {
-  const approved = data.requisitions.filter((row: Row) => id(row.status) === 'approved')
+  const approved = data.requisitions.filter((row: Row) => ['approved', 'partially_ordered'].includes(id(row.status)))
   const order = data.orders.find((row: Row) => id(row.id) === id(form.order))
   const lines = data.orderItems.filter((row: Row) => id(row.purchase_order) === id(form.order))
   const line = lines.find((row: Row) => id(row.id) === id(form.orderLine))
@@ -391,6 +394,9 @@ function ReturnPanel({ data, form, setForm, busy, run, receiptLabel, names, empl
 }
 
 function StageTable({ stage, data, names, onSelect }: { stage: Stage; data: Datasets; names: Record<string, Map<string, string>>; onSelect: (row: Row) => void }) {
+  const requisitionNumber = (requisitionId: string) =>
+    id(data.requisitions.find((record) => id(record.id) === requisitionId)?.requisition_number)
+    || `PR-${requisitionId.slice(0, 8).toUpperCase()}`
   let rows: Row[] = []
   let title = ''
   if (stage === 'request') { rows = data.requisitionItems; title = 'Requisition lines' }
@@ -406,7 +412,7 @@ function StageTable({ stage, data, names, onSelect }: { stage: Stage; data: Data
       {requisitionIds.map((requisitionId) => {
         const quotations = rows.filter((row) => id(row.requisition) === requisitionId)
         return <section key={requisitionId} style={{ padding: 16, borderBottom: '1px solid var(--border)' }}>
-          <div style={{ marginBottom: 10, color: 'var(--text)', fontSize: 12, fontWeight: 750 }}>PR-{requisitionId.slice(0, 8).toUpperCase()} <span style={{ color: 'var(--text-faint)', fontWeight: 500 }}>· {quotations.length} supplier quotation{quotations.length === 1 ? '' : 's'}</span></div>
+          <div style={{ marginBottom: 10, color: 'var(--text)', fontSize: 12, fontWeight: 750 }}>{requisitionNumber(requisitionId)} <span style={{ color: 'var(--text-faint)', fontWeight: 500 }}>· {quotations.length} supplier quotation{quotations.length === 1 ? '' : 's'}</span></div>
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(Math.max(quotations.length, 1), 3)},minmax(210px,1fr))`, gap: 10, overflowX: 'auto' }}>
             {quotations.map((quote) => {
               const winner = data.quotationItems.some((line) => id(line.quotation) === id(quote.id) && line.selected)
@@ -430,7 +436,7 @@ function StageTable({ stage, data, names, onSelect }: { stage: Stage; data: Data
     </div>
   }
   const cells = (row: Row): string[] => {
-    if (stage === 'request') return [`PR-${id(row.requisition).slice(0, 8)}`, names.items.get(id(row.item)) || id(row.item), id(row.quantity), money(row.estimated_total)]
+    if (stage === 'request') return [requisitionNumber(id(row.requisition)), names.items.get(id(row.item)) || id(row.item), id(row.quantity), money(row.estimated_total)]
     if (stage === 'lpo') return [id(row.po_number), names.suppliers.get(id(row.supplier)) || id(row.supplier), money(row.total_amount), id(row.status)]
     if (stage === 'receipt') return [`GRN-${id(row.id).slice(0, 8)}`, id(row.received_date), names.employees.get(id(row.received_by)) || id(row.received_by), `${data.receiptItems.filter((line) => id(line.goods_receipt) === id(row.id)).length} lines`]
     if (stage === 'inspect') return [`INS-${id(row.id).slice(0, 8)}`, `GRN-${id(row.goods_receipt).slice(0, 8)}`, names.employees.get(id(row.inspected_by)) || id(row.inspected_by), id(row.status)]
@@ -475,7 +481,7 @@ function ProcurementRecordDrawer({ stage, row, data, names, canAttach, onClose, 
         : stage === 'receipt' ? 'Goods receipt note'
           : stage === 'inspect' ? 'Goods inspection'
             : 'Supplier return'
-  const reference = stage === 'request' ? `PR-${id(row.requisition).slice(0, 8).toUpperCase()}`
+  const reference = stage === 'request' ? id(requisition?.requisition_number) || `PR-${id(row.requisition).slice(0, 8).toUpperCase()}`
     : stage === 'quote' ? `QUOTE-${id(row.id).slice(0, 8).toUpperCase()}`
       : stage === 'lpo' ? id(row.po_number) || id(row.id)
         : stage === 'receipt' ? id(row.grn_number) || `GRN-${id(row.id).slice(0, 8).toUpperCase()}`
@@ -498,7 +504,7 @@ function ProcurementRecordDrawer({ stage, row, data, names, canAttach, onClose, 
     ['Estimated total', money(row.estimated_total)],
     ['Reason', id(requisition?.reason) || '—'],
   ] : stage === 'quote' ? [
-    ['Requisition', `PR-${id(row.requisition).slice(0, 8).toUpperCase()}`],
+    ['Requisition', id(requisition?.requisition_number) || `PR-${id(row.requisition).slice(0, 8).toUpperCase()}`],
     ['Supplier', names.suppliers.get(id(row.supplier)) || id(row.supplier)],
     ['Quoted total', money(row.total_amount)],
     ['Evaluation', winner ? 'Selected winner' : 'Open quotation'],
@@ -559,10 +565,13 @@ function ProcurementRecordDrawer({ stage, row, data, names, canAttach, onClose, 
   const communications = stage === 'lpo'
     ? data.communications.filter((communication) => id(communication.purchase_order) === id(row.id))
     : []
-  const history = data.history.filter((event) =>
-    id(event.entity_id) === id(row.id) ||
-    id(event.metadata?.requisition_id) === id(row.id),
-  )
+  const requisitionId = id(requisition?.id)
+  const history = requisitionId
+    ? data.requisitionHistory.filter((event) => id(event.requisition) === requisitionId)
+    : data.history.filter((event) =>
+      id(event.entity_id) === id(row.id) ||
+      id(event.metadata?.requisition_id) === id(row.id),
+    )
   const upload = async (file?: File) => {
     if (!file || !documentType) return
     setAttachmentMessage('')
@@ -674,7 +683,7 @@ function ProcurementRecordDrawer({ stage, row, data, names, canAttach, onClose, 
         </section>}
         <section style={{ marginTop: 25 }}>
           <h3 style={drawerHeading}>Document history <span style={{ color: 'var(--text-faint)', fontWeight: 500 }}>({history.length})</span></h3>
-          <div style={{ borderLeft: '2px solid var(--border)', marginLeft: 7 }}>{history.slice(0, 20).map((event) => <div key={id(event.id)} style={{ position: 'relative', padding: '0 0 15px 18px' }}><span style={{ position: 'absolute', left: -5, top: 3, width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)' }} /><div style={{ color: 'var(--text)', fontSize: 11.5, fontWeight: 650 }}>{id(event.action).replace(/_/g, ' ')}</div><div style={{ marginTop: 3, color: 'var(--text-faint)', fontSize: 10.5 }}>{id(event.created_at)} · {id(event.metadata?.status)}</div></div>)}{!history.length && <div style={{ padding: '0 0 12px 18px', color: 'var(--text-faint)', fontSize: 11.5 }}>No history events recorded yet.</div>}</div>
+          <div style={{ borderLeft: '2px solid var(--border)', marginLeft: 7 }}>{history.slice(0, 20).map((event) => <div key={id(event.id)} style={{ position: 'relative', padding: '0 0 15px 18px' }}><span style={{ position: 'absolute', left: -5, top: 3, width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)' }} /><div style={{ color: 'var(--text)', fontSize: 11.5, fontWeight: 650 }}>{id(event.action).replace(/_/g, ' ')}</div><div style={{ marginTop: 3, color: 'var(--text-faint)', fontSize: 10.5 }}>{id(event.performed_by_name) || id(event.created_at)} · {id(event.new_status || event.metadata?.status)}</div>{event.comments && <div style={{ marginTop: 4, color: 'var(--text-muted)', fontSize: 10.5 }}>{id(event.comments)}</div>}</div>)}{!history.length && <div style={{ padding: '0 0 12px 18px', color: 'var(--text-faint)', fontSize: 11.5 }}>No history events recorded yet.</div>}</div>
         </section>
       </div>
       <footer style={{ padding: '14px 22px', display: 'flex', justifyContent: 'flex-end', gap: 8, borderTop: '1px solid var(--border)' }}>

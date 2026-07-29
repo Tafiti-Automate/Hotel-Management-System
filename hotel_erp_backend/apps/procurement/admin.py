@@ -9,7 +9,9 @@ from apps.procurement.models import (
     PurchaseOrder,
     PurchaseOrderItem,
     PurchaseRequisition,
+    RequisitionHistory,
     RequisitionItem,
+    RequisitionSequence,
     SupplierReturn,
     SupplierReturnItem,
     VendorQuotation,
@@ -21,7 +23,13 @@ from core.mixins.admin import CreatedByAdminMixin
 class RequisitionItemInline(admin.TabularInline):
     model = RequisitionItem
     extra = 0
-    autocomplete_fields = ("item",)
+    autocomplete_fields = ("item", "unit")
+    readonly_fields = (
+        "description",
+        "approved_quantity",
+        "ordered_quantity",
+        "received_quantity",
+    )
 
 
 class ApprovalWorkflowInline(admin.TabularInline):
@@ -48,7 +56,9 @@ class GoodsReceiptItemInline(admin.TabularInline):
 @admin.register(PurchaseRequisition)
 class PurchaseRequisitionAdmin(CreatedByAdminMixin, admin.ModelAdmin):
     list_display = (
-        "id",
+        "requisition_number",
+        "hotel",
+        "branch",
         "request_type",
         "requester",
         "department",
@@ -56,10 +66,30 @@ class PurchaseRequisitionAdmin(CreatedByAdminMixin, admin.ModelAdmin):
         "status",
         "created_at",
     )
-    list_filter = ("request_type", "status", "department", "preferred_supplier")
-    list_select_related = ("requester", "department", "preferred_supplier")
-    autocomplete_fields = ("requester", "department", "preferred_supplier")
+    list_filter = (
+        "hotel",
+        "branch",
+        "request_type",
+        "status",
+        "department",
+        "preferred_supplier",
+    )
+    list_select_related = (
+        "hotel",
+        "branch",
+        "requester",
+        "department",
+        "preferred_supplier",
+    )
+    autocomplete_fields = (
+        "hotel",
+        "branch",
+        "requester",
+        "department",
+        "preferred_supplier",
+    )
     search_fields = (
+        "requisition_number",
         "id",
         "requester__user__employee_code",
         "department__name",
@@ -67,7 +97,17 @@ class PurchaseRequisitionAdmin(CreatedByAdminMixin, admin.ModelAdmin):
         "reason",
         "control_notes",
     )
-    readonly_fields = ("status",)
+    readonly_fields = (
+        "requisition_number",
+        "status",
+        "submitted_at",
+        "approved_at",
+        "rejected_at",
+        "returned_at",
+        "fulfilled_at",
+        "cancelled_at",
+        "closed_at",
+    )
     date_hierarchy = "created_at"
     inlines = [RequisitionItemInline, ApprovalWorkflowInline]
     actions = ("submit_selected_requisitions", "cancel_selected_requisitions")
@@ -77,7 +117,7 @@ class PurchaseRequisitionAdmin(CreatedByAdminMixin, admin.ModelAdmin):
         submitted = 0
         for requisition in queryset:
             try:
-                requisition.submit()
+                requisition.submit(actor=request.user)
                 submitted += 1
             except Exception as error:
                 self.message_user(request, f"{requisition}: {error}", level=messages.ERROR)
@@ -89,7 +129,7 @@ class PurchaseRequisitionAdmin(CreatedByAdminMixin, admin.ModelAdmin):
         cancelled = 0
         for requisition in queryset:
             try:
-                requisition.cancel()
+                requisition.cancel(actor=request.user)
                 cancelled += 1
             except Exception as error:
                 self.message_user(request, f"{requisition}: {error}", level=messages.ERROR)
@@ -99,12 +139,90 @@ class PurchaseRequisitionAdmin(CreatedByAdminMixin, admin.ModelAdmin):
 
 @admin.register(RequisitionItem)
 class RequisitionItemAdmin(CreatedByAdminMixin, admin.ModelAdmin):
-    list_display = ("requisition", "item", "quantity", "created_at")
-    list_filter = ("item",)
-    list_select_related = ("requisition", "item")
-    autocomplete_fields = ("requisition", "item")
-    search_fields = ("requisition__id", "item__name", "item__sku")
+    list_display = (
+        "requisition",
+        "item",
+        "unit",
+        "quantity",
+        "approved_quantity",
+        "ordered_quantity",
+        "received_quantity",
+        "created_at",
+    )
+    list_filter = ("item", "unit")
+    list_select_related = ("requisition", "item", "unit")
+    autocomplete_fields = ("requisition", "item", "unit")
+    search_fields = (
+        "requisition__requisition_number",
+        "requisition__id",
+        "item__name",
+        "item__sku",
+    )
     date_hierarchy = "created_at"
+
+
+@admin.register(RequisitionHistory)
+class RequisitionHistoryAdmin(CreatedByAdminMixin, admin.ModelAdmin):
+    list_display = (
+        "requisition",
+        "action",
+        "previous_status",
+        "new_status",
+        "performed_by",
+        "created_at",
+    )
+    list_filter = ("action", "previous_status", "new_status")
+    list_select_related = ("requisition", "performed_by")
+    autocomplete_fields = ("requisition", "performed_by")
+    search_fields = (
+        "requisition__requisition_number",
+        "performed_by__username",
+        "comments",
+    )
+    readonly_fields = (
+        "requisition",
+        "action",
+        "previous_status",
+        "new_status",
+        "performed_by",
+        "comments",
+        "metadata",
+        "created_at",
+        "updated_at",
+        "created_by",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(RequisitionSequence)
+class RequisitionSequenceAdmin(CreatedByAdminMixin, admin.ModelAdmin):
+    list_display = ("scope", "year", "current_value", "updated_at")
+    list_filter = ("year", "scope")
+    readonly_fields = (
+        "scope",
+        "year",
+        "current_value",
+        "created_at",
+        "updated_at",
+        "created_by",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(VendorQuotation)

@@ -89,7 +89,10 @@ def test_seed_presentation_data_builds_connected_uganda_workflows(monkeypatch):
     assert StockIssue.objects.count() == 1
     assert StockTransfer.objects.count() == 1
     assert Sale.objects.count() == 2
-    assert Notification.objects.count() == 4
+    assert Notification.objects.count() >= 4
+    assert Notification.objects.filter(
+        title__contains="requires approval"
+    ).exists()
     assert get_user_model().objects.get(username="grace.nakato").check_password(
         "sample-pass-123"
     )

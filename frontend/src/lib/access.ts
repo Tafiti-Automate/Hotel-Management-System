@@ -38,7 +38,7 @@ const roleRoutes: Record<string, Set<string>> = {
   ]),
   'department head': new Set([
     'dashboard',
-    'requisitions', 'approvals', 'storeRequisitions',
+    'requisitions', 'workflow-procure', 'approvals', 'storeRequisitions',
     'items', 'locations', 'balances', 'ledgers',
     'reports', 'reportview', 'detail',
   ]),

@@ -64,7 +64,7 @@ export default function WorkflowHub({ kind }: { kind: WorkflowKind }) {
       icon: 'shopping_cart_checkout',
       steps: [
         { label: 'Request', route: 'requisitions', icon: 'request_quote', description: 'Capture demand and estimated value', count: data.requisitions.length },
-        { label: 'Approve', route: 'approvals', icon: 'approval', description: 'Sequential value-based decisions', count: data.requisitions.filter((x) => !['Approved', 'Rejected', 'Cancelled'].includes(statusText(x.status))).length },
+        { label: 'Approve', route: 'approvals', icon: 'approval', description: 'Sequential value-based decisions', count: data.requisitions.filter((x) => Boolean(x.approvalActionable)).length },
         { label: 'Source', route: 'requisitions', icon: 'compare_arrows', description: 'Compare supplier quotations' },
         { label: 'LPO', route: 'orders', icon: 'receipt_long', description: 'Issue controlled purchase order', count: data.orders.length },
         { label: 'Inspect', route: 'inspections', icon: 'fact_check', description: 'Accept or reject delivered quantity', count: data.inspections.length },

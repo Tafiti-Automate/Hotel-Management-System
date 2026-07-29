@@ -230,12 +230,32 @@ class Command(BaseCommand):
 
     def approval_matrix(self, employees):
         stages = (
-            (1, "Department approval", employees["head"]),
-            (2, "Procurement approval", employees["procurement"]),
-            (3, "Finance approval", employees["finance"]),
-            (4, "General Manager approval", employees["manager"]),
+            (
+                1,
+                "Department approval",
+                ApprovalMatrixRule.ASSIGNMENT_DEPARTMENT_HEAD,
+                None,
+            ),
+            (
+                2,
+                "Procurement approval",
+                ApprovalMatrixRule.ASSIGNMENT_FIXED_EMPLOYEE,
+                employees["procurement"],
+            ),
+            (
+                3,
+                "Finance approval",
+                ApprovalMatrixRule.ASSIGNMENT_FIXED_EMPLOYEE,
+                employees["finance"],
+            ),
+            (
+                4,
+                "General Manager approval",
+                ApprovalMatrixRule.ASSIGNMENT_FIXED_EMPLOYEE,
+                employees["manager"],
+            ),
         )
-        for stage, stage_name, approver in stages:
+        for stage, stage_name, assignment_type, approver in stages:
             ApprovalMatrixRule.objects.update_or_create(
                 document_type=ApprovalMatrixRule.DOCUMENT_PURCHASE_REQUISITION,
                 branch=None,
@@ -245,7 +265,9 @@ class Command(BaseCommand):
                 defaults={
                     "name": f"UAT purchase approval stage {stage}",
                     "stage_name": stage_name,
+                    "assignment_type": assignment_type,
                     "approver": approver,
+                    "approver_role": None,
                     "maximum_amount": None,
                     "is_active": True,
                 },

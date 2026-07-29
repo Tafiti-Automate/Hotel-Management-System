@@ -11,7 +11,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.viewsets import ModelViewSet
+from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
 
 from apps.employees.models import Employee
 from apps.procurement.models import (
@@ -24,6 +24,7 @@ from apps.procurement.models import (
     ProcurementAttachment,
     ProcurementCommunication,
     PurchaseRequisition,
+    RequisitionHistory,
     RequisitionItem,
     SupplierReturn,
     SupplierReturnItem,
@@ -42,6 +43,7 @@ from apps.procurement.serializers import (
     ProcurementAttachmentSerializer,
     ProcurementCommunicationSerializer,
     PurchaseRequisitionSerializer,
+    RequisitionHistorySerializer,
     RequisitionItemSerializer,
     SupplierReturnItemSerializer,
     SupplierReturnSerializer,
@@ -68,6 +70,8 @@ def enforce_readiness(readiness):
 
 class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = PurchaseRequisition.objects.select_related(
+        "hotel",
+        "branch",
         "requester",
         "department",
         "preferred_supplier",
@@ -77,11 +81,35 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = (
         "reason",
         "control_notes",
+        "requisition_number",
         "requester__user__employee_code",
         "department__name",
         "preferred_supplier__name",
     )
-    ordering_fields = ("status", "created_at")
+    ordering_fields = ("requisition_number", "status", "created_at", "expected_date")
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        if user.is_superuser or user.groups.filter(
+            name__in=(
+                "System Administrator",
+                "General Manager",
+                "Procurement Manager",
+                "Finance Controller",
+                "Auditor",
+            )
+        ).exists():
+            return queryset
+        employee = getattr(user, "employee_profile", None)
+        if not employee:
+            return queryset.none()
+        if user.groups.filter(name="Department Head").exists():
+            return queryset.filter(
+                department=employee.department,
+                branch=employee.branch,
+            )
+        return queryset.filter(requester=employee)
 
     @action(detail=True, methods=["get"])
     def readiness(self, request, pk=None):
@@ -92,7 +120,7 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
         requisition = self.get_object()
         enforce_readiness(requisition.submission_readiness())
         try:
-            requisition.submit()
+            requisition.submit(actor=request.user)
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
         serializer = self.get_serializer(requisition)
@@ -102,11 +130,26 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     def cancel(self, request, pk=None):
         requisition = self.get_object()
         try:
-            requisition.cancel()
+            requisition.cancel(
+                actor=request.user,
+                comments=str(request.data.get("comments", "")),
+            )
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
         serializer = self.get_serializer(requisition)
         return Response(serializer.data)
+
+    @action(detail=True, methods=["post"])
+    def close(self, request, pk=None):
+        requisition = self.get_object()
+        try:
+            requisition.close(
+                actor=request.user,
+                comments=str(request.data.get("comments", "")),
+            )
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        return Response(self.get_serializer(requisition).data)
 
     @action(detail=True, methods=["post"], url_path="create-purchase-order")
     def create_purchase_order(self, request, pk=None):
@@ -154,11 +197,54 @@ class RequisitionItemViewSet(CreatedByModelMixin, ModelViewSet):
     ordering_fields = ("quantity", "created_at")
 
     def perform_destroy(self, instance):
-        if instance.requisition.status not in (PRStatus.DRAFT, PRStatus.REJECTED):
+        if not instance.requisition.editable:
             raise ValidationError(
-                "Requisition lines can only be removed while the requisition is draft or rejected."
+                "Requisition lines can only be removed while the requisition is draft, rejected, or returned."
             )
         instance.delete()
+
+
+class RequisitionHistoryViewSet(ReadOnlyModelViewSet):
+    queryset = RequisitionHistory.objects.select_related(
+        "requisition",
+        "performed_by",
+    )
+    serializer_class = RequisitionHistorySerializer
+    filterset_fields = ("requisition", "action", "previous_status", "new_status")
+    search_fields = (
+        "requisition__requisition_number",
+        "comments",
+        "performed_by__username",
+        "performed_by__first_name",
+        "performed_by__last_name",
+    )
+    ordering_fields = ("created_at", "action")
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        visible_requisitions = PurchaseRequisitionViewSet.queryset
+        user = self.request.user
+        if user.is_superuser or user.groups.filter(
+            name__in=(
+                "System Administrator",
+                "General Manager",
+                "Procurement Manager",
+                "Finance Controller",
+                "Auditor",
+            )
+        ).exists():
+            return queryset
+        employee = getattr(user, "employee_profile", None)
+        if not employee:
+            return queryset.none()
+        if user.groups.filter(name="Department Head").exists():
+            visible_requisitions = visible_requisitions.filter(
+                department=employee.department,
+                branch=employee.branch,
+            )
+        else:
+            visible_requisitions = visible_requisitions.filter(requester=employee)
+        return queryset.filter(requisition__in=visible_requisitions)
 
 
 class VendorQuotationViewSet(CreatedByModelMixin, ModelViewSet):

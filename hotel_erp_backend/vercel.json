@@ -1,0 +1,3 @@
+{
+  "buildCommand": "python manage.py migrate --noinput --settings=core.settings.prod && python manage.py setup_hotel_roles --settings=core.settings.prod && python manage.py check --settings=core.settings.prod"
+}

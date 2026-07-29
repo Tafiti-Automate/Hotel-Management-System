@@ -455,3 +455,67 @@ def test_inspected_receipt_posts_only_accepted_quantity_to_inventory():
     assert InventoryBatch.objects.get(item=item, store=store).remaining_quantity == Decimal("7.00")
     assert StockLedger.objects.get(reference_id=receipt.id).quantity_in == Decimal("7.00")
     assert order.status == POStatus.PARTIALLY_RECEIVED
+
+
+@pytest.mark.django_db
+def test_requisition_tracks_ordering_and_receipt_fulfillment():
+    employee, department, supplier, item = create_procurement_context()
+    branch = Branch.objects.create(name="Kampala Fulfillment")
+    employee.branch = branch
+    employee.save(update_fields=["branch", "updated_at"])
+    store = StoreLocation.objects.create(branch=branch, name="Fulfillment Store")
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        reason="End-to-end fulfillment tracking",
+        status=PRStatus.APPROVED,
+    )
+    requisition_item = RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity=Decimal("4.00"),
+        estimated_unit_cost=Decimal("8000.00"),
+        approved_quantity=Decimal("4.00"),
+    )
+    quotation = VendorQuotation.objects.create(
+        requisition=requisition,
+        supplier=supplier,
+    )
+    VendorQuotationItem.objects.create(
+        quotation=quotation,
+        requisition_item=requisition_item,
+        quantity=Decimal("4.00"),
+        unit_price=Decimal("7500.00"),
+        selected=True,
+    )
+    order = requisition.create_purchase_order(
+        ordered_by=employee,
+        store=store,
+    )
+
+    order.issue(sent_by=employee)
+    requisition.refresh_from_db()
+    assert requisition.status == PRStatus.ORDERED
+    assert requisition_item.ordered_quantity == Decimal("4.00")
+
+    receipt = GoodsReceiptNote.objects.create(
+        purchase_order=order,
+        received_by=employee,
+        delivery_note_no="FULFILL-DN-001",
+    )
+    receipt_item = GoodsReceiptItem.objects.create(
+        goods_receipt=receipt,
+        purchase_order_item=order.items.get(),
+        quantity_received=Decimal("4.00"),
+        unit_cost=Decimal("7500.00"),
+    )
+    receipt_item.post_to_inventory()
+
+    requisition.refresh_from_db()
+    assert requisition.status == PRStatus.FULFILLED
+    assert requisition.fulfilled_at is not None
+    assert requisition_item.received_quantity == Decimal("4.00")
+    assert requisition.history.filter(
+        action="fulfillment_status_updated",
+        new_status=PRStatus.FULFILLED,
+    ).exists()

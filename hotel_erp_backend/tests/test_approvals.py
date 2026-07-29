@@ -7,9 +7,10 @@ from django.core.exceptions import ValidationError
 from django.core.management import call_command
 
 from apps.approvals.models import ApprovalMatrixRule, ApprovalWorkflow
-from apps.departments.models import Department
+from apps.departments.models import Branch, Department
 from apps.employees.models import Employee
 from apps.inventory.models import Category, Item
+from apps.organization.models import Hotel
 from apps.procurement.models import PurchaseRequisition, RequisitionItem
 from apps.vendors.models import Supplier
 from core.constants.choices import PRStatus, RequisitionType
@@ -281,3 +282,145 @@ def test_only_assigned_employee_can_decide_approval(client):
     assert allowed.status_code == 200
     approval.refresh_from_db()
     assert approval.status == "approved"
+
+
+@pytest.mark.django_db
+def test_department_head_route_uses_requesting_department_and_property():
+    call_command("setup_hotel_roles", verbosity=0)
+    hotel = Hotel.objects.create(name="Routing Hotel")
+    branch = Branch.objects.create(
+        hotel=hotel,
+        name="Kampala Main",
+        branch_code="KLA",
+    )
+    housekeeping = Department.objects.create(name="Housekeeping Routing")
+    food_beverage = Department.objects.create(name="Food and Beverage Routing")
+    user_model = get_user_model()
+    department_head_group = Group.objects.get(name="Department Head")
+
+    housekeeping_user = user_model.objects.create_user(
+        username="housekeeping-head-routing",
+        employee_code="EMP-HK-ROUTE",
+    )
+    housekeeping_user.groups.add(department_head_group)
+    Employee.objects.create(
+        user=housekeeping_user,
+        department=housekeeping,
+        branch=branch,
+        designation="Executive Housekeeper",
+    )
+
+    food_head_user = user_model.objects.create_user(
+        username="food-head-routing",
+        employee_code="EMP-FB-ROUTE",
+    )
+    food_head_user.groups.add(department_head_group)
+    food_head = Employee.objects.create(
+        user=food_head_user,
+        department=food_beverage,
+        branch=branch,
+        designation="Food and Beverage Manager",
+    )
+    requester_user = user_model.objects.create_user(
+        username="food-requester-routing",
+        employee_code="EMP-FB-REQ",
+    )
+    requester = Employee.objects.create(
+        user=requester_user,
+        department=food_beverage,
+        branch=branch,
+        designation="Restaurant Supervisor",
+    )
+    ApprovalMatrixRule.objects.create(
+        name="Dynamic department approval",
+        document_type=ApprovalMatrixRule.DOCUMENT_PURCHASE_REQUISITION,
+        minimum_amount=Decimal("0.00"),
+        stage=1,
+        stage_name="Department review",
+        assignment_type=ApprovalMatrixRule.ASSIGNMENT_DEPARTMENT_HEAD,
+    )
+    category = Category.objects.create(name="Restaurant Routing Supplies")
+    item = Item.objects.create(
+        category=category,
+        name="Table napkins",
+        sku="NAP-ROUTE",
+        unit="packet",
+        reorder_level=Decimal("2.00"),
+    )
+    requisition = PurchaseRequisition.objects.create(
+        requester=requester,
+        department=food_beverage,
+        reason="Restaurant service supplies",
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity=Decimal("4.00"),
+        estimated_unit_cost=Decimal("5000.00"),
+    )
+
+    requisition.submit(actor=requester_user)
+
+    requisition.refresh_from_db()
+    assert requisition.branch == branch
+    assert requisition.hotel == hotel
+    assert requisition.requisition_number.startswith("PR-KLA-")
+    assert requisition.approval_workflow.get().approver == food_head
+
+
+@pytest.mark.django_db
+def test_approver_can_return_requisition_for_correction_with_history():
+    user = get_user_model().objects.create_user(
+        username="correction-approver",
+        employee_code="EMP-CORRECT",
+    )
+    department = Department.objects.create(name="Maintenance Correction")
+    approver = Employee.objects.create(
+        user=user,
+        department=department,
+        designation="Maintenance Manager",
+    )
+    category = Category.objects.create(name="Maintenance Correction Supplies")
+    item = Item.objects.create(
+        category=category,
+        name="LED lamp",
+        sku="LED-CORRECT",
+        unit="piece",
+        reorder_level=Decimal("2.00"),
+    )
+    requisition = PurchaseRequisition.objects.create(
+        requester=approver,
+        department=department,
+        reason="Replace failed lamps",
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity=Decimal("6.00"),
+        estimated_unit_cost=Decimal("12000.00"),
+    )
+    approval = ApprovalWorkflow.objects.create(
+        requisition=requisition,
+        approver=approver,
+        stage=1,
+        stage_name="Department review",
+    )
+    requisition.submit(actor=user)
+
+    approval.return_for_correction(
+        comments="Attach the maintenance inspection report.",
+        decided_by=user,
+    )
+
+    requisition.refresh_from_db()
+    approval.refresh_from_db()
+    assert requisition.status == PRStatus.RETURNED
+    assert requisition.returned_at is not None
+    assert requisition.editable is True
+    assert approval.status == "returned"
+    assert approval.decided_by == user
+    assert approval.decided_at is not None
+    assert requisition.history.filter(
+        action="returned_for_correction",
+        comments="Attach the maintenance inspection report.",
+    ).exists()

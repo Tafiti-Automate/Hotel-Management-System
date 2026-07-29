@@ -14,6 +14,7 @@ from apps.procurement.models import (
     ProcurementAttachment,
     ProcurementCommunication,
     PurchaseRequisition,
+    RequisitionHistory,
     RequisitionItem,
     SupplierReturn,
     SupplierReturnItem,
@@ -24,10 +25,14 @@ from apps.procurement.models import (
 
 class PurchaseRequisitionSerializer(serializers.ModelSerializer):
     estimated_total = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+
     class Meta:
         model = PurchaseRequisition
         fields = (
             "id",
+            "requisition_number",
+            "hotel",
+            "branch",
             "request_type",
             "requester",
             "department",
@@ -36,44 +41,185 @@ class PurchaseRequisitionSerializer(serializers.ModelSerializer):
             "reason",
             "expected_date",
             "control_notes",
+            "currency",
             "estimated_total",
+            "submitted_at",
+            "approved_at",
+            "rejected_at",
+            "returned_at",
+            "fulfilled_at",
+            "cancelled_at",
+            "closed_at",
             "created_at",
             "updated_at",
             "created_by",
         )
-        read_only_fields = ("id", "status", "created_at", "updated_at", "created_by")
+        read_only_fields = (
+            "id",
+            "requisition_number",
+            "hotel",
+            "status",
+            "submitted_at",
+            "approved_at",
+            "rejected_at",
+            "returned_at",
+            "fulfilled_at",
+            "cancelled_at",
+            "closed_at",
+            "created_at",
+            "updated_at",
+            "created_by",
+        )
+
+    def validate(self, attrs):
+        request_type = attrs.get(
+            "request_type",
+            getattr(self.instance, "request_type", None),
+        )
+        requester = attrs.get("requester", getattr(self.instance, "requester", None))
+        department = attrs.get(
+            "department",
+            getattr(self.instance, "department", None),
+        )
+        branch = attrs.get("branch", getattr(self.instance, "branch", None))
+        request = self.context.get("request")
+        employee = (
+            getattr(request.user, "employee_profile", None)
+            if request and request.user.is_authenticated
+            else None
+        )
+
+        if (
+            request
+            and not request.user.is_superuser
+            and request.user.groups.filter(name="Department Head").exists()
+        ):
+            if not employee:
+                raise serializers.ValidationError(
+                    "Your account is not connected to an employee profile."
+                )
+            requester = employee
+            department = employee.department
+            branch = employee.branch
+            attrs.update(
+                {
+                    "requester": requester,
+                    "department": department,
+                    "branch": branch,
+                    "request_type": "department",
+                }
+            )
+            request_type = "department"
+
+        if request_type == "department":
+            if not requester:
+                raise serializers.ValidationError(
+                    {"requester": "Department requisitions require a requester."}
+                )
+            if not department:
+                raise serializers.ValidationError(
+                    {"department": "Department requisitions require a department."}
+                )
+            if requester.department_id != department.id:
+                raise serializers.ValidationError(
+                    {"requester": "The requester must belong to the selected department."}
+                )
+            if not branch:
+                branch = requester.branch
+                attrs["branch"] = branch
+            if branch and requester.branch_id and branch.id != requester.branch_id:
+                raise serializers.ValidationError(
+                    {"branch": "The selected branch must match the requester's branch."}
+                )
+        elif not branch and employee:
+            attrs["branch"] = employee.branch
+
+        if self.instance and not self.instance.editable:
+            immutable = {"request_type", "requester", "department", "branch"}
+            attempted = immutable.intersection(attrs)
+            if attempted:
+                raise serializers.ValidationError(
+                    "Requisition ownership cannot be changed after submission."
+                )
+        return attrs
 
 
 class RequisitionItemSerializer(serializers.ModelSerializer):
     estimated_total = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+    requested_base_quantity = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        read_only=True,
+    )
+    approved_base_quantity = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        read_only=True,
+    )
+    ordered_quantity = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        read_only=True,
+    )
+    received_quantity = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        read_only=True,
+    )
+    remaining_order_quantity = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        read_only=True,
+    )
+
     class Meta:
         model = RequisitionItem
         fields = (
             "id",
             "requisition",
             "item",
+            "description",
+            "unit",
             "quantity",
+            "approved_quantity",
             "estimated_unit_cost",
             "estimated_total",
+            "requested_base_quantity",
+            "approved_base_quantity",
+            "ordered_quantity",
+            "received_quantity",
+            "remaining_order_quantity",
             "created_at",
             "updated_at",
             "created_by",
         )
-        read_only_fields = ("id", "estimated_total", "created_at", "updated_at", "created_by")
+        read_only_fields = (
+            "id",
+            "approved_quantity",
+            "estimated_total",
+            "requested_base_quantity",
+            "approved_base_quantity",
+            "ordered_quantity",
+            "received_quantity",
+            "remaining_order_quantity",
+            "created_at",
+            "updated_at",
+            "created_by",
+        )
 
     def validate_requisition(self, requisition):
-        if requisition.status not in (PRStatus.DRAFT, PRStatus.REJECTED):
+        if not requisition.editable:
             raise serializers.ValidationError(
-                "Requisition items can only be changed while the requisition is draft or rejected."
+                "Requisition items can only be changed while the requisition is draft, rejected, or returned."
             )
         return requisition
 
     def validate(self, attrs):
         requisition = attrs.get("requisition") or getattr(self.instance, "requisition", None)
         item = attrs.get("item") or getattr(self.instance, "item", None)
-        if requisition and requisition.status not in (PRStatus.DRAFT, PRStatus.REJECTED):
+        if requisition and not requisition.editable:
             raise serializers.ValidationError(
-                "Requisition items can only be changed while the requisition is draft or rejected."
+                "Requisition items can only be changed while the requisition is draft, rejected, or returned."
             )
         duplicate = RequisitionItem.objects.filter(requisition=requisition, item=item)
         if self.instance:
@@ -83,6 +229,31 @@ class RequisitionItemSerializer(serializers.ModelSerializer):
                 {"item": "This Article is already on the requisition. Edit the existing line instead."}
             )
         return attrs
+
+
+class RequisitionHistorySerializer(serializers.ModelSerializer):
+    performed_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RequisitionHistory
+        fields = (
+            "id",
+            "requisition",
+            "action",
+            "previous_status",
+            "new_status",
+            "performed_by",
+            "performed_by_name",
+            "comments",
+            "metadata",
+            "created_at",
+        )
+        read_only_fields = fields
+
+    def get_performed_by_name(self, obj):
+        if not obj.performed_by:
+            return ""
+        return obj.performed_by.get_full_name() or obj.performed_by.username
 
 
 class VendorQuotationSerializer(serializers.ModelSerializer):
@@ -156,7 +327,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
         )
 
     def validate_requisition(self, requisition):
-        if requisition.status != PRStatus.APPROVED:
+        if requisition.status not in (PRStatus.APPROVED, PRStatus.PARTIALLY_ORDERED):
             raise serializers.ValidationError(
                 "Purchase order can only be created from an approved requisition."
             )

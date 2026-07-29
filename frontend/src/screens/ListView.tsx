@@ -52,7 +52,9 @@ export default function ListView() {
   const [columnsOpen, setColumnsOpen] = useState(false)
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set())
   let rows = [...(app.data[source] || [])]
-  if (route === 'approvals') rows = rows.filter((row) => row.status === 'Pending')
+  if (route === 'approvals') {
+    rows = rows.filter((row) => row.status === 'Pending' && Boolean(row.approvalActionable))
+  }
   const term = app.searchTerm.toLowerCase()
   if (term) rows = rows.filter((row) => config.cols.some((column) => String(row[column.key] ?? '').toLowerCase().includes(term)))
   if (statusFilter) rows = rows.filter((row) => String(row.status || '') === statusFilter)
