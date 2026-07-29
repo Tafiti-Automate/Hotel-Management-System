@@ -45,6 +45,7 @@ ROLE_SPECS = {
                 "storelocation",
                 "unitofmeasure",
             ],
+            "procurement": ["goodsreceiptitem", "goodsreceiptnote"],
         },
     },
     "Finance Controller": {
