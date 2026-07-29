@@ -82,6 +82,9 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "core.wsgi.application"
 ASGI_APPLICATION = "core.asgi.application"
+# Database Configuration
+# Local Development  -> SQLite
+# Production (Neon)  -> PostgreSQL via DATABASE_URL
 
 if os.environ.get("DATABASE_URL"):
     import dj_database_url
@@ -89,19 +92,27 @@ if os.environ.get("DATABASE_URL"):
     DATABASES = {
         "default": dj_database_url.parse(
             os.environ["DATABASE_URL"],
-            conn_max_age=600,
-            conn_health_checks=True,
-        ),
+            conn_max_age=600,          # Reuse database connections
+            conn_health_checks=True,   # Verify connection before reuse
+            ssl_require=True,          # Required by Neon
+        )
     }
 else:
     DATABASES = {
         "default": {
-            "ENGINE": os.environ.get("DB_ENGINE", "django.db.backends.sqlite3"),
-            "NAME": os.environ.get("DB_NAME", str(BASE_DIR / "db.sqlite3")),
+            "ENGINE": os.environ.get(
+                "DB_ENGINE",
+                "django.db.backends.sqlite3",
+            ),
+            "NAME": os.environ.get(
+                "DB_NAME",
+                str(BASE_DIR / "db.sqlite3"),
+            ),
             "USER": os.environ.get("DB_USER", ""),
             "PASSWORD": os.environ.get("DB_PASSWORD", ""),
             "HOST": os.environ.get("DB_HOST", ""),
             "PORT": os.environ.get("DB_PORT", ""),
+            "CONN_MAX_AGE": 600,
         }
     }
 
