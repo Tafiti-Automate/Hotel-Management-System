@@ -1,3 +1,25 @@
-# Entry point for build tools (Railway / Nixpacks) that look for a top-level
-# requirements.txt. Production dependencies live in requirements/prod.txt.
--r requirements/prod.txt
+asgiref==3.11.1
+coverage==7.14.1
+dj-database-url==3.1.2
+Django==6.0.6
+django-cors-headers==4.9.0
+django-filter==25.2
+django-jazzmin==3.0.4
+djangorestframework==3.17.1
+factory_boy==3.3.3
+Faker==37.12.0
+gunicorn==26.0.0
+iniconfig==2.3.0
+packaging==26.2
+pillow==12.2.0
+pluggy==1.6.0
+psycopg==3.3.4
+psycopg-binary==3.3.4
+Pygments==2.20.0
+pytest==8.4.2
+pytest-django==4.12.0
+python-dotenv==1.2.2
+sqlparse==0.5.5
+typing_extensions==4.15.0
+tzdata==2026.2
+whitenoise==6.12.0
