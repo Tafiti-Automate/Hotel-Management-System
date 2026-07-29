@@ -16,9 +16,23 @@ Production frontend:
 5. Use the property selector near the top of the sidebar to select the branch you want to show.
 6. Keep the sidebar expanded so your audience can see the workflow sections.
 
-Use the superadmin for the presentation. The seeded employee profiles demonstrate roles and
-responsibilities, but their password logins are disabled unless a separate secure demo password
-has been configured.
+Use the superadmin when you need to demonstrate the complete system. Use the role accounts below
+when you want to demonstrate separation of duties. Their passwords are supplied privately and are
+not stored in this repository.
+
+### Role demonstration accounts
+
+| Employee | Username / employee code | Role | Intended responsibilities |
+|---|---|---|---|
+| Alex Nankya | `anankya` / `EMP-004` | Store Keeper | Store requests, picking and issuing, department returns, stock counts and read-only stock visibility |
+| Esther Nambasa | `esther.nambasa` / `UG-HQ-106` | Department Head | Department purchase requests, store requests and only the approval stages assigned to her |
+| Grace Nakato | `grace.nakato` / `UG-HQ-101` | General Manager | Management dashboard, broad read-only oversight, assigned management approvals and controlled inventory decisions |
+| Daniel Okello | `daniel.okello` / `UG-HQ-102` | Procurement Manager | Suppliers, quotations, LPOs, procurement documents and read-only visibility of received goods |
+
+These are active role-only accounts. They are not Django staff users or superusers. A role may
+review information needed for its work, but backend permissions block unrelated operations. For
+example, the store keeper cannot access purchase orders, the department head cannot manage
+suppliers, and the procurement manager cannot access supplier invoices or payments.
 
 ### Presentation safety
 
