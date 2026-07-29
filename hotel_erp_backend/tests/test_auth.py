@@ -2,6 +2,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.management import call_command
+from django.test import override_settings
 
 
 @pytest.mark.django_db
@@ -14,6 +15,56 @@ def test_custom_user_uses_employee_code():
 
     assert user.employee_code == "EMP-001"
     assert user.check_password("test-pass-123")
+
+
+@pytest.mark.django_db
+def test_api_login_accepts_superuser_username(client):
+    user = get_user_model().objects.create_superuser(
+        username="admin",
+        employee_code="EMP-ADMIN",
+        password="test-pass-123",
+    )
+
+    response = client.post(
+        "/api/v1/auth/login/",
+        {"username": "admin", "password": "test-pass-123"},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["user"]["username"] == user.username
+    assert response.json()["user"]["is_superuser"] is True
+    assert response.json()["token"]
+
+
+@pytest.mark.django_db
+def test_api_login_accepts_employee_code(client):
+    user = get_user_model().objects.create_user(
+        username="jane",
+        employee_code="EMP-001",
+        password="test-pass-123",
+    )
+
+    response = client.post(
+        "/api/v1/auth/login/",
+        {"username": "EMP-001", "password": "test-pass-123"},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["user"]["username"] == user.username
+
+
+@override_settings(CORS_ALLOWED_ORIGINS=["https://hotel.example.com"])
+def test_api_login_allows_configured_frontend_origin(client):
+    response = client.options(
+        "/api/v1/auth/login/",
+        HTTP_ORIGIN="https://hotel.example.com",
+        HTTP_ACCESS_CONTROL_REQUEST_METHOD="POST",
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "https://hotel.example.com"
 
 
 @pytest.mark.django_db

@@ -78,14 +78,18 @@ if (
 # CORS
 # ---------------------------------------------------------
 
+DEFAULT_FRONTEND_ORIGIN = "https://hotel-management-syste-five-livid.vercel.app"
+
 CORS_ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.environ.get(
         "CORS_ALLOWED_ORIGINS",
-        "",
+        DEFAULT_FRONTEND_ORIGIN,
     ).split(",")
     if origin.strip()
 ]
+
+CORS_URLS_REGEX = r"^/api/.*$"
 
 
 # ---------------------------------------------------------
