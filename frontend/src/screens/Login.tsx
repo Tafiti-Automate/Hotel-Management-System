@@ -2,7 +2,6 @@ import { FormEvent, KeyboardEvent, ReactNode, useId, useState } from 'react'
 import { useApp } from '../state/AppContext'
 
 type AuthIconName =
-  | 'building'
   | 'user'
   | 'lock'
   | 'eye'
@@ -18,14 +17,6 @@ function AuthIcon({ name, size = 20 }: { name: AuthIconName; size?: number }) {
   let paths: ReactNode
 
   switch (name) {
-    case 'building':
-      paths = (
-        <>
-          <path d="M4 21V6.5a1.5 1.5 0 0 1 1.5-1.5h8A1.5 1.5 0 0 1 15 6.5V21" />
-          <path d="M15 10.5h3.5A1.5 1.5 0 0 1 20 12v9M2.5 21h19M8 9h3M8 13h3M8 17h3" />
-        </>
-      )
-      break
     case 'user':
       paths = (
         <>
@@ -176,25 +167,13 @@ export default function Login() {
       <div className="auth-orb auth-orb-one" aria-hidden="true" />
       <div className="auth-orb auth-orb-two" aria-hidden="true" />
 
-      <section className="auth-panel" aria-labelledby="staff-login-title">
-        <div className="auth-brand">
-          <span className="auth-brand-mark" aria-hidden="true">
-            <AuthIcon name="building" size={23} />
-          </span>
-          <span>
-            <strong>Hotel Management ERP</strong>
-            <small>Secure operations workspace</small>
-          </span>
-        </div>
-
+      <section className="auth-panel" aria-labelledby="login-title">
         <div className="auth-card">
           <header>
             <span className="auth-avatar" aria-hidden="true">
               <AuthIcon name="user" size={30} />
             </span>
-            <span className="auth-kicker">Welcome back</span>
-            <h1 id="staff-login-title">Hotel Staff Login</h1>
-            <p>Enter your staff credentials to continue to hotel operations.</p>
+            <h1 id="login-title">Welcome back</h1>
           </header>
 
           {authMessage && (

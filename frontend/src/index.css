@@ -130,48 +130,6 @@ select { appearance: none; -webkit-appearance: none; }
   to { opacity: 1; transform: none; }
 }
 
-.auth-brand {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 11px;
-  margin: 0 auto 18px;
-  color: #fff;
-  text-align: left;
-  text-shadow: 0 1px 2px rgba(0, 31, 71, .15);
-}
-
-.auth-brand-mark {
-  width: 42px;
-  height: 42px;
-  display: grid;
-  place-items: center;
-  flex: none;
-  border: 1px solid rgba(255, 255, 255, .42);
-  border-radius: 13px;
-  background: rgba(4, 59, 119, .34);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2);
-  backdrop-filter: blur(10px);
-}
-
-.auth-brand > span:last-child {
-  display: flex;
-  flex-direction: column;
-}
-
-.auth-brand strong {
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: .045em;
-}
-
-.auth-brand small {
-  margin-top: 1px;
-  color: rgba(255, 255, 255, .76);
-  font-size: 10.5px;
-  letter-spacing: .025em;
-}
-
 .auth-card {
   width: 100%;
   padding: 34px 38px 28px;
@@ -203,31 +161,13 @@ select { appearance: none; -webkit-appearance: none; }
   box-shadow: 0 12px 26px rgba(6, 75, 135, .22);
 }
 
-.auth-kicker {
-  display: block;
-  margin-bottom: 5px;
-  color: #2173b5;
-  font-size: 10.5px;
-  font-weight: 750;
-  letter-spacing: .13em;
-  text-transform: uppercase;
-}
-
 .auth-card header h1 {
-  margin: 0;
+  margin: 0 0 28px;
   color: #102a43;
   font-size: 27px;
   line-height: 1.22;
   font-weight: 740;
   letter-spacing: -.025em;
-}
-
-.auth-card header p {
-  max-width: 310px;
-  margin: 9px auto 27px;
-  color: #627d98;
-  font-size: 12.5px;
-  line-height: 1.55;
 }
 
 .auth-notice, .auth-error, .auth-help {
@@ -438,7 +378,6 @@ select { appearance: none; -webkit-appearance: none; }
 
   .auth-orb-one { top: -250px; right: -230px; }
   .auth-orb-two { display: none; }
-  .auth-brand { margin-bottom: 13px; }
   .auth-card {
     padding: 27px 21px 23px;
     border-radius: 21px;
@@ -452,7 +391,6 @@ select { appearance: none; -webkit-appearance: none; }
   }
 
   .auth-card header h1 { font-size: 24px; }
-  .auth-card header p { margin-bottom: 23px; }
   .auth-input input { font-size: 16px; }
   .auth-security-note { margin-top: 18px; }
 }
@@ -468,10 +406,8 @@ select { appearance: none; -webkit-appearance: none; }
 
 @media (max-height: 760px) and (min-width: 521px) {
   .auth-page { padding-block: 18px; }
-  .auth-brand { margin-bottom: 10px; }
   .auth-card { padding-top: 25px; padding-bottom: 21px; }
   .auth-avatar { width: 50px; height: 50px; margin-bottom: 9px; border-radius: 16px; }
-  .auth-card header p { margin-bottom: 20px; }
   .auth-field { margin-bottom: 13px; }
   .auth-options { margin-bottom: 15px; }
   .auth-security-note { margin-top: 15px; }
