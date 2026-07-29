@@ -1195,6 +1195,9 @@ class ProcurementAttachment(BaseModel):
     document_id = models.UUIDField(db_index=True)
     category = models.CharField(max_length=30, choices=CATEGORY_CHOICES, default="supporting")
     file = models.FileField(upload_to="procurement/%Y/%m/")
+    file_content = models.BinaryField(null=True, blank=True, editable=False)
+    content_type = models.CharField(max_length=150, blank=True)
+    file_size = models.PositiveIntegerField(default=0)
     original_name = models.CharField(max_length=255)
     note = models.TextField(blank=True)
 

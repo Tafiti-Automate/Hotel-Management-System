@@ -1,3 +1,6 @@
+from pathlib import Path
+
+from django.urls import reverse
 from rest_framework import serializers
 
 from core.constants.choices import POStatus, PRStatus
@@ -352,19 +355,81 @@ class SupplierReturnSerializer(serializers.ModelSerializer):
 
 
 class ProcurementAttachmentSerializer(serializers.ModelSerializer):
+    MAX_FILE_SIZE = 4 * 1024 * 1024
+    ALLOWED_EXTENSIONS = {
+        ".pdf",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".webp",
+        ".doc",
+        ".docx",
+    }
+
+    file = serializers.FileField(write_only=True)
+    download_url = serializers.SerializerMethodField()
     uploaded_by = serializers.CharField(source="created_by.get_full_name", read_only=True)
 
     class Meta:
         model = ProcurementAttachment
-        fields = "__all__"
+        fields = (
+            "id",
+            "document_type",
+            "document_id",
+            "category",
+            "file",
+            "download_url",
+            "original_name",
+            "content_type",
+            "file_size",
+            "note",
+            "uploaded_by",
+            "created_at",
+            "updated_at",
+            "created_by",
+        )
         read_only_fields = (
-            "id", "original_name", "uploaded_by", "created_at", "updated_at", "created_by",
+            "id",
+            "download_url",
+            "original_name",
+            "content_type",
+            "file_size",
+            "uploaded_by",
+            "created_at",
+            "updated_at",
+            "created_by",
         )
 
+    def validate_file(self, uploaded_file):
+        extension = Path(uploaded_file.name).suffix.lower()
+        if extension not in self.ALLOWED_EXTENSIONS:
+            raise serializers.ValidationError(
+                "Use a PDF, Word document, PNG, JPEG or WebP file."
+            )
+        if uploaded_file.size <= 0:
+            raise serializers.ValidationError("The selected file is empty.")
+        if uploaded_file.size > self.MAX_FILE_SIZE:
+            raise serializers.ValidationError("The maximum attachment size is 4 MB.")
+        return uploaded_file
+
     def create(self, validated_data):
-        uploaded_file = validated_data["file"]
-        validated_data["original_name"] = uploaded_file.name
+        uploaded_file = validated_data.pop("file")
+        validated_data["original_name"] = Path(uploaded_file.name).name[:255]
+        validated_data["content_type"] = (
+            str(getattr(uploaded_file, "content_type", ""))[:150]
+            or "application/octet-stream"
+        )
+        validated_data["file_size"] = uploaded_file.size
+        validated_data["file_content"] = b"".join(uploaded_file.chunks())
         return super().create(validated_data)
+
+    def get_download_url(self, attachment):
+        request = self.context.get("request")
+        path = reverse(
+            "procurement-attachment-download",
+            kwargs={"pk": attachment.pk},
+        )
+        return request.build_absolute_uri(path) if request else path
 
 
 class ProcurementCommunicationSerializer(serializers.ModelSerializer):

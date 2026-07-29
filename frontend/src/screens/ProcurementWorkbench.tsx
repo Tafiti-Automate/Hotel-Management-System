@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Icon } from '../components/Icon'
 import { HelpLabel } from '../components/HelpLabel'
-import { createBackendRecord, deleteBackendPath, errorMessage, readBackendRecords, runBackendAction, updateBackendRecord, uploadProcurementAttachment } from '../lib/api'
+import { createBackendRecord, deleteBackendPath, downloadProcurementAttachment, errorMessage, readBackendRecords, runBackendAction, updateBackendRecord, uploadProcurementAttachment } from '../lib/api'
 import type { Row } from '../lib/data'
 import { chipStyleFor, money } from '../lib/theme'
 import { useApp } from '../state/AppContext'
@@ -54,6 +54,12 @@ const empty: Datasets = Object.fromEntries(Object.keys(paths).map((key) => [key,
 
 function id(value: unknown) { return String(value || '') }
 function num(value: unknown) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0 }
+function fileSize(value: unknown) {
+  const bytes = num(value)
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${Math.ceil(bytes / 1024)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
 
 export default function ProcurementWorkbench() {
   const app = useApp()
@@ -217,7 +223,7 @@ export default function ProcurementWorkbench() {
           </aside>
         </div>
       )}
-      {selectedRecord && <ProcurementRecordDrawer stage={stage} row={selectedRecord} data={scopedData} names={names} onChanged={load} onClose={() => setSelectedRecord(null)} />}
+      {selectedRecord && <ProcurementRecordDrawer stage={stage} row={selectedRecord} data={scopedData} names={names} canAttach={can('procurement.add_procurementattachment')} onChanged={load} onClose={() => setSelectedRecord(null)} />}
     </div>
   )
 }
@@ -440,16 +446,21 @@ function ComparisonField({ label, value }: { label: string; value: string }) {
   return <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '5px 0', borderTop: '1px solid var(--border)', fontSize: 10.5 }}><span style={{ color: 'var(--text-faint)' }}>{label}</span><span style={{ color: 'var(--text-muted)', textAlign: 'right', fontWeight: 600 }}>{value}</span></div>
 }
 
-function ProcurementRecordDrawer({ stage, row, data, names, onClose, onChanged }: {
+function ProcurementRecordDrawer({ stage, row, data, names, canAttach, onClose, onChanged }: {
   stage: Stage
   row: Row
   data: Datasets
   names: Record<string, Map<string, string>>
+  canAttach: boolean
   onClose: () => void
   onChanged: () => Promise<void>
 }) {
   const [attachmentCategory, setAttachmentCategory] = useState('supporting')
   const [uploading, setUploading] = useState(false)
+  const [attachmentMessage, setAttachmentMessage] = useState('')
+  const [attachmentError, setAttachmentError] = useState('')
+  const [downloadingId, setDownloadingId] = useState('')
+  const fileInput = useRef<HTMLInputElement>(null)
   const requisition = stage === 'request'
     ? data.requisitions.find((record) => id(record.id) === id(row.requisition))
     : stage === 'quote'
@@ -554,12 +565,30 @@ function ProcurementRecordDrawer({ stage, row, data, names, onClose, onChanged }
   )
   const upload = async (file?: File) => {
     if (!file || !documentType) return
+    setAttachmentMessage('')
+    setAttachmentError('')
     setUploading(true)
     try {
       await uploadProcurementAttachment(documentType, id(row.id), attachmentCategory, file)
       await onChanged()
+      setAttachmentMessage(`${file.name} attached successfully.`)
+    } catch (error) {
+      setAttachmentError(errorMessage(error))
     } finally {
       setUploading(false)
+    }
+  }
+  const download = async (attachment: Row) => {
+    const attachmentId = id(attachment.id)
+    setAttachmentMessage('')
+    setAttachmentError('')
+    setDownloadingId(attachmentId)
+    try {
+      await downloadProcurementAttachment(attachmentId, id(attachment.original_name))
+    } catch (error) {
+      setAttachmentError(errorMessage(error))
+    } finally {
+      setDownloadingId('')
     }
   }
 
@@ -601,9 +630,43 @@ function ProcurementRecordDrawer({ stage, row, data, names, onClose, onChanged }
           <h3 style={drawerHeading}>Supporting documents <span style={{ color: 'var(--text-faint)', fontWeight: 500 }}>({attachments.length})</span></h3>
           <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
             <select value={attachmentCategory} onChange={(event) => setAttachmentCategory(event.target.value)} style={{ ...control, flex: 1 }}><option value="quotation">Supplier quotation</option><option value="delivery_note">Delivery note</option><option value="invoice">Invoice copy</option><option value="inspection_photo">Inspection photograph</option><option value="supporting">Other supporting document</option></select>
-            <label style={{ ...secondary, cursor: uploading ? 'wait' : 'pointer' }}><Icon name="upload_file" size={17} />{uploading ? 'Uploading…' : 'Attach file'}<input disabled={uploading} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx" onChange={(event) => void upload(event.target.files?.[0])} style={{ display: 'none' }} /></label>
+            {canAttach && <>
+              <input
+                ref={fileInput}
+                disabled={uploading}
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx"
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  event.target.value = ''
+                  void upload(file)
+                }}
+                style={{ display: 'none' }}
+              />
+              <button type="button" disabled={uploading} onClick={() => fileInput.current?.click()} style={{ ...secondary, cursor: uploading ? 'wait' : 'pointer', opacity: uploading ? .65 : 1 }}><Icon name="upload_file" size={17} />{uploading ? 'Uploading…' : 'Attach file'}</button>
+            </>}
           </div>
-          <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>{attachments.map((attachment) => <a key={id(attachment.id)} href={id(attachment.file)} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '11px 13px', color: 'var(--text)', borderBottom: '1px solid var(--border)', textDecoration: 'none', fontSize: 12 }}><Icon name="attach_file" size={17} color="var(--accent)" /><span style={{ flex: 1 }}>{id(attachment.original_name)}</span><span style={{ color: 'var(--text-faint)', fontSize: 10.5 }}>{id(attachment.category).replace(/_/g, ' ')}</span><Icon name="open_in_new" size={15} color="var(--text-faint)" /></a>)}{!attachments.length && <div style={{ padding: 20, color: 'var(--text-faint)', textAlign: 'center', fontSize: 11.5 }}>No documents attached yet.</div>}</div>
+          {!canAttach && <div style={{ marginBottom: 10, color: 'var(--text-faint)', fontSize: 10.5 }}>Your role can view attachments but cannot add new files.</div>}
+          <div style={{ margin: '-2px 0 10px', color: 'var(--text-faint)', fontSize: 10 }}>PDF, Word or image files up to 4 MB.</div>
+          {attachmentMessage && <div role="status" style={{ marginBottom: 10, padding: '9px 11px', borderRadius: 6, color: 'var(--good)', background: 'var(--good-soft)', fontSize: 11 }}>{attachmentMessage}</div>}
+          {attachmentError && <div role="alert" style={{ marginBottom: 10, padding: '9px 11px', borderRadius: 6, color: 'var(--bad)', background: 'var(--bad-soft)', fontSize: 11 }}>{attachmentError}</div>}
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+            {attachments.map((attachment) => (
+              <button
+                type="button"
+                key={id(attachment.id)}
+                disabled={downloadingId === id(attachment.id)}
+                onClick={() => void download(attachment)}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 9, padding: '11px 13px', color: 'var(--text)', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', cursor: 'pointer', textAlign: 'left', font: 'inherit', fontSize: 12 }}
+              >
+                <Icon name="attach_file" size={17} color="var(--accent)" />
+                <span style={{ flex: 1 }}>{id(attachment.original_name)}</span>
+                <span style={{ color: 'var(--text-faint)', fontSize: 10.5 }}>{id(attachment.category).replace(/_/g, ' ')} · {fileSize(attachment.file_size)}</span>
+                <Icon name={downloadingId === id(attachment.id) ? 'progress_activity' : 'download'} size={15} color="var(--text-faint)" />
+              </button>
+            ))}
+            {!attachments.length && <div style={{ padding: 20, color: 'var(--text-faint)', textAlign: 'center', fontSize: 11.5 }}>No documents attached yet.</div>}
+          </div>
         </section>}
         {stage === 'lpo' && <section style={{ marginTop: 25 }}>
           <h3 style={drawerHeading}>Communication history <span style={{ color: 'var(--text-faint)', fontWeight: 500 }}>({communications.length})</span></h3>

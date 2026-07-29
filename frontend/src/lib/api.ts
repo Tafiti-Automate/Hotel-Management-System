@@ -1042,6 +1042,26 @@ export async function uploadProcurementAttachment(
   return response.json() as Promise<Row>
 }
 
+export async function downloadProcurementAttachment(id: string, originalName: string): Promise<void> {
+  const response = await fetch(endpointUrl(`procurement-attachments/${id}/download`), {
+    headers: { Accept: '*/*', ...authHeaders() },
+  })
+  if (!response.ok) {
+    let body: unknown = null
+    try { body = await response.json() } catch { /* non-JSON response */ }
+    throw new Error(apiErrorDetail(body, `Download failed (${response.status}).`))
+  }
+
+  const blobUrl = URL.createObjectURL(await response.blob())
+  const link = document.createElement('a')
+  link.href = blobUrl
+  link.download = originalName || 'supporting-document'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1_000)
+}
+
 export async function decideRequisition(requisitionId: string, decision: 'approve' | 'reject'): Promise<void> {
   const approvals = await readList(`approvals?requisition=${encodeURIComponent(requisitionId)}&status=pending`)
   const approval = approvals.sort((a, b) => num(a.stage) - num(b.stage))[0]

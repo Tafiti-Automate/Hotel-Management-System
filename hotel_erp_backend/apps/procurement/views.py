@@ -1,10 +1,12 @@
 from decimal import Decimal
 
+from django.http import Http404, HttpResponse
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.conf import settings
 from django.core.mail import send_mail
 from django.utils import timezone
+from django.utils.http import content_disposition_header
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
@@ -468,6 +470,35 @@ class ProcurementAttachmentViewSet(CreatedByModelMixin, ModelViewSet):
     filterset_fields = ("document_type", "document_id", "category")
     search_fields = ("original_name", "note")
     ordering_fields = ("created_at", "original_name")
+
+    @action(detail=True, methods=["get"])
+    def download(self, request, pk=None):
+        attachment = self.get_object()
+        if attachment.file_content is not None:
+            content = bytes(attachment.file_content)
+        elif attachment.file:
+            try:
+                attachment.file.open("rb")
+                content = attachment.file.read()
+            except (FileNotFoundError, OSError, ValueError):
+                raise Http404("The attachment file is not available.")
+            else:
+                attachment.file.close()
+        else:
+            raise Http404("The attachment file is not available.")
+
+        response = HttpResponse(
+            content,
+            content_type=attachment.content_type or "application/octet-stream",
+        )
+        response["Content-Disposition"] = content_disposition_header(
+            False,
+            attachment.original_name,
+        )
+        response["Content-Length"] = len(content)
+        response["Cache-Control"] = "private, no-store"
+        response["X-Content-Type-Options"] = "nosniff"
+        return response
 
 
 class ProcurementCommunicationViewSet(CreatedByModelMixin, ModelViewSet):
