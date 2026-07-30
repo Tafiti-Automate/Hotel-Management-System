@@ -25,6 +25,7 @@ from apps.procurement.models import (
 
 class PurchaseRequisitionSerializer(serializers.ModelSerializer):
     estimated_total = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+    approval_steps = serializers.SerializerMethodField()
 
     class Meta:
         model = PurchaseRequisition
@@ -43,6 +44,7 @@ class PurchaseRequisitionSerializer(serializers.ModelSerializer):
             "control_notes",
             "currency",
             "estimated_total",
+            "approval_steps",
             "submitted_at",
             "approved_at",
             "rejected_at",
@@ -54,6 +56,32 @@ class PurchaseRequisitionSerializer(serializers.ModelSerializer):
             "updated_at",
             "created_by",
         )
+
+    def get_approval_steps(self, obj):
+        steps = list(obj.approval_workflow.all())
+        completed_statuses = {"approved", "skipped"}
+        return [
+            {
+                "stage": step.stage,
+                "stage_name": step.stage_name or f"Stage {step.stage}",
+                "approver_name": (
+                    step.approver.user.get_full_name()
+                    or step.approver.user.username
+                ),
+                "status": step.status,
+                "comments": step.comments,
+                "decided_at": step.decided_at,
+                "is_actionable": (
+                    step.status == "pending"
+                    and all(
+                        previous.status in completed_statuses
+                        for previous in steps
+                        if previous.stage < step.stage
+                    )
+                ),
+            }
+            for step in steps
+        ]
         read_only_fields = (
             "id",
             "requisition_number",

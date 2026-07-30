@@ -70,6 +70,37 @@ def test_department_requisition_requires_requester_and_department():
 
 
 @pytest.mark.django_db
+def test_requester_cannot_be_assigned_to_approve_own_requisition():
+    user = get_user_model().objects.create_user(
+        username="self-approver",
+        employee_code="EMP-SELF",
+        password="test-pass-123",
+    )
+    department = Department.objects.create(name="Front Office")
+    requester = Employee.objects.create(
+        user=user,
+        department=department,
+        designation="Department Head",
+    )
+    requisition = PurchaseRequisition.objects.create(
+        requester=requester,
+        department=department,
+        reason="Front desk supplies",
+    )
+    rule = ApprovalMatrixRule.objects.create(
+        name="Front Office approval",
+        document_type=ApprovalMatrixRule.DOCUMENT_PURCHASE_REQUISITION,
+        minimum_amount=0,
+        stage=1,
+        stage_name="Department approval",
+        approver=requester,
+    )
+
+    with pytest.raises(ValidationError, match="cannot be assigned"):
+        rule.resolve_approver(requisition)
+
+
+@pytest.mark.django_db
 def test_hotel_purchase_requisition_passes_ordered_controls():
     user_model = get_user_model()
     management = Department.objects.create(name="Management")

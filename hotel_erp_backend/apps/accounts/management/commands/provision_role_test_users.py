@@ -9,6 +9,7 @@ from django.db import transaction
 
 from apps.departments.models import Branch, Department
 from apps.employees.models import Employee
+from rest_framework.authtoken.models import Token
 
 
 DEFAULT_TEST_PASSWORD = "RoleTest-2026!"
@@ -25,9 +26,14 @@ ROLE_ACCOUNTS = (
     ("role-auditor", "ROLE-AUDIT", "Operations", "Auditor", "Auditor", None),
 )
 
+PASSWORD_VARIABLES = {
+    username: f"ROLE_TEST_{employee_code.removeprefix('ROLE-').replace('-', '_')}_PASSWORD"
+    for username, employee_code, *_rest in ROLE_ACCOUNTS
+}
+
 
 class Command(BaseCommand):
-    help = "Create or refresh local role-testing users without creating workflow records."
+    help = "Create or refresh isolated role-testing users without creating workflow records."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -44,14 +50,7 @@ class Command(BaseCommand):
     @transaction.atomic
     def handle(self, *args, **options):
         password = str(options["password"]).strip()
-        if not password:
-            if not settings.DEBUG:
-                raise CommandError(
-                    "Set ROLE_TEST_PASSWORD or pass --password outside a DEBUG environment."
-                )
-            password = DEFAULT_TEST_PASSWORD
-        if len(password) < 12:
-            raise CommandError("The role-test password must contain at least 12 characters.")
+        passwords = self.get_passwords(password)
 
         call_command("setup_hotel_roles", verbosity=0)
         branch = self.get_branch(str(options["branch"]).strip())
@@ -73,9 +72,11 @@ class Command(BaseCommand):
             user.is_active = True
             user.is_staff = role == "System Administrator"
             user.is_superuser = False
-            user.set_password(password)
+            user.set_password(passwords[username])
             user.save()
             user.groups.set([Group.objects.get(name=role)])
+            user.user_permissions.clear()
+            Token.objects.filter(user=user).delete()
 
             Employee.objects.update_or_create(
                 user=user,
@@ -94,6 +95,38 @@ class Command(BaseCommand):
                 f"Provisioned {len(ROLE_ACCOUNTS)} role-test users for {branch.name}."
             )
         )
+
+    @staticmethod
+    def get_passwords(shared_password):
+        if settings.DEBUG:
+            password = shared_password or DEFAULT_TEST_PASSWORD
+            if len(password) < 12:
+                raise CommandError("The role-test password must contain at least 12 characters.")
+            return {username: password for username, *_rest in ROLE_ACCOUNTS}
+
+        if shared_password:
+            raise CommandError(
+                "Shared role-test passwords are disabled in production. "
+                "Set the separate ROLE_TEST_*_PASSWORD environment variables."
+            )
+
+        passwords = {
+            username: os.environ.get(variable_name, "").strip()
+            for username, variable_name in PASSWORD_VARIABLES.items()
+        }
+        missing = [
+            PASSWORD_VARIABLES[username]
+            for username, password in passwords.items()
+            if len(password) < 16
+        ]
+        if missing:
+            raise CommandError(
+                "Set a unique password of at least 16 characters for: "
+                + ", ".join(missing)
+            )
+        if len(set(passwords.values())) != len(passwords):
+            raise CommandError("Every production role-test account must use a unique password.")
+        return passwords
 
     def get_branch(self, requested_name):
         branches = Branch.objects.filter(is_active=True)

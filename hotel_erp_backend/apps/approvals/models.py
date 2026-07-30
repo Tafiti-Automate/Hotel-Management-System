@@ -109,6 +109,11 @@ class ApprovalMatrixRule(BaseModel):
                 raise ValidationError(
                     f"{self.stage_name} does not have an active assigned employee."
                 )
+            if requisition.requester_id == self.approver_id:
+                raise ValidationError(
+                    f"{self.stage_name} cannot be assigned to the employee who requested "
+                    "the purchase. Configure an independent approver."
+                )
             return self.approver
 
         from apps.employees.models import Employee
@@ -116,6 +121,8 @@ class ApprovalMatrixRule(BaseModel):
         candidates = Employee.objects.filter(is_active=True, user__is_active=True)
         if requisition.branch_id:
             candidates = candidates.filter(branch=requisition.branch)
+        if requisition.requester_id:
+            candidates = candidates.exclude(pk=requisition.requester_id)
 
         if self.assignment_type == self.ASSIGNMENT_DEPARTMENT_HEAD:
             if not requisition.department_id:
@@ -139,7 +146,7 @@ class ApprovalMatrixRule(BaseModel):
                 else f"employee in the {self.approver_role} role"
             )
             raise ValidationError(
-                f"{self.stage_name} requires exactly one active {assignment} "
+                f"{self.stage_name} requires exactly one independent active {assignment} "
                 f"at {requisition.branch or 'the hotel'}; found {candidates.count()}."
             )
         return candidates.first()

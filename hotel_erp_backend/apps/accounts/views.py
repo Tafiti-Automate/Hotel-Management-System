@@ -1,7 +1,7 @@
 from django.contrib.auth import authenticate, get_user_model
 from rest_framework import status
 from rest_framework.authtoken.models import Token
-from rest_framework.permissions import AllowAny, IsAdminUser
+from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
@@ -72,12 +72,16 @@ class LoginView(APIView):
 class CurrentUserView(APIView):
     """Return the authenticated user's profile (used to restore a session)."""
 
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
         return Response(_user_payload(request.user))
 
 
 class LogoutView(APIView):
     """Invalidate the caller's auth token."""
+
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         Token.objects.filter(user=request.user).delete()
