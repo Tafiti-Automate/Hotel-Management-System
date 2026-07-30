@@ -565,7 +565,6 @@ function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey
   if (entity === 'requisitions') {
     const requestType = text(values.request_type, 'department')
     const supplierId = findDataId(data, 'suppliers', values.preferred_supplier || values.supplier)
-    const branchId = findDataId(data, 'branches', values.branch)
 
     const payload: Row = {
       request_type: requestType,
@@ -575,15 +574,6 @@ function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey
     }
     const currency = text(values.currency)
     if (currency) payload.currency = currency.toUpperCase()
-    if (branchId) payload.branch = branchId
-    if (requestType === 'department') {
-      const departmentId = findDataId(data, 'departments', values.department)
-      const requesterId = findDataId(data, 'employees', values.requester)
-      if (!departmentId) throw new Error('Choose a backend department before saving this requisition.')
-      if (!requesterId) throw new Error('Choose a backend requester before saving this requisition.')
-      payload.department = departmentId
-      payload.requester = requesterId
-    }
     if (supplierId) payload.preferred_supplier = supplierId
     return payload
   }

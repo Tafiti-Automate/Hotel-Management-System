@@ -40,13 +40,14 @@ export default function FormDrawer() {
     const existing = f.id ? app.data[f.entity].find((x) => x.id === f.id) : null
     const seed: Row = {}
     conf.fields?.forEach((fd) => {
-      const fallback = fd.key === 'request_type'
-        ? 'department'
-        : f.entity === 'requisitions' && fd.key === 'currency'
+      const fallback = f.entity === 'requisitions' && fd.key === 'currency'
           ? 'UGX'
           : ''
       seed[fd.key] = existing && existing[fd.key] != null ? existing[fd.key] : fallback
     })
+    if (f.entity === 'requisitions') {
+      seed.request_type = existing?.request_type || 'department'
+    }
     setValues(seed)
     setStep(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -83,6 +84,9 @@ export default function FormDrawer() {
       const v = values[fd.key]
       out[fd.key] = fd.type === 'number' ? Number(v || 0) : v
     })
+    if (f.entity === 'requisitions') {
+      out.request_type = values.request_type || 'department'
+    }
     app.saveForm(out)
   }
 
