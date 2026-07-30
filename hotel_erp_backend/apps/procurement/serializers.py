@@ -74,7 +74,7 @@ class PurchaseRequisitionSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         request_type = attrs.get(
             "request_type",
-            getattr(self.instance, "request_type", None),
+            getattr(self.instance, "request_type", None) or "department",
         )
         requester = attrs.get("requester", getattr(self.instance, "requester", None))
         department = attrs.get(
@@ -91,8 +91,9 @@ class PurchaseRequisitionSerializer(serializers.ModelSerializer):
 
         if (
             request
-            and not request.user.is_superuser
-            and request.user.groups.filter(name="Department Head").exists()
+            and request.user.is_authenticated
+            and request_type == "department"
+            and self.instance is None
         ):
             if not employee:
                 raise serializers.ValidationError(

@@ -3,6 +3,7 @@ from decimal import Decimal
 import pytest
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from rest_framework.test import APIRequestFactory
 
 from apps.departments.models import Branch, Department
 from apps.employees.models import Employee
@@ -28,7 +29,12 @@ from apps.procurement.models import (
     VendorQuotation,
     VendorQuotationItem,
 )
-from apps.procurement.serializers import GoodsReceiptItemSerializer, PurchaseOrderItemSerializer, PurchaseOrderSerializer
+from apps.procurement.serializers import (
+    GoodsReceiptItemSerializer,
+    PurchaseOrderItemSerializer,
+    PurchaseOrderSerializer,
+    PurchaseRequisitionSerializer,
+)
 from apps.vendors.models import Supplier
 from core.constants.choices import POStatus, PRStatus
 
@@ -62,6 +68,23 @@ def create_procurement_context():
         reorder_level=Decimal("15.00"),
     )
     return employee, department, supplier, item
+
+
+@pytest.mark.django_db
+def test_requisition_creation_uses_logged_in_employee_identity():
+    employee, department, _supplier, _item = create_procurement_context()
+    request = APIRequestFactory().post("/api/v1/requisitions/")
+    request.user = employee.user
+    serializer = PurchaseRequisitionSerializer(
+        data={"reason": "Monthly kitchen restock"},
+        context={"request": request},
+    )
+
+    assert serializer.is_valid(), serializer.errors
+    requisition = serializer.save()
+    assert requisition.requester == employee
+    assert requisition.department == department
+    assert requisition.branch == employee.branch
 
 
 @pytest.mark.django_db
