@@ -573,9 +573,11 @@ function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey
       expected_date: text(values.expected_date) || null,
       control_notes: text(values.control_notes),
     }
+    const currency = text(values.currency)
+    if (currency) payload.currency = currency.toUpperCase()
     if (branchId) payload.branch = branchId
     if (requestType === 'department') {
-      const departmentId = findDataId(data, 'departments', values.dept || values.department)
+      const departmentId = findDataId(data, 'departments', values.department)
       const requesterId = findDataId(data, 'employees', values.requester)
       if (!departmentId) throw new Error('Choose a backend department before saving this requisition.')
       if (!requesterId) throw new Error('Choose a backend requester before saving this requisition.')
@@ -930,10 +932,13 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
       request_type: text(row.request_type, 'department'),
       branch: branchNames.get(text(row.branch)) || '',
       dept: departmentNames.get(text(row.department)) || titleCaseStatus(row.request_type),
+      department: departmentNames.get(text(row.department)) || '',
       requester: employeeNames.get(text(row.requester)) || shortId(row.requester),
       preferred_supplier: supplierNames.get(text(row.preferred_supplier)) || '',
       expected_date: dateOnly(row.expected_date),
       reason: text(row.reason),
+      control_notes: text(row.control_notes),
+      currency: text(row.currency, 'UGX'),
       status: requisitionStatus(row.status),
       approvalActionable: raw.approvals.some(
         (approval) =>

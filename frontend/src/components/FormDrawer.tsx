@@ -40,7 +40,11 @@ export default function FormDrawer() {
     const existing = f.id ? app.data[f.entity].find((x) => x.id === f.id) : null
     const seed: Row = {}
     conf.fields?.forEach((fd) => {
-      const fallback = fd.key === 'request_type' ? 'department' : ''
+      const fallback = fd.key === 'request_type'
+        ? 'department'
+        : f.entity === 'requisitions' && fd.key === 'currency'
+          ? 'UGX'
+          : ''
       seed[fd.key] = existing && existing[fd.key] != null ? existing[fd.key] : fallback
     })
     setValues(seed)
@@ -52,7 +56,7 @@ export default function FormDrawer() {
   const conf = cfg[f.entity]
   const fields = conf.fields || []
   const isHotelPurchase = f.entity === 'requisitions' && values.request_type === 'hotel_purchase'
-  const visibleFields = fields.filter((fd) => !(isHotelPurchase && ['dept', 'requester'].includes(fd.key)))
+  const visibleFields = fields.filter((fd) => !(isHotelPurchase && ['department', 'requester'].includes(fd.key)))
   const wizard = visibleFields.length > 6
   const pageSize = 4
   const pageCount = wizard ? Math.ceil(visibleFields.length / pageSize) : 1
@@ -66,7 +70,7 @@ export default function FormDrawer() {
     setValues((v) => {
       const next = { ...v, [key]: numeric ? Number(raw || 0) : raw }
       if (f.entity === 'requisitions' && key === 'request_type' && raw === 'hotel_purchase') {
-        next.dept = ''
+        next.department = ''
         next.requester = ''
       }
       return next
