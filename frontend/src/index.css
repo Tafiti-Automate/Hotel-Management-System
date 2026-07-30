@@ -499,30 +499,181 @@ select { appearance: none; -webkit-appearance: none; }
   }
 }
 
+.print-only {
+  display: none;
+}
+
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    width: auto !important;
+    min-width: 0 !important;
+    background: #fff !important;
+  }
+
   body * { visibility: hidden !important; }
   .inventory-print-document,
-  .inventory-print-document *,
   .procurement-print-document,
-  .procurement-print-document * { visibility: visible !important; }
-  .inventory-print-document {
-    position: absolute !important;
-    inset: 0 !important;
-    width: 100% !important;
-    max-width: none !important;
-    box-shadow: none !important;
-  }
+  .print-sheet,
+  .print-sheet * { visibility: visible !important; }
+
+  .screen-document-view { display: none !important; }
+
+  .inventory-print-document,
   .procurement-print-document {
     position: absolute !important;
     inset: 0 !important;
     width: 100% !important;
+    height: auto !important;
     max-width: none !important;
+    display: block !important;
+    overflow: visible !important;
+    background: #fff !important;
     box-shadow: none !important;
+    animation: none !important;
   }
-  .inventory-print-document footer,
-  .inventory-print-document header button,
-  .procurement-print-document footer,
-  .procurement-print-document header button { display: none !important; }
+
+  .print-only.print-sheet {
+    display: block !important;
+    color: #111827 !important;
+    font-family: Arial, Helvetica, sans-serif !important;
+    font-size: 10pt !important;
+  }
+
+  .print-sheet-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding-bottom: 14px;
+    border-bottom: 2px solid #111827;
+  }
+
+  .print-property {
+    margin-bottom: 5px;
+    color: #4b5563;
+    font-size: 8.5pt;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .print-sheet h1 {
+    margin: 0;
+    color: #111827;
+    font-size: 17pt;
+    font-weight: 700;
+  }
+
+  .print-reference {
+    margin-top: 5px;
+    font-family: "Courier New", monospace;
+    font-size: 11pt;
+    font-weight: 700;
+  }
+
+  .print-status {
+    padding: 4px 7px;
+    border: 1px solid #9ca3af;
+    color: #374151;
+    font-size: 8pt;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .print-meta {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+    margin: 14px 0 18px;
+    border-top: 1px solid #d1d5db;
+    border-left: 1px solid #d1d5db;
+  }
+
+  .print-meta > div {
+    min-height: 42px;
+    padding: 8px 9px;
+    border-right: 1px solid #d1d5db;
+    border-bottom: 1px solid #d1d5db;
+  }
+
+  .print-meta span,
+  .print-signatures span {
+    display: block;
+    margin-bottom: 4px;
+    color: #6b7280;
+    font-size: 7.5pt;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .print-meta strong {
+    color: #111827;
+    font-size: 9.5pt;
+  }
+
+  .print-lines {
+    width: 100%;
+    border-collapse: collapse;
+    page-break-inside: auto;
+  }
+
+  .print-lines tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  .print-lines th,
+  .print-lines td {
+    padding: 8px;
+    border: 1px solid #cbd5e1;
+    color: #111827;
+    font-size: 8.5pt;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .print-lines th {
+    background: #f3f4f6 !important;
+    font-size: 7.5pt;
+    text-transform: uppercase;
+  }
+
+  .print-lines .number,
+  .print-lines tfoot td {
+    text-align: right;
+  }
+
+  .print-lines tfoot td {
+    font-weight: 700;
+  }
+
+  .print-signatures {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 28px;
+    margin-top: 42px;
+    page-break-inside: avoid;
+  }
+
+  .print-signatures i {
+    display: block;
+    height: 24px;
+    border-bottom: 1px solid #6b7280;
+  }
+
+  .print-sheet-footer {
+    margin-top: 24px;
+    padding-top: 7px;
+    border-top: 1px solid #e5e7eb;
+    color: #6b7280;
+    font-size: 7.5pt;
+    text-align: center;
+  }
 }
 
 .workflow-steps {

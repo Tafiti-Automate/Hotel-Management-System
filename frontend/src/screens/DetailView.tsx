@@ -21,6 +21,8 @@ export default function DetailView() {
   const isReq = d.entity === 'requisitions'
   const kind = isReq ? 'Requisition' : 'Purchase Order'
   const lines: Line[] = r.lines || []
+  const approvalSteps: Array<Record<string, any>> = r.approvalSteps || []
+  const awaitingApproval = r.awaitingApproval
   const isPending = isReq && r.status === 'Pending'
   const decided = isReq && (r.status === 'Approved' || r.status === 'Rejected')
   const canDecide = Boolean(r.approvalActionable) && (
@@ -77,6 +79,12 @@ export default function DetailView() {
             </div>
             <span style={chipStyleFor(r.status)}>{r.status}</span>
           </div>
+          {isReq && awaitingApproval && (
+            <div style={{ padding: '10px 22px', borderBottom: '1px solid var(--border)', background: 'var(--accent-soft)', color: 'var(--text)', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Icon name="schedule" size={17} color="var(--accent)" />
+              Waiting for <strong>{awaitingApproval.approverName}</strong> to complete {awaitingApproval.stageName}.
+            </div>
+          )}
 
           <div style={{ padding: '18px 22px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 16, borderBottom: '1px solid var(--border)' }}>
             <div><div style={fieldLabel}>{f1label}</div><div style={fieldValue}>{f1}</div></div>
@@ -150,22 +158,33 @@ export default function DetailView() {
             </div>
           )}
 
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, boxShadow: 'var(--shadow)', padding: 18 }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)', marginBottom: 14 }}>Activity</div>
-            <div style={{ display: 'flex', gap: 10, marginBottom: 13 }}>
-              <span style={{ color: 'var(--accent)', background: 'var(--accent-soft)', width: 26, height: 26, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}><Icon name="edit_note" size={15} color="var(--accent)" /></span>
-              <div>
-                <div style={{ fontSize: 12, color: 'var(--text)', fontWeight: 600 }}>{kind} created</div>
-                <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>{f2} · {r.date}</div>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: 'var(--shadow-sm)', padding: 18 }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)', marginBottom: 14 }}>Approval route</div>
+            {!approvalSteps.length && (
+              <div style={{ display: 'flex', gap: 10 }}>
+                <span style={{ background: 'var(--surface-2)', width: 28, height: 28, borderRadius: 6, display: 'grid', placeItems: 'center', flex: 'none' }}><Icon name="edit_note" size={16} color="var(--text-faint)" /></span>
+                <div><div style={{ fontSize: 12, color: 'var(--text)', fontWeight: 650 }}>Draft preparation</div><div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>Approval route is assigned when submitted</div></div>
               </div>
-            </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <span style={{ color: 'var(--text-faint)', background: 'var(--surface-2)', width: 26, height: 26, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}><Icon name="hourglass_top" size={15} color="var(--text-faint)" /></span>
-              <div>
-                <div style={{ fontSize: 12, color: 'var(--text)', fontWeight: 600 }}>Awaiting assigned approver</div>
-                <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>Purchase approval workflow</div>
-              </div>
-            </div>
+            )}
+            {approvalSteps.map((approval, index) => {
+              const complete = ['approved', 'skipped'].includes(approval.status)
+              const failed = ['rejected', 'returned'].includes(approval.status)
+              const active = approval.isActionable
+              const color = failed ? 'var(--bad)' : complete ? 'var(--good)' : active ? 'var(--accent)' : 'var(--text-faint)'
+              const icon = failed ? 'cancel' : complete ? 'check_circle' : active ? 'schedule' : 'radio_button_unchecked'
+              return (
+                <div key={`${approval.stage}-${approval.approverName}`} style={{ display: 'flex', gap: 10, paddingBottom: index === approvalSteps.length - 1 ? 0 : 14, position: 'relative' }}>
+                  {index < approvalSteps.length - 1 && <span style={{ position: 'absolute', left: 13, top: 27, bottom: 0, width: 1, background: 'var(--border)' }} />}
+                  <span style={{ background: active ? 'var(--accent-soft)' : 'var(--surface-2)', width: 28, height: 28, borderRadius: 6, display: 'grid', placeItems: 'center', flex: 'none', zIndex: 1 }}><Icon name={icon} size={16} color={color} /></span>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 12, color: 'var(--text)', fontWeight: 700 }}>{approval.stageName}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{approval.approverName}</div>
+                    <div style={{ fontSize: 10.5, color, marginTop: 3, textTransform: 'capitalize', fontWeight: 650 }}>{active ? 'Waiting for approval' : String(approval.status).replace(/_/g, ' ')}</div>
+                    {approval.comments && <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 4, lineHeight: 1.4 }}>{approval.comments}</div>}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
       </div>

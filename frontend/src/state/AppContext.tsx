@@ -53,12 +53,14 @@ interface AppState {
   activeModule: ActiveModule
   apiMessage: string | null
   authMessage: string | null
+  procurementDraftId: string | null
 }
 
 export interface AppContextValue extends AppState {
   user: User
   data: Record<EntityKey, Row[]>
   refreshData: () => void
+  consumeProcurementDraft: () => void
   // auth
   login: (username: string, password: string, remember?: boolean) => Promise<void>
   // navigation
@@ -215,6 +217,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     activeModule: 'operations',
     apiMessage: null,
     authMessage: null,
+    procurementDraftId: null,
   })
 
   const patch = useCallback((p: Partial<AppState>) => setState((s) => ({ ...s, ...p })), [])
@@ -256,6 +259,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       apiStatus: 'idle',
       apiMessage: null,
       authMessage,
+      procurementDraftId: null,
     }))
   }, [])
 
@@ -396,15 +400,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
       : null
     const backendId = target.id ? String(row?.apiId || target.id) : null
     void saveBackendRecord(target.entity, backendId, values, dataRef.current)
-      .then(async () => {
+      .then(async (saved) => {
         await refreshData(true)
-        patch({ form: null })
+        const continueToLines = (
+          !target.id
+          && target.entity === 'requisitions'
+          && canAccessRoute(user, 'workflow-procure')
+        )
+        patch(continueToLines
+          ? {
+              form: null,
+              route: 'workflow-procure',
+              navActive: 'workflow-procure',
+              crumb: 'Add requisition articles',
+              procurementDraftId: String(saved.id || ''),
+            }
+          : { form: null })
         showToast(target.id ? 'Changes saved to the backend' : `${cfg[target.entity].singular || 'Record'} created`)
       })
       .catch((error) => {
         showWorkflowAlert('Cannot save this record', errorMessage(error))
       })
-  }, [patch, refreshData, showToast, showWorkflowAlert, state.form])
+  }, [patch, refreshData, showToast, showWorkflowAlert, state.form, user])
 
   const doDelete = useCallback(() => {
     const target = state.confirm
@@ -555,6 +572,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     toggleSettings: () => setState((s) => ({ ...s, settingsOpen: !s.settingsOpen, branchOpen: false })),
     closePop: () => patch({ branchOpen: false, settingsOpen: false }),
     setSearchTerm: (searchTerm) => patch({ searchTerm }),
+    consumeProcurementDraft: () => patch({ procurementDraftId: null }),
     openCreate: (entity, label) => {
       const target = (typeof entity === 'string' ? entity : state.route) as EntityKey
       const next: Partial<AppState> = {

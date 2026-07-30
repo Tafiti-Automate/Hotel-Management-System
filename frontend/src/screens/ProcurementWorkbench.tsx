@@ -101,6 +101,12 @@ export default function ProcurementWorkbench() {
 
   useEffect(() => { void load() }, [load])
   useEffect(() => { setForm({}); setMessage(''); setSelectedRecord(null) }, [stage])
+  useEffect(() => {
+    if (!app.procurementDraftId) return
+    setStage('request')
+    setForm({ requisition: app.procurementDraftId })
+    app.consumeProcurementDraft()
+  }, [app.procurementDraftId, app.consumeProcurementDraft])
   const scopedData = useMemo(() => {
     if (!app.currentBranch) return data
     const employees = new Set(app.data.employees.map((row) => id(row.id)))
@@ -461,6 +467,7 @@ function ProcurementRecordDrawer({ stage, row, data, names, canAttach, onClose, 
   onClose: () => void
   onChanged: () => Promise<void>
 }) {
+  const app = useApp()
   const [attachmentCategory, setAttachmentCategory] = useState('supporting')
   const [uploading, setUploading] = useState(false)
   const [attachmentMessage, setAttachmentMessage] = useState('')
@@ -604,7 +611,7 @@ function ProcurementRecordDrawer({ stage, row, data, names, canAttach, onClose, 
   return <>
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(15,23,42,.38)' }} />
     <aside role="dialog" aria-modal="true" aria-label={`${title} ${reference}`} className="procurement-detail-drawer procurement-print-document" style={{ position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 81, width: 560, maxWidth: '94vw', display: 'flex', flexDirection: 'column', background: 'var(--surface)', boxShadow: '-12px 0 32px rgba(15,23,42,.18)', animation: 'slideIn .2s ease' }}>
-      <header style={{ padding: '19px 22px', display: 'flex', alignItems: 'flex-start', gap: 14, borderBottom: '1px solid var(--border)' }}>
+      <header className="screen-document-view" style={{ padding: '19px 22px', display: 'flex', alignItems: 'flex-start', gap: 14, borderBottom: '1px solid var(--border)' }}>
         <span style={{ width: 40, height: 40, display: 'grid', placeItems: 'center', flex: 'none', borderRadius: 8, color: 'var(--accent)', background: 'var(--accent-soft)' }}><Icon name={stage === 'inspect' ? 'fact_check' : stage === 'receipt' ? 'receipt_long' : stage === 'quote' ? 'compare_arrows' : 'description'} size={21} /></span>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ color: 'var(--text-faint)', fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em' }}>{title}</div>
@@ -613,7 +620,7 @@ function ProcurementRecordDrawer({ stage, row, data, names, canAttach, onClose, 
         <span style={chipStyleFor(winner ? 'Approved' : status)}>{winner ? 'Winner' : status || 'Open'}</span>
         <button type="button" onClick={onClose} aria-label="Close details" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', border: 0, borderRadius: 6, background: 'var(--surface-2)', color: 'var(--text-muted)', cursor: 'pointer' }}><Icon name="close" size={18} /></button>
       </header>
-      <div style={{ flex: 1, overflowY: 'auto', padding: 22 }}>
+      <div className="screen-document-view" style={{ flex: 1, overflowY: 'auto', padding: 22 }}>
         <section>
           <h3 style={drawerHeading}>Document details</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
@@ -686,12 +693,78 @@ function ProcurementRecordDrawer({ stage, row, data, names, canAttach, onClose, 
           <div style={{ borderLeft: '2px solid var(--border)', marginLeft: 7 }}>{history.slice(0, 20).map((event) => <div key={id(event.id)} style={{ position: 'relative', padding: '0 0 15px 18px' }}><span style={{ position: 'absolute', left: -5, top: 3, width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)' }} /><div style={{ color: 'var(--text)', fontSize: 11.5, fontWeight: 650 }}>{id(event.action).replace(/_/g, ' ')}</div><div style={{ marginTop: 3, color: 'var(--text-faint)', fontSize: 10.5 }}>{id(event.performed_by_name) || id(event.created_at)} · {id(event.new_status || event.metadata?.status)}</div>{event.comments && <div style={{ marginTop: 4, color: 'var(--text-muted)', fontSize: 10.5 }}>{id(event.comments)}</div>}</div>)}{!history.length && <div style={{ padding: '0 0 12px 18px', color: 'var(--text-faint)', fontSize: 11.5 }}>No history events recorded yet.</div>}</div>
         </section>
       </div>
-      <footer style={{ padding: '14px 22px', display: 'flex', justifyContent: 'flex-end', gap: 8, borderTop: '1px solid var(--border)' }}>
+      {['lpo', 'receipt', 'return'].includes(stage) && (
+        <ProcurementPrintSheet
+          propertyName={app.currentBranch}
+          stage={stage}
+          title={title}
+          reference={reference}
+          status={status}
+          details={details}
+          lines={lines}
+          lineName={lineName}
+        />
+      )}
+      <footer className="screen-document-view" style={{ padding: '14px 22px', display: 'flex', justifyContent: 'flex-end', gap: 8, borderTop: '1px solid var(--border)' }}>
         {['lpo', 'receipt', 'return'].includes(stage) && <button type="button" onClick={() => window.print()} style={secondary}><Icon name="print" size={17} />Print document</button>}
         <button type="button" onClick={onClose} style={secondary}>Close</button>
       </footer>
     </aside>
   </>
+}
+
+function ProcurementPrintSheet({ propertyName, stage, title, reference, status, details, lines, lineName }: {
+  propertyName: string
+  stage: Stage
+  title: string
+  reference: string
+  status: string
+  details: Array<[string, string]>
+  lines: Row[]
+  lineName: (line: Row) => string
+}) {
+  const allowedLabels: Record<string, Set<string>> = {
+    lpo: new Set(['Supplier', 'Receiving store', 'Order total', 'Expected date', 'Sent to']),
+    receipt: new Set(['Purchase order', 'Received date', 'Received by', 'Delivery note', 'Note']),
+    return: new Set(['Supplier', 'Store', 'Returned by', 'Return date', 'Reason', 'Credit note', 'Replacement expected']),
+  }
+  const documentDetails = details.filter(([label]) => allowedLabels[stage]?.has(label))
+  const total = stage === 'lpo'
+    ? lines.reduce((sum, line) => sum + num(line.quantity) * num(line.unit_cost), 0)
+    : null
+  return (
+    <article className="print-only print-sheet">
+      <header className="print-sheet-header">
+        <div>
+          <div className="print-property">{propertyName || 'Hotel property'}</div>
+          <h1>{title}</h1>
+          <div className="print-reference">{reference}</div>
+        </div>
+        <div className="print-status">{id(status).replace(/_/g, ' ') || 'Open'}</div>
+      </header>
+      <section className="print-meta">
+        {documentDetails.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value || '—'}</strong></div>)}
+      </section>
+      <table className="print-lines">
+        <thead><tr><th>#</th><th>Article</th><th className="number">Quantity</th>{stage === 'lpo' && <><th className="number">Unit price</th><th className="number">Amount</th></>}</tr></thead>
+        <tbody>
+          {lines.map((line, index) => {
+            const quantity = num(line.quantity ?? line.quantity_received)
+            const price = num(line.unit_cost)
+            return <tr key={id(line.id)}><td>{index + 1}</td><td>{lineName(line)}</td><td className="number">{quantity}</td>{stage === 'lpo' && <><td className="number">{money(price)}</td><td className="number">{money(quantity * price)}</td></>}</tr>
+          })}
+          {!lines.length && <tr><td colSpan={stage === 'lpo' ? 5 : 3}>No line items recorded.</td></tr>}
+        </tbody>
+        {total != null && <tfoot><tr><td colSpan={4}>Total</td><td className="number">{money(total)}</td></tr></tfoot>}
+      </table>
+      <section className="print-signatures">
+        <div><span>Prepared by</span><i /></div>
+        <div><span>{stage === 'receipt' ? 'Received and verified by' : 'Authorised by'}</span><i /></div>
+        <div><span>Date</span><i /></div>
+      </section>
+      <footer className="print-sheet-footer">Generated from the Hotel Management System · {reference}</footer>
+    </article>
+  )
 }
 
 function Panel({ title, note, children }: { title: string; note: string; children: ReactNode }) {

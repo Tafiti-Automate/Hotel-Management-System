@@ -915,6 +915,21 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
   data.requisitions = raw.requisitions.map((row) => {
     const lines = itemLines(reqItemsByRequisition.get(idOf(row)) || [], itemNames, itemUnits, itemPrice)
     const total = lines.reduce((sum, line) => sum + line.qty * line.unitCost, 0)
+    const approvalSteps = Array.isArray(row.approval_steps)
+      ? row.approval_steps.map((step) => {
+          const record = step as ApiRecord
+          return {
+            stage: num(record.stage),
+            stageName: text(record.stage_name, `Stage ${text(record.stage)}`),
+            approverName: text(record.approver_name, 'Unassigned approver'),
+            status: text(record.status, 'pending'),
+            comments: text(record.comments),
+            decidedAt: text(record.decided_at),
+            isActionable: bool(record.is_actionable),
+          }
+        })
+      : []
+    const awaitingApproval = approvalSteps.find((step) => step.isActionable)
     return {
       id: text(row.requisition_number, idOf(row)),
       apiId: idOf(row),
@@ -930,6 +945,9 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
       control_notes: text(row.control_notes),
       currency: text(row.currency, 'UGX'),
       status: requisitionStatus(row.status),
+      statusCode: text(row.status),
+      approvalSteps,
+      awaitingApproval,
       approvalActionable: raw.approvals.some(
         (approval) =>
           text(approval.requisition) === idOf(row)
@@ -1005,12 +1023,12 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
   }
 }
 
-export async function saveBackendRecord(entity: EntityKey, id: string | null, values: Row, data: Record<EntityKey, Row[]>): Promise<void> {
+export async function saveBackendRecord(entity: EntityKey, id: string | null, values: Row, data: Record<EntityKey, Row[]>): Promise<Row> {
   const endpoint = entityEndpoints[entity]
   if (!endpoint) throw new Error(`Backend saving is not configured for ${entity}.`)
 
   const payload = toBackendPayload(entity, values, data)
-  await sendJson(id ? `${endpoint}/${id}` : endpoint, id ? 'PATCH' : 'POST', payload)
+  return (await sendJson(id ? `${endpoint}/${id}` : endpoint, id ? 'PATCH' : 'POST', payload)) as Row
 }
 
 export async function deleteBackendRecord(entity: EntityKey, id: string): Promise<void> {

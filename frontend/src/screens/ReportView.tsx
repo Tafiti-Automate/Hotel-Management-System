@@ -55,9 +55,17 @@ export default function ReportView() {
   const exportPdf = () => {
     const popup = window.open('', '_blank', 'width=1000,height=700')
     if (!popup) { app.showWorkflowAlert('PDF export blocked', 'Allow pop-ups for this site, then try again.'); return }
-    const head = report.columns.map((column) => `<th>${column.label}</th>`).join('')
-    const body = report.rows.map((row) => `<tr>${row.cells.map((cell) => `<td>${cell.text}</td>`).join('')}</tr>`).join('')
-    popup.document.write(`<html><head><title>${report.title}</title><style>body{font-family:Arial;padding:28px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f3f4f6}</style></head><body><h1>${report.title}</h1><p>${report.subtitle}</p><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table><script>window.onload=()=>window.print()</script></body></html>`)
+    const escapeHtml = (value: unknown) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    const head = report.columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join('')
+    const body = report.rows.map((row) => `<tr>${row.cells.map((cell) => `<td>${escapeHtml(cell.text)}</td>`).join('')}</tr>`).join('')
+    const criteria = [
+      app.currentBranch ? `Property: ${app.currentBranch}` : 'All properties',
+      dateFrom ? `From: ${dateFrom}` : '',
+      dateTo ? `To: ${dateTo}` : '',
+      store ? `Store: ${store}` : '',
+      category ? `Category: ${category}` : '',
+    ].filter(Boolean).join(' · ')
+    popup.document.write(`<html><head><title>${escapeHtml(report.title)}</title><style>@page{size:A4 landscape;margin:12mm}*{box-sizing:border-box}body{margin:0;color:#111827;font-family:Arial,sans-serif;font-size:9pt}header{display:flex;justify-content:space-between;gap:24px;padding-bottom:12px;border-bottom:2px solid #111827}h1{margin:0;font-size:18pt}p{margin:5px 0 0;color:#4b5563}.meta{text-align:right;color:#4b5563;font-size:8pt}.criteria{margin:12px 0;color:#374151;font-size:8.5pt}table{border-collapse:collapse;width:100%}tr{break-inside:avoid}th,td{border:1px solid #cbd5e1;padding:6px 7px;text-align:left;vertical-align:top}th{background:#f3f4f6;text-transform:uppercase;font-size:7.5pt}footer{margin-top:12px;padding-top:6px;border-top:1px solid #e5e7eb;color:#6b7280;font-size:7.5pt;text-align:center}</style></head><body><header><div><h1>${escapeHtml(report.title)}</h1><p>${escapeHtml(report.subtitle)}</p></div><div class="meta">Generated ${escapeHtml(new Date().toLocaleString())}<br>${report.rows.length} record${report.rows.length === 1 ? '' : 's'}</div></header><div class="criteria">${escapeHtml(criteria)}</div><table><thead><tr>${head}</tr></thead><tbody>${body || `<tr><td colspan="${report.columns.length}">No records match the selected criteria.</td></tr>`}</tbody></table><footer>Hotel Management System · ${escapeHtml(report.title)}</footer><script>window.onload=()=>window.print()</script></body></html>`)
     popup.document.close()
   }
   if (!app.reportId) return null

@@ -346,15 +346,51 @@ function InventoryRecordDrawer({ tab, row, data, app, close }: { tab: Tab; row: 
   return <>
     <div onClick={close} style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(15,23,42,.38)' }} />
     <aside className="procurement-detail-drawer inventory-print-document" role="dialog" aria-modal="true" style={{ position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 81, width: 560, maxWidth: '94vw', display: 'flex', flexDirection: 'column', background: 'var(--surface)', boxShadow: '-12px 0 32px rgba(15,23,42,.18)', animation: 'slideIn .2s ease' }}>
-      <header style={{ padding: '19px 22px', display: 'flex', alignItems: 'center', gap: 12, borderBottom: '1px solid var(--border)' }}><span style={{ width: 40, height: 40, display: 'grid', placeItems: 'center', borderRadius: 8, color: 'var(--accent)', background: 'var(--accent-soft)' }}><Icon name="inventory_2" size={21} /></span><div style={{ flex: 1 }}><div style={{ color: 'var(--text-faint)', fontSize: 10.5, textTransform: 'uppercase', fontWeight: 700 }}>{config.title}</div><div style={{ marginTop: 3, color: 'var(--text)', fontSize: 18, fontWeight: 750 }}>{config.ref}</div></div><span style={{ color: 'var(--accent)', background: 'var(--accent-soft)', padding: '4px 9px', borderRadius: 20, fontSize: 10.5, fontWeight: 700 }}>{id(row.status) || (row.inventory_changes_applied ? 'Posted' : 'Draft')}</span><button onClick={close} aria-label="Close" style={{ width: 32, height: 32, border: 0, borderRadius: 6, background: 'var(--surface-2)', cursor: 'pointer' }}><Icon name="close" size={18} /></button></header>
-      <div style={{ flex: 1, overflowY: 'auto', padding: 22 }}>
+      <header className="screen-document-view" style={{ padding: '19px 22px', display: 'flex', alignItems: 'center', gap: 12, borderBottom: '1px solid var(--border)' }}><span style={{ width: 40, height: 40, display: 'grid', placeItems: 'center', borderRadius: 8, color: 'var(--accent)', background: 'var(--accent-soft)' }}><Icon name="inventory_2" size={21} /></span><div style={{ flex: 1 }}><div style={{ color: 'var(--text-faint)', fontSize: 10.5, textTransform: 'uppercase', fontWeight: 700 }}>{config.title}</div><div style={{ marginTop: 3, color: 'var(--text)', fontSize: 18, fontWeight: 750 }}>{config.ref}</div></div><span style={{ color: 'var(--accent)', background: 'var(--accent-soft)', padding: '4px 9px', borderRadius: 20, fontSize: 10.5, fontWeight: 700 }}>{id(row.status) || (row.inventory_changes_applied ? 'Posted' : 'Draft')}</span><button onClick={close} aria-label="Close" style={{ width: 32, height: 32, border: 0, borderRadius: 6, background: 'var(--surface-2)', cursor: 'pointer' }}><Icon name="close" size={18} /></button></header>
+      <div className="screen-document-view" style={{ flex: 1, overflowY: 'auto', padding: 22 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>{details.map(([label, value]) => <div key={label} style={{ minHeight: 68, padding: 13, borderBottom: '1px solid var(--border)' }}><div style={{ color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase' }}>{label}</div><div style={{ marginTop: 5, color: 'var(--text)', fontSize: 12.5, fontWeight: 600 }}>{value}</div></div>)}</div>
         <h3 style={{ margin: '24px 0 10px', fontSize: 13 }}>Line items ({config.lines.length})</h3>
         <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>{config.lines.map((line) => <div key={id(line.id)} style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}><div style={{ color: 'var(--text)', fontSize: 12.5, fontWeight: 650 }}>{itemName(app, line.item)}</div><div style={{ marginTop: 4, color: 'var(--text-faint)', fontSize: 11.5 }}>{lineQuantity(line)}</div>{line.remarks && <div style={{ marginTop: 3, color: 'var(--text-muted)', fontSize: 11 }}>{id(line.remarks)}</div>}</div>)}{!config.lines.length && <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>No line items.</div>}</div>
       </div>
-      <footer style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 22px', borderTop: '1px solid var(--border)' }}><button onClick={() => window.print()} style={secondary}><Icon name="print" size={17} />Print document</button><button onClick={close} style={secondary}>Close</button></footer>
+      <InventoryPrintSheet propertyName={app.currentBranch} title={config.title} reference={config.ref} status={id(row.status) || (row.inventory_changes_applied ? 'Posted' : 'Draft')} details={details} lines={config.lines} lineQuantity={lineQuantity} itemLabel={(line) => itemName(app, line.item)} />
+      <footer className="screen-document-view" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 22px', borderTop: '1px solid var(--border)' }}><button onClick={() => window.print()} style={secondary}><Icon name="print" size={17} />Print document</button><button onClick={close} style={secondary}>Close</button></footer>
     </aside>
   </>
+}
+
+function InventoryPrintSheet({ propertyName, title, reference, status, details, lines, lineQuantity, itemLabel }: {
+  propertyName: string
+  title: string
+  reference: string
+  status: string
+  details: Array<[string, string]>
+  lines: Row[]
+  lineQuantity: (line: Row) => string
+  itemLabel: (line: Row) => string
+}) {
+  const meaningfulDetails = details.filter(([, value]) => value && value !== '—' && !value.startsWith('Not '))
+  return (
+    <article className="print-only print-sheet">
+      <header className="print-sheet-header">
+        <div><div className="print-property">{propertyName || 'Hotel property'}</div><h1>{title}</h1><div className="print-reference">{reference}</div></div>
+        <div className="print-status">{status.replace(/_/g, ' ')}</div>
+      </header>
+      <section className="print-meta">
+        {meaningfulDetails.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
+      </section>
+      <table className="print-lines">
+        <thead><tr><th>#</th><th>Article</th><th>Quantity / movement</th><th>Remarks</th></tr></thead>
+        <tbody>
+          {lines.map((line, index) => <tr key={id(line.id)}><td>{index + 1}</td><td>{itemLabel(line)}</td><td>{lineQuantity(line)}</td><td>{id(line.remarks) || '—'}</td></tr>)}
+          {!lines.length && <tr><td colSpan={4}>No line items recorded.</td></tr>}
+        </tbody>
+      </table>
+      <section className="print-signatures">
+        <div><span>Prepared by</span><i /></div><div><span>Checked / authorised by</span><i /></div><div><span>Date</span><i /></div>
+      </section>
+      <footer className="print-sheet-footer">Generated from the Hotel Management System · {reference}</footer>
+    </article>
+  )
 }
 
 const itemName = (app: any, value: unknown) => id(app.data.items.find((r: Row) => id(r.id) === id(value))?.name) || id(value)
