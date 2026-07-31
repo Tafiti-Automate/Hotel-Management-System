@@ -228,7 +228,7 @@ function LineChart({ series }: { series: Series[] }) {
   const max = Math.max(...points.map(p => p.value), 1)
   return <div>
     <div style={{ height: 190, display: 'flex', alignItems: 'stretch', gap: 8, borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
-      {(series[0]?.points || []).map((point, i) => <div key={point.label} title={`${point.label}: ${point.value.toLocaleString()}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', minWidth: 20 }}>
+      {(series[0]?.points || []).map((point) => <div key={point.label} title={`${point.label}: ${point.value.toLocaleString()}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', minWidth: 20 }}>
         <span style={{ color: 'var(--text-faint)', fontSize: 9, marginBottom: 4 }}>{point.value ? compact(point.value) : ''}</span>
         <div style={{ width: '65%', maxWidth: 34, minHeight: point.value ? 3 : 0, height: `${(point.value / max) * 145}px`, borderRadius: '5px 5px 1px 1px', background: 'var(--accent)', opacity: .82 }} />
         <span style={{ color: 'var(--text-faint)', fontSize: 9, marginTop: 7 }}>{point.label.slice(5)}</span>
