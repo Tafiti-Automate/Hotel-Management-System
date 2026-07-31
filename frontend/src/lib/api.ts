@@ -744,6 +744,9 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
     .filter(([, result]) => result.error)
     .map(([key, result]) => `${key}: ${result.error}`)
   if (errors.length === entries.length) {
+    if (errors.every((error) => /\b401\b/.test(error))) {
+      throw new Error('Your sign-in session is no longer valid (401).')
+    }
     throw new Error(`Backend data could not be fully loaded. ${errors.join(' ')}`)
   }
 

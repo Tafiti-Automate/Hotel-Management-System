@@ -378,12 +378,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       patch({ apiStatus: 'live', apiMessage: operationalWarning || `Backend connected; ${rowsLoaded} accessible records loaded` })
       if (!silent) showToast('Backend synced')
     } catch (error) {
+      const message = errorMessage(error)
+      if (/\b401\b|session is no longer valid/i.test(message)) {
+        endSession('Your session expired or is no longer valid. Please sign in again.')
+        return
+      }
       dataRef.current = emptyData()
       bumpData()
-      patch({ apiStatus: 'offline', apiMessage: errorMessage(error), currentBranch: '' })
+      patch({ apiStatus: 'offline', apiMessage: message, currentBranch: '' })
       if (!silent) showToast('Backend unavailable')
     }
-  }, [applyBackendData, bumpData, patch, showToast])
+  }, [applyBackendData, bumpData, endSession, patch, showToast])
 
   useEffect(() => {
     if (state.screen === 'app' && !didInitialSync.current) {
