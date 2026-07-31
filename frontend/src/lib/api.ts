@@ -214,6 +214,14 @@ export async function login(username: string, password: string, remember = true)
   return body.user
 }
 
+export async function fetchCurrentUser(): Promise<AuthUser> {
+  const response = await fetch(`${apiRoot()}/auth/me/`, {
+    headers: { Accept: 'application/json', ...authHeaders() },
+  })
+  if (!response.ok) throw new Error(`Current session could not be verified (${response.status}).`)
+  return response.json() as Promise<AuthUser>
+}
+
 export async function logout(): Promise<void> {
   const headers = { Accept: 'application/json', ...authHeaders() }
   // End the browser session immediately even if the network request is slow.

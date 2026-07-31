@@ -61,7 +61,12 @@ export default function AccessManagement() {
     if (!roleDraft?.name) return
     setSaving(true)
     try {
-      await saveRole(roleDraft.id || null, { name: roleDraft.name, permission_ids: roleDraft.permission_ids || [] })
+      const requestedPermissions = [...(roleDraft.permission_ids || [])].sort((a, b) => a - b)
+      const saved = await saveRole(roleDraft.id || null, { name: roleDraft.name, permission_ids: requestedPermissions })
+      const persistedPermissions = [...(saved.permission_ids || [])].sort((a, b) => a - b)
+      if (requestedPermissions.join(',') !== persistedPermissions.join(',')) {
+        throw new Error('The backend did not save all selected permissions. Please try again or check the deployed backend version.')
+      }
       setRoleDraft(null); await load(); app.showToast(roleDraft.id ? 'Role updated' : 'Role created')
     } catch (reason) { setError(errorMessage(reason)) }
     finally { setSaving(false) }

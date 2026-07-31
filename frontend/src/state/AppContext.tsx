@@ -8,6 +8,7 @@ import {
   deleteBackendRecord,
   errorMessage,
   fetchBackendData,
+  fetchCurrentUser,
   getStoredUser,
   getToken,
   login as apiLogin,
@@ -371,6 +372,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const refreshData = useCallback(async (silent = false) => {
     patch({ apiStatus: 'loading', apiMessage: null })
     try {
+      const authenticatedUser = toUser(await fetchCurrentUser())
+      setUser((current) => JSON.stringify(current) === JSON.stringify(authenticatedUser) ? current : authenticatedUser)
       const result = await fetchBackendData()
       applyBackendData(result.data)
       const rowsLoaded = Object.values(result.data).reduce((sum, rows) => sum + (rows?.length || 0), 0)
