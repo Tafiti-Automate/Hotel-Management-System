@@ -63,6 +63,9 @@ export function canAccessModule(user: AccessUser, module: 'operations' | 'hr'): 
 }
 
 export function operationsLandingFor(user: AccessUser): { route: string; crumb: string } {
+  if (['stores manager', 'store manager'].includes(roleKey(user))) {
+    return { route: 'dashboard', crumb: 'Stores overview' }
+  }
   const candidates = [
     ['workflow-stores', 'Stores workbench'],
     ['workflow-procure', 'Procurement workbench'],
@@ -74,7 +77,8 @@ export function operationsLandingFor(user: AccessUser): { route: string; crumb: 
 }
 
 export function canSwitchModules(user: AccessUser): boolean {
-  return canAccessModule(user, 'operations') && canAccessModule(user, 'hr')
+  const administrator = user.isSuperuser || roleKey(user) === 'system administrator'
+  return administrator && canAccessModule(user, 'operations') && canAccessModule(user, 'hr')
 }
 
 export function canSwitchBranches(user: AccessUser): boolean {
