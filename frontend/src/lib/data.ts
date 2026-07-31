@@ -310,6 +310,9 @@ export const cfg: Record<string, EntityConfig> = {
       { key: 'status', label: 'Status', w: '120px', kind: 'status', align: 'right' },
     ],
     fields: [
+      { key: 'request_type', label: 'Request type', type: 'select', opts: 'reqTypes' },
+      { key: 'department', label: 'Department', type: 'select', opts: 'departments' },
+      { key: 'requester', label: 'Requested by', type: 'select', opts: 'employees' },
       { key: 'preferred_supplier', label: 'Preferred supplier', type: 'select', opts: 'suppliers' },
       { key: 'expected_date', label: 'Expected date', type: 'date' },
       { key: 'reason', label: 'Reason', type: 'textarea' },

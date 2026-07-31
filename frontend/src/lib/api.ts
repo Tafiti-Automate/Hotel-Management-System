@@ -638,6 +638,8 @@ function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey
   if (entity === 'requisitions') {
     const requestType = text(values.request_type, 'department')
     const supplierId = findDataId(data, 'suppliers', values.preferred_supplier || values.supplier)
+    const departmentId = findDataId(data, 'departments', values.department)
+    const requesterId = findDataId(data, 'employees', values.requester)
 
     const payload: Row = {
       request_type: requestType,
@@ -648,6 +650,8 @@ function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey
     const currency = text(values.currency)
     if (currency) payload.currency = currency.toUpperCase()
     if (supplierId) payload.preferred_supplier = supplierId
+    if (departmentId) payload.department = departmentId
+    if (requesterId) payload.requester = requesterId
     return payload
   }
 
@@ -801,6 +805,7 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
     })),
     employees: raw.employees.map((row) => ({
       id: idOf(row),
+      userId: text(row.user),
       name: `${text(row.first_name)} ${text(row.last_name)}`.trim() || text(row.designation, shortId(row.id)),
       firstName: text(row.first_name),
       lastName: text(row.last_name),

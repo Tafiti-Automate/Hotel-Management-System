@@ -32,6 +32,14 @@ export default function FormDrawer() {
   const f = app.form
   const [values, setValues] = useState<Row>({})
   const [step, setStep] = useState(0)
+  const roleKey = app.user.role.trim().toLowerCase()
+  const canRequestOnBehalf = app.user.isSuperuser || ['system administrator', 'stores manager'].includes(roleKey)
+  const canPurchaseOnBehalf = app.user.isSuperuser || ['system administrator', 'procurement manager', 'general manager'].includes(roleKey)
+  const signedInEmployee = app.data.employees.find((employee) =>
+    String(employee.employeeCode) === app.user.id || String(employee.userId) === app.user.id,
+  )
+  const locksStoreIdentity = f?.entity === 'storeRequisitions' && !canRequestOnBehalf
+  const locksPurchaseIdentity = f?.entity === 'requisitions' && !canPurchaseOnBehalf
 
   // Seed the form whenever a new target opens.
   useEffect(() => {
@@ -47,11 +55,19 @@ export default function FormDrawer() {
     })
     if (f.entity === 'requisitions') {
       seed.request_type = existing?.request_type || 'department'
+      if (!canPurchaseOnBehalf && signedInEmployee) {
+        seed.department = signedInEmployee.department
+        seed.requester = signedInEmployee.name
+      }
+    }
+    if (f.entity === 'storeRequisitions' && !canRequestOnBehalf && signedInEmployee) {
+      seed.department = signedInEmployee.department
+      seed.requester = signedInEmployee.name
     }
     setValues(seed)
     setStep(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [f?.entity, f?.id])
+  }, [f?.entity, f?.id, canPurchaseOnBehalf, canRequestOnBehalf, signedInEmployee?.id])
 
   if (!f) return null
   const conf = cfg[f.entity]
@@ -110,10 +126,18 @@ export default function FormDrawer() {
             const options = fd.opts === 'categoryParents'
               ? categoryParentOptions(getOptions(fd.opts, app.data), app.data.categories, editingCategoryName)
               : getOptions(fd.opts || '', app.data)
+            const identityLocked = (locksStoreIdentity && ['department', 'requester'].includes(fd.key))
+              || (locksPurchaseIdentity && ['request_type', 'department', 'requester'].includes(fd.key))
             return (
               <div key={fd.key}>
                 <label><HelpLabel label={fd.label} style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 7 }} /></label>
-                {isSelect ? (
+                {identityLocked ? (
+                  <div style={{ minHeight: 42, display: 'flex', alignItems: 'center', gap: 9, border: '1px solid var(--border)', background: 'var(--surface-2)', borderRadius: 10, padding: '0 12px', color: 'var(--text)', fontSize: 13.5 }}>
+                    <Icon name={fd.key === 'department' ? 'account_tree' : fd.key === 'request_type' ? 'request_quote' : 'person'} size={18} color="var(--text-faint)" />
+                    <span style={{ flex: 1 }}>{fd.key === 'request_type' ? 'Department request' : values[fd.key] || 'No employee profile found'}</span>
+                    <span style={{ color: 'var(--text-faint)', fontSize: 10.5 }}>From your account</span>
+                  </div>
+                ) : isSelect ? (
                   <div style={{ position: 'relative' }}>
                     <select value={values[fd.key] ?? ''} onChange={(e) => setVal(fd.key, e.target.value, false)} style={{ width: '100%', height: 42, border: '1px solid var(--border)', background: 'var(--surface-2)', borderRadius: 10, padding: '0 34px 0 12px', fontSize: 13.5, color: 'var(--text)', outline: 'none', cursor: 'pointer' }}>
                       <option value="" />
