@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import { useApp } from '../state/AppContext'
 import { Icon } from './Icon'
-import { canSwitchModules, isStoresManager } from '../lib/access'
+import { canAccessRoute, canSwitchModules, isStoresManager } from '../lib/access'
 import {
   errorMessage,
   fetchNotifications,
@@ -18,7 +18,6 @@ export default function Header() {
   const [notificationsLoading, setNotificationsLoading] = useState(true)
   const [notificationsError, setNotificationsError] = useState('')
   const storesManager = isStoresManager(app.user)
-  const roleKey = app.user.role.trim().toLowerCase()
   const moduleName = storesManager ? 'Stores & Inventory' : app.activeModule === 'hr' ? 'Human Resources' : `${app.user.role} workspace`
   const initials = app.user.name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()
   const notificationCount = notifications.filter((notification) => !notification.is_read).length
@@ -82,13 +81,13 @@ export default function Header() {
   }
 
   const primary = (() => {
-    if (['stores manager', 'store manager', 'store keeper'].includes(roleKey)) {
+    if (canAccessRoute(app.user, 'workflow-stores')) {
       return { label: 'Open stores workbench', icon: 'warehouse', action: () => app.navTo('workflow-stores', 'Stores workbench') }
     }
-    if (roleKey === 'finance controller') {
+    if (canAccessRoute(app.user, 'workflow-pay')) {
       return { label: 'Open finance workbench', icon: 'account_balance', action: () => app.navTo('workflow-pay', 'Finance control centre') }
     }
-    if (roleKey === 'receiving officer') {
+    if (canAccessRoute(app.user, 'workflow-procure')) {
       return { label: 'Open receiving workbench', icon: 'move_to_inbox', action: () => app.navTo('workflow-procure', 'Receiving workbench') }
     }
     if (hasPermission('approvals.change_approvalworkflow')) {

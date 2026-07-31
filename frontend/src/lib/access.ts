@@ -4,83 +4,41 @@ export interface AccessUser {
   permissions: string[]
 }
 
-const roleRoutes: Record<string, Set<string>> = {
-  'stores manager': new Set([
-    'dashboard',
-    'items', 'categories', 'uoms', 'locations', 'balances', 'ledgers', 'batches', 'reorderRules',
-    'storeRequisitions', 'stockIssues', 'storeReturns', 'workflow-stores', 'workflow-consume',
-    'grns', 'inspections', 'supplierReturns', 'suppliers', 'supplierItems', 'reports', 'reportview',
-  ]),
-  'store manager': new Set([
-    'dashboard',
-    'items', 'categories', 'uoms', 'locations', 'balances', 'ledgers', 'batches', 'reorderRules',
-    'storeRequisitions', 'stockIssues', 'storeReturns', 'workflow-stores', 'workflow-consume',
-    'grns', 'inspections', 'supplierReturns', 'suppliers', 'supplierItems', 'reports', 'reportview',
-  ]),
-  'store keeper': new Set([
-    'dashboard',
-    'items', 'uoms', 'locations', 'balances', 'ledgers', 'batches',
-    'storeRequisitions', 'stockIssues', 'storeReturns', 'workflow-stores', 'workflow-consume',
-    'reports', 'reportview',
-  ]),
-  'procurement manager': new Set([
-    'dashboard',
-    'requisitions', 'workflow-procure', 'orders', 'grns', 'approvals',
-    'items', 'uoms', 'locations', 'balances', 'ledgers', 'batches', 'reorderRules',
-    'suppliers', 'supplierItems', 'inspections', 'supplierReturns',
-    'reports', 'reportview', 'detail',
-  ]),
-  'finance controller': new Set([
-    'dashboard',
-    'workflow-pay', 'requisitions', 'approvals', 'orders',
-    'locations', 'balances', 'ledgers', 'suppliers',
-    'reports', 'reportview', 'detail',
-  ]),
-  'department head': new Set([
-    'dashboard',
-    'requisitions', 'workflow-procure', 'approvals', 'storeRequisitions',
-    'items', 'locations', 'balances', 'ledgers',
-    'reports', 'reportview', 'detail',
-  ]),
-  'receiving officer': new Set([
-    'dashboard',
-    'workflow-procure', 'orders', 'grns', 'inspections', 'supplierReturns',
-    'items', 'uoms', 'locations', 'balances', 'ledgers', 'batches', 'suppliers',
-    'reports', 'reportview',
-  ]),
-  'general manager': new Set([
-    'dashboard',
-    'requisitions', 'approvals', 'orders', 'grns', 'workflow-stores',
-    'items', 'categories', 'uoms', 'locations', 'balances', 'ledgers', 'batches',
-    'storeRequisitions', 'stockIssues', 'storeReturns',
-    'suppliers', 'supplierItems', 'inspections', 'supplierReturns',
-    'reports', 'reportview', 'detail',
-    'hr-dashboard', 'employees', 'departments',
-  ]),
-  auditor: new Set([
-    'dashboard',
-    'requisitions', 'approvals', 'orders', 'grns',
-    'items', 'categories', 'uoms', 'locations', 'balances', 'ledgers', 'batches', 'reorderRules',
-    'storeRequisitions', 'stockIssues', 'storeReturns',
-    'suppliers', 'supplierItems', 'inspections', 'supplierReturns',
-    'reports', 'reportview', 'detail',
-    'hr-dashboard', 'employees', 'departments',
-  ]),
+const routePermissions: Record<string, string[]> = {
+  items: ['inventory.view_item'],
+  categories: ['inventory.view_category'],
+  uoms: ['inventory.view_unitofmeasure'],
+  locations: ['inventory.view_storelocation'],
+  balances: ['inventory.view_inventorybalance'],
+  ledgers: ['inventory.view_stockledger'],
+  batches: ['inventory.view_inventorybatch'],
+  reorderRules: ['inventory.view_reorderrule'],
+  storeRequisitions: ['inventory.view_storerequisition'],
+  stockIssues: ['inventory.view_stockissue'],
+  storeReturns: ['inventory.view_storereturn'],
+  'workflow-stores': ['inventory.view_storerequisition', 'inventory.view_stocktransfer', 'inventory.view_stockcount'],
+  'workflow-consume': ['inventory.view_storerequisition', 'inventory.view_stockissue'],
+  suppliers: ['vendors.view_supplier'],
+  supplierItems: ['inventory.view_supplieritemprice'],
+  requisitions: ['procurement.view_purchaserequisition'],
+  orders: ['procurement.view_purchaseorder'],
+  grns: ['procurement.view_goodsreceiptnote'],
+  inspections: ['procurement.view_goodsinspection'],
+  supplierReturns: ['procurement.view_supplierreturn'],
+  'workflow-procure': ['procurement.view_purchaserequisition', 'procurement.view_vendorquotation', 'procurement.view_purchaseorder', 'procurement.view_goodsreceiptnote'],
+  approvals: ['approvals.view_approvalworkflow'],
+  'workflow-pay': ['finance.view_supplierinvoice', 'finance.view_supplierpayment', 'finance.view_expense', 'finance.view_cashflow'],
+  employees: ['employees.view_employee'],
+  departments: ['departments.view_department'],
+  'hr-dashboard': ['employees.view_employee', 'departments.view_department'],
+  reports: ['reports.view_reportdefinition', 'reports.view_generatedreport'],
+  reportview: ['reports.view_reportdefinition', 'reports.view_generatedreport'],
+  'audit-log': ['audit_logs.view_auditlog'],
+  'access-management': ['accounts.view_user', 'auth.view_group'],
+  'hotel-profile': ['organization.view_hotel'],
 }
 
-const operationsLanding: Record<string, { route: string; crumb: string }> = {
-  'stores manager': { route: 'dashboard', crumb: 'Stores overview' },
-  'store manager': { route: 'dashboard', crumb: 'Stores overview' },
-  'store keeper': { route: 'workflow-stores', crumb: 'Stores workbench' },
-  'procurement manager': { route: 'workflow-procure', crumb: 'Procurement workbench' },
-  'finance controller': { route: 'workflow-pay', crumb: 'Finance control centre' },
-  'department head': { route: 'requisitions', crumb: 'Purchase requisitions' },
-  'receiving officer': { route: 'workflow-procure', crumb: 'Receiving workbench' },
-  'general manager': { route: 'dashboard', crumb: 'Operations dashboard' },
-  auditor: { route: 'dashboard', crumb: 'Operations dashboard' },
-}
-
-const hrRoles = new Set(['system administrator', 'general manager', 'auditor'])
+const hrApps = new Set(['employees', 'departments', 'accounts'])
 
 function roleKey(user: Pick<AccessUser, 'role'>): string {
   return user.role.trim().toLowerCase()
@@ -92,17 +50,27 @@ export function isStoresManager(user: Pick<AccessUser, 'role'>): boolean {
 
 export function canAccessRoute(user: AccessUser, route: string): boolean {
   if (user.isSuperuser || roleKey(user) === 'system administrator') return true
-  const routes = roleRoutes[roleKey(user)]
-  return routes ? routes.has(route) : route === 'dashboard'
+  if (route === 'dashboard' || route === 'detail') return true
+  const required = routePermissions[route]
+  return required ? required.some((permission) => user.permissions.includes(permission)) : false
 }
 
 export function canAccessModule(user: AccessUser, module: 'operations' | 'hr'): boolean {
   if (user.isSuperuser || roleKey(user) === 'system administrator') return true
-  return module === 'operations' || hrRoles.has(roleKey(user))
+  const hasHR = user.permissions.some((permission) => hrApps.has(permission.split('.')[0]))
+  const hasOperations = user.permissions.some((permission) => !hrApps.has(permission.split('.')[0]))
+  return module === 'hr' ? hasHR : hasOperations || !user.permissions.length
 }
 
 export function operationsLandingFor(user: AccessUser): { route: string; crumb: string } {
-  return operationsLanding[roleKey(user)] || { route: 'dashboard', crumb: 'Operations dashboard' }
+  const candidates = [
+    ['workflow-stores', 'Stores workbench'],
+    ['workflow-procure', 'Procurement workbench'],
+    ['workflow-pay', 'Finance control centre'],
+    ['requisitions', 'Purchase requisitions'],
+  ]
+  const match = candidates.find(([route]) => canAccessRoute(user, route))
+  return match ? { route: match[0], crumb: match[1] } : { route: 'dashboard', crumb: 'Operations dashboard' }
 }
 
 export function canSwitchModules(user: AccessUser): boolean {
@@ -110,5 +78,5 @@ export function canSwitchModules(user: AccessUser): boolean {
 }
 
 export function canSwitchBranches(user: AccessUser): boolean {
-  return user.isSuperuser || ['system administrator', 'general manager', 'auditor'].includes(roleKey(user))
+  return user.isSuperuser || roleKey(user) === 'system administrator' || user.permissions.includes('departments.change_branch')
 }

@@ -49,39 +49,11 @@ const hrGroups: NavGroup[] = [
   ] },
 ]
 
-const storesManagerGroups: NavGroup[] = [
-  { heading: 'Stores overview', items: [
-    { route: 'dashboard', label: 'Dashboard', icon: 'space_dashboard' },
-  ] },
-  { heading: 'Inventory', icon: 'inventory_2', items: [
-    { route: 'items', label: 'Articles', icon: 'inventory_2' },
-    { route: 'categories', label: 'Categories', icon: 'category' },
-    { route: 'balances', label: 'Stock balances', icon: 'equalizer' },
-    { route: 'ledgers', label: 'Stock ledger', icon: 'menu_book' },
-    { route: 'batches', label: 'Batches & expiry', icon: 'layers' },
-  ] },
-  { heading: 'Store operations', icon: 'warehouse', items: [
-    { route: 'workflow-stores', label: 'Stores workbench', icon: 'dashboard_customize' },
-    { route: 'storeRequisitions', label: 'Store requisitions', icon: 'assignment' },
-    { route: 'stockIssues', label: 'Stock issues', icon: 'outbox' },
-    { route: 'storeReturns', label: 'Returns', icon: 'assignment_return' },
-  ] },
-  { heading: 'Receiving', icon: 'move_to_inbox', items: [
-    { route: 'grns', label: 'Goods received', icon: 'move_to_inbox' },
-    { route: 'inspections', label: 'Goods inspections', icon: 'fact_check' },
-    { route: 'supplierReturns', label: 'Supplier returns', icon: 'assignment_returned' },
-  ] },
-  { heading: 'Reference', items: [
-    { route: 'suppliers', label: 'Suppliers', icon: 'local_shipping' },
-    { route: 'supplierItems', label: 'Supplier catalogue', icon: 'contract' },
-  ] },
-]
-
 export default function Sidebar() {
   const app = useApp()
   const [collapsed, setCollapsed] = useState(false)
   const storesManager = isStoresManager(app.user)
-  const baseGroups = storesManager ? storesManagerGroups : app.activeModule === 'hr' ? hrGroups : operationsGroups
+  const baseGroups = app.activeModule === 'hr' ? hrGroups : operationsGroups
   const groups = baseGroups
     .map((group) => ({ ...group, items: group.items.filter((item) => canAccessRoute(app.user, item.route)) }))
     .filter((group) => group.items.length > 0)
