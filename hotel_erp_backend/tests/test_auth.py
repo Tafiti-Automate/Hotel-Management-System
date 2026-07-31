@@ -1,6 +1,6 @@
 import pytest
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, Permission
 from django.core.management import call_command
 from django.test import override_settings
 
@@ -53,6 +53,38 @@ def test_api_login_accepts_employee_code(client):
 
     assert response.status_code == 200
     assert response.json()["user"]["username"] == user.username
+
+
+@pytest.mark.django_db
+def test_role_permission_changes_are_returned_on_next_login(client):
+    admin = get_user_model().objects.create_superuser(
+        username="access-admin", employee_code="EMP-ACCESS-ADMIN", password="test-pass-123"
+    )
+    user = get_user_model().objects.create_user(
+        username="store-user", employee_code="EMP-STORE", password="test-pass-123"
+    )
+    role = Group.objects.create(name="Custom Store Role")
+    user.groups.set([role])
+    permission = Permission.objects.get(
+        content_type__app_label="employees", codename="view_employee"
+    )
+
+    client.force_login(admin)
+    response = client.patch(
+        f"/api/v1/roles/{role.pk}/",
+        {"permission_ids": [permission.pk]},
+        content_type="application/json",
+    )
+    assert response.status_code == 200
+
+    client.logout()
+    response = client.post(
+        "/api/v1/auth/login/",
+        {"username": user.username, "password": "test-pass-123"},
+        content_type="application/json",
+    )
+    assert response.status_code == 200
+    assert "employees.view_employee" in response.json()["user"]["permissions"]
 
 
 @override_settings(CORS_ALLOWED_ORIGINS=["https://hotel.example.com"])
