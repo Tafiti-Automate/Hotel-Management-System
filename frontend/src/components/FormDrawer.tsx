@@ -126,15 +126,15 @@ export default function FormDrawer() {
             const options = fd.opts === 'categoryParents'
               ? categoryParentOptions(getOptions(fd.opts, app.data), app.data.categories, editingCategoryName)
               : getOptions(fd.opts || '', app.data)
-            const identityLocked = (locksStoreIdentity && ['department', 'requester'].includes(fd.key))
+            const identityLocked = (locksStoreIdentity && ['department', 'requester', 'store'].includes(fd.key))
               || (locksPurchaseIdentity && ['request_type', 'department', 'requester'].includes(fd.key))
             return (
               <div key={fd.key}>
                 <label><HelpLabel label={fd.label} style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 7 }} /></label>
                 {identityLocked ? (
                   <div style={{ minHeight: 42, display: 'flex', alignItems: 'center', gap: 9, border: '1px solid var(--border)', background: 'var(--surface-2)', borderRadius: 10, padding: '0 12px', color: 'var(--text)', fontSize: 13.5 }}>
-                    <Icon name={fd.key === 'department' ? 'account_tree' : fd.key === 'request_type' ? 'request_quote' : 'person'} size={18} color="var(--text-faint)" />
-                    <span style={{ flex: 1 }}>{fd.key === 'request_type' ? 'Department request' : values[fd.key] || 'No employee profile found'}</span>
+                    <Icon name={fd.key === 'department' ? 'account_tree' : fd.key === 'request_type' ? 'request_quote' : fd.key === 'store' ? 'warehouse' : 'person'} size={18} color="var(--text-faint)" />
+                    <span style={{ flex: 1 }}>{fd.key === 'request_type' ? 'Department request' : fd.key === 'store' ? 'Automatically assigned by branch' : values[fd.key] || 'No employee profile found'}</span>
                     <span style={{ color: 'var(--text-faint)', fontSize: 10.5 }}>From your account</span>
                   </div>
                 ) : isSelect ? (

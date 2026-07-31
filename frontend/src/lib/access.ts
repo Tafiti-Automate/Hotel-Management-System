@@ -51,6 +51,7 @@ export function isStoresManager(user: Pick<AccessUser, 'role'>): boolean {
 export function canAccessRoute(user: AccessUser, route: string): boolean {
   if (user.isSuperuser || roleKey(user) === 'system administrator') return true
   if (route === 'dashboard' || route === 'detail') return true
+  if (route === 'items' && ['department head', 'department requester'].includes(roleKey(user))) return false
   const required = routePermissions[route]
   return required ? required.some((permission) => user.permissions.includes(permission)) : false
 }

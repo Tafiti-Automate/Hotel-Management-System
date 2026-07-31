@@ -692,15 +692,15 @@ function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey
     const storeId = findDataId(data, 'locations', values.store)
     const requesterId = findDataId(data, 'employees', values.requester)
     if (!departmentId) throw new Error('Choose a department before saving this store requisition.')
-    if (!storeId) throw new Error('Choose a store before saving this store requisition.')
     if (!requesterId) throw new Error('Choose a requester before saving this store requisition.')
-    return {
+    const payload: Row = {
       department: departmentId,
-      store: storeId,
       requested_by: requesterId,
       required_date: text(values.required_date) || null,
       purpose: text(values.purpose, 'Department stock request'),
     }
+    if (storeId) payload.store = storeId
+    return payload
   }
 
   throw new Error(`Backend saving is not configured for ${entity}.`)

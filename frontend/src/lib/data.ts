@@ -259,7 +259,7 @@ export const cfg: Record<string, EntityConfig> = {
     ],
   },
   storeRequisitions: {
-    title: 'Store Requisitions', sub: 'Departments requesting stock from stores', icon: 'assignment', add: 'New store request', singular: 'Store Requisition', editable: true, detail: true,
+    title: 'Department Material Requests', sub: 'Departments report what they need; Stores decides whether to issue or procure', icon: 'assignment', add: 'New material request', singular: 'Department Material Request', editable: true, detail: true,
     cols: [
       { key: 'id', label: 'Request', w: '1.1fr', kind: 'mono' },
       { key: 'department', label: 'Department', w: '1.3fr', kind: 'text' },

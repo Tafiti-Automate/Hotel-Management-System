@@ -23,7 +23,7 @@ const operationsGroups: NavGroup[] = [
     { route: 'batches', label: 'Batches & expiry', icon: 'layers' },
   ] },
   { heading: 'Stores', icon: 'warehouse', items: [
-    { route: 'storeRequisitions', label: 'Store requisitions', icon: 'assignment' },
+    { route: 'storeRequisitions', label: 'Department requests', icon: 'assignment' },
     { route: 'stockIssues', label: 'Stock issues', icon: 'outbox' },
     { route: 'storeReturns', label: 'Returns', icon: 'assignment_return' },
     { route: 'workflow-stores', label: 'Transfers & counts', icon: 'sync_alt' },
