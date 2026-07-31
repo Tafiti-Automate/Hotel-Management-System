@@ -1,4 +1,6 @@
 from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth.models import Group
+from django.db.models import Count
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
@@ -6,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 
-from apps.accounts.serializers import UserSerializer
+from apps.accounts.serializers import RoleSerializer, UserSerializer
 
 
 User = get_user_model()
@@ -94,3 +96,11 @@ class UserViewSet(ModelViewSet):
     permission_classes = [IsAdminUser]
     search_fields = ("username", "email", "employee_code", "first_name", "last_name")
     ordering_fields = ("username", "employee_code", "date_joined")
+
+
+class RoleViewSet(ModelViewSet):
+    queryset = Group.objects.annotate(user_count=Count("user")).order_by("name")
+    serializer_class = RoleSerializer
+    permission_classes = [IsAdminUser]
+    search_fields = ("name",)
+    ordering_fields = ("name",)
