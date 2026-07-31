@@ -1,14 +1,14 @@
 from django.contrib.auth import authenticate, get_user_model
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, Permission
 from django.db.models import Count
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.viewsets import ModelViewSet
+from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
 
-from apps.accounts.serializers import RoleSerializer, UserSerializer
+from apps.accounts.serializers import PermissionSerializer, RoleSerializer, UserSerializer
 
 
 User = get_user_model()
@@ -104,3 +104,12 @@ class RoleViewSet(ModelViewSet):
     permission_classes = [IsAdminUser]
     search_fields = ("name",)
     ordering_fields = ("name",)
+
+
+class PermissionViewSet(ReadOnlyModelViewSet):
+    queryset = Permission.objects.select_related("content_type").order_by(
+        "content_type__app_label", "content_type__model", "codename"
+    )
+    serializer_class = PermissionSerializer
+    permission_classes = [IsAdminUser]
+    pagination_class = None
