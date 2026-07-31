@@ -105,6 +105,28 @@ export interface NotificationRecord {
   updated_at: string
 }
 
+export interface AccountRecord {
+  id: string
+  username: string
+  email: string
+  first_name: string
+  last_name: string
+  employee_code: string
+  phone: string
+  is_active: boolean
+  is_staff: boolean
+  date_joined: string
+  last_login: string | null
+  role_name: string
+}
+
+export interface RoleRecord {
+  id: string
+  name: string
+  permission_ids: number[]
+  user_count: number
+}
+
 export type HotelInput = Omit<
   HotelRecord,
   'id' | 'logo' | 'branch_count' | 'created_at' | 'updated_at' | 'created_by'
@@ -269,6 +291,37 @@ export async function markAllNotificationsRead(): Promise<number> {
   const response = await postNotificationAction('notifications/mark-all-read')
   const body = (await response.json()) as { updated?: number }
   return Number(body.updated || 0)
+}
+
+export async function fetchAccounts(): Promise<AccountRecord[]> {
+  return (await readList('users?ordering=username')) as unknown as AccountRecord[]
+}
+
+export async function fetchRoles(): Promise<RoleRecord[]> {
+  return (await readList('roles?ordering=name')) as unknown as RoleRecord[]
+}
+
+async function saveAccessRecord<T>(path: string, id: string | null, values: Record<string, unknown>): Promise<T> {
+  const method = id ? 'PATCH' : 'POST'
+  const response = await fetch(endpointUrl(id ? `${path}/${id}` : path), {
+    method,
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(values),
+  })
+  if (!response.ok) {
+    let body: unknown = null
+    try { body = await response.json() } catch { /* non-JSON response */ }
+    throw new Error(apiErrorDetail(body, `${method} ${path} failed with ${response.status}`))
+  }
+  return response.json() as Promise<T>
+}
+
+export function saveAccount(id: string | null, values: Record<string, unknown>): Promise<AccountRecord> {
+  return saveAccessRecord<AccountRecord>('users', id, values)
+}
+
+export function saveRole(id: string | null, values: Record<string, unknown>): Promise<RoleRecord> {
+  return saveAccessRecord<RoleRecord>('roles', id, values)
 }
 
 function apiErrorDetail(body: unknown, fallback: string): string {

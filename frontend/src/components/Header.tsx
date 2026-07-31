@@ -21,7 +21,6 @@ export default function Header() {
   const roleKey = app.user.role.trim().toLowerCase()
   const moduleName = storesManager ? 'Stores & Inventory' : app.activeModule === 'hr' ? 'Human Resources' : `${app.user.role} workspace`
   const initials = app.user.name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()
-  const isHR = app.activeModule === 'hr'
   const notificationCount = notifications.filter((notification) => !notification.is_read).length
   const hasPermission = (permission: string) => app.user.isSuperuser || app.user.permissions.includes(permission)
 
@@ -83,11 +82,6 @@ export default function Header() {
   }
 
   const primary = (() => {
-    if (isHR) {
-      return hasPermission('employees.add_employee')
-        ? { label: 'Register employee', icon: 'person_add', action: () => app.openCreate('employees', 'Employees') }
-        : null
-    }
     if (['stores manager', 'store manager', 'store keeper'].includes(roleKey)) {
       return { label: 'Open stores workbench', icon: 'warehouse', action: () => app.navTo('workflow-stores', 'Stores workbench') }
     }
@@ -96,9 +90,6 @@ export default function Header() {
     }
     if (roleKey === 'receiving officer') {
       return { label: 'Open receiving workbench', icon: 'move_to_inbox', action: () => app.navTo('workflow-procure', 'Receiving workbench') }
-    }
-    if (hasPermission('procurement.add_purchaserequisition')) {
-      return { label: 'New requisition', icon: 'add', action: () => app.openCreate('requisitions', 'Purchase requisitions') }
     }
     if (hasPermission('approvals.change_approvalworkflow')) {
       return { label: 'Review approvals', icon: 'approval', action: () => app.navTo('approvals', 'Approvals') }
@@ -196,7 +187,7 @@ export default function Header() {
         <span style={{ color: 'var(--text-faint)', fontSize: 12 }}>{moduleName}</span>
         <Icon name="chevron_right" size={15} color="var(--text-faint)" />
         <span style={{ color: 'var(--text)', fontSize: 12, fontWeight: 600 }}>{app.crumb}</span>
-        {primary && <button onClick={primary.action} className="header-primary-action hover-accent" style={{ marginLeft: 'auto', height: 29, display: 'flex', alignItems: 'center', gap: 6, border: 0, borderRadius: 5, background: 'var(--accent)', color: '#fff', padding: '0 11px', cursor: 'pointer', font: 'inherit', fontSize: 11.5, fontWeight: 600 }}><Icon name={primary.icon} size={16} color="#fff" />{primary.label}</button>}
+        {primary && app.route === 'dashboard' && <button onClick={primary.action} className="header-primary-action hover-accent" style={{ marginLeft: 'auto', height: 29, display: 'flex', alignItems: 'center', gap: 6, border: 0, borderRadius: 5, background: 'var(--accent)', color: '#fff', padding: '0 11px', cursor: 'pointer', font: 'inherit', fontSize: 11.5, fontWeight: 600 }}><Icon name={primary.icon} size={16} color="#fff" />{primary.label}</button>}
       </div>
     </header>
   )

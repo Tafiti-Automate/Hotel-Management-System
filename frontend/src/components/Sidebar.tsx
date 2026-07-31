@@ -44,6 +44,9 @@ const hrGroups: NavGroup[] = [
     { route: 'employees', label: 'Employees', icon: 'badge' },
     { route: 'departments', label: 'Departments', icon: 'account_tree' },
   ] },
+  { heading: 'Access control', icon: 'admin_panel_settings', items: [
+    { route: 'access-management', label: 'Roles & user accounts', icon: 'manage_accounts' },
+  ] },
 ]
 
 const storesManagerGroups: NavGroup[] = [

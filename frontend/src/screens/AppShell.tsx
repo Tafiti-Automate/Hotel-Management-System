@@ -14,6 +14,7 @@ import FinanceWorkbench from './FinanceWorkbench'
 import InventoryWorkbench from './InventoryWorkbench'
 import AuditLog from './AuditLog'
 import StoresDashboard from './StoresDashboard'
+import AccessManagement from './AccessManagement'
 import { canAccessRoute, isStoresManager } from '../lib/access'
 
 const listRoutes: string[] = [
@@ -44,6 +45,7 @@ export default function AppShell() {
   else if (route === 'reportview') content = <ReportView />
   else if (route === 'hotel-profile') content = <HotelProfile />
   else if (route === 'audit-log') content = <AuditLog />
+  else if (route === 'access-management') content = <AccessManagement />
 
   return (
     <div className="app-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
