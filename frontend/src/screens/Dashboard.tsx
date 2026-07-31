@@ -1,122 +1,280 @@
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { Icon } from '../components/Icon'
 import { money } from '../lib/theme'
 import { useApp } from '../state/AppContext'
 
-const panel: CSSProperties = { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: 'var(--shadow-sm)' }
+const panel: CSSProperties = { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, boxShadow: 'var(--shadow-sm)' }
+const roleKey = (role: string) => role.trim().toLowerCase()
+const monthKey = (date: unknown) => String(date || '').slice(0, 7)
+const today = new Date().toISOString().slice(0, 10)
 
 export default function Dashboard() {
   const app = useApp()
-  const requisitions = app.data.requisitions
-  const pending = requisitions.filter((row) => Boolean(row.approvalActionable))
-  const lowStock = app.data.items.filter((row) => ['Low', 'Critical'].includes(String(row.status)))
-  const expiring = app.data.batches.filter((row) => String(row.status) === 'Expiring')
-  const todaysReceipts = app.data.grns.filter((row) => String(row.date) === new Date().toISOString().slice(0, 10))
-  const todaysIssues = app.data.stockIssues.filter((row) => String(row.date) === new Date().toISOString().slice(0, 10))
-  const inventoryValue = app.data.balances.reduce((sum, row) => sum + Number(row.value || 0), 0)
+  const role = roleKey(app.user.role)
+  const data = app.data
+  const isHR = role === 'hr administrator'
+  const title = dashboardTitle(role)
 
-  const kpis = [
-    { label: 'Pending purchase requests', value: pending.length, icon: 'request_quote', tone: 'neutral' },
-    { label: 'Pending approvals', value: pending.length, icon: 'approval', tone: pending.length ? 'warning' : 'neutral' },
-    { label: 'Low stock articles', value: lowStock.length, icon: 'warning', tone: lowStock.length ? 'danger' : 'neutral' },
-    { label: 'Items near expiry', value: expiring.length, icon: 'event_busy', tone: expiring.length ? 'warning' : 'neutral' },
-    { label: "Today's receipts", value: todaysReceipts.length, icon: 'move_to_inbox', tone: 'success' },
-    { label: 'Inventory value', value: money(inventoryValue), icon: 'savings', tone: 'neutral' },
-  ]
-
-  const movements = app.data.ledgers.slice(0, 7)
+  const config = buildDashboard(role, data)
   const syncTone = app.apiStatus === 'live' ? 'var(--good)' : app.apiStatus === 'loading' ? 'var(--warn)' : 'var(--bad)'
 
-  return (
-    <div className="dashboard-screen">
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 18 }}>
-        <div><h1 style={{ margin: 0, color: 'var(--text)', fontSize: 25, fontWeight: 650, letterSpacing: '-.03em' }}>Operations dashboard</h1><p style={{ margin: '5px 0 0', color: 'var(--text-muted)', fontSize: 13.5 }}>Current workload and stock exceptions for {app.currentBranch}.</p></div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: syncTone }} /><span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{app.apiStatus === 'live' ? 'Live data' : app.apiStatus === 'loading' ? 'Refreshing' : 'Connection unavailable'}</span><button onClick={app.refreshData} style={iconButton}><Icon name="refresh" size={18} /></button></div>
+  return <div className="dashboard-screen">
+    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 18 }}>
+      <div>
+        <h1 style={{ margin: 0, color: 'var(--text)', fontSize: 25, fontWeight: 700, letterSpacing: '-.03em' }}>{title}</h1>
+        <p style={{ margin: '5px 0 0', color: 'var(--text-muted)', fontSize: 13.5 }}>{config.subtitle} · {app.currentBranch || app.user.branchName || 'Current branch'}</p>
       </div>
-
-      <div className="enterprise-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(6,minmax(150px,1fr))', gap: 10 }}>
-        {kpis.map((kpi) => {
-          const colors = tone(kpi.tone)
-          return <button key={kpi.label} className="hover-card" style={{ ...panel, minHeight: 112, padding: 15, textAlign: 'left', cursor: 'pointer', font: 'inherit', transition: 'all .15s ease' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}><span style={{ color: 'var(--text-muted)', fontSize: 11.5, fontWeight: 500 }}>{kpi.label}</span><span style={{ width: 29, height: 29, borderRadius: 6, display: 'grid', placeItems: 'center', background: colors.bg }}><Icon name={kpi.icon} size={17} color={colors.fg} /></span></div>
-            <div style={{ color: 'var(--text)', fontSize: typeof kpi.value === 'string' && kpi.value.length > 8 ? 20 : 25, fontWeight: 650, letterSpacing: '-.025em', marginTop: 18 }}>{kpi.value}</div>
-          </button>
-        })}
-      </div>
-
-      <div className="dashboard-ops-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.25fr) minmax(0,1fr)', gap: 14, marginTop: 14 }}>
-        <section style={panel}>
-          <PanelHeader title="Purchase requests awaiting action" subtitle="Prioritised approval and procurement queue" action="View all" onAction={() => app.navTo('approvals', 'Approvals')} />
-          {pending.slice(0, 6).map((row) => <button key={row.id} onClick={() => app.openDetail('requisitions', row.id, 'dashboard')} className="hover-surface2" style={queueRow}>
-            <span><span style={primaryText}>{String(row.id).slice(0, 18)}</span><span style={secondaryText}>{row.dept || 'Department'} · {row.requester || 'Requester'}</span></span>
-            <span style={{ color: 'var(--text)', fontSize: 12, fontWeight: 600 }}>{money(row.total)}</span>
-            <Status value={String(row.status || 'Pending')} />
-            <Icon name="chevron_right" size={18} color="var(--text-faint)" />
-          </button>)}
-          {!pending.length && <Empty text="No purchase requests require attention." />}
-        </section>
-
-        <section style={panel}>
-          <PanelHeader title="Low stock" subtitle="Articles at or below minimum level" action="Open inventory" onAction={() => app.navTo('items', 'Articles')} />
-          {lowStock.slice(0, 6).map((row) => <button key={row.id} onClick={() => app.navTo('items', 'Articles')} className="hover-surface2" style={queueRow}>
-            <span><span style={primaryText}>{row.name}</span><span style={secondaryText}>{row.sku || 'No SKU'} · {row.store || 'All stores'}</span></span>
-            <span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{row.onHand || 0} available</span>
-            <Status value={String(row.status)} />
-            <Icon name="chevron_right" size={18} color="var(--text-faint)" />
-          </button>)}
-          {!lowStock.length && <Empty text="No low-stock exceptions." />}
-        </section>
-      </div>
-
-      <div className="dashboard-ops-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.25fr) minmax(0,1fr)', gap: 14, marginTop: 14 }}>
-        <section style={panel}>
-          <PanelHeader title="Recent stock movements" subtitle="Latest posted inventory transactions" action="Stock ledger" onAction={() => app.navTo('ledgers', 'Stock ledger')} />
-          {movements.map((row) => <button key={row.id} onClick={() => app.navTo('ledgers', 'Stock ledger')} className="hover-surface2" style={queueRow}>
-            <span><span style={primaryText}>{row.item || 'Article movement'}</span><span style={secondaryText}>{row.date || '—'} · {row.ref || 'No reference'}</span></span>
-            <span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{row.store || 'Store'}</span>
-            <span style={{ color: String(row.type).toLowerCase().includes('in') ? 'var(--good)' : 'var(--text)', fontSize: 12, fontWeight: 600 }}>{row.qty || 0}</span>
-            <Icon name="open_in_new" size={16} color="var(--text-faint)" />
-          </button>)}
-          {!movements.length && <Empty text="No stock movements have been posted." />}
-        </section>
-
-        <section style={{ ...panel, padding: 16 }}>
-          <div style={{ color: 'var(--text)', fontSize: 14, fontWeight: 650 }}>Notifications</div>
-          <div style={{ color: 'var(--text-muted)', fontSize: 11.5, marginTop: 3 }}>Operational alerts requiring follow-up</div>
-          {[
-            [`${pending.length} purchase requests`, 'Awaiting review or approval', 'approval', pending.length ? 'var(--warn)' : 'var(--text-faint)'],
-            [`${lowStock.length} low-stock articles`, 'Reorder action recommended', 'warning', lowStock.length ? 'var(--bad)' : 'var(--text-faint)'],
-            [`${expiring.length} near-expiry batches`, 'Review consumption or transfer', 'event_busy', expiring.length ? 'var(--warn)' : 'var(--text-faint)'],
-            [`${todaysIssues.length} issues today`, 'Department stock consumption', 'outbox', 'var(--accent)'],
-          ].map(([title, subtitle, icon, color]) => <div key={title} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '13px 0', borderBottom: '1px solid var(--border)' }}><span style={{ width: 31, height: 31, display: 'grid', placeItems: 'center', borderRadius: 6, background: 'var(--surface-2)' }}><Icon name={icon} size={18} color={color} /></span><span><span style={primaryText}>{title}</span><span style={secondaryText}>{subtitle}</span></span></div>)}
-        </section>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ width: 7, height: 7, borderRadius: '50%', background: syncTone }} />
+        <span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{app.apiStatus === 'live' ? 'Live authorised data' : app.apiStatus === 'loading' ? 'Refreshing' : 'Connection unavailable'}</span>
+        <button aria-label="Refresh dashboard" onClick={app.refreshData} style={iconButton}><Icon name="refresh" size={18} /></button>
       </div>
     </div>
-  )
+
+    <div className="enterprise-kpi-grid" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(config.kpis.length, 6)},minmax(150px,1fr))`, gap: 10 }}>
+      {config.kpis.map(kpi => <Kpi key={kpi.label} {...kpi} />)}
+    </div>
+
+    <div className="dashboard-ops-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.45fr) minmax(280px,.75fr)', gap: 14, marginTop: 14 }}>
+      <ChartCard title={config.trend.title} subtitle={config.trend.subtitle}>
+        <LineChart series={config.trend.series} />
+      </ChartCard>
+      <ChartCard title={config.status.title} subtitle={config.status.subtitle}>
+        <DonutChart data={config.status.data} />
+      </ChartCard>
+    </div>
+
+    <div className="dashboard-ops-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.1fr) minmax(0,1fr)', gap: 14, marginTop: 14 }}>
+      <ChartCard title={config.bars.title} subtitle={config.bars.subtitle}>
+        <BarChart data={config.bars.data} valueFormatter={config.bars.money ? money : undefined} />
+      </ChartCard>
+      <section style={panel}>
+        <PanelHeader title={config.queue.title} subtitle={config.queue.subtitle} action={config.queue.action} onAction={() => app.navTo(config.queue.route, config.queue.action)} />
+        {config.queue.rows.slice(0, 7).map((row, index) => <button key={String(row.id || index)} onClick={() => config.queue.route === 'requisitions' && row.id ? app.openDetail('requisitions', String(row.id), 'dashboard') : app.navTo(config.queue.route, config.queue.action)} className="hover-surface2" style={queueRow}>
+          <span><span style={primaryText}>{String(row.primary || 'Record')}</span><span style={secondaryText}>{String(row.secondary || '')}</span></span>
+          <span style={{ color: 'var(--text)', fontSize: 11.5, fontWeight: 600 }}>{row.value || ''}</span>
+          <Status value={String(row.status || 'Pending')} />
+          <Icon name="chevron_right" size={18} color="var(--text-faint)" />
+        </button>)}
+        {!config.queue.rows.length && <Empty text="Nothing currently requires action." />}
+      </section>
+    </div>
+
+    <div style={{ marginTop: 12, color: 'var(--text-faint)', fontSize: 10.5 }}>
+      Dashboard scope: {isHR ? 'employee and department records permitted to this HR account' : role === 'department head' ? 'this department only' : 'records returned by the signed-in role and branch permissions'}.
+    </div>
+  </div>
+}
+
+type Point = { label: string; value: number }
+type Series = { name: string; points: Point[] }
+type KpiProps = { label: string; value: string | number; icon: string; tone?: 'neutral' | 'warning' | 'danger' | 'success' }
+
+type DashboardConfig = {
+  subtitle: string
+  kpis: KpiProps[]
+  trend: { title: string; subtitle: string; series: Series[] }
+  status: { title: string; subtitle: string; data: Point[] }
+  bars: { title: string; subtitle: string; data: Point[]; money?: boolean }
+  queue: { title: string; subtitle: string; action: string; route: string; rows: any[] }
+}
+
+function buildDashboard(role: string, data: any): DashboardConfig {
+  const reqs = data.requisitions || []
+  const orders = data.orders || []
+  const balances = data.balances || []
+  const items = data.items || []
+  const ledgers = data.ledgers || []
+  const storeReqs = data.storeRequisitions || []
+  const issues = data.stockIssues || []
+  const returns = data.storeReturns || []
+  const employees = data.employees || []
+  const departments = data.departments || []
+  const low = items.filter((r: any) => ['Low', 'Critical'].includes(String(r.status)))
+
+  if (role === 'department head') {
+    const actionable = reqs.filter((r: any) => r.approvalActionable)
+    const fulfilled = reqs.filter((r: any) => /approved|completed|fulfilled/i.test(String(r.status)))
+    return {
+      subtitle: 'Department request workload and approvals',
+      kpis: [
+        { label: 'Awaiting your approval', value: actionable.length, icon: 'approval', tone: actionable.length ? 'warning' : 'neutral' },
+        { label: 'Waiting for Stores', value: countStatus(storeReqs, /submitted|approved|pending/i), icon: 'warehouse' },
+        { label: 'Waiting for Procurement', value: countStatus(reqs, /submitted|procurement|pending/i), icon: 'shopping_cart' },
+        { label: 'Fulfilled this month', value: fulfilled.filter((r: any) => monthKey(r.date) === monthKey(today)).length, icon: 'task_alt', tone: 'success' },
+      ],
+      trend: { title: 'Monthly department requests', subtitle: 'Requests visible to this department', series: [{ name: 'Requests', points: monthly(reqs, 'date') }] },
+      status: { title: 'Requests by status', subtitle: 'Department-only pipeline', data: byStatus(reqs) },
+      bars: { title: 'Request value by status', subtitle: 'Estimated UGX value of visible requests', data: groupSum(reqs, 'status', 'total'), money: true },
+      queue: { title: 'Approval queue', subtitle: 'Requests requiring this department head', action: 'Approvals', route: 'approvals', rows: actionable.map((r: any) => queueReq(r)) },
+    }
+  }
+
+  if (role === 'stores manager' || role === 'store manager') {
+    return {
+      subtitle: 'Inventory movement, requests and exceptions',
+      kpis: [
+        { label: 'Inventory value', value: money(sum(balances, 'value')), icon: 'savings' },
+        { label: 'Low-stock articles', value: low.length, icon: 'warning', tone: low.length ? 'danger' : 'neutral' },
+        { label: 'Pending store requests', value: countStatus(storeReqs, /submitted|approved|pending/i), icon: 'pending_actions', tone: 'warning' },
+        { label: 'Issues today', value: issues.filter((r: any) => r.date === today).length, icon: 'outbox' },
+        { label: 'Returns this month', value: returns.filter((r: any) => monthKey(r.date) === monthKey(today)).length, icon: 'assignment_return' },
+      ],
+      trend: { title: 'Stock movement trend', subtitle: 'Receipts and issues from the authorised stock ledger', series: ledgerSeries(ledgers) },
+      status: { title: 'Department request pipeline', subtitle: 'Store requisitions by current status', data: byStatus(storeReqs) },
+      bars: { title: 'Inventory value by store', subtitle: 'UGX valuation from visible balances', data: groupSum(balances, 'store', 'value'), money: true },
+      queue: { title: 'Low-stock action queue', subtitle: 'Articles at or below reorder level', action: 'Articles', route: 'items', rows: low.map((r: any) => ({ id: r.id, primary: r.name, secondary: `${r.sku || 'No SKU'} · ${r.store || 'Store'}`, value: `${r.onHand || 0} on hand`, status: r.status })) },
+    }
+  }
+
+  if (role === 'procurement manager') {
+    const pending = reqs.filter((r: any) => !/completed|rejected/i.test(String(r.status)))
+    return {
+      subtitle: 'Purchase pipeline, LPOs and supplier activity',
+      kpis: [
+        { label: 'Open requisitions', value: pending.length, icon: 'request_quote', tone: pending.length ? 'warning' : 'neutral' },
+        { label: 'Requisition value', value: money(sum(reqs, 'total')), icon: 'payments' },
+        { label: 'Open LPOs', value: orders.filter((r: any) => !/received|closed|cancelled/i.test(String(r.status))).length, icon: 'description' },
+        { label: 'Suppliers available', value: (data.suppliers || []).length, icon: 'local_shipping' },
+      ],
+      trend: { title: 'Monthly procurement value', subtitle: 'Estimated requisition value over time', series: [{ name: 'UGX value', points: monthly(reqs, 'date', 'total') }] },
+      status: { title: 'Purchase requests by stage', subtitle: 'Current approval and procurement state', data: byStatus(reqs) },
+      bars: { title: 'Requisition value by department', subtitle: 'Visible purchasing demand in UGX', data: groupSum(reqs, 'dept', 'total'), money: true },
+      queue: { title: 'Procurement action queue', subtitle: 'Open requisitions requiring follow-up', action: 'Purchase requisitions', route: 'requisitions', rows: pending.map((r: any) => queueReq(r)) },
+    }
+  }
+
+  if (role === 'finance controller') {
+    const approved = reqs.filter((r: any) => /approved|completed|ordered/i.test(String(r.status)))
+    return {
+      subtitle: 'Approved procurement commitments and expense exposure',
+      kpis: [
+        { label: 'Approved procurement', value: money(sum(approved, 'total')), icon: 'account_balance_wallet' },
+        { label: 'Approved requests', value: approved.length, icon: 'verified', tone: 'success' },
+        { label: 'LPO commitments', value: money(sum(orders, 'total')), icon: 'receipt_long' },
+        { label: 'Awaiting completion', value: orders.filter((r: any) => !/received|closed/i.test(String(r.status))).length, icon: 'pending_actions', tone: 'warning' },
+      ],
+      trend: { title: 'Monthly approved procurement', subtitle: 'Only approved financial commitments', series: [{ name: 'Approved UGX', points: monthly(approved, 'date', 'total') }] },
+      status: { title: 'LPO status', subtitle: 'Purchase orders available to Finance', data: byStatus(orders) },
+      bars: { title: 'Procurement value by department', subtitle: 'Approved requisitions only', data: groupSum(approved, 'dept', 'total'), money: true },
+      queue: { title: 'Financial review queue', subtitle: 'Open purchase orders and commitments', action: 'Finance control centre', route: 'workflow-pay', rows: orders.filter((r: any) => !/received|closed/i.test(String(r.status))).map((r: any) => ({ id: r.id, primary: r.id, secondary: r.supplier, value: money(r.total || 0), status: r.status })) },
+    }
+  }
+
+  if (role === 'general manager') {
+    return {
+      subtitle: 'Hotel-wide operational summary within executive permissions',
+      kpis: [
+        { label: 'Purchasing this month', value: money(sum(reqs.filter((r: any) => monthKey(r.date) === monthKey(today)), 'total')), icon: 'shopping_cart' },
+        { label: 'Approval pipeline', value: reqs.filter((r: any) => !/completed|rejected/i.test(String(r.status))).length, icon: 'approval', tone: 'warning' },
+        { label: 'Inventory value', value: money(sum(balances, 'value')), icon: 'inventory' },
+        { label: 'Low-stock exceptions', value: low.length, icon: 'warning', tone: low.length ? 'danger' : 'neutral' },
+      ],
+      trend: { title: 'Monthly purchasing trend', subtitle: 'Hotel-wide visible requisition value', series: [{ name: 'UGX value', points: monthly(reqs, 'date', 'total') }] },
+      status: { title: 'Approval pipeline', subtitle: 'Requests by current state', data: byStatus(reqs) },
+      bars: { title: 'Expenditure by department', subtitle: 'Estimated procurement value', data: groupSum(reqs, 'dept', 'total'), money: true },
+      queue: { title: 'Executive exceptions', subtitle: 'High-value and delayed open requests', action: 'Approvals', route: 'approvals', rows: reqs.filter((r: any) => !/completed|rejected/i.test(String(r.status))).sort((a: any,b: any) => Number(b.total)-Number(a.total)).map((r: any) => queueReq(r)) },
+    }
+  }
+
+  if (role === 'hr administrator') {
+    const active = employees.filter((r: any) => /active/i.test(String(r.status)))
+    return {
+      subtitle: 'Workforce composition and staffing activity',
+      kpis: [
+        { label: 'Total employees', value: employees.length, icon: 'groups' },
+        { label: 'Active employees', value: active.length, icon: 'person_check', tone: 'success' },
+        { label: 'Inactive employees', value: employees.length - active.length, icon: 'person_off', tone: employees.length - active.length ? 'warning' : 'neutral' },
+        { label: 'Departments', value: departments.length, icon: 'account_tree' },
+      ],
+      trend: { title: 'Hiring trend', subtitle: 'Employees by joining month', series: [{ name: 'New hires', points: monthly(employees, 'dateJoined') }] },
+      status: { title: 'Active versus inactive', subtitle: 'Current employment status', data: byStatus(employees) },
+      bars: { title: 'Employees by department', subtitle: 'Current staffing distribution', data: groupCount(employees, 'department') },
+      queue: { title: 'Recent employee records', subtitle: 'Latest staff additions', action: 'Employees', route: 'employees', rows: [...employees].sort((a: any,b: any) => String(b.dateJoined).localeCompare(String(a.dateJoined))).map((r: any) => ({ id: r.id, primary: r.name, secondary: `${r.department || 'No department'} · ${r.designation || 'Employee'}`, value: r.dateJoined || '', status: r.status })) },
+    }
+  }
+
+  // Safe fallback: uses only data already returned to this signed-in account.
+  return {
+    subtitle: 'Your authorised operational workload',
+    kpis: [
+      { label: 'Visible requests', value: reqs.length, icon: 'request_quote' },
+      { label: 'Pending actions', value: reqs.filter((r: any) => r.approvalActionable).length, icon: 'approval', tone: 'warning' },
+      { label: 'Visible issues', value: issues.length, icon: 'outbox' },
+      { label: 'Visible receipts', value: (data.grns || []).length, icon: 'move_to_inbox' },
+    ],
+    trend: { title: 'Recent request trend', subtitle: 'Records available to your account', series: [{ name: 'Requests', points: monthly(reqs, 'date') }] },
+    status: { title: 'Requests by status', subtitle: 'Authorised records only', data: byStatus(reqs) },
+    bars: { title: 'Requests by department', subtitle: 'Visible request distribution', data: groupCount(reqs, 'dept') },
+    queue: { title: 'Recent requests', subtitle: 'Latest authorised records', action: 'Purchase requisitions', route: 'requisitions', rows: reqs.map((r: any) => queueReq(r)) },
+  }
+}
+
+function Kpi({ label, value, icon, tone: toneName = 'neutral' }: KpiProps) {
+  const colors = tone(toneName)
+  return <div className="hover-card" style={{ ...panel, minHeight: 112, padding: 15 }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}><span style={{ color: 'var(--text-muted)', fontSize: 11.5, fontWeight: 500 }}>{label}</span><span style={{ width: 29, height: 29, borderRadius: 6, display: 'grid', placeItems: 'center', background: colors.bg }}><Icon name={icon} size={17} color={colors.fg} /></span></div>
+    <div style={{ color: 'var(--text)', fontSize: typeof value === 'string' && value.length > 11 ? 19 : 25, fontWeight: 700, letterSpacing: '-.025em', marginTop: 18 }}>{value}</div>
+  </div>
+}
+
+function ChartCard({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
+  return <section style={{ ...panel, minHeight: 310 }}><PanelHeader title={title} subtitle={subtitle} action="" onAction={() => undefined} /><div style={{ padding: 18 }}>{children}</div></section>
+}
+
+function LineChart({ series }: { series: Series[] }) {
+  const points = series.flatMap(s => s.points)
+  if (!points.length || !points.some(p => p.value)) return <Empty text="No chart data is available for this period." />
+  const max = Math.max(...points.map(p => p.value), 1)
+  return <div>
+    <div style={{ height: 190, display: 'flex', alignItems: 'stretch', gap: 8, borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
+      {(series[0]?.points || []).map((point, i) => <div key={point.label} title={`${point.label}: ${point.value.toLocaleString()}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', minWidth: 20 }}>
+        <span style={{ color: 'var(--text-faint)', fontSize: 9, marginBottom: 4 }}>{point.value ? compact(point.value) : ''}</span>
+        <div style={{ width: '65%', maxWidth: 34, minHeight: point.value ? 3 : 0, height: `${(point.value / max) * 145}px`, borderRadius: '5px 5px 1px 1px', background: 'var(--accent)', opacity: .82 }} />
+        <span style={{ color: 'var(--text-faint)', fontSize: 9, marginTop: 7 }}>{point.label.slice(5)}</span>
+      </div>)}
+    </div>
+    <Legend labels={series.map(s => s.name)} />
+  </div>
+}
+
+function DonutChart({ data }: { data: Point[] }) {
+  const total = data.reduce((s,p) => s+p.value,0)
+  if (!total) return <Empty text="No status data is available." />
+  let cursor = 0
+  const stops = data.slice(0,7).map((p,i) => { const start=cursor; cursor += p.value/total*100; return `var(--chart-${(i%6)+1}, var(--accent)) ${start}% ${cursor}%` }).join(',')
+  return <div style={{ display: 'grid', gridTemplateColumns: '150px minmax(0,1fr)', gap: 18, alignItems: 'center' }}>
+    <div title={`Total: ${total}`} style={{ width: 145, height: 145, borderRadius: '50%', background: `conic-gradient(${stops})`, display: 'grid', placeItems: 'center' }}><div style={{ width: 82, height: 82, borderRadius: '50%', background: 'var(--surface)', display: 'grid', placeItems: 'center', color: 'var(--text)', fontSize: 22, fontWeight: 700 }}>{total}</div></div>
+    <div>{data.slice(0,7).map((p,i)=><div key={p.label} title={`${p.label}: ${p.value}`} style={{ display:'grid',gridTemplateColumns:'10px minmax(0,1fr) auto',gap:8,alignItems:'center',padding:'5px 0',fontSize:11.5 }}><span style={{width:8,height:8,borderRadius:2,background:`var(--chart-${(i%6)+1}, var(--accent))`}}/><span style={{color:'var(--text-muted)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{clean(p.label)}</span><strong style={{color:'var(--text)'}}>{p.value}</strong></div>)}</div>
+  </div>
+}
+
+function BarChart({ data, valueFormatter }: { data: Point[]; valueFormatter?: (n:number)=>string }) {
+  const rows = data.slice(0,8), max = Math.max(...rows.map(p=>p.value),1)
+  if (!rows.length || !rows.some(p=>p.value)) return <Empty text="No category data is available." />
+  return <div>{rows.map(p=><div key={p.label} title={`${p.label}: ${valueFormatter ? valueFormatter(p.value) : p.value}`} style={{marginBottom:12}}><div style={{display:'flex',justifyContent:'space-between',gap:10,fontSize:11.5,marginBottom:5}}><span style={{color:'var(--text-muted)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{clean(p.label)}</span><strong style={{color:'var(--text)'}}>{valueFormatter ? valueFormatter(p.value) : p.value.toLocaleString()}</strong></div><div style={{height:8,borderRadius:8,background:'var(--surface-2)',overflow:'hidden'}}><div style={{height:'100%',width:`${Math.max(2,p.value/max*100)}%`,background:'var(--accent)',borderRadius:8}}/></div></div>)}</div>
 }
 
 function PanelHeader({ title, subtitle, action, onAction }: { title: string; subtitle: string; action: string; onAction: () => void }) {
-  return <div style={{ minHeight: 61, display: 'flex', alignItems: 'center', padding: '0 16px', borderBottom: '1px solid var(--border)' }}><div><div style={{ color: 'var(--text)', fontSize: 13.5, fontWeight: 650 }}>{title}</div><div style={{ color: 'var(--text-faint)', fontSize: 10.5, marginTop: 2 }}>{subtitle}</div></div><button onClick={onAction} style={{ marginLeft: 'auto', border: 0, background: 'transparent', color: 'var(--accent)', font: 'inherit', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>{action}</button></div>
+  return <div style={{ minHeight: 61, display: 'flex', alignItems: 'center', padding: '0 16px', borderBottom: '1px solid var(--border)' }}><div><div style={{ color: 'var(--text)', fontSize: 13.5, fontWeight: 650 }}>{title}</div><div style={{ color: 'var(--text-faint)', fontSize: 10.5, marginTop: 2 }}>{subtitle}</div></div>{action && <button onClick={onAction} style={{ marginLeft: 'auto', border: 0, background: 'transparent', color: 'var(--accent)', font: 'inherit', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>{action}</button>}</div>
 }
+function Status({ value }: { value: string }) { const bad=/critical|rejected|inactive/i.test(value), good=/approved|completed|active|applied|received/i.test(value); return <span style={{justifySelf:'end',color:bad?'var(--bad)':good?'var(--good)':'var(--warn)',background:bad?'var(--bad-soft)':good?'var(--good-soft)':'var(--warn-soft)',borderRadius:12,padding:'3px 8px',fontSize:10,fontWeight:600,textTransform:'capitalize'}}>{clean(value)}</span> }
+function Empty({ text }: { text: string }) { return <div style={{padding:30,color:'var(--text-faint)',textAlign:'center',fontSize:12.5}}>{text}</div> }
+function Legend({ labels }: { labels: string[] }) { return <div style={{display:'flex',gap:14,marginTop:12,flexWrap:'wrap'}}>{labels.map((l,i)=><span key={l} style={{fontSize:10.5,color:'var(--text-muted)'}}><i style={{display:'inline-block',width:8,height:8,borderRadius:2,background:`var(--chart-${i+1}, var(--accent))`,marginRight:5}}/>{l}</span>)}</div> }
+function dashboardTitle(role:string){ const names:Record<string,string>={'department head':'Department Head dashboard','stores manager':'Stores Manager dashboard','store manager':'Stores Manager dashboard','procurement manager':'Procurement Manager dashboard','finance controller':'Finance Controller dashboard','general manager':'General Manager dashboard','hr administrator':'HR Administrator dashboard'}; return names[role] || `${role ? role.replace(/\b\w/g,c=>c.toUpperCase()) : 'Operations'} dashboard` }
+function tone(value:string){ if(value==='danger')return{fg:'var(--bad)',bg:'var(--bad-soft)'};if(value==='warning')return{fg:'var(--warn)',bg:'var(--warn-soft)'};if(value==='success')return{fg:'var(--good)',bg:'var(--good-soft)'};return{fg:'var(--accent)',bg:'var(--accent-soft)'} }
+function clean(v:unknown){return String(v||'Unknown').replace(/_/g,' ')}
+function compact(v:number){return Intl.NumberFormat('en',{notation:'compact',maximumFractionDigits:1}).format(v)}
+function sum(rows:any[], key:string){return rows.reduce((s,r)=>s+Number(r[key]||0),0)}
+function countStatus(rows:any[], pattern:RegExp){return rows.filter(r=>pattern.test(String(r.status))).length}
+function byStatus(rows:any[]):Point[]{return groupCount(rows,'status')}
+function groupCount(rows:any[], key:string):Point[]{const m=new Map<string,number>();rows.forEach(r=>{const k=clean(r[key]);m.set(k,(m.get(k)||0)+1)});return [...m].map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value)}
+function groupSum(rows:any[], key:string, valueKey:string):Point[]{const m=new Map<string,number>();rows.forEach(r=>{const k=clean(r[key]);m.set(k,(m.get(k)||0)+Number(r[valueKey]||0))});return [...m].map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value)}
+function monthly(rows:any[], dateKey:string, valueKey?:string):Point[]{const months:string[]=[];const now=new Date();for(let i=5;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);months.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`)}return months.map(label=>({label,value:rows.filter(r=>monthKey(r[dateKey])===label).reduce((s,r)=>s+(valueKey?Number(r[valueKey]||0):1),0)}))}
+function ledgerSeries(rows:any[]):Series[]{return [{name:'Received',points:monthly(rows.filter(r=>/in/i.test(String(r.type))),'date','qty')},{name:'Issued',points:monthly(rows.filter(r=>/out/i.test(String(r.type))),'date','qty')}]}
+function queueReq(r:any){return{id:r.id,primary:r.id,secondary:`${r.dept||r.department||'Department'} · ${r.requester||'Requester'}`,value:money(r.total||0),status:r.status}}
 
-function Status({ value }: { value: string }) {
-  const bad = ['critical', 'rejected'].some((item) => value.toLowerCase().includes(item))
-  const good = ['approved', 'completed', 'active'].some((item) => value.toLowerCase().includes(item))
-  return <span style={{ justifySelf: 'end', color: bad ? 'var(--bad)' : good ? 'var(--good)' : 'var(--warn)', background: bad ? 'var(--bad-soft)' : good ? 'var(--good-soft)' : 'var(--warn-soft)', borderRadius: 12, padding: '3px 8px', fontSize: 10, fontWeight: 600, textTransform: 'capitalize' }}>{value.replace(/_/g, ' ')}</span>
-}
-
-function Empty({ text }: { text: string }) {
-  return <div style={{ padding: 30, color: 'var(--text-faint)', textAlign: 'center', fontSize: 12.5 }}>{text}</div>
-}
-
-function tone(value: string) {
-  if (value === 'danger') return { fg: 'var(--bad)', bg: 'var(--bad-soft)' }
-  if (value === 'warning') return { fg: 'var(--warn)', bg: 'var(--warn-soft)' }
-  if (value === 'success') return { fg: 'var(--good)', bg: 'var(--good-soft)' }
-  return { fg: 'var(--accent)', bg: 'var(--accent-soft)' }
-}
-
-const queueRow: CSSProperties = { width: '100%', minHeight: 56, display: 'grid', gridTemplateColumns: 'minmax(150px,1fr) auto auto 18px', alignItems: 'center', gap: 12, padding: '8px 16px', border: 0, borderBottom: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', textAlign: 'left', font: 'inherit' }
-const primaryText: CSSProperties = { display: 'block', color: 'var(--text)', fontSize: 12.5, fontWeight: 600 }
-const secondaryText: CSSProperties = { display: 'block', color: 'var(--text-faint)', fontSize: 10.5, marginTop: 3 }
-const iconButton: CSSProperties = { width: 32, height: 32, display: 'grid', placeItems: 'center', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer' }
+const iconButton: CSSProperties = { width: 31, height: 31, display: 'grid', placeItems: 'center', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer' }
+const queueRow: CSSProperties = { width:'100%',display:'grid',gridTemplateColumns:'minmax(0,1.6fr) auto auto 18px',alignItems:'center',gap:13,padding:'11px 16px',border:0,borderBottom:'1px solid var(--border)',background:'transparent',textAlign:'left',cursor:'pointer',font:'inherit' }
+const primaryText: CSSProperties = { display:'block',color:'var(--text)',fontSize:12,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }
+const secondaryText: CSSProperties = { display:'block',color:'var(--text-faint)',fontSize:10.5,marginTop:3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }

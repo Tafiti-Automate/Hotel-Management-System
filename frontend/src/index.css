@@ -1184,3 +1184,21 @@ select { appearance: none; -webkit-appearance: none; }
   .role-editor-heading { align-items:center; }
   .role-editor-card { padding:15px; }
 }
+
+/* Role-aware dashboard chart palette and responsive layout */
+:root {
+  --chart-1: var(--accent);
+  --chart-2: #2f855a;
+  --chart-3: #b7791f;
+  --chart-4: #805ad5;
+  --chart-5: #c05621;
+  --chart-6: #3182ce;
+}
+@media (max-width: 900px) {
+  .dashboard-screen .dashboard-ops-grid { grid-template-columns: 1fr !important; }
+  .dashboard-screen .enterprise-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+}
+@media (max-width: 560px) {
+  .dashboard-screen .enterprise-kpi-grid { grid-template-columns: 1fr !important; }
+  .dashboard-screen button[style*="grid-template-columns"] { grid-template-columns: minmax(0, 1fr) auto !important; }
+}
