@@ -127,6 +127,14 @@ export interface RoleRecord {
   user_count: number
 }
 
+export interface PermissionRecord {
+  id: number
+  name: string
+  codename: string
+  app_label: string
+  model: string
+}
+
 export type HotelInput = Omit<
   HotelRecord,
   'id' | 'logo' | 'branch_count' | 'created_at' | 'updated_at' | 'created_by'
@@ -299,6 +307,10 @@ export async function fetchAccounts(): Promise<AccountRecord[]> {
 
 export async function fetchRoles(): Promise<RoleRecord[]> {
   return (await readList('roles?ordering=name')) as unknown as RoleRecord[]
+}
+
+export async function fetchPermissions(): Promise<PermissionRecord[]> {
+  return (await readList('permissions')) as unknown as PermissionRecord[]
 }
 
 async function saveAccessRecord<T>(path: string, id: string | null, values: Record<string, unknown>): Promise<T> {
