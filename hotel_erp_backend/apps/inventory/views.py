@@ -267,6 +267,26 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("requisition_no", "purpose", "department__name", "store__name")
     ordering_fields = ("requisition_no", "status", "required_date", "created_at")
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        if user.is_superuser or user.groups.filter(
+            name__in=(
+                "System Administrator", "General Manager", "Stores Manager",
+                "Store Keeper", "Auditor",
+            )
+        ).exists():
+            return queryset
+        employee = getattr(user, "employee_profile", None)
+        if not employee:
+            return queryset.none()
+        if user.groups.filter(name="Department Head").exists():
+            return queryset.filter(
+                department=employee.department,
+                store__branch=employee.branch,
+            )
+        return queryset.filter(requested_by=employee)
+
     @action(detail=True, methods=["post"])
     def submit(self, request, pk=None):
         requisition = self.get_object()

@@ -412,6 +412,37 @@ class StoreRequisitionSerializer(serializers.ModelSerializer):
             "created_by",
         )
 
+    def validate(self, attrs):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return attrs
+
+        user = request.user
+        can_request_on_behalf = user.is_superuser or user.groups.filter(
+            name__in=("System Administrator", "Stores Manager")
+        ).exists()
+        if can_request_on_behalf:
+            return attrs
+
+        employee = getattr(user, "employee_profile", None)
+        if not employee:
+            raise serializers.ValidationError(
+                "Your account is not connected to an employee profile."
+            )
+        if not employee.department_id:
+            raise serializers.ValidationError(
+                "Your employee profile is not assigned to a department."
+            )
+
+        store = attrs.get("store", getattr(self.instance, "store", None))
+        if store and employee.branch_id and store.branch_id != employee.branch_id:
+            raise serializers.ValidationError(
+                {"store": "Select a store in your assigned branch."}
+            )
+        attrs["department"] = employee.department
+        attrs["requested_by"] = employee
+        return attrs
+
 
 class StockIssueItemSerializer(serializers.ModelSerializer):
     class Meta:

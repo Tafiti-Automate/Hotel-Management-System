@@ -3,6 +3,7 @@ from uuid import uuid4
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group, Permission
 from django.core.exceptions import ValidationError
 
 from apps.departments.models import Branch, Department
@@ -199,6 +200,49 @@ def create_inventory_operations_context():
         quantity_in_stock=Decimal("40.00"),
     )
     return department, employee, store, item
+
+
+@pytest.mark.django_db
+def test_department_user_store_request_uses_own_identity(client):
+    branch = Branch.objects.create(name="Identity Test Hotel")
+    own_department = Department.objects.create(name="Housekeeping Identity Test")
+    other_department = Department.objects.create(name="Finance Identity Test")
+    store = StoreLocation.objects.create(branch=branch, name="Identity Test Store")
+    user = get_user_model().objects.create_user(
+        username="department-requester", employee_code="EMP-REQUESTER", password="test-pass-123"
+    )
+    own_employee = Employee.objects.create(
+        user=user, department=own_department, branch=branch, designation="Department Head"
+    )
+    other_user = get_user_model().objects.create_user(
+        username="other-requester", employee_code="EMP-OTHER", password="test-pass-123"
+    )
+    other_employee = Employee.objects.create(
+        user=other_user, department=other_department, branch=branch, designation="Finance Officer"
+    )
+    group = Group.objects.create(name="Department Head")
+    group.permissions.add(
+        Permission.objects.get(content_type__app_label="inventory", codename="add_storerequisition"),
+        Permission.objects.get(content_type__app_label="inventory", codename="view_storerequisition"),
+    )
+    user.groups.add(group)
+    client.force_login(user)
+
+    response = client.post(
+        "/api/v1/store-requisitions/",
+        {
+            "department": str(other_department.pk),
+            "store": str(store.pk),
+            "requested_by": str(other_employee.pk),
+            "purpose": "Room supplies",
+        },
+        content_type="application/json",
+    )
+
+    assert response.status_code == 201
+    requisition = StoreRequisition.objects.get(pk=response.json()["id"])
+    assert requisition.department == own_department
+    assert requisition.requested_by == own_employee
 
 
 @pytest.mark.django_db

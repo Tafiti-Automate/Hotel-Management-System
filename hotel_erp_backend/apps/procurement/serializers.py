@@ -116,12 +116,23 @@ class PurchaseRequisitionSerializer(serializers.ModelSerializer):
             if request and request.user.is_authenticated
             else None
         )
+        can_request_on_behalf = bool(
+            request
+            and request.user.is_authenticated
+            and (
+                request.user.is_superuser
+                or request.user.groups.filter(
+                    name__in=("System Administrator", "Procurement Manager", "General Manager")
+                ).exists()
+            )
+        )
 
         if (
             request
             and request.user.is_authenticated
             and request_type == "department"
             and self.instance is None
+            and not can_request_on_behalf
         ):
             if not employee:
                 raise serializers.ValidationError(
