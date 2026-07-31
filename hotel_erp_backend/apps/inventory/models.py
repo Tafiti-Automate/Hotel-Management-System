@@ -966,8 +966,24 @@ class StoreRequisition(BaseModel):
         blank=True,
         related_name="approved_store_requisitions",
     )
+    department_approved_by = models.ForeignKey(
+        "employees.Employee",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="department_approved_store_requisitions",
+    )
+    department_approved_at = models.DateTimeField(null=True, blank=True)
+    department_approval_comments = models.TextField(blank=True)
+    procurement_requisition = models.OneToOneField(
+        "procurement.PurchaseRequisition",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="source_store_requisition",
+    )
     status = models.CharField(
-        max_length=20,
+        max_length=30,
         choices=StoreRequisitionStatus.choices,
         default=StoreRequisitionStatus.DRAFT,
     )
@@ -1002,11 +1018,106 @@ class StoreRequisition(BaseModel):
             self.requisition_no = f"{prefix}-{next_number:05d}"
         super().save(*args, **kwargs)
 
-    def submit(self):
+    def submit(self, actor=None):
         if self.status not in (StoreRequisitionStatus.DRAFT, StoreRequisitionStatus.REJECTED):
             raise ValidationError("Only draft or rejected store requisitions can be submitted.")
         if not self.items.exists():
             raise ValidationError("Store requisition must include at least one item.")
+        employee = getattr(actor, "employee_profile", None) if actor else None
+        is_department_head = bool(
+            actor
+            and (
+                actor.is_superuser
+                or actor.groups.filter(name="Department Head").exists()
+            )
+            and employee
+            and employee.department_id == self.department_id
+        )
+        if is_department_head:
+            from django.utils import timezone
+            self.status = StoreRequisitionStatus.SUBMITTED
+            self.department_approved_by = employee
+            self.department_approved_at = timezone.now()
+            self.department_approval_comments = "Submitted by Department Head"
+            self.save(update_fields=[
+                "status", "department_approved_by", "department_approved_at",
+                "department_approval_comments", "updated_at",
+            ])
+            return
+        self.status = (
+            StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL
+            if actor else StoreRequisitionStatus.SUBMITTED
+        )
+        self.save(update_fields=["status", "updated_at"])
+
+    def approve_department(self, approved_by, comments=""):
+        if self.status != StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL:
+            raise ValidationError("Only requests awaiting department approval can be approved here.")
+        if not approved_by or approved_by.department_id != self.department_id:
+            raise ValidationError("The approver must be a Department Head in the requesting department.")
+        from django.utils import timezone
+        self.status = StoreRequisitionStatus.SUBMITTED
+        self.department_approved_by = approved_by
+        self.department_approved_at = timezone.now()
+        self.department_approval_comments = comments
+        self.save(update_fields=[
+            "status", "department_approved_by", "department_approved_at",
+            "department_approval_comments", "updated_at",
+        ])
+
+    def create_shortage_purchase_requisition(self, created_by=None, reason=""):
+        if self.status != StoreRequisitionStatus.SUBMITTED:
+            raise ValidationError("Only a Stores-reviewed submitted request can be sent to Procurement.")
+        if self.procurement_requisition_id:
+            raise ValidationError("A Purchase Requisition already exists for this department request.")
+        if not self.items.exists():
+            raise ValidationError("The department request has no items.")
+
+        from apps.procurement.models import PurchaseRequisition, RequisitionItem
+        from core.constants.choices import RequisitionType
+
+        purchase = PurchaseRequisition.objects.create(
+            request_type=RequisitionType.DEPARTMENT,
+            requester=self.requested_by,
+            department=self.department,
+            branch=self.store.branch,
+            expected_date=self.required_date,
+            reason=reason or (
+                f"Stock shortage confirmed by Stores for {self.requisition_no}. "
+                f"Department purpose: {self.purpose or 'Not provided'}."
+            ),
+            control_notes=f"Generated from department material request {self.requisition_no}.",
+            created_by=created_by,
+        )
+        for line in self.items.select_related("item", "unit"):
+            RequisitionItem.objects.create(
+                requisition=purchase,
+                item=line.item,
+                unit=line.unit,
+                quantity=line.base_quantity_requested,
+                estimated_unit_cost=Decimal("0.00"),
+                created_by=created_by,
+            )
+        self.procurement_requisition = purchase
+        self.status = StoreRequisitionStatus.AWAITING_PROCUREMENT
+        self.save(update_fields=["procurement_requisition", "status", "updated_at"])
+        return purchase
+
+    def resume_after_procurement(self):
+        if self.status != StoreRequisitionStatus.AWAITING_PROCUREMENT:
+            raise ValidationError("Only requests awaiting Procurement can be resumed.")
+        shortages = []
+        for line in self.items.select_related("item"):
+            balance = InventoryBalance.objects.filter(item=line.item, store=self.store).first()
+            available = balance.available_quantity if balance else Decimal("0.00")
+            if available < line.base_quantity_requested:
+                shortages.append(
+                    f"{line.item}: {available} available, {line.base_quantity_requested} required"
+                )
+        if shortages:
+            raise ValidationError(
+                "Purchased stock has not yet been posted to the issuing store: " + "; ".join(shortages)
+            )
         self.status = StoreRequisitionStatus.SUBMITTED
         self.save(update_fields=["status", "updated_at"])
 
@@ -1053,7 +1164,11 @@ class StoreRequisition(BaseModel):
             self.save(update_fields=["approved_by", "approved_at", "approval_comments", "status", "updated_at"])
 
     def reject(self, reason=""):
-        if self.status not in (StoreRequisitionStatus.SUBMITTED, StoreRequisitionStatus.PARTIALLY_APPROVED):
+        if self.status not in (
+            StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL,
+            StoreRequisitionStatus.SUBMITTED,
+            StoreRequisitionStatus.PARTIALLY_APPROVED,
+        ):
             raise ValidationError("Only submitted requisitions can be rejected.")
         self.status = StoreRequisitionStatus.REJECTED
         self.rejection_reason = reason

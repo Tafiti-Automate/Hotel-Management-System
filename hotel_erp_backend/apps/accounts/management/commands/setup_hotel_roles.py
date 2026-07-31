@@ -167,10 +167,19 @@ ROLE_SPECS = {
             ],
         },
     },
+    "Department Requester": {
+        "crud": {
+            "inventory": ["storerequisition", "storerequisitionitem"],
+        },
+        "view": {
+            "departments": ["department"],
+            "employees": ["employee"],
+            "inventory": ["item", "unitofmeasure"],
+        },
+    },
     "Department Head": {
         "crud": {
             "inventory": ["storerequisition", "storerequisitionitem"],
-            "procurement": ["purchaserequisition", "requisitionitem"],
         },
         "change": {
             "approvals": ["approvalworkflow"],
@@ -178,13 +187,7 @@ ROLE_SPECS = {
         "view": {
             "departments": ["department"],
             "employees": ["employee"],
-            "inventory": ["inventorybalance", "item", "stockledger", "storelocation", "unitofmeasure"],
-            "procurement": [
-                "purchaseorder",
-                "purchaserequisition",
-                "requisitionitem",
-                "requisitionhistory",
-            ],
+            "inventory": ["item", "unitofmeasure"],
         },
     },
     "Receiving Officer": {

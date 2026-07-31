@@ -229,6 +229,12 @@ class PurchaseRequisition(BaseModel):
                 )
             else:
                 for rule in rules:
+                    if (
+                        rule.assignment_type == rule.ASSIGNMENT_DEPARTMENT_HEAD
+                        and self.requester_id
+                        and self.requester.user.groups.filter(name="Department Head").exists()
+                    ):
+                        continue
                     try:
                         rule.resolve_approver(self)
                     except ValidationError as error:
@@ -243,6 +249,11 @@ class PurchaseRequisition(BaseModel):
         from apps.approvals.models import ApprovalMatrixRule, ApprovalWorkflow
 
         rules = list(ApprovalMatrixRule.matching_requisition_rules(self))
+        if self.requester_id and self.requester.user.groups.filter(name="Department Head").exists():
+            rules = [
+                rule for rule in rules
+                if rule.assignment_type != rule.ASSIGNMENT_DEPARTMENT_HEAD
+            ]
         if not rules:
             return []
         with transaction.atomic():

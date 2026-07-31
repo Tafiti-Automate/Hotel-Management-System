@@ -106,6 +106,8 @@ def test_setup_hotel_roles_creates_operational_groups():
     stores_manager = Group.objects.get(name="Stores Manager")
     procurement_manager = Group.objects.get(name="Procurement Manager")
     auditor = Group.objects.get(name="Auditor")
+    department_head = Group.objects.get(name="Department Head")
+    department_requester = Group.objects.get(name="Department Requester")
 
     assert stores_manager.permissions.filter(codename="change_stockissue").exists()
     assert stores_manager.permissions.filter(codename="change_stockcount").exists()
@@ -117,6 +119,10 @@ def test_setup_hotel_roles_creates_operational_groups():
     assert not procurement_manager.permissions.filter(codename="change_goodsreceiptnote").exists()
     assert not procurement_manager.permissions.filter(codename="view_supplierinvoice").exists()
     assert auditor.permissions.filter(codename="view_stockledger").exists()
+    assert department_requester.permissions.filter(codename="add_storerequisition").exists()
+    assert not department_requester.permissions.filter(codename="view_inventorybalance").exists()
+    assert not department_head.permissions.filter(codename="add_purchaserequisition").exists()
+    assert not department_head.permissions.filter(codename="view_inventorybalance").exists()
 
 
 @pytest.mark.django_db

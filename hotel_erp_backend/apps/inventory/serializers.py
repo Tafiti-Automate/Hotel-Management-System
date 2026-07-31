@@ -398,6 +398,9 @@ class StoreRequisitionItemSerializer(serializers.ModelSerializer):
 
 
 class StoreRequisitionSerializer(serializers.ModelSerializer):
+    store = serializers.PrimaryKeyRelatedField(
+        queryset=StoreLocation.objects.filter(is_active=True), required=False
+    )
     class Meta:
         model = StoreRequisition
         fields = "__all__"
@@ -407,6 +410,9 @@ class StoreRequisitionSerializer(serializers.ModelSerializer):
             "status",
             "approved_at",
             "issued_at",
+            "department_approved_at",
+            "department_approved_by",
+            "procurement_requisition",
             "created_at",
             "updated_at",
             "created_by",
@@ -422,6 +428,8 @@ class StoreRequisitionSerializer(serializers.ModelSerializer):
             name__in=("System Administrator", "Stores Manager")
         ).exists()
         if can_request_on_behalf:
+            if not attrs.get("store", getattr(self.instance, "store", None)):
+                raise serializers.ValidationError({"store": "Select the issuing store."})
             return attrs
 
         employee = getattr(user, "employee_profile", None)
@@ -435,6 +443,17 @@ class StoreRequisitionSerializer(serializers.ModelSerializer):
             )
 
         store = attrs.get("store", getattr(self.instance, "store", None))
+        if self.instance is None:
+            store = StoreLocation.objects.filter(
+                branch=employee.branch, is_active=True, is_default=True
+            ).first() or StoreLocation.objects.filter(
+                branch=employee.branch, is_active=True
+            ).order_by("name").first()
+            if not store:
+                raise serializers.ValidationError(
+                    {"store": "No active issuing store is configured for your branch."}
+                )
+            attrs["store"] = store
         if store and employee.branch_id and store.branch_id != employee.branch_id:
             raise serializers.ValidationError(
                 {"store": "Select a store in your assigned branch."}

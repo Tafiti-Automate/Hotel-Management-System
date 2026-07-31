@@ -207,7 +207,9 @@ def test_department_user_store_request_uses_own_identity(client):
     branch = Branch.objects.create(name="Identity Test Hotel")
     own_department = Department.objects.create(name="Housekeeping Identity Test")
     other_department = Department.objects.create(name="Finance Identity Test")
-    store = StoreLocation.objects.create(branch=branch, name="Identity Test Store")
+    store = StoreLocation.objects.create(
+        branch=branch, name="Identity Test Store", is_default=True
+    )
     user = get_user_model().objects.create_user(
         username="department-requester", employee_code="EMP-REQUESTER", password="test-pass-123"
     )
@@ -232,7 +234,6 @@ def test_department_user_store_request_uses_own_identity(client):
         "/api/v1/store-requisitions/",
         {
             "department": str(other_department.pk),
-            "store": str(store.pk),
             "requested_by": str(other_employee.pk),
             "purpose": "Room supplies",
         },
@@ -243,6 +244,72 @@ def test_department_user_store_request_uses_own_identity(client):
     requisition = StoreRequisition.objects.get(pk=response.json()["id"])
     assert requisition.department == own_department
     assert requisition.requested_by == own_employee
+    assert requisition.store == store
+
+
+@pytest.mark.django_db
+def test_store_request_department_approval_and_head_bypass():
+    branch = Branch.objects.create(name="Approval Flow Hotel")
+    department = Department.objects.create(name="Approval Flow Housekeeping")
+    store = StoreLocation.objects.create(branch=branch, name="Approval Flow Store")
+    category = Category.objects.create(name="Approval Flow Supplies")
+    item = Item.objects.create(
+        category=category, name="Approval Soap", unit="L", reorder_level=Decimal("1")
+    )
+    employee_user = get_user_model().objects.create_user(
+        username="requesting-employee", employee_code="EMP-FLOW-EMPLOYEE"
+    )
+    employee = Employee.objects.create(
+        user=employee_user, department=department, branch=branch, designation="Attendant"
+    )
+    head_user = get_user_model().objects.create_user(
+        username="requesting-head", employee_code="EMP-FLOW-HEAD"
+    )
+    head = Employee.objects.create(
+        user=head_user, department=department, branch=branch, designation="Department Head"
+    )
+    head_group = Group.objects.create(name="Department Head")
+    head_user.groups.add(head_group)
+
+    employee_request = StoreRequisition.objects.create(
+        department=department, store=store, requested_by=employee
+    )
+    StoreRequisitionItem.objects.create(
+        requisition=employee_request, item=item, quantity_requested=Decimal("2")
+    )
+    employee_request.submit(actor=employee_user)
+    assert employee_request.status == StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL
+
+    employee_request.approve_department(head, "Needed for guest rooms")
+    assert employee_request.status == StoreRequisitionStatus.SUBMITTED
+    assert employee_request.department_approved_by == head
+
+    purchase = employee_request.create_shortage_purchase_requisition(
+        created_by=head_user, reason="No approval soap is available in the issuing store."
+    )
+    assert employee_request.status == StoreRequisitionStatus.AWAITING_PROCUREMENT
+    assert employee_request.procurement_requisition == purchase
+    assert purchase.requester == employee
+    assert purchase.department == department
+    assert purchase.items.get().quantity == Decimal("2")
+    with pytest.raises(ValidationError, match="not yet been posted"):
+        employee_request.resume_after_procurement()
+
+    InventoryBalance.objects.create(
+        item=item, store=store, quantity_in_stock=Decimal("2")
+    )
+    employee_request.resume_after_procurement()
+    assert employee_request.status == StoreRequisitionStatus.SUBMITTED
+
+    head_request = StoreRequisition.objects.create(
+        department=department, store=store, requested_by=head
+    )
+    StoreRequisitionItem.objects.create(
+        requisition=head_request, item=item, quantity_requested=Decimal("1")
+    )
+    head_request.submit(actor=head_user)
+    assert head_request.status == StoreRequisitionStatus.SUBMITTED
+    assert head_request.department_approved_by == head
 
 
 @pytest.mark.django_db

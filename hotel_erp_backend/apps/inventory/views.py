@@ -1,6 +1,6 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
@@ -261,7 +261,9 @@ class ReorderRuleViewSet(CreatedByModelMixin, ModelViewSet):
 
 
 class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
-    queryset = StoreRequisition.objects.select_related("department", "store", "requested_by", "approved_by")
+    queryset = StoreRequisition.objects.select_related(
+        "department", "store", "requested_by", "approved_by", "procurement_requisition"
+    )
     serializer_class = StoreRequisitionSerializer
     filterset_fields = ("department", "store", "requested_by", "approved_by", "status")
     search_fields = ("requisition_no", "purpose", "department__name", "store__name")
@@ -291,7 +293,25 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     def submit(self, request, pk=None):
         requisition = self.get_object()
         try:
-            requisition.submit()
+            requisition.submit(actor=request.user)
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        return Response(self.get_serializer(requisition).data)
+
+    @action(detail=True, methods=["post"], url_path="department-approve")
+    def department_approve(self, request, pk=None):
+        requisition = self.get_object()
+        employee = getattr(request.user, "employee_profile", None)
+        is_department_head = request.user.is_superuser or request.user.groups.filter(
+            name__in=("System Administrator", "Department Head")
+        ).exists()
+        if not is_department_head:
+            raise PermissionDenied("Only the Department Head can approve this request.")
+        try:
+            requisition.approve_department(
+                approved_by=employee,
+                comments=request.data.get("comments", ""),
+            )
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
         return Response(self.get_serializer(requisition).data)
@@ -299,6 +319,11 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
         requisition = self.get_object()
+        if not (
+            request.user.is_superuser
+            or request.user.groups.filter(name__in=("System Administrator", "Stores Manager")).exists()
+        ):
+            raise PermissionDenied("Only the Stores Manager can approve and reserve stock.")
         try:
             requisition.approve(
                 approved_by=getattr(request.user, "employee_profile", None),
@@ -308,9 +333,51 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             raise_drf_validation_error(error)
         return Response(self.get_serializer(requisition).data)
 
+    @action(detail=True, methods=["post"], url_path="send-to-procurement")
+    def send_to_procurement(self, request, pk=None):
+        requisition = self.get_object()
+        if not (
+            request.user.is_superuser
+            or request.user.groups.filter(name__in=("System Administrator", "Stores Manager")).exists()
+        ):
+            raise PermissionDenied("Only the Stores Manager can confirm a shortage.")
+        try:
+            purchase = requisition.create_shortage_purchase_requisition(
+                created_by=request.user,
+                reason=request.data.get("reason", ""),
+            )
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        from apps.procurement.serializers import PurchaseRequisitionSerializer
+        return Response(PurchaseRequisitionSerializer(purchase, context=self.get_serializer_context()).data)
+
+    @action(detail=True, methods=["post"], url_path="resume-after-procurement")
+    def resume_after_procurement(self, request, pk=None):
+        requisition = self.get_object()
+        if not (
+            request.user.is_superuser
+            or request.user.groups.filter(name__in=("System Administrator", "Stores Manager")).exists()
+        ):
+            raise PermissionDenied("Only the Stores Manager can resume this request.")
+        try:
+            requisition.resume_after_procurement()
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        return Response(self.get_serializer(requisition).data)
+
     @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
         requisition = self.get_object()
+        if requisition.status == StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL:
+            allowed = request.user.is_superuser or request.user.groups.filter(
+                name__in=("System Administrator", "Department Head")
+            ).exists()
+        else:
+            allowed = request.user.is_superuser or request.user.groups.filter(
+                name__in=("System Administrator", "Stores Manager")
+            ).exists()
+        if not allowed:
+            raise PermissionDenied("Your role cannot reject this request at its current stage.")
         try:
             requisition.reject(reason=request.data.get("reason", ""))
         except DjangoValidationError as error:
