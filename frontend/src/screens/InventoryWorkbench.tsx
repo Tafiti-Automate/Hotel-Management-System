@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Icon } from '../components/Icon'
 import { HelpLabel } from '../components/HelpLabel'
 import { createBackendRecord, deleteBackendPath, errorMessage, readBackendRecords, runBackendAction, updateBackendRecord } from '../lib/api'
@@ -63,6 +63,7 @@ export default function InventoryWorkbench() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [selectedRecord, setSelectedRecord] = useState<Row | null>(null)
+  const operationRunning = useRef(false)
   const can = useCallback(
     (permission: string) => app.user.isSuperuser || app.user.permissions.includes(permission),
     [app.user.isSuperuser, app.user.permissions],
@@ -80,6 +81,12 @@ export default function InventoryWorkbench() {
   }, [can])
   useEffect(() => { void load() }, [load])
   useEffect(() => { setForm({}); setError(''); setSelectedRecord(null) }, [tab])
+  useEffect(() => {
+    if (!app.inventoryDraftId) return
+    setTab('requests')
+    setForm({ request: app.inventoryDraftId })
+    app.consumeInventoryDraft()
+  }, [app.inventoryDraftId, app.consumeInventoryDraft])
   const scopedData = useMemo(() => {
     if (!app.currentBranch) return data
     const stores = new Set(app.data.locations.map((row) => id(row.id)))
@@ -107,11 +114,13 @@ export default function InventoryWorkbench() {
     next.returnItems = data.returnItems.filter((row) => returnIds.has(id(row.store_return)))
     return next
   }, [app.currentBranch, app.data.locations, data])
-  const execute = async (operation: () => Promise<unknown>, success: string) => {
+  const execute = async (operation: () => Promise<unknown>, success: string, nextForm: Row = {}) => {
+    if (operationRunning.current) return
+    operationRunning.current = true
     setBusy(true); setError('')
-    try { await operation(); await load(); app.refreshData(); setForm({}); app.showToast(success) }
+    try { await operation(); await load(); app.refreshData(); setForm(nextForm); app.showToast(success) }
     catch (reason) { const detail = errorMessage(reason); setError(detail); app.showWorkflowAlert('Inventory operation blocked', detail) }
-    finally { setBusy(false) }
+    finally { operationRunning.current = false; setBusy(false) }
   }
   const tabs: Array<[Tab, string, string]> = ([
     ['requests', 'assignment', 'Department requests'], ['issues', 'outbox', 'Pick & issue'],
@@ -154,6 +163,7 @@ function RequestPanel({ app, data, form, setForm, busy, execute }: any) {
   const isDepartmentHead = app.user.isSuperuser || ['system administrator', 'department head'].includes(role)
   const isStoresApprover = app.user.isSuperuser || ['system administrator', 'stores manager'].includes(role)
   const drafts = data.requests.filter((row: Row) => ['draft', 'rejected'].includes(id(row.status)))
+  const draftRequest = drafts.find((row: Row) => id(row.id) === id(form.request))
   const draftLines = data.requestItems.filter((row: Row) => id(row.requisition) === id(form.request))
   const draftLine = draftLines.find((row: Row) => id(row.id) === id(form.requestLine))
   const submittedRequest = data.requests.find((row: Row) => id(row.id) === id(form.submitted))
@@ -162,15 +172,24 @@ function RequestPanel({ app, data, form, setForm, busy, execute }: any) {
   const departmentPending = data.requests.find((row: Row) => id(row.id) === id(form.departmentPending))
   const procurementPending = data.requests.find((row: Row) => id(row.id) === id(form.procurementPending))
   return <Panel title="Department store requisition" note="Employee requests go to the Department Head first; Department Head requests go directly to Stores.">
-    <Field label="Draft request"><Select value={form.request} change={(v) => setForm({ request: v })} rows={drafts} label={(r) => id(r.requisition_no)} /></Field>
+    <StepHeading number="1" title="Choose the draft request" />
+    <Field label="Draft request"><Select value={form.request} change={(v) => setForm({ request: v })} rows={drafts} label={(r) => `${id(r.requisition_no)} · ${departmentName(app, r.department)}`} /></Field>
+    {!drafts.length && <Hint>Create a new Department Material Request first. After saving it, the system returns here automatically.</Hint>}
+    {draftRequest && <div style={{ marginBottom: 12, padding: 10, borderRadius: 6, background: 'var(--surface-2)', color: 'var(--text-muted)', fontSize: 11.5 }}><strong style={{ color: 'var(--text)' }}>Active issuing store:</strong> {storeName(app, draftRequest.store)}<br /><span>{id(draftRequest.purpose) || 'No purpose entered'}</span></div>}
+    <Rule />
+    <StepHeading number="2" title="Add requested items and quantities" />
+    <div style={{ margin: '-3px 0 10px', color: 'var(--text-faint)', fontSize: 11.5 }}>Add each Article required by the department. You can add multiple lines before submitting.</div>
     <Field label="Existing draft line"><Select optional value={form.requestLine} change={(v) => { const line = draftLines.find((r: Row) => id(r.id) === v); setForm({ ...form, requestLine: v, item: line?.item || '', unit: line?.unit || '', quantity: line?.quantity_requested || '' }) }} rows={draftLines} label={(r) => `${itemName(app, r.item)} · ${r.quantity_requested}`} /></Field>
     <Field label="Article"><Select value={form.item} change={(v) => setForm({ ...form, item: v })} rows={app.data.items} /></Field>
     <Field label="Unit"><Select value={form.unit} change={(v) => setForm({ ...form, unit: v })} rows={app.data.uoms} optional /></Field>
     <Field label="Requested quantity"><Input type="number" value={form.quantity} change={(v) => setForm({ ...form, quantity: v })} /></Field>
-    {!draftLine && <Action disabled={busy || !form.request || !form.item} click={() => execute(() => createBackendRecord('store-requisition-items', { requisition: form.request, item: form.item, unit: form.unit || null, quantity_requested: num(form.quantity), quantity_approved: 0, quantity_issued: 0, remarks: '' }), 'Store request line added')}>Add request line</Action>}
-    {draftLine && <><Action disabled={busy} click={() => execute(() => updateBackendRecord('store-requisition-items', id(draftLine.id), { requisition: form.request, item: form.item, unit: form.unit || null, quantity_requested: num(form.quantity) }), 'Store request line updated')}>Save draft line</Action><Action tone="danger" disabled={busy} click={() => execute(() => deleteBackendPath('store-requisition-items', id(draftLine.id)), 'Store request line removed')}>Remove draft line</Action></>}
+    {!draftLine && <Action disabled={busy || !form.request || !form.item || num(form.quantity) <= 0} click={() => execute(() => createBackendRecord('store-requisition-items', { requisition: form.request, item: form.item, unit: form.unit || null, quantity_requested: num(form.quantity), quantity_approved: 0, quantity_issued: 0, remarks: '' }), 'Requested item added', { request: form.request })}>Add item to this request</Action>}
+    {draftLine && <><Action disabled={busy || num(form.quantity) <= 0} click={() => execute(() => updateBackendRecord('store-requisition-items', id(draftLine.id), { requisition: form.request, item: form.item, unit: form.unit || null, quantity_requested: num(form.quantity) }), 'Requested item updated', { request: form.request })}>Save item changes</Action><Action tone="danger" disabled={busy} click={() => execute(() => deleteBackendPath('store-requisition-items', id(draftLine.id)), 'Requested item removed', { request: form.request })}>Remove item</Action></>}
+    {draftLines.length > 0 && <div style={{ marginTop: 12, border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>{draftLines.map((line: Row, index: number) => <div key={id(line.id)} style={{ display: 'grid', gridTemplateColumns: '26px 1fr auto', gap: 8, padding: '9px 10px', borderBottom: index < draftLines.length - 1 ? '1px solid var(--border)' : 0, fontSize: 11.5 }}><span style={{ color: 'var(--text-faint)' }}>{index + 1}</span><strong style={{ color: 'var(--text)' }}>{itemName(app, line.item)}</strong><span style={{ color: 'var(--text-muted)' }}>{line.quantity_requested}</span></div>)}</div>}
+    {!draftLines.length && form.request && <Hint>No items have been added yet. Select an Article, enter its quantity, then click “Add item to this request”.</Hint>}
     <Rule />
-    <Action disabled={busy || !form.request} click={() => execute(() => runBackendAction('store-requisitions', id(form.request), 'submit'), isDepartmentHead ? 'Store requisition sent to Stores' : 'Store requisition sent to Department Head')}>Submit request</Action>
+    <StepHeading number="3" title="Submit the completed request" />
+    <Action disabled={busy || !form.request || !draftLines.length} click={() => execute(() => runBackendAction('store-requisitions', id(form.request), 'submit'), isDepartmentHead ? 'Store requisition sent to Stores' : 'Store requisition sent to Department Head')}>Submit request with {draftLines.length} item{draftLines.length === 1 ? '' : 's'}</Action>
     {isDepartmentHead && <>
       <Rule />
       <Field label="Waiting for department approval"><Select value={form.departmentPending} change={(v) => setForm({ departmentPending: v })} rows={data.requests.filter((r: Row) => id(r.status) === 'pending_department_approval')} label={(r) => `${id(r.requisition_no)} · ${departmentName(app, r.department)}`} /></Field>
@@ -422,10 +441,11 @@ const storeName = (app: any, value: unknown) => id(app.data.locations.find((r: R
 const departmentName = (app: any, value: unknown) => id(app.data.departments.find((r: Row) => id(r.id) === id(value))?.name) || id(value)
 const employeeName = (app: any, value: unknown) => id(app.data.employees.find((r: Row) => id(r.id) === id(value))?.name) || id(value)
 function Panel({ title, note, children }: { title: string; note: string; children: ReactNode }) { return <><div style={{ fontSize: 14, fontWeight: 800 }}>{title}</div><div style={{ ...muted, margin: '4px 0 15px', lineHeight: 1.5 }}>{note}</div>{children}</> }
+function StepHeading({ number, title }: { number: string; title: string }) { return <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 10px', color: 'var(--text)', fontSize: 12, fontWeight: 750 }}><span style={{ width: 22, height: 22, display: 'grid', placeItems: 'center', borderRadius: 20, color: '#fff', background: 'var(--accent)', fontSize: 10 }}>{number}</span>{title}</div> }
 function Field({ label, children }: { label: string; children: ReactNode }) { return <label style={{ display: 'block', marginBottom: 10 }}><HelpLabel label={label} style={labelStyle} />{children}</label> }
 function Input({ value, change, type = 'text' }: { value: unknown; change: (value: string) => void; type?: string }) { return <input type={type} value={id(value)} onChange={(e) => change(e.target.value)} style={control} /> }
 function Select({ value, change, rows, label = (r: Row) => id(r.name), optional = false }: { value: unknown; change: (value: string) => void; rows: Row[]; label?: (row: Row) => string; optional?: boolean }) { return <select value={id(value)} onChange={(e) => change(e.target.value)} style={control}><option value="">{optional ? 'None' : 'Select…'}</option>{rows.map((row) => <option key={id(row.id)} value={id(row.id)}>{label(row)}</option>)}</select> }
-function Action({ children, click, disabled, tone = 'accent' }: any) { return <button onClick={click} disabled={disabled} style={{ ...action, opacity: disabled ? .45 : 1, background: tone === 'good' ? 'var(--good)' : tone === 'danger' ? 'var(--bad)' : 'var(--accent)' }}>{children}</button> }
+function Action({ children, click, disabled, tone = 'accent' }: any) { return <button type="button" onClick={click} disabled={disabled} style={{ ...action, opacity: disabled ? .45 : 1, background: tone === 'good' ? 'var(--good)' : tone === 'danger' ? 'var(--bad)' : 'var(--accent)' }}>{children}</button> }
 function Rule() { return <div style={{ borderTop: '1px solid var(--border)', margin: '16px 0' }} /> }
 function Hint({ children }: { children: ReactNode }) { return <div style={{ padding: 9, color: 'var(--warn)', background: 'var(--warn-soft)', borderRadius: 6, fontSize: 11 }}>{children}</div> }
 const card: CSSProperties = { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: 'var(--shadow-sm)' }

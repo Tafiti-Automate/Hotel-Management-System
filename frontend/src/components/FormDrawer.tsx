@@ -38,6 +38,13 @@ export default function FormDrawer() {
   const signedInEmployee = app.data.employees.find((employee) =>
     String(employee.employeeCode) === app.user.id || String(employee.userId) === app.user.id,
   )
+  const assignedStore = app.data.locations.find((location) =>
+    location.branch === signedInEmployee?.branch
+    && location.status === 'Active'
+    && location.isDefault === 'Yes',
+  ) || app.data.locations.find((location) =>
+    location.branch === signedInEmployee?.branch && location.status === 'Active',
+  )
   const locksStoreIdentity = f?.entity === 'storeRequisitions' && !canRequestOnBehalf
   const locksPurchaseIdentity = f?.entity === 'requisitions' && !canPurchaseOnBehalf
 
@@ -49,8 +56,12 @@ export default function FormDrawer() {
     const seed: Row = {}
     conf.fields?.forEach((fd) => {
       const fallback = f.entity === 'requisitions' && fd.key === 'currency'
-          ? 'UGX'
-          : ''
+        ? 'UGX'
+        : f.entity === 'locations' && fd.key === 'status'
+          ? 'Active'
+          : f.entity === 'locations' && fd.key === 'isDefault'
+            ? 'No'
+            : ''
       seed[fd.key] = existing && existing[fd.key] != null ? existing[fd.key] : fallback
     })
     if (f.entity === 'requisitions') {
@@ -63,11 +74,12 @@ export default function FormDrawer() {
     if (f.entity === 'storeRequisitions' && !canRequestOnBehalf && signedInEmployee) {
       seed.department = signedInEmployee.department
       seed.requester = signedInEmployee.name
+      seed.store = assignedStore?.name || ''
     }
     setValues(seed)
     setStep(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [f?.entity, f?.id, canPurchaseOnBehalf, canRequestOnBehalf, signedInEmployee?.id])
+  }, [f?.entity, f?.id, canPurchaseOnBehalf, canRequestOnBehalf, signedInEmployee?.id, assignedStore?.id])
 
   if (!f) return null
   const conf = cfg[f.entity]
@@ -103,16 +115,16 @@ export default function FormDrawer() {
     if (f.entity === 'requisitions') {
       out.request_type = values.request_type || 'department'
     }
-    app.saveForm(out)
+    void app.saveForm(out)
   }
 
   return (
     <>
-      <div className="form-overlay" onClick={app.closeForm} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(16,17,33,.4)' }} />
+      <div className="form-overlay" onClick={app.formSaving ? undefined : app.closeForm} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(16,17,33,.4)' }} />
       <div className="form-drawer" style={{ position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 71, width: 520, maxWidth: '94vw', background: 'var(--surface)', boxShadow: '-8px 0 28px rgba(15,23,42,.16)', display: 'flex', flexDirection: 'column', animation: 'slideIn .22s ease' }}>
         <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div><div style={{ fontSize: 17, fontWeight: 650, color: 'var(--text)' }}>{title}</div>{wizard && <div style={{ marginTop: 4, color: 'var(--text-faint)', fontSize: 11.5 }}>Step {step + 1} of {pageCount}</div>}</div>
-          <button onClick={app.closeForm} className="hover-text" style={{ width: 32, height: 32, border: 'none', background: 'var(--surface-2)', borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-muted)' }}>
+          <button type="button" onClick={app.closeForm} disabled={app.formSaving} className="hover-text" style={{ width: 32, height: 32, border: 'none', background: 'var(--surface-2)', borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: app.formSaving ? 'wait' : 'pointer', color: 'var(--text-muted)' }}>
             <Icon name="close" size={19} />
           </button>
         </div>
@@ -120,6 +132,7 @@ export default function FormDrawer() {
         {wizard && <div style={{ display: 'grid', gridTemplateColumns: `repeat(${pageCount},1fr)`, gap: 5, padding: '12px 22px', borderBottom: '1px solid var(--border)' }}>{Array.from({ length: pageCount }).map((_, index) => <span key={index} style={{ height: 3, borderRadius: 2, background: index <= step ? 'var(--accent)' : 'var(--border)' }} />)}</div>}
 
         <div className="form-body" style={{ flex: 1, overflowY: 'auto', padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {f.entity === 'storeRequisitions' && !f.id && <div style={{ padding: 12, border: '1px solid var(--accent)', borderRadius: 8, background: 'var(--accent-soft)', color: 'var(--text)', fontSize: 12, lineHeight: 1.55 }}><strong>Step 1 of 2 — Request details.</strong><br />After saving, the system will open Step 2 so you can add every Article and quantity before submitting the request.</div>}
           {pageFields.map((fd) => {
             const isSelect = fd.type === 'select'
             const numeric = fd.type === 'number'
@@ -134,8 +147,8 @@ export default function FormDrawer() {
                 {identityLocked ? (
                   <div style={{ minHeight: 42, display: 'flex', alignItems: 'center', gap: 9, border: '1px solid var(--border)', background: 'var(--surface-2)', borderRadius: 10, padding: '0 12px', color: 'var(--text)', fontSize: 13.5 }}>
                     <Icon name={fd.key === 'department' ? 'account_tree' : fd.key === 'request_type' ? 'request_quote' : fd.key === 'store' ? 'warehouse' : 'person'} size={18} color="var(--text-faint)" />
-                    <span style={{ flex: 1 }}>{fd.key === 'request_type' ? 'Department request' : fd.key === 'store' ? 'Automatically assigned by branch' : values[fd.key] || 'No employee profile found'}</span>
-                    <span style={{ color: 'var(--text-faint)', fontSize: 10.5 }}>From your account</span>
+                    <span style={{ flex: 1 }}>{fd.key === 'request_type' ? 'Department request' : fd.key === 'store' ? values.store || 'No active store configured for your branch' : values[fd.key] || 'No employee profile found'}</span>
+                    <span style={{ color: 'var(--text-faint)', fontSize: 10.5 }}>{fd.key === 'store' ? 'Active issuing store' : 'From your account'}</span>
                   </div>
                 ) : isSelect ? (
                   <div style={{ position: 'relative' }}>
@@ -167,11 +180,11 @@ export default function FormDrawer() {
         </div>
 
         <div className="form-footer" style={{ padding: '14px 22px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 9 }}>
-          <button onClick={app.closeForm} className="hover-surface2" style={{ height: 40, padding: '0 15px', border: '1px solid var(--border)', cursor: 'pointer', background: 'var(--surface)', color: 'var(--text-muted)', borderRadius: 6, font: 'inherit', fontSize: 12.5, fontWeight: 550 }}>Cancel</button>
+          <button type="button" onClick={app.closeForm} disabled={app.formSaving} className="hover-surface2" style={{ height: 40, padding: '0 15px', border: '1px solid var(--border)', cursor: app.formSaving ? 'wait' : 'pointer', background: 'var(--surface)', color: 'var(--text-muted)', borderRadius: 6, font: 'inherit', fontSize: 12.5, fontWeight: 550 }}>Cancel</button>
           {wizard && step > 0 && <button onClick={() => setStep((value) => value - 1)} className="hover-surface2" style={{ height: 40, padding: '0 15px', border: '1px solid var(--border)', cursor: 'pointer', background: 'var(--surface)', color: 'var(--text)', borderRadius: 6, font: 'inherit', fontSize: 12.5, fontWeight: 550 }}>Back</button>}
           {wizard && step < pageCount - 1
             ? <button onClick={() => setStep((value) => value + 1)} className="hover-accent" style={{ height: 40, padding: '0 17px', border: 0, cursor: 'pointer', background: 'var(--accent)', color: '#fff', borderRadius: 6, font: 'inherit', fontSize: 12.5, fontWeight: 600 }}>Continue</button>
-            : <button onClick={submit} className="hover-accent" style={{ height: 40, padding: '0 17px', border: 0, cursor: 'pointer', background: 'var(--accent)', color: '#fff', borderRadius: 6, font: 'inherit', fontSize: 12.5, fontWeight: 600 }}>Save</button>}
+            : <button type="button" onClick={submit} disabled={app.formSaving} className="hover-accent" style={{ height: 40, padding: '0 17px', border: 0, cursor: app.formSaving ? 'wait' : 'pointer', opacity: app.formSaving ? .65 : 1, background: 'var(--accent)', color: '#fff', borderRadius: 6, font: 'inherit', fontSize: 12.5, fontWeight: 600 }}>{app.formSaving ? 'Saving…' : f.entity === 'storeRequisitions' && !f.id ? 'Save & add items' : 'Save'}</button>}
         </div>
       </div>
     </>

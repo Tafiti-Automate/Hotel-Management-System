@@ -106,7 +106,7 @@ export const cfg: Record<string, EntityConfig> = {
     cols: [
       { key: 'name', label: 'Location', w: 'minmax(0,1.5fr)', kind: 'bold' },
       { key: 'branch', label: 'Branch', w: '1.4fr', kind: 'text' },
-      { key: 'type', label: 'Type', w: '1fr', kind: 'text' },
+      { key: 'type', label: 'Issuing role', w: '1fr', kind: 'status' },
       { key: 'itemsCount', label: 'Items', w: '100px', kind: 'num', align: 'right' },
       { key: 'status', label: 'Status', w: '110px', kind: 'status', align: 'right' },
     ],
@@ -114,6 +114,7 @@ export const cfg: Record<string, EntityConfig> = {
       { key: 'name', label: 'Location name', type: 'text' },
       { key: 'branch', label: 'Branch', type: 'select', opts: 'branches' },
       { key: 'address', label: 'Address', type: 'textarea' },
+      { key: 'isDefault', label: 'Default issuing store for this branch', type: 'select', opts: 'yesNo' },
       { key: 'status', label: 'Status', type: 'select', opts: 'genStatus' },
     ],
   },

@@ -142,6 +142,19 @@ export type HotelInput = Omit<
 
 const TOKEN_KEY = 'hms_token'
 const USER_KEY = 'hms_user'
+const inFlightMutations = new Map<string, Promise<unknown>>()
+
+function singleFlightMutation<T>(key: string, operation: () => Promise<T>): Promise<T> {
+  const existing = inFlightMutations.get(key)
+  if (existing) return existing as Promise<T>
+
+  let request: Promise<T>
+  request = operation().finally(() => {
+    if (inFlightMutations.get(key) === request) inFlightMutations.delete(key)
+  })
+  inFlightMutations.set(key, request)
+  return request
+}
 
 function readAuthValue(key: string): string | null {
   try {
@@ -323,17 +336,21 @@ export async function fetchPermissions(): Promise<PermissionRecord[]> {
 
 async function saveAccessRecord<T>(path: string, id: string | null, values: Record<string, unknown>): Promise<T> {
   const method = id ? 'PATCH' : 'POST'
-  const response = await fetch(endpointUrl(id ? `${path}/${id}` : path), {
-    method,
-    headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify(values),
+  const target = id ? `${path}/${id}` : path
+  const body = JSON.stringify(values)
+  return singleFlightMutation(`${method}:${endpointUrl(target)}:${body}`, async () => {
+    const response = await fetch(endpointUrl(target), {
+      method,
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...authHeaders() },
+      body,
+    })
+    if (!response.ok) {
+      let errorBody: unknown = null
+      try { errorBody = await response.json() } catch { /* non-JSON response */ }
+      throw new Error(apiErrorDetail(errorBody, `${method} ${path} failed with ${response.status}`))
+    }
+    return response.json() as Promise<T>
   })
-  if (!response.ok) {
-    let body: unknown = null
-    try { body = await response.json() } catch { /* non-JSON response */ }
-    throw new Error(apiErrorDetail(body, `${method} ${path} failed with ${response.status}`))
-  }
-  return response.json() as Promise<T>
 }
 
 export function saveAccount(id: string | null, values: Record<string, unknown>): Promise<AccountRecord> {
@@ -375,23 +392,28 @@ export async function saveHotel(id: string | null, values: HotelInput, logo?: Fi
   if (logo) form.append('logo', logo)
 
   const method = id ? 'PATCH' : 'POST'
-  const response = await fetch(endpointUrl(id ? `hotels/${id}` : 'hotels'), {
-    method,
-    headers: { Accept: 'application/json', ...authHeaders() },
-    body: form,
-  })
+  const target = id ? `hotels/${id}` : 'hotels'
+  const logoKey = logo ? `${logo.name}:${logo.size}:${logo.lastModified}` : ''
+  const mutationKey = `${method}:${endpointUrl(target)}:${JSON.stringify(values)}:${logoKey}`
+  return singleFlightMutation(mutationKey, async () => {
+    const response = await fetch(endpointUrl(target), {
+      method,
+      headers: { Accept: 'application/json', ...authHeaders() },
+      body: form,
+    })
 
-  if (!response.ok) {
-    let body: unknown = null
-    try {
-      body = await response.json()
-    } catch {
-      /* non-JSON error body */
+    if (!response.ok) {
+      let body: unknown = null
+      try {
+        body = await response.json()
+      } catch {
+        /* non-JSON error body */
+      }
+      throw new Error(apiErrorDetail(body, `${method} hotels failed with ${response.status}`))
     }
-    throw new Error(apiErrorDetail(body, `${method} hotels failed with ${response.status}`))
-  }
 
-  return response.json() as Promise<HotelRecord>
+    return response.json() as Promise<HotelRecord>
+  })
 }
 
 async function safeRead(path: string): Promise<ApiListResult> {
@@ -566,6 +588,7 @@ function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey
       name: text(values.name),
       branch: branchId,
       address: text(values.address),
+      is_default: text(values.isDefault, 'No') === 'Yes',
       is_active: text(values.status, 'Active') !== 'Inactive',
     }
   }
@@ -707,28 +730,36 @@ function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey
 }
 
 async function sendJson(path: string, method: string, body?: Row): Promise<unknown> {
-  const response = await fetch(endpointUrl(path), {
-    method,
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      ...authHeaders(),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  })
+  const serializedBody = body ? JSON.stringify(body) : ''
+  const request = async () => {
+    const response = await fetch(endpointUrl(path), {
+      method,
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        ...authHeaders(),
+      },
+      body: serializedBody || undefined,
+    })
 
-  if (!response.ok) {
-    let body: unknown = null
-    try {
-      body = await response.json()
-    } catch {
-      /* non-JSON response */
+    if (!response.ok) {
+      let errorBody: unknown = null
+      try {
+        errorBody = await response.json()
+      } catch {
+        /* non-JSON response */
+      }
+      throw new Error(apiErrorDetail(errorBody, `The operation could not be completed (${response.status}).`))
     }
-    throw new Error(apiErrorDetail(body, `The operation could not be completed (${response.status}).`))
+
+    if (response.status === 204) return null
+    return response.json()
   }
 
-  if (response.status === 204) return null
-  return response.json()
+  if (['POST', 'PATCH', 'PUT', 'DELETE'].includes(method.toUpperCase())) {
+    return singleFlightMutation(`${method}:${endpointUrl(path)}:${serializedBody}`, request)
+  }
+  return request()
 }
 
 export async function readBackendRecords(path: string): Promise<Row[]> {
@@ -897,6 +928,7 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
       branch: branchNames.get(text(row.branch)) || '',
       branchId: text(row.branch),
       type: bool(row.is_default) ? 'Default' : 'Store',
+      isDefault: bool(row.is_default) ? 'Yes' : 'No',
       itemsCount: balancesByStore.get(idOf(row)) || 0,
       status: activeStatus(row.is_active),
     })),

@@ -45,6 +45,7 @@ interface AppState {
   crumb: string
   searchTerm: string
   form: FormTarget | null
+  formSaving: boolean
   confirm: ConfirmTarget | null
   detail: DetailTarget | null
   reportId: string | null
@@ -55,6 +56,7 @@ interface AppState {
   apiMessage: string | null
   authMessage: string | null
   procurementDraftId: string | null
+  inventoryDraftId: string | null
 }
 
 export interface AppContextValue extends AppState {
@@ -62,6 +64,7 @@ export interface AppContextValue extends AppState {
   data: Record<EntityKey, Row[]>
   refreshData: () => void
   consumeProcurementDraft: () => void
+  consumeInventoryDraft: () => void
   // auth
   login: (username: string, password: string, remember?: boolean) => Promise<void>
   // navigation
@@ -87,7 +90,7 @@ export interface AppContextValue extends AppState {
   openCreate: (entity?: EntityKey, label?: string) => void
   openEdit: (id: string) => void
   closeForm: () => void
-  saveForm: (values: Row) => void
+  saveForm: (values: Row) => Promise<void>
   requestDelete: (id: string) => void
   closeConfirm: () => void
   doDelete: () => void
@@ -187,6 +190,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const toastTimer = useRef<ReturnType<typeof setTimeout>>()
   const didInitialSync = useRef(false)
   const logoutRequest = useRef<Promise<void> | null>(null)
+  const saveFormRequest = useRef<Promise<void> | null>(null)
 
   const storedUser = getStoredUser()
   const initialUser = toUser(storedUser)
@@ -209,6 +213,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     crumb: initialLanding.crumb,
     searchTerm: '',
     form: null,
+    formSaving: false,
     confirm: null,
     detail: null,
     reportId: null,
@@ -219,6 +224,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     apiMessage: null,
     authMessage: null,
     procurementDraftId: null,
+    inventoryDraftId: null,
   })
 
   const patch = useCallback((p: Partial<AppState>) => setState((s) => ({ ...s, ...p })), [])
@@ -253,6 +259,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       branchOpen: false,
       settingsOpen: false,
       form: null,
+      formSaving: false,
       confirm: null,
       detail: null,
       reportId: null,
@@ -261,6 +268,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       apiMessage: null,
       authMessage,
       procurementDraftId: null,
+      inventoryDraftId: null,
     }))
   }, [])
 
@@ -400,35 +408,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [refreshData, state.screen])
 
-  const saveForm = useCallback((values: Row) => {
+  const saveForm = useCallback((values: Row): Promise<void> => {
+    if (saveFormRequest.current) return saveFormRequest.current
     const target = state.form
-    if (!target) return
+    if (!target) return Promise.resolve()
     const row = target.id
       ? dataRef.current[target.entity].find((record) => record.id === target.id)
       : null
     const backendId = target.id ? String(row?.apiId || target.id) : null
-    void saveBackendRecord(target.entity, backendId, values, dataRef.current)
+    patch({ formSaving: true })
+    let request: Promise<void>
+    request = saveBackendRecord(target.entity, backendId, values, dataRef.current)
       .then(async (saved) => {
         await refreshData(true)
-        const continueToLines = (
+        const continueToProcurementLines = (
           !target.id
           && target.entity === 'requisitions'
           && canAccessRoute(user, 'workflow-procure')
         )
-        patch(continueToLines
-          ? {
-              form: null,
-              route: 'workflow-procure',
-              navActive: 'workflow-procure',
-              crumb: 'Add requisition articles',
-              procurementDraftId: String(saved.id || ''),
-            }
-          : { form: null })
+        const continueToInventoryLines = (
+          !target.id
+          && target.entity === 'storeRequisitions'
+          && canAccessRoute(user, 'workflow-stores')
+        )
+        if (continueToProcurementLines) {
+          patch({
+            form: null,
+            route: 'workflow-procure',
+            navActive: 'workflow-procure',
+            crumb: 'Add requisition articles',
+            procurementDraftId: String(saved.id || ''),
+          })
+        } else if (continueToInventoryLines) {
+          patch({
+            form: null,
+            route: 'workflow-stores',
+            navActive: 'workflow-stores',
+            crumb: 'Add requested articles',
+            inventoryDraftId: String(saved.id || ''),
+          })
+        } else {
+          patch({ form: null })
+        }
         showToast(target.id ? 'Changes saved to the backend' : `${cfg[target.entity].singular || 'Record'} created`)
       })
       .catch((error) => {
         showWorkflowAlert('Cannot save this record', errorMessage(error))
       })
+      .finally(() => {
+        if (saveFormRequest.current === request) saveFormRequest.current = null
+        patch({ formSaving: false })
+      })
+    saveFormRequest.current = request
+    return request
   }, [patch, refreshData, showToast, showWorkflowAlert, state.form, user])
 
   const doDelete = useCallback(() => {
@@ -581,6 +613,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     closePop: () => patch({ branchOpen: false, settingsOpen: false }),
     setSearchTerm: (searchTerm) => patch({ searchTerm }),
     consumeProcurementDraft: () => patch({ procurementDraftId: null }),
+    consumeInventoryDraft: () => patch({ inventoryDraftId: null }),
     openCreate: (entity, label) => {
       const target = (typeof entity === 'string' ? entity : state.route) as EntityKey
       const next: Partial<AppState> = {
