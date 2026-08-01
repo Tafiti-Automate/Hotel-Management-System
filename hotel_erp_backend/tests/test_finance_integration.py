@@ -11,6 +11,7 @@ from apps.procurement.models import (
     PurchaseOrderItem,
     PurchaseRequisition,
 )
+from apps.inventory.models import ItemUnitPrice, UnitOfMeasure
 from core.constants.choices import PRStatus
 from tests.test_procurement import create_procurement_context
 
@@ -70,3 +71,61 @@ def test_supplier_invoice_matches_accepted_grn_and_can_be_paid():
 
     assert invoice.status == SupplierInvoice.STATUS_PAID
     assert invoice.balance_due == Decimal("0.00")
+
+
+@pytest.mark.django_db
+def test_supplier_invoice_matches_packaged_purchase_at_purchase_unit_price():
+    employee, department, supplier, item = create_procurement_context()
+    carton = UnitOfMeasure.objects.create(name="Carton", abbreviation="ctn")
+    ItemUnitPrice.objects.create(
+        item=item,
+        unit=carton,
+        role="purchase",
+        conversion_factor=Decimal("12.0000"),
+    )
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        reason="Packaged matched purchase",
+        status=PRStatus.APPROVED,
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition,
+        supplier=supplier,
+        ordered_by=employee,
+        po_number="PO-MATCH-CARTON",
+    )
+    order_item = PurchaseOrderItem.objects.create(
+        purchase_order=order,
+        item=item,
+        unit=carton,
+        quantity=Decimal("2.00"),
+        unit_cost=Decimal("120000.00"),
+    )
+    order.issue(sent_by=employee)
+    receipt = GoodsReceiptNote.objects.create(
+        purchase_order=order,
+        received_by=employee,
+    )
+    GoodsReceiptItem.objects.create(
+        goods_receipt=receipt,
+        purchase_order_item=order_item,
+        quantity_received=Decimal("2.00"),
+        unit_cost=Decimal("120000.00"),
+        inventory_changes_applied=True,
+    )
+    invoice = SupplierInvoice.objects.create(
+        supplier=supplier,
+        purchase_order=order,
+        invoice_number="INV-CARTON",
+        due_date=timezone.localdate(),
+        subtotal=Decimal("240000.00"),
+    )
+
+    invoice.perform_three_way_match()
+    invoice.refresh_from_db()
+
+    assert order.total_amount == Decimal("240000.00")
+    assert order_item.base_quantity == Decimal("24.000000")
+    assert invoice.status == SupplierInvoice.STATUS_MATCHED
+    assert invoice.amount_variance == Decimal("0.00")

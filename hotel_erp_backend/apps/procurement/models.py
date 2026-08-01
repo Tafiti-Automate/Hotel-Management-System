@@ -702,18 +702,7 @@ class RequisitionItem(BaseModel):
         super().save(*args, **kwargs)
 
     def conversion_factor_for_unit(self, unit):
-        if not unit:
-            return Decimal("1.0000")
-        if self.item.base_unit_id == unit.id:
-            return Decimal("1.0000")
-        from apps.inventory.models import ItemUnitPrice
-
-        configured_unit = ItemUnitPrice.objects.filter(
-            item=self.item,
-            unit=unit,
-            is_active=True,
-        ).first()
-        return configured_unit.conversion_factor if configured_unit else Decimal("1.0000")
+        return self.item.conversion_factor_for_unit(unit)
 
     def base_quantity_for(self, quantity):
         return (quantity or Decimal("0.00")) * self.conversion_factor_for_unit(self.unit)
@@ -1092,16 +1081,25 @@ class PurchaseOrderItem(BaseModel):
 
     @property
     def line_total(self):
-        return (self.base_quantity or Decimal("0.00")) * (self.unit_cost or Decimal("0.00"))
+        # Supplier prices are per selected purchase unit (carton, pallet, each),
+        # while stock quantity is always held in the article's base unit.
+        return (self.quantity or Decimal("0.00")) * (self.unit_cost or Decimal("0.00"))
+
+    @property
+    def conversion_factor(self):
+        if self.pk and self.quantity and self.base_quantity:
+            return self.base_quantity / self.quantity
+        return self.item.conversion_factor_for_unit(self.unit)
+
+    @property
+    def base_unit_cost(self):
+        factor = self.conversion_factor
+        if factor <= Decimal("0.00"):
+            raise ValidationError("The purchase unit conversion factor must be greater than zero.")
+        return (self.unit_cost or Decimal("0.00")) / factor
 
     def save(self, *args, **kwargs):
-        if self.unit_id:
-            from apps.inventory.models import ItemUnitPrice
-
-            item_unit = ItemUnitPrice.objects.filter(item=self.item, unit=self.unit).first()
-            self.base_quantity = self.quantity * item_unit.conversion_factor if item_unit else self.quantity
-        else:
-            self.base_quantity = self.quantity
+        self.base_quantity = self.item.quantity_in_base_units(self.quantity, self.unit)
         super().save(*args, **kwargs)
         self.purchase_order.update_total_amount()
 
@@ -1269,16 +1267,7 @@ class GoodsReceiptItem(BaseModel):
 
     def save(self, *args, **kwargs):
         self.item = self.purchase_order_item.item
-        self.base_quantity = self.quantity_received
-        if self.purchase_order_item.unit_id:
-            from apps.inventory.models import ItemUnitPrice
-
-            item_unit = ItemUnitPrice.objects.filter(
-                item=self.purchase_order_item.item,
-                unit=self.purchase_order_item.unit,
-            ).first()
-            if item_unit:
-                self.base_quantity = self.quantity_received * item_unit.conversion_factor
+        self.base_quantity = self.quantity_received * self.purchase_order_item.conversion_factor
         if not self.store_id and not self.direct_issue_department_id:
             self.store = self.goods_receipt.purchase_order.store
         if not self.unit_cost:
@@ -1286,6 +1275,13 @@ class GoodsReceiptItem(BaseModel):
         if not self.expiry_date:
             self.expiry_date = self.purchase_order_item.expiry_date
         super().save(*args, **kwargs)
+
+    @property
+    def base_unit_cost(self):
+        factor = self.purchase_order_item.conversion_factor
+        if factor <= Decimal("0.00"):
+            raise ValidationError("The purchase unit conversion factor must be greater than zero.")
+        return (self.unit_cost or Decimal("0.00")) / factor
 
     def clean(self):
         super().clean()
@@ -1337,7 +1333,7 @@ class GoodsReceiptItem(BaseModel):
                     goods_receipt_item=receipt_item,
                     item=receipt_item.item,
                     quantity=post_quantity,
-                    unit_cost=receipt_item.unit_cost,
+                    unit_cost=receipt_item.base_unit_cost,
                     consumed_on=receipt_item.goods_receipt.received_date,
                     purpose=f"Direct supplier issue against {receipt_item.goods_receipt.purchase_order}",
                     created_by=receipt_item.created_by,
@@ -1361,7 +1357,7 @@ class GoodsReceiptItem(BaseModel):
                 store=receipt_item.store,
                 quantity=post_quantity,
                 remaining_quantity=post_quantity,
-                unit_cost=receipt_item.unit_cost,
+                unit_cost=receipt_item.base_unit_cost,
                 expiry_date=receipt_item.expiry_date,
                 purchase_order_item=receipt_item.purchase_order_item,
                 created_by=receipt_item.created_by,
@@ -1446,6 +1442,10 @@ class VendorQuotationItem(BaseModel):
     @property
     def line_total(self):
         return (self.quantity or Decimal("0.00")) * (self.unit_price or Decimal("0.00"))
+
+    @property
+    def base_quantity(self):
+        return self.item.quantity_in_base_units(self.quantity, self.unit)
 
     def save(self, *args, **kwargs):
         self.item = self.requisition_item.item
@@ -1668,12 +1668,7 @@ class SupplierReturnItem(BaseModel):
     reason = models.TextField(blank=True)
 
     def save(self, *args, **kwargs):
-        if self.unit_id:
-            from apps.inventory.models import ItemUnitPrice
-            item_unit = ItemUnitPrice.objects.filter(item=self.item, unit=self.unit).first()
-            self.base_quantity = self.quantity * item_unit.conversion_factor if item_unit else self.quantity
-        else:
-            self.base_quantity = self.quantity
+        self.base_quantity = self.item.quantity_in_base_units(self.quantity, self.unit)
         super().save(*args, **kwargs)
 
     def __str__(self):

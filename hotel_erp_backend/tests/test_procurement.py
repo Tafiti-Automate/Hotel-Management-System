@@ -60,11 +60,13 @@ def create_procurement_context():
         registration_number="REG-003",
     )
     category = Category.objects.create(name="Kitchen Supplies")
+    base_unit = UnitOfMeasure.objects.create(name="Litre", abbreviation="L")
     item = Item.objects.create(
         category=category,
         name="Cooking Oil",
         sku="OIL-001",
         unit="litre",
+        base_unit=base_unit,
         reorder_level=Decimal("15.00"),
     )
     return employee, department, supplier, item
@@ -170,13 +172,15 @@ def test_goods_receipt_item_posts_received_stock_to_inventory():
     order.refresh_from_db()
     receipt_item.refresh_from_db()
     assert order_item.base_quantity == Decimal("36.0000")
-    assert order.total_amount == Decimal("252000.00")
+    assert order.total_amount == Decimal("21000.00")
     assert receipt_item.base_quantity == Decimal("24.0000")
     assert receipt_item.store == store
     assert receipt_item.inventory_changes_applied is True
     assert order.status == POStatus.PARTIALLY_RECEIVED
     assert InventoryBalance.objects.get(item=item, store=store).quantity_in_stock == Decimal("24.00")
-    assert InventoryBatch.objects.get(item=item, store=store).remaining_quantity == Decimal("24.00")
+    batch = InventoryBatch.objects.get(item=item, store=store)
+    assert batch.remaining_quantity == Decimal("24.00")
+    assert batch.unit_cost == Decimal("583.33")
     assert StockLedger.objects.get(reference_id=receipt.id).quantity_in == Decimal("24.00")
 
     with pytest.raises(ValidationError):

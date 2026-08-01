@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import Count
 from rest_framework import serializers
@@ -30,6 +31,16 @@ from apps.inventory.models import (
     UnitOfMeasure,
 )
 from core.constants.choices import StoreRequisitionStatus
+
+
+def validate_configured_item_unit(item, unit):
+    if not item or not unit:
+        return
+    try:
+        item.conversion_factor_for_unit(unit)
+    except DjangoValidationError as error:
+        detail = getattr(error, "message_dict", None) or getattr(error, "messages", None) or str(error)
+        raise serializers.ValidationError(detail)
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -142,6 +153,8 @@ class UnitOfMeasureSerializer(serializers.ModelSerializer):
 
 
 class ItemSerializer(serializers.ModelSerializer):
+    base_unit_name = serializers.CharField(source="base_unit.name", read_only=True)
+
     class Meta:
         model = Item
         fields = (
@@ -154,6 +167,7 @@ class ItemSerializer(serializers.ModelSerializer):
             "barcode",
             "unit",
             "base_unit",
+            "base_unit_name",
             "reorder_level",
             "maximum_level",
             "batch_tracking",
@@ -166,12 +180,87 @@ class ItemSerializer(serializers.ModelSerializer):
         )
         read_only_fields = ("id", "created_at", "updated_at", "created_by")
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        base_unit = attrs.get("base_unit", getattr(self.instance, "base_unit", None))
+        if not base_unit:
+            raise serializers.ValidationError(
+                {"base_unit": "Choose the smallest unit that will be counted in stock."}
+            )
+        if self.instance and self.instance.base_unit_id and base_unit.pk != self.instance.base_unit_id:
+            has_usage = (
+                self.instance.unit_prices.exists()
+                or self.instance.inventory_balances.exists()
+                or self.instance.requisition_items.exists()
+                or self.instance.store_requisition_items.exists()
+            )
+            if has_usage:
+                raise serializers.ValidationError(
+                    {"base_unit": "The base stock unit cannot change after conversions, stock, or transactions exist."}
+                )
+        attrs["unit"] = base_unit.abbreviation or base_unit.name
+        return attrs
+
 
 class ItemUnitPriceSerializer(serializers.ModelSerializer):
+    item_name = serializers.CharField(source="item.name", read_only=True)
+    item_sku = serializers.CharField(source="item.sku", read_only=True)
+    unit_name = serializers.CharField(source="unit.name", read_only=True)
+    unit_abbreviation = serializers.CharField(source="unit.abbreviation", read_only=True)
+    base_unit_name = serializers.CharField(source="item.base_unit.name", read_only=True)
+    base_equivalent = serializers.SerializerMethodField()
+
     class Meta:
         model = ItemUnitPrice
-        fields = "__all__"
-        read_only_fields = ("id", "created_at", "updated_at", "created_by")
+        fields = (
+            "id", "item", "item_name", "item_sku", "unit", "unit_name",
+            "unit_abbreviation", "base_unit_name", "conversion_factor", "role",
+            "selling_price", "is_active", "base_equivalent", "created_at",
+            "updated_at", "created_by",
+        )
+        read_only_fields = (
+            "id", "item_name", "item_sku", "unit_name", "unit_abbreviation",
+            "base_unit_name", "base_equivalent", "created_at", "updated_at", "created_by",
+        )
+
+    def get_base_equivalent(self, instance):
+        factor = format(instance.conversion_factor, "f").rstrip("0").rstrip(".")
+        base_unit = instance.item.base_unit
+        if not base_unit:
+            return "Invalid configuration: no base stock unit"
+        return (
+            f"1 {instance.unit.abbreviation or instance.unit.name} = "
+            f"{factor} "
+            f"{base_unit.abbreviation or base_unit.name}"
+        )
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if self.instance and self.instance.is_used_in_transactions():
+            protected = ("item", "unit", "conversion_factor", "role", "is_active")
+            changed = any(
+                field in attrs and attrs[field] != getattr(self.instance, field)
+                for field in protected
+            )
+            if changed:
+                raise serializers.ValidationError(
+                    "This conversion is already used by a transaction and cannot be changed or deactivated. Add a new unit definition instead."
+                )
+        values = {
+            "item": attrs.get("item", getattr(self.instance, "item", None)),
+            "unit": attrs.get("unit", getattr(self.instance, "unit", None)),
+            "conversion_factor": attrs.get("conversion_factor", getattr(self.instance, "conversion_factor", Decimal("1.0000"))),
+            "role": attrs.get("role", getattr(self.instance, "role", "alternate")),
+            "selling_price": attrs.get("selling_price", getattr(self.instance, "selling_price", Decimal("0.00"))),
+            "is_active": attrs.get("is_active", getattr(self.instance, "is_active", True)),
+        }
+        candidate = ItemUnitPrice(**values)
+        try:
+            candidate.clean()
+        except DjangoValidationError as error:
+            detail = getattr(error, "message_dict", None) or getattr(error, "messages", None) or str(error)
+            raise serializers.ValidationError(detail)
+        return attrs
 
 
 class StoreLocationSerializer(serializers.ModelSerializer):
@@ -337,6 +426,14 @@ class StockTransferItemSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ("id", "base_quantity", "created_at", "updated_at", "created_by")
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        validate_configured_item_unit(
+            attrs.get("item", getattr(self.instance, "item", None)),
+            attrs.get("unit", getattr(self.instance, "unit", None)),
+        )
+        return attrs
+
 
 class StockTransferSerializer(serializers.ModelSerializer):
     total_quantity = serializers.DecimalField(
@@ -363,6 +460,18 @@ class StockAdjustmentItemSerializer(serializers.ModelSerializer):
         model = StockAdjustmentItem
         fields = "__all__"
         read_only_fields = ("id", "created_at", "updated_at", "created_by")
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        instance = self.instance or StockAdjustmentItem(**attrs)
+        for field, value in attrs.items():
+            setattr(instance, field, value)
+        try:
+            instance.clean()
+        except DjangoValidationError as error:
+            detail = getattr(error, "message_dict", None) or getattr(error, "messages", None) or str(error)
+            raise serializers.ValidationError(detail)
+        return attrs
 
 
 class StockAdjustmentSerializer(serializers.ModelSerializer):
@@ -406,6 +515,10 @@ class StoreRequisitionItemSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         requisition = attrs.get("requisition") or getattr(self.instance, "requisition", None)
         item = attrs.get("item") or getattr(self.instance, "item", None)
+        validate_configured_item_unit(
+            item,
+            attrs.get("unit", getattr(self.instance, "unit", None)),
+        )
         if not requisition:
             return attrs
         if self.instance and requisition.status == StoreRequisitionStatus.SUBMITTED:
@@ -505,6 +618,18 @@ class StockIssueItemSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ("id", "item", "base_quantity", "created_at", "updated_at", "created_by")
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        requisition_item = attrs.get(
+            "requisition_item", getattr(self.instance, "requisition_item", None)
+        )
+        item = requisition_item.item if requisition_item else None
+        validate_configured_item_unit(
+            item,
+            attrs.get("unit", getattr(self.instance, "unit", None)),
+        )
+        return attrs
+
 
 class StockIssueSerializer(serializers.ModelSerializer):
     class Meta:
@@ -526,6 +651,14 @@ class StoreReturnItemSerializer(serializers.ModelSerializer):
         model = StoreReturnItem
         fields = "__all__"
         read_only_fields = ("id", "base_quantity", "created_at", "updated_at", "created_by")
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        validate_configured_item_unit(
+            attrs.get("item", getattr(self.instance, "item", None)),
+            attrs.get("unit", getattr(self.instance, "unit", None)),
+        )
+        return attrs
 
 
 class DepartmentConsumptionSerializer(serializers.ModelSerializer):

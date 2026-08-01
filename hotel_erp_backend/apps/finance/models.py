@@ -314,7 +314,7 @@ class SupplierInvoice(BaseModel):
         for receipt in self.purchase_order.goods_receipt_notes.all():
             for line in receipt.items.select_related("purchase_order_item"):
                 if line.inventory_changes_applied:
-                    accepted_value += line.inventory_post_quantity() * line.unit_cost
+                    accepted_value += line.inventory_post_quantity() * line.base_unit_cost
 
         self.amount_variance = self.subtotal - accepted_value
         if abs(self.amount_variance) <= amount_tolerance and accepted_value > 0:

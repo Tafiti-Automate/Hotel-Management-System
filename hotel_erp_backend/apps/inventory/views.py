@@ -101,9 +101,16 @@ class ItemViewSet(CreatedByModelMixin, ModelViewSet):
 class ItemUnitPriceViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = ItemUnitPrice.objects.select_related("item", "unit")
     serializer_class = ItemUnitPriceSerializer
-    filterset_fields = ("item", "unit", "is_active")
+    filterset_fields = ("item", "unit", "role", "is_active")
     search_fields = ("item__name", "item__sku", "unit__name")
     ordering_fields = ("conversion_factor", "selling_price", "created_at")
+
+    def perform_destroy(self, instance):
+        if instance.is_used_in_transactions():
+            raise ValidationError(
+                "This conversion is already used by a transaction and cannot be deleted."
+            )
+        super().perform_destroy(instance)
 
 
 class StoreLocationViewSet(CreatedByModelMixin, ModelViewSet):

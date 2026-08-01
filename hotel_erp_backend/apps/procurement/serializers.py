@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.urls import reverse
 from rest_framework import serializers
 
@@ -21,6 +22,16 @@ from apps.procurement.models import (
     VendorQuotation,
     VendorQuotationItem,
 )
+
+
+def validate_configured_item_unit(item, unit):
+    if not item or not unit:
+        return
+    try:
+        item.conversion_factor_for_unit(unit)
+    except DjangoValidationError as error:
+        detail = getattr(error, "message_dict", None) or getattr(error, "messages", None) or str(error)
+        raise serializers.ValidationError(detail)
 
 
 class PurchaseRequisitionSerializer(serializers.ModelSerializer):
@@ -257,6 +268,10 @@ class RequisitionItemSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         requisition = attrs.get("requisition") or getattr(self.instance, "requisition", None)
         item = attrs.get("item") or getattr(self.instance, "item", None)
+        validate_configured_item_unit(
+            item,
+            attrs.get("unit", getattr(self.instance, "unit", None)),
+        )
         if requisition and not requisition.editable:
             raise serializers.ValidationError(
                 "Requisition items can only be changed while the requisition is draft, rejected, or returned."
@@ -396,6 +411,10 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         order = attrs.get("purchase_order") or getattr(self.instance, "purchase_order", None)
         item = attrs.get("item") or getattr(self.instance, "item", None)
+        validate_configured_item_unit(
+            item,
+            attrs.get("unit", getattr(self.instance, "unit", None)),
+        )
         if order and order.status != POStatus.DRAFT:
             raise serializers.ValidationError("LPO lines can only be changed while the LPO is draft.")
         if order and item and not order.requisition.items.filter(item=item).exists():
@@ -481,6 +500,10 @@ class VendorQuotationItemSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         quotation = attrs.get("quotation") or getattr(self.instance, "quotation", None)
         requisition_item = attrs.get("requisition_item") or getattr(self.instance, "requisition_item", None)
+        validate_configured_item_unit(
+            requisition_item.item if requisition_item else None,
+            attrs.get("unit", getattr(self.instance, "unit", None)),
+        )
         if self.instance and self.instance.selected:
             raise serializers.ValidationError(
                 "A selected winning quotation line cannot be changed. Reopen the evaluation first."
@@ -534,6 +557,10 @@ class SupplierReturnItemSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         supplier_return = attrs.get("supplier_return") or getattr(self.instance, "supplier_return", None)
         item = attrs.get("item") or getattr(self.instance, "item", None)
+        validate_configured_item_unit(
+            item,
+            attrs.get("unit", getattr(self.instance, "unit", None)),
+        )
         if supplier_return and item and not supplier_return.goods_receipt.items.filter(item=item).exists():
             raise serializers.ValidationError(
                 {"item": "Only Articles from the selected goods receipt can be returned."}

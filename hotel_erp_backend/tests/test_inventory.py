@@ -32,7 +32,12 @@ from apps.inventory.models import (
 from apps.procurement.models import PurchaseRequisition
 from apps.vendors.models import Supplier
 from core.constants.choices import RequisitionType, StockCountStatus, StoreRequisitionStatus
-from apps.inventory.serializers import CategorySerializer, StoreLocationSerializer
+from apps.inventory.serializers import (
+    CategorySerializer,
+    ItemUnitPriceSerializer,
+    StockTransferItemSerializer,
+    StoreLocationSerializer,
+)
 
 
 @pytest.mark.django_db
@@ -211,6 +216,74 @@ def test_stock_transfer_posts_store_balances_and_ledger_entries():
     assert InventoryBalance.objects.get(item=item, store=main_store).quantity_in_stock == Decimal("20.00")
     assert InventoryBalance.objects.get(item=item, store=kitchen_store).quantity_in_stock == Decimal("105.00")
     assert StockLedger.objects.filter(reference_id=transfer.id).count() == 2
+
+
+@pytest.mark.django_db
+def test_article_unit_conversion_requires_explicit_ratio_and_locks_after_use():
+    branch = Branch.objects.create(name="Conversion Control Branch")
+    store = StoreLocation.objects.create(branch=branch, name="Conversion Store")
+    category = Category.objects.create(name="Packaged Drinks")
+    piece = UnitOfMeasure.objects.create(name="Piece", abbreviation="pc")
+    carton = UnitOfMeasure.objects.create(name="Carton", abbreviation="ctn")
+    pallet = UnitOfMeasure.objects.create(name="Pallet", abbreviation="plt")
+    item = Item.objects.create(
+        category=category,
+        name="Bottled Water",
+        unit="pc",
+        base_unit=piece,
+        reorder_level=Decimal("24.00"),
+    )
+
+    invalid = ItemUnitPriceSerializer(data={
+        "item": str(item.id),
+        "unit": str(carton.id),
+        "role": "purchase",
+        "conversion_factor": "1.0000",
+        "selling_price": "0.00",
+        "is_active": True,
+    })
+    assert not invalid.is_valid()
+    assert "conversion_factor" in invalid.errors
+
+    configured = ItemUnitPriceSerializer(data={
+        "item": str(item.id),
+        "unit": str(carton.id),
+        "role": "purchase",
+        "conversion_factor": "12.0000",
+        "selling_price": "0.00",
+        "is_active": True,
+    })
+    assert configured.is_valid(), configured.errors
+    conversion = configured.save()
+    assert configured.data["base_equivalent"] == "1 ctn = 12 pc"
+
+    transfer = StockTransfer.objects.create(from_store=store, to_store=store)
+    transfer_line = StockTransferItemSerializer(data={
+        "stock_transfer": str(transfer.id),
+        "item": str(item.id),
+        "unit": str(carton.id),
+        "quantity": "2.00",
+    })
+    assert transfer_line.is_valid(), transfer_line.errors
+    line = transfer_line.save()
+    assert line.base_quantity == Decimal("24.000000")
+
+    unconfigured = StockTransferItemSerializer(data={
+        "stock_transfer": str(transfer.id),
+        "item": str(item.id),
+        "unit": str(pallet.id),
+        "quantity": "1.00",
+    })
+    assert not unconfigured.is_valid()
+    assert "unit" in unconfigured.errors
+
+    locked = ItemUnitPriceSerializer(
+        conversion,
+        data={"conversion_factor": "10.0000"},
+        partial=True,
+    )
+    assert not locked.is_valid()
+    assert "non_field_errors" in locked.errors
 
 
 def create_inventory_operations_context():

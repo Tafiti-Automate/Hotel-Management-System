@@ -284,13 +284,7 @@ class SaleItem(BaseModel):
         return (self.quantity or Decimal("0.00")) * (self.unit_price or Decimal("0.00"))
 
     def save(self, *args, **kwargs):
-        if self.unit_id:
-            from apps.inventory.models import ItemUnitPrice
-
-            item_unit = ItemUnitPrice.objects.filter(item=self.item, unit=self.unit).first()
-            self.base_quantity = self.quantity * item_unit.conversion_factor if item_unit else self.quantity
-        else:
-            self.base_quantity = self.quantity
+        self.base_quantity = self.item.quantity_in_base_units(self.quantity, self.unit)
         super().save(*args, **kwargs)
         self.sale.update_total_amount()
 

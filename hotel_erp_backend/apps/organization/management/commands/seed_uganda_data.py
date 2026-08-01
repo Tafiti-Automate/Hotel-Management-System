@@ -29,7 +29,7 @@ from apps.notifications.models import Notification
 from apps.audit_logs.models import AuditLog
 from apps.approvals.models import ApprovalMatrixRule, ApprovalWorkflow
 
-from core.constants.choices import ItemBusinessType, LedgerReferenceType
+from core.constants.choices import ArticleUnitRole, ItemBusinessType, LedgerReferenceType
 
 User = get_user_model()
 
@@ -678,6 +678,7 @@ class Command(BaseCommand):
             item=item_water,
             unit=uom_pcs,
             conversion_factor=Decimal("1.0000"),
+            role=ArticleUnitRole.BASE,
             selling_price=Decimal("1500.00"),
             is_active=True,
             created_by=admin_user
@@ -687,6 +688,7 @@ class Command(BaseCommand):
             item=item_cola,
             unit=uom_pcs,
             conversion_factor=Decimal("1.0000"),
+            role=ArticleUnitRole.BASE,
             selling_price=Decimal("2000.00"),
             is_active=True,
             created_by=admin_user
@@ -696,6 +698,7 @@ class Command(BaseCommand):
             item=item_beer,
             unit=uom_pcs,
             conversion_factor=Decimal("1.0000"),
+            role=ArticleUnitRole.BASE,
             selling_price=Decimal("5000.00"),
             is_active=True,
             created_by=admin_user

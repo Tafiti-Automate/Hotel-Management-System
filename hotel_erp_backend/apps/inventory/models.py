@@ -171,6 +171,31 @@ class Item(BaseModel):
                 {"maximum_level": "Maximum level cannot be lower than the reorder level."}
             )
 
+    def conversion_factor_for_unit(self, unit):
+        """Return an explicit, active conversion into this article's base stock unit."""
+        if unit is None:
+            return Decimal("1.0000")
+        if not self.base_unit_id:
+            raise ValidationError(
+                {"unit": f"Configure a base stock unit for {self.name} before using another unit."}
+            )
+        if unit.pk == self.base_unit_id:
+            return Decimal("1.0000")
+        configured = self.unit_prices.filter(unit=unit, is_active=True).first()
+        if not configured:
+            raise ValidationError(
+                {
+                    "unit": (
+                        f"{unit} is not an active configured unit for {self.name}. "
+                        f"Add an Article unit conversion before using it."
+                    )
+                }
+            )
+        return configured.conversion_factor
+
+    def quantity_in_base_units(self, quantity, unit=None):
+        return (quantity or Decimal("0.00")) * self.conversion_factor_for_unit(unit)
+
 
 class ItemUnitPrice(BaseModel):
     item = models.ForeignKey(
@@ -221,11 +246,56 @@ class ItemUnitPrice(BaseModel):
     def __str__(self):
         return f"{self.item} - {self.unit} x {self.conversion_factor}"
 
+    def is_used_in_transactions(self):
+        if not self.item_id or not self.unit_id:
+            return False
+        related_names = (
+            "requisition_items",
+            "quotation_items",
+            "purchase_order_items",
+            "supplier_return_items",
+            "stock_transfer_items",
+            "stock_adjustment_items",
+            "store_requisition_items",
+            "stock_issue_items",
+            "store_return_items",
+            "sale_items",
+        )
+        for related_name in related_names:
+            manager = getattr(self.item, related_name, None)
+            if manager is not None and manager.filter(unit_id=self.unit_id).exists():
+                return True
+        return False
+
     def clean(self):
         super().clean()
-        if self.role == ArticleUnitRole.BASE and self.conversion_factor != Decimal("1.0000"):
+        if not self.item_id or not self.unit_id:
+            return
+        if not self.item.base_unit_id:
+            raise ValidationError(
+                {"item": "Set the article base stock unit before adding purchase or issue conversions."}
+            )
+        is_base_unit = self.unit_id == self.item.base_unit_id
+        if is_base_unit and self.conversion_factor != Decimal("1.0000"):
             raise ValidationError(
                 {"conversion_factor": "The base unit conversion factor must be 1."}
+            )
+        if is_base_unit and self.role != ArticleUnitRole.BASE:
+            raise ValidationError(
+                {"role": "The article base stock unit must use the Base unit role."}
+            )
+        if not is_base_unit and self.role == ArticleUnitRole.BASE:
+            raise ValidationError(
+                {"role": "Only the article's configured base stock unit can use the Base unit role."}
+            )
+        if not is_base_unit and self.conversion_factor <= Decimal("1.0000"):
+            raise ValidationError(
+                {
+                    "conversion_factor": (
+                        "A purchase, issue, or alternate unit must contain more than one base unit. "
+                        "If it is smaller, choose a smaller base stock unit first."
+                    )
+                }
             )
 
 
@@ -677,14 +747,7 @@ class StockTransferItem(BaseModel):
         ordering = ("item__name",)
 
     def save(self, *args, **kwargs):
-        if self.unit_id:
-            unit_price = ItemUnitPrice.objects.filter(item=self.item, unit=self.unit).first()
-            if unit_price:
-                self.base_quantity = self.quantity * unit_price.conversion_factor
-            else:
-                self.base_quantity = self.quantity
-        else:
-            self.base_quantity = self.quantity
+        self.base_quantity = self.item.quantity_in_base_units(self.quantity, self.unit)
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -818,6 +881,13 @@ class StockAdjustmentItem(BaseModel):
             )
         ]
         ordering = ("item__name",)
+
+    def clean(self):
+        super().clean()
+        if self.unit_id and self.item_id and self.unit_id != self.item.base_unit_id:
+            raise ValidationError(
+                {"unit": "Stock adjustments must be entered in the article's base stock unit."}
+            )
 
     def __str__(self):
         return f"{self.item} {self.quantity_change}"
@@ -1266,11 +1336,10 @@ class StoreRequisitionItem(BaseModel):
         return max(Decimal("0.00"), self.quantity_approved - self.quantity_issued)
 
     def save(self, *args, **kwargs):
-        if self.unit_id:
-            unit_price = ItemUnitPrice.objects.filter(item=self.item, unit=self.unit).first()
-            self.base_quantity_requested = self.quantity_requested * unit_price.conversion_factor if unit_price else self.quantity_requested
-        else:
-            self.base_quantity_requested = self.quantity_requested
+        self.base_quantity_requested = self.item.quantity_in_base_units(
+            self.quantity_requested,
+            self.unit,
+        )
         if self.quantity_approved > self.base_quantity_requested:
             raise ValidationError("Approved quantity cannot exceed requested quantity.")
         if self.quantity_issued > self.quantity_approved:
@@ -1496,11 +1565,7 @@ class StockIssueItem(BaseModel):
 
     def save(self, *args, **kwargs):
         self.item = self.requisition_item.item
-        if self.unit_id:
-            unit_price = ItemUnitPrice.objects.filter(item=self.item, unit=self.unit).first()
-            self.base_quantity = self.quantity * unit_price.conversion_factor if unit_price else self.quantity
-        else:
-            self.base_quantity = self.quantity
+        self.base_quantity = self.item.quantity_in_base_units(self.quantity, self.unit)
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -1659,11 +1724,7 @@ class StoreReturnItem(BaseModel):
     condition_note = models.TextField(blank=True)
 
     def save(self, *args, **kwargs):
-        if self.unit_id:
-            unit_price = ItemUnitPrice.objects.filter(item=self.item, unit=self.unit).first()
-            self.base_quantity = self.quantity * unit_price.conversion_factor if unit_price else self.quantity
-        else:
-            self.base_quantity = self.quantity
+        self.base_quantity = self.item.quantity_in_base_units(self.quantity, self.unit)
         super().save(*args, **kwargs)
 
     def __str__(self):
