@@ -3,7 +3,9 @@ from decimal import Decimal
 
 from django.db.models import Count, Sum
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from rest_framework.permissions import BasePermission
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -36,6 +38,37 @@ class ReportAPIView(APIView):
     permission_classes = [CanViewOperationalReports]
 
 
+def apply_store_scope(queryset, request, *, store_field="store"):
+    store_id = request.query_params.get("store")
+    branch_id = request.query_params.get("branch")
+    if store_id:
+        queryset = queryset.filter(**{f"{store_field}_id": store_id})
+    elif branch_id:
+        queryset = queryset.filter(**{f"{store_field}__branch_id": branch_id})
+    return queryset
+
+
+def apply_category_scope(queryset, request, *, item_field="item"):
+    category_id = request.query_params.get("category")
+    if category_id:
+        queryset = queryset.filter(**{f"{item_field}__category_id": category_id})
+    return queryset
+
+
+def apply_date_scope(queryset, request, *, field="created_at"):
+    filters = {}
+    for parameter, lookup in (("date_from", "date"), ("date_to", "date")):
+        raw_value = request.query_params.get(parameter)
+        if not raw_value:
+            continue
+        value = parse_date(raw_value)
+        if value is None:
+            raise ValidationError({parameter: "Enter a valid date in YYYY-MM-DD format."})
+        suffix = "gte" if parameter == "date_from" else "lte"
+        filters[f"{field}__{lookup}__{suffix}"] = value
+    return queryset.filter(**filters)
+
+
 def weighted_average_cost(item, store):
     batches = InventoryBatch.objects.filter(
         item=item,
@@ -59,9 +92,8 @@ def decimal_string(value):
 class StockSummaryReportView(ReportAPIView):
     def get(self, request):
         queryset = InventoryBalance.objects.select_related("item", "store", "item__category")
-        store_id = request.query_params.get("store")
-        if store_id:
-            queryset = queryset.filter(store_id=store_id)
+        queryset = apply_store_scope(queryset, request)
+        queryset = apply_category_scope(queryset, request)
 
         rows = []
         total_value = Decimal("0.00")
@@ -87,9 +119,8 @@ class StockSummaryReportView(ReportAPIView):
 class LowStockReportView(ReportAPIView):
     def get(self, request):
         queryset = InventoryBalance.objects.select_related("item", "store")
-        store_id = request.query_params.get("store")
-        if store_id:
-            queryset = queryset.filter(store_id=store_id)
+        queryset = apply_store_scope(queryset, request)
+        queryset = apply_category_scope(queryset, request)
 
         rows = []
         for balance in queryset:
@@ -116,16 +147,31 @@ class LowStockReportView(ReportAPIView):
 
 class ExpiryReportView(ReportAPIView):
     def get(self, request):
-        days = int(request.query_params.get("days", 30))
-        end_date = timezone.localdate() + timedelta(days=days)
+        raw_days = request.query_params.get("days", "30")
+        try:
+            days = int(raw_days)
+        except (TypeError, ValueError):
+            raise ValidationError({"days": "Enter a whole number of days."})
+        if days < 0:
+            raise ValidationError({"days": "Days cannot be negative."})
+        requested_end_date = request.query_params.get("date_to")
+        end_date = parse_date(requested_end_date) if requested_end_date else None
+        if requested_end_date and end_date is None:
+            raise ValidationError({"date_to": "Enter a valid date in YYYY-MM-DD format."})
+        end_date = end_date or (timezone.localdate() + timedelta(days=days))
         queryset = InventoryBatch.objects.select_related("item", "store").filter(
             expiry_date__isnull=False,
             expiry_date__lte=end_date,
             remaining_quantity__gt=Decimal("0.00"),
         )
-        store_id = request.query_params.get("store")
-        if store_id:
-            queryset = queryset.filter(store_id=store_id)
+        date_from = request.query_params.get("date_from")
+        if date_from:
+            start_date = parse_date(date_from)
+            if start_date is None:
+                raise ValidationError({"date_from": "Enter a valid date in YYYY-MM-DD format."})
+            queryset = queryset.filter(expiry_date__gte=start_date)
+        queryset = apply_store_scope(queryset, request)
+        queryset = apply_category_scope(queryset, request)
         rows = [
             {
                 "item": str(batch.item),
@@ -150,10 +196,10 @@ class ConsumptionReportView(ReportAPIView):
                 LedgerReferenceType.STOCK_ADJUSTMENT,
             ],
         )
-        store_id = request.query_params.get("store")
         item_id = request.query_params.get("item")
-        if store_id:
-            queryset = queryset.filter(store_id=store_id)
+        queryset = apply_store_scope(queryset, request)
+        queryset = apply_category_scope(queryset, request)
+        queryset = apply_date_scope(queryset, request)
         if item_id:
             queryset = queryset.filter(item_id=item_id)
 
@@ -180,18 +226,29 @@ class ConsumptionReportView(ReportAPIView):
 
 class ProcurementSummaryReportView(ReportAPIView):
     def get(self, request):
+        requisition_queryset = PurchaseRequisition.objects.all()
+        purchase_order_queryset = PurchaseOrder.objects.all()
+        supplier_return_queryset = SupplierReturn.objects.all()
+        branch_id = request.query_params.get("branch")
+        if branch_id:
+            requisition_queryset = requisition_queryset.filter(branch_id=branch_id)
+            purchase_order_queryset = purchase_order_queryset.filter(requisition__branch_id=branch_id)
+            supplier_return_queryset = supplier_return_queryset.filter(store__branch_id=branch_id)
+        requisition_queryset = apply_date_scope(requisition_queryset, request)
+        purchase_order_queryset = apply_date_scope(purchase_order_queryset, request)
+        supplier_return_queryset = apply_date_scope(supplier_return_queryset, request)
         requisitions = (
-            PurchaseRequisition.objects.values("status")
+            requisition_queryset.values("status")
             .annotate(count=Count("id"))
             .order_by("status")
         )
         purchase_orders = (
-            PurchaseOrder.objects.values("status")
+            purchase_order_queryset.values("status")
             .annotate(count=Count("id"), total_amount=Sum("total_amount"))
             .order_by("status")
         )
         supplier_returns = (
-            SupplierReturn.objects.values("status")
+            supplier_return_queryset.values("status")
             .annotate(count=Count("id"))
             .order_by("status")
         )
@@ -218,11 +275,23 @@ class StockCardReportView(ReportAPIView):
             return Response({"detail": "item query parameter is required."}, status=400)
 
         queryset = StockLedger.objects.select_related("item", "store").filter(item_id=item_id)
-        store_id = request.query_params.get("store")
-        if store_id:
-            queryset = queryset.filter(store_id=store_id)
-
+        queryset = apply_store_scope(queryset, request)
         running_balance = Decimal("0.00")
+        date_from = request.query_params.get("date_from")
+        if date_from:
+            start_date = parse_date(date_from)
+            if start_date is None:
+                raise ValidationError({"date_from": "Enter a valid date in YYYY-MM-DD format."})
+            opening = queryset.filter(created_at__date__lt=start_date).aggregate(
+                quantity_in=Sum("quantity_in"),
+                quantity_out=Sum("quantity_out"),
+            )
+            running_balance = (
+                (opening["quantity_in"] or Decimal("0.00"))
+                - (opening["quantity_out"] or Decimal("0.00"))
+            )
+        queryset = apply_date_scope(queryset, request)
+
         rows = []
         for movement in queryset.order_by("created_at", "id"):
             running_balance += movement.net_quantity
