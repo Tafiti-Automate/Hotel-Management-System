@@ -211,7 +211,7 @@ function RequestPanel({ app, data, form, setForm, busy, execute, stage }: any) {
   const hasApprovedQuantity = submittedLines.some((line: Row) => num(line.quantity_approved) > 0)
   const stageMeta: Record<SupplyTask, { title: string; note: string }> = {
     prepare: { title: 'New request', note: 'Create or update a requisition.' },
-    department: { title: 'Department approval', note: 'Pending department approvals.' },
+    department: { title: 'Department approval', note: '' },
     stores: { title: 'Stock review', note: 'Review and allocate stock.' },
     shortage: { title: 'Shortages', note: 'Items awaiting procurement.' },
     issue: { title: 'Pick and issue', note: 'Approved requests ready for issue.' },
@@ -345,7 +345,6 @@ function TransferPanel({ app, data, form, setForm, busy, execute }: any) {
   return <Panel title="Inter-store transfer" note="Move stock between stores.">
     <Field label="From store"><Select value={form.from} change={(v) => setForm({ ...form, from: v })} rows={app.data.locations} /></Field>
     <Field label="To store"><Select value={form.to} change={(v) => setForm({ ...form, to: v })} rows={app.data.locations} /></Field>
-    <Field label="Requested by"><Select value={form.employee} change={(v) => setForm({ ...form, employee: v })} rows={app.data.employees} /></Field>
     <Action disabled={busy || !form.from || !form.to || form.from === form.to} click={() => execute(() => createBackendRecord('stock-transfers', { from_store: form.from, to_store: form.to, requested_by: form.employee || null, status: 'pending', note: '' }), 'Transfer created')}>Create transfer</Action>
     <Rule />
     <Field label="Transfer"><Select value={form.transfer} change={(v) => setForm({ transfer: v })} rows={data.transfers.filter((r: Row) => !r.inventory_changes_applied)} label={(r) => `${storeName(app, r.from_store)} → ${storeName(app, r.to_store)} · ${r.status}`} /></Field>
@@ -429,7 +428,7 @@ function ReadOnlyPanel({ title, note }: { title: string; note: string }) {
 
 function Records({ tab, data, app, onSelect }: { tab: Tab; data: Record<string, Row[]>; app: any; onSelect: (row: Row) => void }) {
   const rows = data[tab]
-  const cells = (row: Row) => tab === 'requests' ? [id(row.requisition_no), departmentName(app, row.department), storeName(app, row.store), id(row.status)]
+  const cells = (row: Row) => tab === 'requests' ? [id(row.requisition_no), departmentName(app, row.department), data.requestItems.filter((line) => id(line.requisition) === id(row.id)).slice(0, 2).map((line) => `${itemName(app, line.item)} × ${id(line.base_quantity_requested || line.quantity_requested || line.quantity)}`).join(', ') || 'No items', id(row.status)]
     : tab === 'issues' ? [id(row.issue_no), storeName(app, row.store), row.inventory_changes_applied ? 'Posted' : 'Draft', id(row.received_by_name) || 'Not acknowledged']
     : tab === 'transfers' ? [storeName(app, row.from_store), storeName(app, row.to_store), id(row.total_quantity), id(row.status)]
     : tab === 'adjustments' ? [id(row.reference) || id(row.id).slice(0, 8), storeName(app, row.store), id(row.reason), id(row.status)]
@@ -438,7 +437,7 @@ function Records({ tab, data, app, onSelect }: { tab: Tab; data: Record<string, 
       : tab === 'reorder' ? [itemName(app, row.item), storeName(app, row.store) || 'All stores', `Min ${row.minimum_level}`, `Reorder ${row.reorder_quantity}`]
         : tab === 'batches' ? [itemName(app, row.item), storeName(app, row.store), `Remaining ${row.remaining_quantity}`, id(row.expiry_date) || 'No expiry']
           : [departmentName(app, row.department), itemName(app, row.item), `${row.quantity} × ${row.unit_cost}`, id(row.consumed_on)]
-  const titles: Record<Tab, string> = { requests: 'Department material requests', issues: 'Issue vouchers', transfers: 'Inter-store transfers', adjustments: 'Stock adjustments', counts: 'Stock counts', returns: 'Department returns', reorder: 'Low-stock reorder queue', batches: 'Inventory batches and expiry', consumption: 'Department consumption' }
+  const titles: Record<Tab, string> = { requests: 'Store requests', issues: 'Issue vouchers', transfers: 'Inter-store transfers', adjustments: 'Stock adjustments', counts: 'Stock counts', returns: 'Department returns', reorder: 'Low-stock reorder queue', batches: 'Inventory batches and expiry', consumption: 'Department consumption' }
   return <section style={{ ...card, overflow: 'hidden' }}><div style={{ padding: '15px 17px', borderBottom: '1px solid var(--border)', fontSize: 13, fontWeight: 800 }}>{titles[tab]}</div>{rows.map((row) => <button type="button" onClick={() => onSelect(row)} className="procurement-record-row" key={id(row.id)} style={{ ...recordRow, width: '100%', alignItems: 'center', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>{cells(row).map((cell, index) => <span key={index} style={{ color: index ? 'var(--text-muted)' : 'var(--text)', fontWeight: index ? 500 : 700 }}>{cell || '—'}</span>)}</button>)}{!rows.length && <div style={{ padding: 45, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>No {titles[tab].toLowerCase()} are waiting here.</div>}</section>
 }
 

@@ -192,7 +192,7 @@ export default function Header() {
         </div>
       </div>
 
-      <div style={{ height: 38, display: 'flex', alignItems: 'center', gap: 8, padding: '0 24px', borderTop: '1px solid var(--border)', background: '#FBFCFD' }}>
+      <div style={{ height: 38, display: 'flex', alignItems: 'center', gap: 8, padding: '0 24px', borderTop: '1px solid var(--border)', background: 'var(--surface-2)' }}>
         <span style={{ color: 'var(--text-faint)', fontSize: 12 }}>{moduleName}</span>
         <Icon name="chevron_right" size={15} color="var(--text-faint)" />
         <span style={{ color: 'var(--text)', fontSize: 12, fontWeight: 600 }}>{app.crumb}</span>

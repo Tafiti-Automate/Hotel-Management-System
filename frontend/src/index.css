@@ -1447,3 +1447,11 @@ kbd { min-width:22px; min-height:20px; display:inline-grid; place-items:center; 
   .page-heading { align-items:flex-start; flex-direction:column; }
 }
 @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; scroll-behavior:auto!important; } }
+
+
+html, body, #root { min-height: 100%; background: var(--bg, #F6F7F9); }
+html[data-theme='dark'] body, html[data-theme='dark'] #root { background: #0C0C10; }
+input, select, textarea, button { color-scheme: inherit; }
+.date-filter { height: 34px; display:flex; align-items:center; gap:6px; padding:0 8px; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:var(--text-faint); font-size:10px; font-weight:700; text-transform:uppercase; }
+.date-filter input { width:118px; border:0; outline:0; background:transparent; color:var(--text); font:inherit; text-transform:none; }
+@media (max-width: 900px) { .date-filter span { display:none; } .date-filter input { width:106px; } }

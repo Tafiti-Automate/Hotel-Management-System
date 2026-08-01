@@ -48,6 +48,8 @@ export default function ListView() {
   const [sortKey, setSortKey] = useState('')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   const [statusFilter, setStatusFilter] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [detailRecord, setDetailRecord] = useState<Row | null>(null)
@@ -60,6 +62,9 @@ export default function ListView() {
   const term = app.searchTerm.toLowerCase()
   if (term) rows = rows.filter((row) => config.cols.some((column) => String(row[column.key] ?? '').toLowerCase().includes(term)))
   if (statusFilter) rows = rows.filter((row) => String(row.status || '') === statusFilter)
+  const rowDate = (row: Row) => String(row.date || row.created_at || row.issue_date || row.return_date || row.receipt_date || row.count_date || '').slice(0, 10)
+  if (dateFrom) rows = rows.filter((row) => rowDate(row) && rowDate(row) >= dateFrom)
+  if (dateTo) rows = rows.filter((row) => rowDate(row) && rowDate(row) <= dateTo)
   if (sortKey) rows.sort((a, b) => {
     const left = a[sortKey]
     const right = b[sortKey]
@@ -82,7 +87,7 @@ export default function ListView() {
     : statusFilter
       ? `No records match the selected status${branchLabel}.`
       : `No ${config.title.toLowerCase()} are available${branchLabel}.`
-  useEffect(() => { setPage(1); setSelected(new Set()); setDetailRecord(null) }, [route, term, statusFilter])
+  useEffect(() => { setPage(1); setSelected(new Set()); setDetailRecord(null) }, [route, term, statusFilter, dateFrom, dateTo])
   useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
 
   const exportRows = (records: Row[]) => {
@@ -97,17 +102,6 @@ export default function ListView() {
   const toggleSort = (key: string) => {
     if (sortKey === key) setSortDirection((direction) => direction === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDirection('asc') }
-  }
-  const saveView = () => {
-    localStorage.setItem(`hms-view-${route}`, JSON.stringify({ statusFilter, hiddenColumns: Array.from(hiddenColumns), sortKey, sortDirection }))
-    app.showToast('Current table view saved')
-  }
-  const loadSavedView = () => {
-    const raw = localStorage.getItem(`hms-view-${route}`)
-    if (!raw) { app.showToast('No saved view for this table'); return }
-    const view = JSON.parse(raw)
-    setStatusFilter(view.statusFilter || ''); setHiddenColumns(new Set(view.hiddenColumns || [])); setSortKey(view.sortKey || ''); setSortDirection(view.sortDirection || 'asc')
-    app.showToast('Saved view applied')
   }
   const openRow = (row: Row) => {
     if (route === 'requisitions' || route === 'approvals') app.openDetail('requisitions', row.id, route)
@@ -134,8 +128,9 @@ export default function ListView() {
           <input value={app.searchTerm} onChange={(event) => app.setSearchTerm(event.target.value)} placeholder={`Search ${config.title.toLowerCase()}`} style={{ width: 280, height: 34, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', padding: '0 11px 0 34px', color: 'var(--text)', fontSize: 12.5, outline: 'none' }} />
         </div>
         <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} style={{ height: 34, border: '1px solid var(--border)', borderRadius: 5, padding: '0 8px', background: 'var(--surface)', color: 'var(--text-muted)', fontSize: 12 }}><option value="">All statuses</option>{statuses.map((status) => <option key={status}>{status}</option>)}</select>
-        <button onClick={saveView} className="hover-surface2" style={commandAction}><Icon name="bookmark_add" size={17} />Save view</button>
-        <button onClick={loadSavedView} className="hover-surface2" style={commandAction}><Icon name="bookmarks" size={17} />Saved view</button>
+        <label className="date-filter" title="From date"><span>From</span><input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label>
+        <label className="date-filter" title="To date"><span>To</span><input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} /></label>
+        {(statusFilter || dateFrom || dateTo || app.searchTerm) && <button onClick={() => { setStatusFilter(''); setDateFrom(''); setDateTo(''); app.setSearchTerm('') }} className="hover-surface2" style={commandAction}><Icon name="filter_alt_off" size={17} />Clear</button>}
         <span style={{ flex: 1 }} />
         <button title="Export selected records" disabled={!selected.size} onClick={() => exportRows(rows.filter((row) => selected.has(row.id)))} className="hover-surface2" style={{ ...iconCommand, opacity: selected.size ? 1 : .4 }}><Icon name="download_for_offline" size={19} /></button>
         <div style={{ position: 'relative' }}><button title="Choose columns" onClick={() => setColumnsOpen((open) => !open)} className="hover-surface2" style={iconCommand}><Icon name="view_column" size={18} /></button>{columnsOpen && <div style={{ position: 'absolute', right: 0, top: 36, zIndex: 10, width: 210, padding: 8, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 7, boxShadow: 'var(--shadow)' }}>{config.cols.map((column) => <label key={column.key} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 7, fontSize: 11.5, color: 'var(--text-muted)' }}><input type="checkbox" checked={!hiddenColumns.has(column.key)} onChange={() => setHiddenColumns((current) => { const next = new Set(current); next.has(column.key) ? next.delete(column.key) : next.add(column.key); return next })} />{column.label}</label>)}</div>}</div>
@@ -143,7 +138,7 @@ export default function ListView() {
       </div>
 
       <div className="data-table" style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
-        <div className="data-head" style={{ display: 'grid', gridTemplateColumns: columns, padding: '0 8px', background: '#F8F9FB', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, zIndex: 2 }}>
+        <div className="data-head" style={{ display: 'grid', gridTemplateColumns: columns, padding: '0 8px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, zIndex: 2 }}>
           <div style={{ display: 'grid', placeItems: 'center' }}><input type="checkbox" checked={pageRows.length > 0 && pageRows.every((row) => selected.has(row.id))} onChange={(event) => setSelected((current) => { const next = new Set(current); pageRows.forEach((row) => event.target.checked ? next.add(row.id) : next.delete(row.id)); return next })} /></div>
           {visibleColumns.map((column) => <button title={helpText(column.label)} onClick={() => toggleSort(column.key)} key={column.key} style={{ padding: '11px 12px', border: 0, background: 'transparent', color: 'var(--text-muted)', fontSize: 10.5, fontWeight: 650, letterSpacing: '.045em', textTransform: 'uppercase', display: 'flex', gap: 4, justifyContent: column.align === 'right' ? 'flex-end' : undefined, cursor: 'pointer' }}>{column.label}{helpText(column.label) && <Icon name="info" size={13} color="var(--text-faint)" />}{sortKey === column.key && <Icon name={sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward'} size={13} />}</button>)}
           <div />
@@ -181,7 +176,7 @@ export default function ListView() {
             {app.apiStatus === 'idle' && 'Waiting for the backend connection…'}
           </div>
         )}
-        <div className="list-footer" style={{ minHeight: 48, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 18px', background: '#FBFCFD', color: 'var(--text-muted)', fontSize: 12 }}>
+        <div className="list-footer" style={{ minHeight: 48, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 18px', background: 'var(--surface-2)', color: 'var(--text-muted)', fontSize: 12 }}>
           <span><b style={{ color: 'var(--text)', fontWeight: 600 }}>{rows.length}</b> records · {selected.size} selected</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><button disabled={page === 1} onClick={() => setPage((value) => Math.max(1, value - 1))} style={pager}><Icon name="chevron_left" size={17} /></button><span style={{ padding: '0 7px', color: 'var(--text)', fontWeight: 600 }}>{page} / {pageCount}</span><button disabled={page === pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))} style={pager}><Icon name="chevron_right" size={17} /></button></div>
         </div>

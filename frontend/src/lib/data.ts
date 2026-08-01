@@ -281,7 +281,7 @@ export const cfg: Record<string, EntityConfig> = {
     ],
   },
   storeRequisitions: {
-    title: 'Department Material Requests', sub: 'Departments report what they need; Stores decides whether to issue or procure', icon: 'assignment', add: 'New material request', singular: 'Department Material Request', editable: true, detail: true,
+    title: 'Store Requests', sub: 'Department requests and fulfilment status', icon: 'assignment', add: 'New request', singular: 'Store Request', editable: true, detail: true,
     cols: [
       { key: 'id', label: 'Request', w: '1.1fr', kind: 'mono' },
       { key: 'department', label: 'Department', w: '1.3fr', kind: 'text' },
@@ -293,7 +293,6 @@ export const cfg: Record<string, EntityConfig> = {
     fields: [
       { key: 'department', label: 'Department', type: 'select', opts: 'departments' },
       { key: 'store', label: 'Store', type: 'select', opts: 'locations' },
-      { key: 'requester', label: 'Requested by', type: 'select', opts: 'employees' },
       { key: 'required_date', label: 'Required date', type: 'date' },
       { key: 'purpose', label: 'Purpose', type: 'textarea' },
     ],
@@ -321,7 +320,7 @@ export const cfg: Record<string, EntityConfig> = {
     ],
   },
   requisitions: {
-    title: 'Requisitions', sub: 'Purchase requisitions from departments', icon: 'request_quote', add: 'New requisition', singular: 'Requisition', prefix: 'PR-', editable: true, detail: true,
+    title: 'Purchase Requisitions', sub: 'Purchase requirements and approval status', icon: 'request_quote', add: 'New requisition', singular: 'Requisition', prefix: 'PR-', editable: true, detail: true,
     cols: [
       { key: 'id', label: 'Requisition', w: '1.1fr', kind: 'mono' },
       { key: 'date', label: 'Date', w: '1fr', kind: 'text' },
@@ -332,9 +331,7 @@ export const cfg: Record<string, EntityConfig> = {
       { key: 'status', label: 'Status', w: '120px', kind: 'status', align: 'right' },
     ],
     fields: [
-      { key: 'request_type', label: 'Request type', type: 'select', opts: 'reqTypes' },
       { key: 'department', label: 'Department', type: 'select', opts: 'departments' },
-      { key: 'requester', label: 'Requested by', type: 'select', opts: 'employees' },
       { key: 'preferred_supplier', label: 'Preferred supplier', type: 'select', opts: 'suppliers' },
       { key: 'expected_date', label: 'Expected date', type: 'date' },
       { key: 'reason', label: 'Reason', type: 'textarea' },

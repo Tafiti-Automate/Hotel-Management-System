@@ -22,7 +22,7 @@ export default function WorkflowAlert() {
       <div style={{ padding: '15px 20px' }}>
         {blockers.map((blocker, index) => <div key={`${blocker}-${index}`} style={{ display: 'flex', gap: 9, padding: '8px 0', color: 'var(--text)', fontSize: 12.5, lineHeight: 1.5 }}><Icon name="error" size={17} color="var(--bad)" style={{ marginTop: 1 }} /><span>{blocker}</span></div>)}
       </div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 20px', borderTop: '1px solid var(--border)', background: '#FBFCFD' }}><button onClick={app.closeWorkflowAlert} style={{ height: 36, border: 0, borderRadius: 6, padding: '0 14px', background: 'var(--accent)', color: '#fff', cursor: 'pointer', font: 'inherit', fontSize: 12.5, fontWeight: 600 }}>Understood</button></div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 20px', borderTop: '1px solid var(--border)', background: 'var(--surface-2)' }}><button onClick={app.closeWorkflowAlert} style={{ height: 36, border: 0, borderRadius: 6, padding: '0 14px', background: 'var(--accent)', color: '#fff', cursor: 'pointer', font: 'inherit', fontSize: 12.5, fontWeight: 600 }}>Understood</button></div>
     </section>
   </>
 }

@@ -114,11 +114,26 @@ const GUEST: User = { name: 'Guest', role: '—', id: '', branchId: '', branchNa
 const IDLE_TIMEOUT_MS = 8 * 60 * 60 * 1000
 const ACTIVITY_WRITE_INTERVAL_MS = 1000
 const LAST_ACTIVITY_KEY = 'hms_last_activity'
+const APPEARANCE_KEY = 'hms_appearance'
 
 function toUser(user: AuthUser | null): User {
   return user
     ? { name: user.name, role: user.role, id: user.id, branchId: user.branch_id || '', branchName: user.branch_name || '', isStaff: Boolean(user.is_staff), isSuperuser: Boolean(user.is_superuser), permissions: user.permissions || [] }
     : GUEST
+}
+
+
+function readAppearance(): { mode: Mode; accentName: AccentName; density: Density } {
+  try {
+    const saved = JSON.parse(localStorage.getItem(APPEARANCE_KEY) || '{}')
+    return {
+      mode: saved.mode === 'dark' ? 'dark' : 'light',
+      accentName: saved.accentName || 'Blue',
+      density: saved.density === 'Compact' ? 'Compact' : 'Airy',
+    }
+  } catch {
+    return { mode: 'light', accentName: 'Blue', density: 'Airy' }
+  }
 }
 
 function readLastActivity(): number {
@@ -200,14 +215,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const initialLanding = operationsLandingFor(initialUser)
   const showInitialLaunchpad = hasSession && canSwitchModules(initialUser)
 
+  const appearance = readAppearance()
   const [state, setState] = useState<AppState>({
     screen: hasSession ? (showInitialLaunchpad ? 'launchpad' : 'app') : 'login',
     route: initialLanding.route,
     navActive: initialLanding.route,
     tab: 'overview',
-    mode: 'light',
-    accentName: 'Blue',
-    density: 'Airy',
+    mode: appearance.mode,
+    accentName: appearance.accentName,
+    density: appearance.density,
     branchOpen: false,
     settingsOpen: false,
     currentBranch: '',
@@ -392,7 +408,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       const message = errorMessage(error)
       if (/\b401\b|session is no longer valid/i.test(message)) {
-        endSession('Your session expired or is no longer valid. Please sign in again.')
+        endSession()
         return
       }
       dataRef.current = emptyData()
@@ -545,6 +561,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })
     return scoped
   }, [dataVersion, state.currentBranch])
+
+  useEffect(() => {
+    try { localStorage.setItem(APPEARANCE_KEY, JSON.stringify({ mode: state.mode, accentName: state.accentName, density: state.density })) } catch { /* ignore */ }
+    document.documentElement.dataset.theme = state.mode
+    document.documentElement.style.colorScheme = state.mode
+  }, [state.mode, state.accentName, state.density])
 
   const value = useMemo<AppContextValue>(() => ({
     ...state,
