@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.db import transaction
 from django.db.models import Count
 from rest_framework import serializers
 
@@ -178,6 +179,41 @@ class StoreLocationSerializer(serializers.ModelSerializer):
         model = StoreLocation
         fields = "__all__"
         read_only_fields = ("id", "created_at", "updated_at", "created_by")
+
+    def validate(self, attrs):
+        branch = attrs.get("branch", getattr(self.instance, "branch", None))
+        is_active = attrs.get("is_active", getattr(self.instance, "is_active", True))
+        is_default = attrs.get("is_default", getattr(self.instance, "is_default", False))
+        if is_default and not branch:
+            raise serializers.ValidationError(
+                {"is_default": "A default issuing store must belong to a branch."}
+            )
+        if is_default and not is_active:
+            raise serializers.ValidationError(
+                {"is_default": "The default issuing store must be active."}
+            )
+        return attrs
+
+    @transaction.atomic
+    def create(self, validated_data):
+        instance = super().create(validated_data)
+        self._clear_other_defaults(instance)
+        return instance
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        instance = super().update(instance, validated_data)
+        self._clear_other_defaults(instance)
+        return instance
+
+    @staticmethod
+    def _clear_other_defaults(instance):
+        if not instance.is_default:
+            return
+        StoreLocation.objects.filter(
+            branch=instance.branch,
+            is_default=True,
+        ).exclude(pk=instance.pk).update(is_default=False)
 
 
 class InventoryBalanceSerializer(serializers.ModelSerializer):

@@ -32,7 +32,7 @@ from apps.inventory.models import (
 from apps.procurement.models import PurchaseRequisition
 from apps.vendors.models import Supplier
 from core.constants.choices import RequisitionType, StockCountStatus, StoreRequisitionStatus
-from apps.inventory.serializers import CategorySerializer
+from apps.inventory.serializers import CategorySerializer, StoreLocationSerializer
 
 
 @pytest.mark.django_db
@@ -68,6 +68,47 @@ def test_category_hierarchy_reports_descendant_items_and_prevents_cycles():
     )
     assert not serializer.is_valid()
     assert "parent" in serializer.errors
+
+
+@pytest.mark.django_db
+def test_store_location_serializer_keeps_one_active_default_per_branch():
+    branch = Branch.objects.create(name="Store Configuration Branch")
+    first = StoreLocation.objects.create(
+        branch=branch,
+        name="Original Default Store",
+        is_default=True,
+    )
+    serializer = StoreLocationSerializer(
+        data={
+            "branch": str(branch.id),
+            "name": "Replacement Default Store",
+            "is_active": True,
+            "is_default": True,
+        }
+    )
+
+    assert serializer.is_valid(), serializer.errors
+    replacement = serializer.save()
+    first.refresh_from_db()
+
+    assert replacement.is_default
+    assert not first.is_default
+
+
+@pytest.mark.django_db
+def test_store_location_serializer_rejects_inactive_default():
+    branch = Branch.objects.create(name="Inactive Store Configuration Branch")
+    serializer = StoreLocationSerializer(
+        data={
+            "branch": str(branch.id),
+            "name": "Inactive Default Store",
+            "is_active": False,
+            "is_default": True,
+        }
+    )
+
+    assert not serializer.is_valid()
+    assert "is_default" in serializer.errors
 
 
 @pytest.mark.django_db
