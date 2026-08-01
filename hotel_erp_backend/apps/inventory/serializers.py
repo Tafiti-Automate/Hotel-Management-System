@@ -185,7 +185,7 @@ class ItemSerializer(serializers.ModelSerializer):
         base_unit = attrs.get("base_unit", getattr(self.instance, "base_unit", None))
         if not base_unit:
             raise serializers.ValidationError(
-                {"base_unit": "Choose the smallest unit that will be counted in stock."}
+                {"base_unit": "Base unit is required."}
             )
         if self.instance and self.instance.base_unit_id and base_unit.pk != self.instance.base_unit_id:
             has_usage = (
