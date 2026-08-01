@@ -111,7 +111,7 @@ export interface AppContextValue extends AppState {
 
 const AppContext = createContext<AppContextValue | null>(null)
 const GUEST: User = { name: 'Guest', role: '—', id: '', branchId: '', branchName: '', isStaff: false, isSuperuser: false, permissions: [] }
-const IDLE_TIMEOUT_MS = 5 * 60 * 1000
+const IDLE_TIMEOUT_MS = 8 * 60 * 60 * 1000
 const ACTIVITY_WRITE_INTERVAL_MS = 1000
 const LAST_ACTIVITY_KEY = 'hms_last_activity'
 
@@ -280,7 +280,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let lastActivityWrite = 0
 
     const expireSession = () => {
-      endSession('You were signed out after 5 minutes of inactivity.')
+      endSession(null)
     }
 
     const checkDeadline = () => {

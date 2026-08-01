@@ -217,8 +217,8 @@ export default function ProcurementWorkbench() {
       </div>
 
       <WorkflowPath
-        title="Procurement journey"
-        summary="Start with an approved need and move from left to right. A later document should always be created from its approved predecessor."
+        title="Procurement workflow"
+        summary="Track requisitions, quotations, orders and receipts."
         activeKey={stage}
         onSelect={(key) => setStage(key as Stage)}
         steps={tabs.map(([key, , label]) => ({ key, label, ...stageGuidance[key] }))}
@@ -258,7 +258,7 @@ function RequestPanel({ data, form, setForm, busy, run, requisitionLabel, items 
   const editing = lines.find((row: Row) => id(row.id) === id(form.requestLine))
   const duplicate = !editing && lines.some((row: Row) => id(row.item) === id(form.item))
   const selectedItem = items.find((item: Row) => id(item.id) === id(form.item))
-  return <Panel title="Requisition Articles" note="Add requested Articles and estimated prices before submission.">
+  return <Panel title="Requisition Articles" note="Add items and estimated prices.">
     <Action disabled={busy} onClick={() => app.openCreate('requisitions', 'New purchase requisition')}>Start a new purchase requisition</Action>
     <Divider />
     <Field label="Draft requisition"><Select value={form.requisition} onChange={(v) => setForm({ ...form, requisition: v })} rows={drafts} label={requisitionLabel} /></Field>
@@ -288,7 +288,7 @@ function QuotePanel({ data, form, setForm, busy, run, requisitionLabel, names, s
   const availableUnits = configuredUnitsForItem(selectedItem, units, itemUnits)
   const conversion = conversionFactorFor(selectedItem, form.unit, itemUnits)
   const requestedBase = num(selectedReqLine?.requested_base_quantity || selectedReqLine?.quantity)
-  return <Panel title="Supplier quotations" note="Record comparable supplier prices, then award one complete quotation.">
+  return <Panel title="Supplier quotations" note="Compare supplier quotations.">
     <Field label="Requisition"><Select value={form.requisition} onChange={(v) => setForm({ requisition: v })} rows={data.requisitions} label={requisitionLabel} /></Field>
     <Field label="Supplier"><Select value={form.supplier} onChange={(v) => setForm({ ...form, supplier: v })} rows={suppliers} /></Field>
     <Action disabled={busy || !form.requisition || !form.supplier} onClick={() => run(() => createBackendRecord('quotations', { requisition: form.requisition, supplier: form.supplier, total_amount: 0 }), 'Supplier quotation created')}>Create quotation</Action>
@@ -323,7 +323,7 @@ function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel
   const selectedItem = items.find((item: Row) => id(item.id) === id(line?.item))
   const availableUnits = configuredUnitsForItem(selectedItem, units, itemUnits)
   const conversion = conversionFactorFor(selectedItem, form.unit || line?.unit, itemUnits)
-  return <Panel title="Local Purchase Order" note="Generate only from an approved requisition. Lines remain editable until issue.">
+  return <Panel title="Local Purchase Order" note="Create and manage purchase orders.">
     <Field label="Approved requisition"><Select value={form.requisition} onChange={(v) => setForm({ requisition: v })} rows={approved} label={requisitionLabel} /></Field>
     <Field label="Supplier"><Select value={form.supplier} onChange={(v) => setForm({ ...form, supplier: v })} rows={suppliers} optional /></Field>
     <Field label="Ordered by"><Select value={form.employee} onChange={(v) => setForm({ ...form, employee: v })} rows={employees} /></Field>
@@ -355,7 +355,7 @@ function ReceiptPanel({ data, form, setForm, busy, run, orderLabel, receiptLabel
   const receiptLines = data.receiptItems.filter((row: Row) => id(row.goods_receipt) === id(form.receipt))
   const editing = receiptLines.find((row: Row) => id(row.id) === id(form.receiptLine))
   const duplicate = !editing && receiptLines.some((row: Row) => id(row.purchase_order_item) === id(form.orderLine))
-  return <Panel title="Goods receipt note" note="Receive delivered quantities only against an issued LPO.">
+  return <Panel title="Goods receipt note" note="Record supplier deliveries.">
     <Field label="Issued LPO"><Select value={form.order} onChange={(v) => setForm({ order: v })} rows={data.orders.filter((row: Row) => ['issued', 'partially_received'].includes(id(row.status)))} label={orderLabel} /></Field>
     <Field label="Received by"><Select value={form.employee} onChange={(v) => setForm({ ...form, employee: v })} rows={employees} /></Field>
     <Field label="Received date"><Input type="date" value={form.date} onChange={(v) => setForm({ ...form, date: v })} /></Field>
@@ -380,7 +380,7 @@ function InspectionPanel({ data, form, setForm, busy, run, receiptLabel, names, 
   const inspection = data.inspections.find((row: Row) => id(row.id) === id(form.inspection))
   const inspectionReceiptItems = data.receiptItems.filter((row: Row) => id(row.goods_receipt) === id(inspection?.goods_receipt))
   const receiptLine = inspectionReceiptItems.find((row: Row) => id(row.id) === id(form.receiptLine))
-  return <Panel title="Goods inspection" note="Accepted plus rejected quantity cannot exceed the delivered quantity.">
+  return <Panel title="Goods inspection" note="Record inspection results.">
     <Field label="GRN"><Select value={form.receipt} onChange={(v) => setForm({ receipt: v })} rows={data.receipts.filter((r: Row) => !data.inspections.some((i: Row) => id(i.goods_receipt) === id(r.id)))} label={receiptLabel} /></Field>
     <Field label="Inspected by"><Select value={form.employee} onChange={(v) => setForm({ ...form, employee: v })} rows={employees} /></Field>
     <Field label="Delivery note"><Input value={form.deliveryNote} onChange={(v) => setForm({ ...form, deliveryNote: v })} /></Field>
@@ -401,7 +401,7 @@ function ReturnPanel({ data, form, setForm, busy, run, receiptLabel, names, empl
   const receiptItems = data.receiptItems.filter((row: Row) => id(row.goods_receipt) === id(form.receipt))
   const supplierReturn = data.returns.find((row: Row) => id(row.id) === id(form.return))
   const returnReceiptItems = data.receiptItems.filter((row: Row) => id(row.goods_receipt) === id(supplierReturn?.goods_receipt))
-  return <Panel title="Supplier return" note="Create a return from the original receipt and apply it only when stock is available.">
+  return <Panel title="Supplier return" note="Record supplier returns.">
     <Field label="Original GRN"><Select value={form.receipt} onChange={(v) => setForm({ receipt: v })} rows={data.receipts} label={receiptLabel} /></Field>
     <Field label="Store"><Select value={form.store} onChange={(v) => setForm({ ...form, store: v })} rows={stores} /></Field>
     <Field label="Returned by"><Select value={form.employee} onChange={(v) => setForm({ ...form, employee: v })} rows={employees} /></Field>
@@ -821,7 +821,7 @@ function Panel({ title, note, children }: { title: string; note: string; childre
 }
 
 function ReadOnlyStage() {
-  return <Panel title="Read-only access" note="Your role can review records at this stage but cannot create, edit or post them.">
+  return <Panel title="Read-only access" note="View only.">
     <div style={{ padding: 12, borderRadius: 6, color: 'var(--text-muted)', background: 'var(--surface-2)', fontSize: 11.5 }}>Select a record on the left to inspect its controlled document and history.</div>
   </Panel>
 }

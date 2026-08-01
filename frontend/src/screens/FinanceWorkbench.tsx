@@ -84,7 +84,7 @@ export default function FinanceWorkbench() {
     </section>
     <WorkflowPath
       title="Supplier invoice to payment"
-      summary="Only pay after the invoice agrees with the purchase order and accepted goods receipt. Move from left to right."
+      summary="Manage invoices, matching, payments and expenses."
       activeKey={paymentPathActive}
       onSelect={openPaymentStep}
       steps={[
@@ -115,7 +115,7 @@ export default function FinanceWorkbench() {
 function InvoicePanel({ data, form, setForm, busy, execute, orderLabel, invoiceLabel }: any) {
   const receivedOrders = data.orders.filter((row: Row) => ['received', 'partially_received'].includes(sid(row.status)))
   const order = data.orders.find((row: Row) => sid(row.id) === sid(form.order))
-  return <Panel title="Supplier invoice and three-way match" note="The invoice supplier is inherited from the LPO. Matching uses posted accepted GRN value.">
+  return <Panel title="Supplier invoice and three-way match" note="Review supplier invoices and matching status.">
     <Field label="Received LPO"><Select value={form.order} change={(v) => setForm({ order: v })} rows={receivedOrders} label={orderLabel} /></Field>
     <Field label="Invoice number"><Input value={form.number} change={(v) => setForm({ ...form, number: v })} /></Field>
     <Two><Field label="Invoice date"><Input type="date" value={form.invoiceDate} change={(v) => setForm({ ...form, invoiceDate: v })} /></Field><Field label="Due date"><Input type="date" value={form.dueDate} change={(v) => setForm({ ...form, dueDate: v })} /></Field></Two>
@@ -130,7 +130,7 @@ function InvoicePanel({ data, form, setForm, busy, execute, orderLabel, invoiceL
 
 function PaymentPanel({ data, form, setForm, busy, execute, invoiceLabel }: any) {
   const payable = data.invoices.filter((row: Row) => ['approved', 'partially_paid'].includes(sid(row.status)))
-  return <Panel title="Supplier settlement" note="Payments cannot exceed the approved invoice balance.">
+  return <Panel title="Supplier settlement" note="Record supplier payments.">
     <Field label="Approved invoice"><Select value={form.invoice} change={(v) => setForm({ invoice: v })} rows={payable} label={invoiceLabel} /></Field>
     <Two><Field label="Amount"><Input type="number" value={form.amount} change={(v) => setForm({ ...form, amount: v })} /></Field><Field label="Payment date"><Input type="date" value={form.date} change={(v) => setForm({ ...form, date: v })} /></Field></Two>
     <Field label="Payment method"><Select value={form.method} change={(v) => setForm({ ...form, method: v })} rows={data.methods.filter((r: Row) => r.is_active)} /></Field>
@@ -143,7 +143,7 @@ function PaymentPanel({ data, form, setForm, busy, execute, invoiceLabel }: any)
 }
 
 function ExpensePanel({ data, form, setForm, busy, execute, stores }: any) {
-  return <Panel title="Operating expenses" note="Record non-stock costs and link them to payment methods and properties.">
+  return <Panel title="Operating expenses" note="Record operating expenses.">
     <Field label="Expense category"><Select value={form.category} change={(v) => setForm({ ...form, category: v })} rows={data.expenseCategories} /></Field>
     <Field label="Store / property"><Select value={form.store} change={(v) => setForm({ ...form, store: v })} rows={stores} optional /></Field>
     <Two><Field label="Amount"><Input type="number" value={form.amount} change={(v) => setForm({ ...form, amount: v })} /></Field><Field label="Payment method"><Select value={form.method} change={(v) => setForm({ ...form, method: v })} rows={data.methods} optional /></Field></Two>
@@ -154,7 +154,7 @@ function ExpensePanel({ data, form, setForm, busy, execute, stores }: any) {
 }
 
 function BankPanel({ data, form, setForm, busy, execute, stores }: any) {
-  return <Panel title="Banking" note="Maintain bank accounts and record deposits, withdrawals, fees and transfers.">
+  return <Panel title="Banking" note="Manage bank accounts and transactions.">
     <Field label="Account name"><Input value={form.name} change={(v) => setForm({ ...form, name: v })} /></Field>
     <Field label="Bank name"><Input value={form.bankName} change={(v) => setForm({ ...form, bankName: v })} /></Field>
     <Field label="Account number"><Input value={form.accountNumber} change={(v) => setForm({ ...form, accountNumber: v })} /></Field>
@@ -169,7 +169,7 @@ function BankPanel({ data, form, setForm, busy, execute, stores }: any) {
 }
 
 function MethodPanel({ form, setForm, busy, execute }: any) {
-  return <Panel title="Payment methods" note="Configure the methods permitted for expenses and supplier settlements.">
+  return <Panel title="Payment methods" note="Manage payment methods.">
     <Field label="Method name"><Input value={form.name} change={(v) => setForm({ ...form, name: v })} /></Field>
     <Field label="Description"><Input value={form.description} change={(v) => setForm({ ...form, description: v })} /></Field>
     <Action disabled={busy || !form.name} click={() => execute(() => createBackendRecord('payment-methods', { name: form.name, description: form.description || '', is_active: true, is_default: false }), 'Payment method created')}>Add payment method</Action>
