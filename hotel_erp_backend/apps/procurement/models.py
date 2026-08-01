@@ -1172,6 +1172,10 @@ class GoodsReceiptNote(BaseModel):
                 )
 
     def post_to_inventory(self, posted_by=None):
+        readiness = self.posting_readiness()
+        if not readiness["can_proceed"]:
+            raise ValidationError(readiness["blockers"])
+
         receipt_items = list(
             self.items.select_related("purchase_order_item", "item", "store")
         )
@@ -1274,6 +1278,7 @@ class GoodsReceiptItem(BaseModel):
             self.unit_cost = self.purchase_order_item.unit_cost
         if not self.expiry_date:
             self.expiry_date = self.purchase_order_item.expiry_date
+        self.full_clean()
         super().save(*args, **kwargs)
 
     @property
@@ -1289,6 +1294,19 @@ class GoodsReceiptItem(BaseModel):
             raise ValidationError(
                 "A receipt line cannot be posted to both a store and a department."
             )
+        if self.purchase_order_item_id and self.quantity_received:
+            previous = GoodsReceiptItem.objects.filter(
+                purchase_order_item_id=self.purchase_order_item_id,
+            )
+            if self.pk:
+                previous = previous.exclude(pk=self.pk)
+            already_received = previous.aggregate(total=models.Sum("quantity_received"))["total"] or Decimal("0.00")
+            ordered = self.purchase_order_item.quantity or Decimal("0.00")
+            if already_received + self.quantity_received > ordered:
+                remaining = max(ordered - already_received, Decimal("0.00"))
+                raise ValidationError({
+                    "quantity_received": f"Receipt exceeds the outstanding LPO quantity. Remaining quantity: {remaining}."
+                })
 
     def post_to_inventory(self):
         from apps.inventory.models import (

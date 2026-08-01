@@ -380,21 +380,22 @@ class SupplierPayment(BaseModel):
         ordering = ("-payment_date", "-created_at")
 
     def post(self):
-        if self.status != self.STATUS_DRAFT:
-            raise ValidationError("Only draft supplier payments can be posted.")
-        if self.invoice.status not in (
-            SupplierInvoice.STATUS_APPROVED,
-            SupplierInvoice.STATUS_PARTIALLY_PAID,
-        ):
-            raise ValidationError("The supplier invoice is not approved for payment.")
-        if self.amount > self.invoice.balance_due:
-            raise ValidationError("Payment cannot exceed the invoice balance.")
-
         with transaction.atomic():
-            payment = SupplierPayment.objects.select_for_update().get(pk=self.pk)
+            payment = SupplierPayment.objects.select_for_update().select_related("invoice").get(pk=self.pk)
+            invoice = SupplierInvoice.objects.select_for_update().get(pk=payment.invoice_id)
+            if payment.status != self.STATUS_DRAFT:
+                raise ValidationError("Only draft supplier payments can be posted.")
+            if invoice.status not in (
+                SupplierInvoice.STATUS_APPROVED,
+                SupplierInvoice.STATUS_PARTIALLY_PAID,
+            ):
+                raise ValidationError("The supplier invoice is not approved for payment.")
+            if payment.amount > invoice.balance_due:
+                raise ValidationError("Payment cannot exceed the invoice balance.")
+
             payment.status = self.STATUS_POSTED
             payment.save(update_fields=("status", "updated_at"))
-            invoice = SupplierInvoice.objects.select_for_update().get(pk=self.invoice_id)
+            invoice.refresh_from_db()
             invoice.status = (
                 SupplierInvoice.STATUS_PAID
                 if invoice.balance_due <= Decimal("0.00")
