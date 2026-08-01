@@ -1,10 +1,11 @@
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
-#root { min-height: 100vh; }
+html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg, #F6F7F9); color: var(--text, #111827); }
+#root { min-height: 100vh; background: var(--bg, #F6F7F9); }
 body {
   font-family: 'Inter', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
-  background: #F6F7F9;
+  background: var(--bg, #F6F7F9);
+  color: var(--text, #111827);
   font-size: 14px;
   line-height: 1.45;
 }
@@ -470,7 +471,7 @@ select { appearance: none; -webkit-appearance: none; }
 }
 
 .data-row:hover {
-  background: #F7F9FC !important;
+  background: var(--surface-2) !important;
 }
 
 .module-card:hover {
@@ -1455,3 +1456,90 @@ input, select, textarea, button { color-scheme: inherit; }
 .date-filter { height: 34px; display:flex; align-items:center; gap:6px; padding:0 8px; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:var(--text-faint); font-size:10px; font-weight:700; text-transform:uppercase; }
 .date-filter input { width:118px; border:0; outline:0; background:transparent; color:var(--text); font:inherit; text-transform:none; }
 @media (max-width: 900px) { .date-filter span { display:none; } .date-filter input { width:106px; } }
+
+
+/* Dark-mode visual completeness */
+:root[data-theme="dark"] { color-scheme: dark; }
+:root[data-theme="dark"] body,
+:root[data-theme="dark"] #root { background: var(--bg); color: var(--text); }
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] select,
+:root[data-theme="dark"] textarea,
+:root[data-theme="dark"] option { background-color: var(--surface); color: var(--text); border-color: var(--border); }
+:root[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
+:root[data-theme="dark"] input[type="datetime-local"]::-webkit-calendar-picker-indicator { filter: invert(1) opacity(.72); }
+:root[data-theme="dark"] .auth-card { background: rgba(21,21,27,.97); border-color: rgba(255,255,255,.13); box-shadow: 0 24px 70px rgba(0,0,0,.48); }
+:root[data-theme="dark"] .auth-card,
+:root[data-theme="dark"] .auth-card label,
+:root[data-theme="dark"] .auth-card h1,
+:root[data-theme="dark"] .auth-card h2 { color: var(--text); }
+:root[data-theme="dark"] .auth-notice { color: #8dd5ff; background: rgba(14,116,144,.18); border-color: rgba(56,189,248,.3); }
+:root[data-theme="dark"] .auth-error,
+:root[data-theme="dark"] .access-error { color: #fca5a5; background: rgba(127,29,29,.28); border-color: rgba(248,113,113,.3); }
+:root[data-theme="dark"] .auth-help { color: var(--text-muted); background: var(--surface-2); border-color: var(--border); }
+:root[data-theme="dark"] .access-status.active { color: #86efac; background: rgba(22,163,74,.18); }
+:root[data-theme="dark"] .access-status.inactive { color: #fdba74; background: rgba(194,65,12,.2); }
+:root[data-theme="dark"] img[alt*="logo preview"] { background: var(--surface-2) !important; }
+:root[data-theme="dark"] button:disabled { color: var(--text-faint); }
+:root[data-theme="dark"] ::-webkit-scrollbar-thumb { background-color: rgba(180,180,190,.32); }
+
+.sidebar-mobile-toggle, .sidebar-mobile-backdrop { display: none; }
+
+@media (max-width: 960px) {
+  .sidebar {
+    position: sticky !important;
+    top: 0;
+    z-index: 70;
+    width: 100% !important;
+    height: 58px !important;
+    overflow: visible !important;
+  }
+  .sidebar-brand { height: 58px !important; padding: 0 14px !important; }
+  .sidebar-mobile-toggle { display: grid !important; margin-left: auto; }
+  .sidebar-desktop-collapse { display: none !important; }
+  .sidebar-nav {
+    position: fixed !important;
+    z-index: 72;
+    top: 58px;
+    bottom: 0;
+    left: 0;
+    width: min(88vw, 330px);
+    display: block !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    padding: 12px 12px calc(24px + env(safe-area-inset-bottom)) !important;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    transform: translateX(-105%);
+    transition: transform .2s ease;
+  }
+  .sidebar.mobile-open .sidebar-nav { transform: translateX(0); }
+  .sidebar-nav > div, .sidebar-nav > div:first-child { width: 100%; flex: none !important; }
+  .sidebar-nav button { white-space: normal !important; }
+  .sidebar-mobile-backdrop {
+    display: block; position: fixed; inset: 0; z-index: 69; border: 0; padding: 0;
+    background: rgba(2,6,23,.56); backdrop-filter: blur(2px);
+  }
+  .app-header { position: sticky; top: 58px; z-index: 60; }
+}
+
+@media (max-width: 640px) {
+  .app-header { min-height: 0 !important; padding: 9px 12px !important; }
+  .header-crumb { display: none !important; }
+  .header-actions { width: 100%; justify-content: flex-end; }
+  .header-search { flex: 1 1 auto !important; min-width: 0; }
+  .header-search button, .header-search > div { width: 100% !important; }
+  .workbench-hero button { margin-left: 0 !important; width: 100%; justify-content: center; }
+  .workflow-grid button, .workbench-grid button { min-height: 42px; }
+  .form-footer { position: sticky; bottom: 0; z-index: 2; }
+  .form-footer button { flex: 1 1 0; min-height: 44px; }
+  .procurement-detail-drawer, .record-detail-drawer { overscroll-behavior: contain; }
+}
+
+@media (max-width: 420px) {
+  .enterprise-kpi-grid, .hr-kpi-grid, .workflow-steps { grid-template-columns: 1fr !important; }
+  .notification-panel { top: 64px !important; right: 8px !important; left: 8px !important; }
+  .data-cell { gap: 10px !important; }
+  .data-cell::before { flex-basis: 38%; max-width: 38%; }
+}

@@ -56,6 +56,7 @@ const hrGroups: NavGroup[] = [
 export default function Sidebar() {
   const app = useApp()
   const [collapsed, setCollapsed] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
   const storesManager = isStoresManager(app.user)
   const baseGroups = app.activeModule === 'hr' ? hrGroups : operationsGroups
   const groups = baseGroups
@@ -79,16 +80,19 @@ export default function Sidebar() {
   })
 
   return (
-    <aside className={`sidebar ${collapsed ? 'is-collapsed' : ''}`} style={{ width, flex: 'none', height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--surface)', borderRight: '1px solid var(--border)', transition: 'width .18s ease' }}>
+    <>
+    {mobileOpen && <button className="sidebar-mobile-backdrop" aria-label="Close navigation" onClick={() => setMobileOpen(false)} />}
+    <aside className={`sidebar ${collapsed ? 'is-collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`} style={{ width, flex: 'none', height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--surface)', borderRight: '1px solid var(--border)', transition: 'width .18s ease' }}>
       <div className="sidebar-brand" style={{ height: 64, padding: '0 17px', display: 'flex', alignItems: 'center', gap: 11, borderBottom: '1px solid var(--border)' }}>
         <div style={{ width: 34, height: 34, flex: 'none', borderRadius: 8, display: 'grid', placeItems: 'center', background: 'var(--accent)', color: '#fff' }}>
           <Icon name={moduleIcon} size={20} color="#fff" fill />
         </div>
         {!collapsed && <div style={{ minWidth: 0, flex: 1 }}><div style={{ color: 'var(--text)', fontSize: 14, fontWeight: 700 }}>{moduleTitle}</div><div style={{ color: 'var(--text-faint)', fontSize: 10.5, marginTop: 2 }}>Management workspace</div></div>}
-        {!collapsed && <button onClick={() => setCollapsed(true)} title="Collapse sidebar" style={plainIcon}><Icon name="left_panel_close" size={18} /></button>}
+        <button className="sidebar-mobile-toggle" onClick={() => setMobileOpen((open) => !open)} aria-expanded={mobileOpen} aria-label={mobileOpen ? 'Close navigation' : 'Open navigation'} style={plainIcon}><Icon name={mobileOpen ? 'close' : 'menu'} size={21} /></button>
+        {!collapsed && <button className="sidebar-desktop-collapse" onClick={() => setCollapsed(true)} title="Collapse sidebar" style={plainIcon}><Icon name="left_panel_close" size={18} /></button>}
       </div>
 
-      {collapsed && <button onClick={() => setCollapsed(false)} title="Expand sidebar" style={{ ...plainIcon, margin: '10px auto 2px' }}><Icon name="left_panel_open" size={19} /></button>}
+      {collapsed && <button className="sidebar-desktop-collapse" onClick={() => setCollapsed(false)} title="Expand sidebar" style={{ ...plainIcon, margin: '10px auto 2px' }}><Icon name="left_panel_open" size={19} /></button>}
 
       {!collapsed && (
         <div className="sidebar-property" style={{ padding: '12px 12px 6px', position: 'relative' }}>
@@ -113,7 +117,7 @@ export default function Sidebar() {
             {!collapsed && <div style={{ height: 27, display: 'flex', alignItems: 'center', gap: 7, padding: '0 10px', color: 'var(--text-faint)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.075em' }}>{group.icon && <Icon name={group.icon} size={14} />}{group.heading}</div>}
             {group.items.map((item) => {
               const active = app.navActive === item.route
-              return <button key={item.route} title={collapsed ? item.label : undefined} onClick={() => app.navTo(item.route, item.label)} className={active ? undefined : 'hover-surface2'} style={navStyle(active)}><Icon name={item.icon} size={19} color={active ? 'var(--accent)' : 'var(--text-faint)'} />{!collapsed && <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.label}</span>}</button>
+              return <button key={item.route} title={collapsed ? item.label : undefined} onClick={() => { app.navTo(item.route, item.label); setMobileOpen(false) }} className={active ? undefined : 'hover-surface2'} style={navStyle(active)}><Icon name={item.icon} size={19} color={active ? 'var(--accent)' : 'var(--text-faint)'} />{!collapsed && <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.label}</span>}</button>
             })}
           </div>
         ))}
@@ -124,6 +128,7 @@ export default function Sidebar() {
         {!collapsed && <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 8px 2px' }}><div style={{ width: 32, height: 32, borderRadius: 7, display: 'grid', placeItems: 'center', background: '#E8EEF9', color: '#1D4ED8', fontSize: 11, fontWeight: 700 }}>{initials}</div><div style={{ flex: 1, minWidth: 0 }}><div style={{ color: 'var(--text)', fontSize: 12.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>{app.user.name}</div><div style={{ color: 'var(--text-faint)', fontSize: 10.5, marginTop: 2 }}>{app.user.role}</div></div><button onClick={app.logout} title="Sign out" style={plainIcon}><Icon name="logout" size={18} /></button></div>}
       </div>
     </aside>
+    </>
   )
 }
 
