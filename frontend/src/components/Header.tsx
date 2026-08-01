@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import { useApp } from '../state/AppContext'
 import { Icon } from './Icon'
+import CommandPalette from './CommandPalette'
 import { canAccessRoute, canSwitchModules, isStoresManager } from '../lib/access'
 import {
   errorMessage,
@@ -13,6 +14,7 @@ import {
 export default function Header() {
   const app = useApp()
   const [profileOpen, setProfileOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [notifications, setNotifications] = useState<NotificationRecord[]>([])
   const [notificationsLoading, setNotificationsLoading] = useState(true)
@@ -96,14 +98,22 @@ export default function Header() {
     return null
   })()
 
+  useEffect(() => {
+    const openSearch = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); setSearchOpen(true) }
+    }
+    window.addEventListener('keydown', openSearch)
+    return () => window.removeEventListener('keydown', openSearch)
+  }, [])
+
   return (
     <header className="app-header" style={{ height: 96, flex: 'none', background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
       <div style={{ height: 58, display: 'flex', alignItems: 'center', gap: 18, padding: '0 24px' }}>
-        <div className="header-search" style={{ flex: 1, maxWidth: 560, position: 'relative' }}>
-          <Icon name="search" size={19} color="var(--text-faint)" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
-          <input placeholder={storesManager ? 'Search articles, stock, store requests and receipts…' : 'Search articles, suppliers, employees, POs, GRNs…'} style={{ width: '100%', height: 38, border: '1px solid var(--border)', background: 'var(--bg)', borderRadius: 7, padding: '0 42px 0 38px', color: 'var(--text)', fontSize: 13, outline: 'none' }} />
-          <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 5px', color: 'var(--text-faint)', fontSize: 10 }}>⌘ K</span>
-        </div>
+        <button className="global-search-trigger" onClick={() => setSearchOpen(true)} aria-label="Open global search">
+          <Icon name="search" size={19} />
+          <span>{storesManager ? 'Search stock, requests and receipts' : 'Search the ERP'}</span>
+          <kbd>Ctrl K</kbd>
+        </button>
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 3 }}>
           <button onClick={primary?.action} className="header-text-action hover-surface2" style={textAction}><Icon name="task_alt" size={18} />Tasks</button>
@@ -188,6 +198,7 @@ export default function Header() {
         <span style={{ color: 'var(--text)', fontSize: 12, fontWeight: 600 }}>{app.crumb}</span>
         {primary && app.route === 'dashboard' && <button onClick={primary.action} className="header-primary-action hover-accent" style={{ marginLeft: 'auto', height: 29, display: 'flex', alignItems: 'center', gap: 6, border: 0, borderRadius: 5, background: 'var(--accent)', color: '#fff', padding: '0 11px', cursor: 'pointer', font: 'inherit', fontSize: 11.5, fontWeight: 600 }}><Icon name={primary.icon} size={16} color="#fff" />{primary.label}</button>}
       </div>
+      <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
     </header>
   )
 }
