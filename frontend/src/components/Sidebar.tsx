@@ -8,30 +8,32 @@ interface NavGroup { heading: string; icon?: string; items: NavItem[] }
 
 const operationsGroups: NavGroup[] = [
   { heading: 'Hotel operations', items: [{ route: 'dashboard', label: 'Dashboard', icon: 'space_dashboard' }] },
-  { heading: 'Procurement', icon: 'shopping_cart', items: [
-    { route: 'requisitions', label: 'Purchase requisitions', icon: 'request_quote' },
-    { route: 'workflow-procure', label: 'Procurement workbench', icon: 'compare_arrows' },
-    { route: 'orders', label: 'Purchase orders', icon: 'receipt_long' },
-    { route: 'grns', label: 'Goods received', icon: 'move_to_inbox' },
-    { route: 'approvals', label: 'Approvals', icon: 'approval' },
+  { heading: 'Start here · workflows', icon: 'route', items: [
+    { route: 'workflow-stores', label: 'Department supply & stores', icon: 'warehouse' },
+    { route: 'workflow-procure', label: 'Procurement to receiving', icon: 'shopping_cart_checkout' },
+    { route: 'workflow-pay', label: 'Supplier invoices & payment', icon: 'payments' },
+    { route: 'approvals', label: 'My approval queue', icon: 'approval' },
   ] },
-  { heading: 'Inventory', icon: 'inventory_2', items: [
-    { route: 'items', label: 'Articles', icon: 'inventory_2' },
+  { heading: 'Procurement records', icon: 'shopping_cart', items: [
+    { route: 'requisitions', label: 'Purchase requisition records', icon: 'request_quote' },
+    { route: 'orders', label: 'Purchase order records', icon: 'receipt_long' },
+    { route: 'grns', label: 'Goods receipt records', icon: 'move_to_inbox' },
+  ] },
+  { heading: 'Inventory records', icon: 'inventory_2', items: [
+    { route: 'items', label: 'Article catalogue', icon: 'inventory_2' },
     { route: 'categories', label: 'Categories', icon: 'category' },
     { route: 'balances', label: 'Stock balances', icon: 'equalizer' },
     { route: 'ledgers', label: 'Stock ledger', icon: 'menu_book' },
     { route: 'batches', label: 'Batches & expiry', icon: 'layers' },
   ] },
-  { heading: 'Stores', icon: 'warehouse', items: [
-    { route: 'storeRequisitions', label: 'Department requests', icon: 'assignment' },
-    { route: 'stockIssues', label: 'Stock issues', icon: 'outbox' },
-    { route: 'storeReturns', label: 'Returns', icon: 'assignment_return' },
-    { route: 'workflow-stores', label: 'Transfers & counts', icon: 'sync_alt' },
+  { heading: 'Stores records', icon: 'warehouse', items: [
+    { route: 'storeRequisitions', label: 'Department request records', icon: 'assignment' },
+    { route: 'stockIssues', label: 'Stock issue records', icon: 'outbox' },
+    { route: 'storeReturns', label: 'Store return records', icon: 'assignment_return' },
   ] },
   { heading: 'Partners & control', items: [
     { route: 'suppliers', label: 'Suppliers', icon: 'local_shipping' },
     { route: 'supplierItems', label: 'Supplier catalogue', icon: 'contract' },
-    { route: 'workflow-pay', label: 'Finance', icon: 'account_balance' },
     { route: 'reports', label: 'Reports', icon: 'bar_chart' },
     { route: 'audit-log', label: 'Audit log', icon: 'history' },
     { route: 'workflow-configure', label: 'Settings', icon: 'settings' },

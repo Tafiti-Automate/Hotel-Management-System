@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { useApp } from '../state/AppContext'
 import { Icon } from '../components/Icon'
+import RecordDetailDrawer from '../components/RecordDetailDrawer'
 import { cfg, type ColumnDef, type EntityKey, type Row } from '../lib/data'
 import { chipStyleFor, money } from '../lib/theme'
 import { helpText } from '../lib/help'
@@ -49,6 +50,7 @@ export default function ListView() {
   const [statusFilter, setStatusFilter] = useState('')
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [detailRecord, setDetailRecord] = useState<Row | null>(null)
   const [columnsOpen, setColumnsOpen] = useState(false)
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set())
   let rows = [...(app.data[source] || [])]
@@ -80,7 +82,7 @@ export default function ListView() {
     : statusFilter
       ? `No records match the selected status${branchLabel}.`
       : `No ${config.title.toLowerCase()} are available${branchLabel}.`
-  useEffect(() => { setPage(1); setSelected(new Set()) }, [route, term, statusFilter])
+  useEffect(() => { setPage(1); setSelected(new Set()); setDetailRecord(null) }, [route, term, statusFilter])
   useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
 
   const exportRows = (records: Row[]) => {
@@ -107,9 +109,10 @@ export default function ListView() {
     setStatusFilter(view.statusFilter || ''); setHiddenColumns(new Set(view.hiddenColumns || [])); setSortKey(view.sortKey || ''); setSortDirection(view.sortDirection || 'asc')
     app.showToast('Saved view applied')
   }
-  const openRow = (id: string) => {
-    if (route === 'requisitions' || route === 'approvals') app.openDetail('requisitions', id, route)
-    else if (route === 'orders') app.openDetail('orders', id, 'orders')
+  const openRow = (row: Row) => {
+    if (route === 'requisitions' || route === 'approvals') app.openDetail('requisitions', row.id, route)
+    else if (route === 'orders') app.openDetail('orders', row.id, 'orders')
+    else setDetailRecord(row)
   }
 
   return (
@@ -147,14 +150,14 @@ export default function ListView() {
         </div>
 
         {pageRows.map((row) => (
-          <div key={row.id} onClick={() => config.detail && openRow(row.id)} className="data-row hover-surface2" style={{ minHeight: 50, display: 'grid', gridTemplateColumns: columns, alignItems: 'center', padding: '0 8px', borderBottom: '1px solid var(--border)', cursor: config.detail ? 'pointer' : 'default' }}>
+          <div key={row.id} onClick={() => openRow(row)} className="data-row hover-surface2" style={{ minHeight: 50, display: 'grid', gridTemplateColumns: columns, alignItems: 'center', padding: '0 8px', borderBottom: '1px solid var(--border)', cursor: 'pointer' }}>
             <div style={{ display: 'grid', placeItems: 'center' }}><input type="checkbox" checked={selected.has(row.id)} onClick={(event) => event.stopPropagation()} onChange={(event) => setSelected((current) => { const next = new Set(current); event.target.checked ? next.add(row.id) : next.delete(row.id); return next })} /></div>
             {visibleColumns.map((column, index) => {
               const value = valueFor(column, row)
               return <div key={column.key} className="data-cell" data-label={column.label} data-primary={index === 0 ? 'true' : undefined} style={cellStyle(column)}>{column.kind === 'status' ? <span style={chipStyleFor(value)}>{value}</span> : value}</div>
             })}
             <div className="data-actions" style={{ padding: '8px', display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
-              {config.detail && <Icon name="chevron_right" size={18} color="var(--text-faint)" />}
+              <Icon name="chevron_right" size={18} color="var(--text-faint)" />
               {config.editable && <>
                 {canChange &&
                 <button onClick={(event) => { event.stopPropagation(); app.openEdit(row.id) }} title="Edit" className="hover-edit" style={iconAction}><Icon name="edit" size={17} /></button>
@@ -183,6 +186,18 @@ export default function ListView() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><button disabled={page === 1} onClick={() => setPage((value) => Math.max(1, value - 1))} style={pager}><Icon name="chevron_left" size={17} /></button><span style={{ padding: '0 7px', color: 'var(--text)', fontWeight: 600 }}>{page} / {pageCount}</span><button disabled={page === pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))} style={pager}><Icon name="chevron_right" size={17} /></button></div>
         </div>
       </div>
+      {detailRecord && <RecordDetailDrawer
+        title={config.singular || config.title}
+        subtitle={String(detailRecord.name || detailRecord.id || 'Record details')}
+        record={detailRecord}
+        preferredKeys={config.cols.map((column) => column.key)}
+        labels={Object.fromEntries(config.cols.map((column) => [column.key, column.label]))}
+        onClose={() => setDetailRecord(null)}
+        actions={config.editable && (canChange || canDelete) ? <>
+          {canChange && <button type="button" onClick={() => { const recordId = detailRecord.id; setDetailRecord(null); app.openEdit(recordId) }} style={drawerSecondary}><Icon name="edit" size={17} />Edit record</button>}
+          {canDelete && <button type="button" onClick={() => { const recordId = detailRecord.id; setDetailRecord(null); app.requestDelete(recordId) }} style={drawerDanger}><Icon name="delete" size={17} />Deactivate or delete</button>}
+        </> : undefined}
+      />}
     </div>
   )
 }
@@ -193,3 +208,5 @@ const commandAction: CSSProperties = { height: 34, display: 'flex', alignItems: 
 const iconCommand: CSSProperties = { width: 32, height: 32, display: 'grid', placeItems: 'center', border: 0, borderRadius: 5, background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer' }
 const iconAction: CSSProperties = { width: 30, height: 30, display: 'grid', placeItems: 'center', border: 0, borderRadius: 5, background: 'transparent', color: 'var(--text-faint)', cursor: 'pointer' }
 const pager: CSSProperties = { width: 30, height: 30, display: 'grid', placeItems: 'center', border: '1px solid var(--border)', borderRadius: 5, background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer' }
+const drawerSecondary: CSSProperties = { minHeight: 36, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 12px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer', font: 'inherit', fontSize: 11.5, fontWeight: 650 }
+const drawerDanger: CSSProperties = { ...drawerSecondary, borderColor: 'rgba(220,38,38,.25)', color: 'var(--bad)' }

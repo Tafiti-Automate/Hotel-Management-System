@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '../components/Icon'
+import RecordDetailDrawer from '../components/RecordDetailDrawer'
 import { useApp } from '../state/AppContext'
 import {
   errorMessage, fetchAccounts, fetchPermissions, fetchRoles, saveAccount, saveRole,
@@ -23,6 +24,7 @@ export default function AccessManagement() {
   const [accountDraft, setAccountDraft] = useState<AccountDraft | null>(null)
   const [roleDraft, setRoleDraft] = useState<Partial<RoleRecord> | null>(null)
   const [saving, setSaving] = useState(false)
+  const [selectedAccessRecord, setSelectedAccessRecord] = useState<{ title: string; subtitle: string; record: Record<string, unknown> } | null>(null)
 
   const load = async () => {
     setLoading(true); setError('')
@@ -120,27 +122,29 @@ export default function AccessManagement() {
       {error && <div className="access-error"><Icon name="error" size={17} />{error}<button onClick={() => setError('')}><Icon name="close" size={16} /></button></div>}
       {loading ? <div className="access-empty">Loading access controls…</div> : tab === 'accounts' ? <>
         <div className="access-table-head account-grid"><span>User</span><span>Employee ID</span><span>Role</span><span>Last sign-in</span><span>Status</span><span /></div>
-        {visibleAccounts.map((account) => <div className="access-table-row account-grid" key={account.id}>
+        {visibleAccounts.map((account) => <div className="access-table-row account-grid" key={account.id} role="button" tabIndex={0} onClick={() => setSelectedAccessRecord({ title: 'User account', subtitle: fullName(account), record: { ...account } })} onKeyDown={(event) => { if (event.key === 'Enter') setSelectedAccessRecord({ title: 'User account', subtitle: fullName(account), record: { ...account } }) }} style={{ cursor: 'pointer' }}>
           <div className="access-person"><span className="access-avatar">{initials(account)}</span><span><b>{fullName(account)}</b><small>{account.email || `@${account.username}`}</small></span></div>
           <code>{account.employee_code || '—'}</code>
           <span className="access-role"><Icon name="shield" size={15} />{account.role_name}</span>
           <span className="muted">{account.last_login ? new Date(account.last_login).toLocaleDateString() : 'Never'}</span>
           <span className={`access-status ${account.is_active ? 'active' : 'inactive'}`}>{account.is_active ? 'Active' : 'Suspended'}</span>
-          <div className="access-row-actions"><button title="Edit account" onClick={() => editAccount(account)}><Icon name="edit" size={17} /></button><button title={account.is_active ? 'Suspend account' : 'Activate account'} onClick={() => void toggleAccount(account)}><Icon name={account.is_active ? 'block' : 'check_circle'} size={17} /></button></div>
+          <div className="access-row-actions"><button title="Edit account" onClick={(event) => { event.stopPropagation(); editAccount(account) }}><Icon name="edit" size={17} /></button><button title={account.is_active ? 'Suspend account' : 'Activate account'} onClick={(event) => { event.stopPropagation(); void toggleAccount(account) }}><Icon name={account.is_active ? 'block' : 'check_circle'} size={17} /></button></div>
         </div>)}
         {!visibleAccounts.length && <div className="access-empty">No user accounts match your search.</div>}
       </> : <>
         <div className="access-table-head role-grid"><span>Role</span><span>Users</span><span>Permissions</span><span>Access level</span><span /></div>
-        {visibleRoles.map((role) => <div className="access-table-row role-grid" key={role.id}>
+        {visibleRoles.map((role) => <div className="access-table-row role-grid" key={role.id} role="button" tabIndex={0} onClick={() => setSelectedAccessRecord({ title: 'Access role', subtitle: role.name, record: { ...role } })} onKeyDown={(event) => { if (event.key === 'Enter') setSelectedAccessRecord({ title: 'Access role', subtitle: role.name, record: { ...role } }) }} style={{ cursor: 'pointer' }}>
           <div className="access-person"><span className="access-role-icon"><Icon name="admin_panel_settings" size={20} /></span><span><b>{role.name}</b><small>Hotel access role</small></span></div>
           <span className="muted">{role.user_count} user{role.user_count === 1 ? '' : 's'}</span>
           <span className="muted">{role.permission_ids.length} permissions</span>
           <span className="access-role"><Icon name="lock" size={15} />Configured</span>
-          <div className="access-row-actions"><button title="Edit role" onClick={() => setRoleDraft(role)}><Icon name="edit" size={17} /></button></div>
+          <div className="access-row-actions"><button title="Edit role" onClick={(event) => { event.stopPropagation(); setRoleDraft(role) }}><Icon name="edit" size={17} /></button></div>
         </div>)}
         {!visibleRoles.length && <div className="access-empty">No roles match your search.</div>}
       </>}
     </section>
+
+    {selectedAccessRecord && <RecordDetailDrawer title={selectedAccessRecord.title} subtitle={selectedAccessRecord.subtitle} record={selectedAccessRecord.record} onClose={() => setSelectedAccessRecord(null)} />}
 
     {accountDraft && <Modal title={accountDraft.id ? 'Edit user account' : 'Add user account'} subtitle="Sign-in details and role assignment" onClose={() => setAccountDraft(null)}>
       <div className="access-form-grid">

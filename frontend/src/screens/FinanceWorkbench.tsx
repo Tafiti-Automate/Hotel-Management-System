@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { Icon } from '../components/Icon'
 import { HelpLabel } from '../components/HelpLabel'
+import RecordDetailDrawer from '../components/RecordDetailDrawer'
+import { WorkflowPath } from '../components/WorkflowPath'
 import { createBackendRecord, errorMessage, readBackendRecords, runBackendAction } from '../lib/api'
 import type { Row } from '../lib/data'
 import { money } from '../lib/theme'
@@ -25,6 +27,7 @@ export default function FinanceWorkbench() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [paymentPathHint, setPaymentPathHint] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -64,17 +67,39 @@ export default function FinanceWorkbench() {
     ['invoices', 'request_page', 'Invoices & matching'], ['payments', 'payments', 'Supplier payments'],
     ['expenses', 'receipt', 'Expenses'], ['banking', 'account_balance', 'Banking'], ['methods', 'credit_card', 'Payment methods'],
   ]
+  const paymentPathActive = paymentPathHint || (tab === 'payments'
+    ? (form.payment ? 'post' : 'payment')
+    : tab === 'invoices' ? (form.invoice ? 'match' : 'invoice') : '')
+  const openPaymentStep = (key: string) => {
+    setPaymentPathHint(key)
+    setTab(['payment', 'post'].includes(key) ? 'payments' : 'invoices')
+    setForm({})
+  }
 
   return <div style={{ maxWidth: 1440, margin: '0 auto' }}>
-    <section style={{ ...card, padding: 20, marginBottom: 15, display: 'flex', alignItems: 'center', gap: 13 }}>
+    <section className="workbench-hero" style={{ ...card, padding: 20, marginBottom: 15, display: 'flex', alignItems: 'center', gap: 13 }}>
       <span style={hero}><Icon name="account_balance" size={24} color="#fff" /></span>
       <div><div style={eyebrow}>PROCURE TO PAY</div><h1 style={{ margin: '3px 0', fontSize: 23 }}>Finance control centre</h1><div style={subtle}>Register liabilities, match accepted goods, approve invoices and post supplier settlements.</div></div>
       <button onClick={() => void load()} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button>
     </section>
-    <div style={{ display: 'flex', gap: 5, marginBottom: 15, flexWrap: 'wrap' }}>{tabs.map(([key, icon, label]) => <button key={key} onClick={() => setTab(key)} style={{ ...tabButton, background: tab === key ? 'var(--accent-soft)' : 'var(--surface)', color: tab === key ? 'var(--accent)' : 'var(--text-muted)', borderColor: tab === key ? 'var(--accent)' : 'var(--border)' }}><Icon name={icon} size={17} />{label}</button>)}</div>
+    <WorkflowPath
+      title="Supplier invoice to payment"
+      summary="Only pay after the invoice agrees with the purchase order and accepted goods receipt. Move from left to right."
+      activeKey={paymentPathActive}
+      onSelect={openPaymentStep}
+      steps={[
+        { key: 'invoice', label: 'Register invoice', actor: 'Finance', description: 'Select a received LPO and enter the supplier invoice.', icon: 'request_page' },
+        { key: 'match', label: 'Three-way match', actor: 'Finance', description: 'Compare LPO, accepted GRN and invoice values.', icon: 'difference' },
+        { key: 'approve', label: 'Approve invoice', actor: 'Authorised approver', description: 'Release only a matched invoice for payment.', icon: 'approval' },
+        { key: 'payment', label: 'Create payment', actor: 'Finance', description: 'Record method, amount, date and bank reference.', icon: 'payments' },
+        { key: 'post', label: 'Post settlement', actor: 'Finance', description: 'Post the payment and reduce the invoice balance.', icon: 'task_alt' },
+      ]}
+    />
+    <div style={{ marginBottom: 7, color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>Finance work areas</div>
+    <div style={{ display: 'flex', gap: 5, marginBottom: 15, flexWrap: 'wrap' }}>{tabs.map(([key, icon, label]) => <button key={key} onClick={() => { setPaymentPathHint(''); setTab(key) }} style={{ ...tabButton, background: tab === key ? 'var(--accent-soft)' : 'var(--surface)', color: tab === key ? 'var(--accent)' : 'var(--text-muted)', borderColor: tab === key ? 'var(--accent)' : 'var(--border)' }}><Icon name={icon} size={17} />{label}</button>)}</div>
     {error && <div style={{ ...card, padding: 12, color: 'var(--bad)', marginBottom: 14, fontSize: 12 }}>{error}</div>}
     {loading ? <div style={{ ...card, padding: 50, textAlign: 'center', color: 'var(--text-faint)' }}>Loading finance records…</div> :
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.45fr) minmax(340px,.7fr)', gap: 16, alignItems: 'start' }}>
+      <div className="workbench-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.45fr) minmax(340px,.7fr)', gap: 16, alignItems: 'start' }}>
         <FinanceTable tab={tab} data={scopedData} suppliers={suppliers} />
         <aside style={{ ...card, padding: 18 }}>
           {tab === 'invoices' && <InvoicePanel {...{ data: scopedData, form, setForm, busy, execute, orderLabel, invoiceLabel }} />}
@@ -152,6 +177,7 @@ function MethodPanel({ form, setForm, busy, execute }: any) {
 }
 
 function FinanceTable({ tab, data, suppliers }: { tab: FinanceTab; data: Record<string, Row[]>; suppliers: Map<string, string> }) {
+  const [selectedRow, setSelectedRow] = useState<Row | null>(null)
   const rows = tab === 'invoices' ? data.invoices : tab === 'payments' ? data.payments : tab === 'expenses' ? data.expenses : tab === 'banking' ? data.transactions : data.methods
   const cells = (row: Row) => tab === 'invoices'
     ? [sid(row.invoice_number), suppliers.get(sid(row.supplier)) || sid(row.supplier), money(row.total_amount), sid(row.status)]
@@ -159,7 +185,17 @@ function FinanceTable({ tab, data, suppliers }: { tab: FinanceTab; data: Record<
     : tab === 'expenses' ? [sid(row.reference) || 'Expense', money(row.amount), sid(row.date), sid(row.description)]
     : tab === 'banking' ? [sid(row.reference), money(row.amount), sid(row.transaction_type), sid(row.date)]
     : [sid(row.name), sid(row.description), row.is_default ? 'Default' : 'Available', row.is_active ? 'Active' : 'Inactive']
-  return <section style={{ ...card, overflow: 'hidden' }}><div style={{ padding: '15px 17px', borderBottom: '1px solid var(--border)', fontWeight: 800, fontSize: 13 }}>Backend records</div>{rows.map((row) => <div key={sid(row.id)} style={tableRow}>{cells(row).map((cell, index) => <span key={index} style={{ color: index ? 'var(--text-muted)' : 'var(--text)', fontWeight: index ? 500 : 700 }}>{cell || '—'}</span>)}</div>)}{!rows.length && <div style={{ padding: 45, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>No finance records at this stage.</div>}</section>
+  const titles: Record<FinanceTab, string> = { invoices: 'Supplier invoices', payments: 'Supplier payments', expenses: 'Operating expenses', banking: 'Bank transactions', methods: 'Payment methods' }
+  return <>
+    <section style={{ ...card, overflow: 'hidden' }}><div style={{ padding: '15px 17px', borderBottom: '1px solid var(--border)', fontWeight: 800, fontSize: 13 }}>{titles[tab]}</div>{rows.map((row) => <button type="button" onClick={() => setSelectedRow(row)} className="procurement-record-row" key={sid(row.id)} style={{ ...tableRow, width: '100%', alignItems: 'center', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>{cells(row).map((cell, index) => <span key={index} style={{ color: index ? 'var(--text-muted)' : 'var(--text)', fontWeight: index ? 500 : 700 }}>{cell || '—'}</span>)}<Icon name="chevron_right" size={18} color="var(--text-faint)" /></button>)}{!rows.length && <div style={{ padding: 45, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>No {titles[tab].toLowerCase()} have been recorded yet.</div>}</section>
+    {selectedRow && <RecordDetailDrawer title={titles[tab]} subtitle={financeRecordTitle(tab, selectedRow)} record={selectedRow} onClose={() => setSelectedRow(null)} />}
+  </>
+}
+
+function financeRecordTitle(tab: FinanceTab, row: Row): string {
+  if (tab === 'invoices') return sid(row.invoice_number) || sid(row.id)
+  if (tab === 'payments' || tab === 'expenses' || tab === 'banking') return sid(row.reference) || sid(row.id)
+  return sid(row.name) || sid(row.id)
 }
 
 function Panel({ title, note, children }: { title: string; note: string; children: ReactNode }) { return <><div style={{ fontSize: 14, fontWeight: 800 }}>{title}</div><div style={{ ...subtle, margin: '4px 0 15px', lineHeight: 1.5 }}>{note}</div>{children}</> }
@@ -179,4 +215,4 @@ const labelStyle: CSSProperties = { display: 'block', color: 'var(--text-muted)'
 const control: CSSProperties = { width: '100%', height: 38, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text)', padding: '0 10px', font: 'inherit', fontSize: 12 }
 const action: CSSProperties = { width: '100%', minHeight: 38, border: 0, borderRadius: 6, color: '#fff', cursor: 'pointer', font: 'inherit', fontSize: 12, fontWeight: 700, marginTop: 5 }
 const secondary: CSSProperties = { height: 36, padding: '0 12px', display: 'flex', alignItems: 'center', gap: 6, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text-muted)', font: 'inherit', fontSize: 12, cursor: 'pointer' }
-const tableRow: CSSProperties = { display: 'grid', gridTemplateColumns: '1.2fr 1.4fr 1fr 1fr', gap: 10, padding: '12px 17px', borderBottom: '1px solid var(--border)', fontSize: 12 }
+const tableRow: CSSProperties = { display: 'grid', gridTemplateColumns: '1.2fr 1.4fr 1fr 1fr 20px', gap: 10, padding: '12px 17px', borderBottom: '1px solid var(--border)', fontSize: 12 }

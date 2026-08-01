@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Icon } from '../components/Icon'
 import { HelpLabel } from '../components/HelpLabel'
+import { WorkflowPath } from '../components/WorkflowPath'
 import { createBackendRecord, deleteBackendPath, downloadProcurementAttachment, errorMessage, readBackendRecords, runBackendAction, updateBackendRecord, uploadProcurementAttachment } from '../lib/api'
 import type { Row } from '../lib/data'
 import { chipStyleFor, money } from '../lib/theme'
@@ -169,6 +170,14 @@ export default function ProcurementWorkbench() {
     ['lpo', '3', 'LPO'], ['receipt', '4', 'Goods receipt'],
     ['inspect', '5', 'Inspection'], ['return', '6', 'Supplier return'],
   ] as Array<[Stage, string, string]>).filter(([key]) => can(stagePermissions[key].view))
+  const stageGuidance: Record<Stage, { actor: string; description: string; icon: string }> = {
+    request: { actor: 'Requester', description: 'Add every required article, then submit the requisition.', icon: 'playlist_add' },
+    quote: { actor: 'Procurement', description: 'Record comparable supplier offers and select the winner.', icon: 'compare_arrows' },
+    lpo: { actor: 'Procurement manager', description: 'Build and issue the purchase order from an approved request.', icon: 'receipt_long' },
+    receipt: { actor: 'Receiving / stores', description: 'Record what the supplier delivered against the LPO.', icon: 'move_to_inbox' },
+    inspect: { actor: 'Inspector', description: 'Accept or reject delivered quantities before stock posting.', icon: 'fact_check' },
+    return: { actor: 'Stores / procurement', description: 'If needed, send rejected or damaged goods back to the supplier.', icon: 'assignment_return' },
+  }
   useEffect(() => {
     if (tabs.length && !tabs.some(([key]) => key === stage)) setStage(tabs[0][0])
   }, [stage, tabs])
@@ -190,7 +199,7 @@ export default function ProcurementWorkbench() {
   return (
     <div style={{ maxWidth: 1480, margin: '0 auto' }}>
       <div style={{ ...card, padding: 20, marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
+        <div className="workbench-hero" style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
           <span style={heroIcon}><Icon name="shopping_cart_checkout" size={24} color="#fff" /></span>
           <div>
             <div style={eyebrow}>PROCURE TO RECEIVE</div>
@@ -200,24 +209,24 @@ export default function ProcurementWorkbench() {
           <button onClick={() => void load()} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button>
         </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(150px,1fr))', gap: 10, marginBottom: 16 }}>
+      <div className="workbench-metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(150px,1fr))', gap: 10, marginBottom: 16 }}>
         <Metric label="Open commitments" value={money(metrics.commitment)} icon="account_balance_wallet" />
         <Metric label="Overdue LPOs" value={id(metrics.overdue)} icon="schedule" tone={metrics.overdue ? 'warn' : 'good'} />
         <Metric label="Unposted receipt lines" value={id(metrics.unposted)} icon="pending_actions" tone={metrics.unposted ? 'warn' : 'good'} />
         <Metric label="Supplier acceptance" value={`${metrics.acceptance}%`} icon="verified" tone={metrics.acceptance >= 90 ? 'good' : 'warn'} />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,minmax(130px,1fr))', marginBottom: 16 }}>
-        {tabs.map(([key, number, label], index) => (
-          <button key={key} onClick={() => setStage(key)} style={{ minHeight: 70, padding: '10px 12px', border: `1px solid ${stage === key ? 'var(--accent)' : 'var(--border)'}`, marginLeft: index ? -1 : 0, background: stage === key ? 'var(--accent-soft)' : 'var(--surface)', color: stage === key ? 'var(--accent)' : 'var(--text-muted)', cursor: 'pointer', font: 'inherit', textAlign: 'left' }}>
-            <span style={{ fontSize: 10, fontWeight: 800 }}>{number}</span><span style={{ display: 'block', marginTop: 5, fontSize: 12, fontWeight: 700 }}>{label}</span>
-          </button>
-        ))}
-      </div>
+      <WorkflowPath
+        title="Procurement journey"
+        summary="Start with an approved need and move from left to right. A later document should always be created from its approved predecessor."
+        activeKey={stage}
+        onSelect={(key) => setStage(key as Stage)}
+        steps={tabs.map(([key, , label]) => ({ key, label, ...stageGuidance[key] }))}
+      />
 
       {message && <div style={{ ...card, padding: 13, marginBottom: 14, borderColor: 'rgba(220,38,38,.3)', color: 'var(--bad)', fontSize: 12.5 }}>{message}</div>}
       {loading ? <div style={{ ...card, padding: 50, textAlign: 'center', color: 'var(--text-faint)' }}>Loading procurement records from the backend…</div> : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.45fr) minmax(340px,.75fr)', gap: 16, alignItems: 'start' }}>
+        <div className="workbench-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.45fr) minmax(340px,.75fr)', gap: 16, alignItems: 'start' }}>
           <section style={{ ...card, overflow: 'hidden' }}>
             <StageTable stage={stage} data={scopedData} names={names} onSelect={setSelectedRecord} />
           </section>
@@ -243,11 +252,14 @@ function Metric({ label, value, icon, tone = 'accent' }: { label: string; value:
 }
 
 function RequestPanel({ data, form, setForm, busy, run, requisitionLabel, items }: any) {
+  const app = useApp()
   const drafts = data.requisitions.filter((row: Row) => ['draft', 'rejected', 'returned'].includes(id(row.status)))
   const lines = data.requisitionItems.filter((row: Row) => id(row.requisition) === id(form.requisition))
   const editing = lines.find((row: Row) => id(row.id) === id(form.requestLine))
   const duplicate = !editing && lines.some((row: Row) => id(row.item) === id(form.item))
   return <Panel title="Requisition Articles" note="Add requested Articles and estimated prices before submission.">
+    <Action disabled={busy} onClick={() => app.openCreate('requisitions', 'New purchase requisition')}>Start a new purchase requisition</Action>
+    <Divider />
     <Field label="Draft requisition"><Select value={form.requisition} onChange={(v) => setForm({ ...form, requisition: v })} rows={drafts} label={requisitionLabel} /></Field>
     <Field label="Existing line"><Select optional value={form.requestLine} onChange={(v) => { const line = lines.find((row: Row) => id(row.id) === v); setForm({ ...form, requestLine: v, item: line?.item || '', quantity: line?.quantity || '', cost: line?.estimated_unit_cost || '' }) }} rows={lines} label={(row: Row) => `${items.find((item: Row) => id(item.id) === id(row.item))?.name || id(row.item)} · ${row.quantity}`} /></Field>
     <Field label="Article"><Select value={form.item} onChange={(v) => setForm({ ...form, item: v })} rows={items} /></Field>
@@ -450,7 +462,7 @@ function StageTable({ stage, data, names, onSelect }: { stage: Stage; data: Data
   }
   return <><div style={{ padding: '15px 17px', borderBottom: '1px solid var(--border)', fontSize: 13, fontWeight: 800 }}>{title}</div>
     {rows.map((row) => <button type="button" key={id(row.id)} onClick={() => onSelect(row)} className="procurement-record-row" style={{ width: '100%', display: 'grid', gridTemplateColumns: '1.2fr 1.5fr 1fr .8fr 24px', alignItems: 'center', gap: 12, padding: '12px 17px', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit', fontSize: 12.5 }}>{cells(row).map((cell, i) => <span key={i} style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: i === 0 ? 'var(--text)' : 'var(--text-muted)', fontWeight: i === 0 ? 700 : 500 }}>{cell || '—'}</span>)}<Icon name="chevron_right" size={18} color="var(--text-faint)" /></button>)}
-    {!rows.length && <div style={{ padding: 45, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12.5 }}>No backend records at this stage.</div>}
+    {!rows.length && <div style={{ padding: 45, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12.5 }}>Nothing has reached this stage yet. Complete the previous step first.</div>}
   </>
 }
 

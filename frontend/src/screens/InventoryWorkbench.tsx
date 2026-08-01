@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Icon } from '../components/Icon'
 import { HelpLabel } from '../components/HelpLabel'
+import { WorkflowPath } from '../components/WorkflowPath'
 import { createBackendRecord, deleteBackendPath, errorMessage, readBackendRecords, runBackendAction, updateBackendRecord } from '../lib/api'
 import type { Row } from '../lib/data'
 import { useApp } from '../state/AppContext'
@@ -56,13 +57,14 @@ const num = (value: unknown) => Number(value || 0)
 
 export default function InventoryWorkbench() {
   const app = useApp()
-  const [tab, setTab] = useState<Tab>('requests')
+  const [tab, setTab] = useState<Tab>(() => String(app.user.role || '').toLowerCase() === 'store keeper' ? 'issues' : 'requests')
   const [data, setData] = useState(blank)
   const [form, setForm] = useState<Row>({})
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [selectedRecord, setSelectedRecord] = useState<Row | null>(null)
+  const [supplyPathHint, setSupplyPathHint] = useState('')
   const operationRunning = useRef(false)
   const can = useCallback(
     (permission: string) => app.user.isSuperuser || app.user.permissions.includes(permission),
@@ -84,6 +86,7 @@ export default function InventoryWorkbench() {
   useEffect(() => {
     if (!app.inventoryDraftId) return
     setTab('requests')
+    setSupplyPathHint('request')
     setForm({ request: app.inventoryDraftId })
     app.consumeInventoryDraft()
   }, [app.inventoryDraftId, app.consumeInventoryDraft])
@@ -134,12 +137,40 @@ export default function InventoryWorkbench() {
   }, [tab, tabs])
   const changePermission = tabPermissions[tab].change
   const canChangeTab = Boolean(changePermission && can(changePermission))
+  const otherTabs = tabs.filter(([key]) => !['requests', 'issues'].includes(key))
+  const role = String(app.user.role || '').toLowerCase()
+  const isAdministrator = app.user.isSuperuser || role === 'system administrator'
+  const isDepartmentActor = isAdministrator || role === 'department head'
+  const isStoresApprover = isAdministrator || ['stores manager', 'store manager'].includes(role)
+  const isStoresIssuer = isStoresApprover || role === 'store keeper'
+  const requestRoleStage = isStoresApprover
+    ? 'stores-review'
+    : role === 'department head' ? 'department-review' : 'request'
+  const supplyPathActive = supplyPathHint || (tab === 'issues' ? 'pick' : tab === 'requests' ? requestRoleStage : '')
+  const selectSupplyStep = (key: string) => {
+    setSupplyPathHint(key)
+    setTab(['pick', 'post', 'acknowledge'].includes(key) ? 'issues' : 'requests')
+  }
   const common = { app, data: scopedData, form, setForm, busy, execute }
   return <div style={{ maxWidth: 1460, margin: '0 auto' }}>
-    <section style={{ ...card, padding: 20, display: 'flex', alignItems: 'center', gap: 13, marginBottom: 15 }}><span style={hero}><Icon name="warehouse" size={24} color="#fff" /></span><div><div style={eyebrow}>STORES & CONSUMPTION</div><h1 style={{ margin: '3px 0', fontSize: 23 }}>Inventory movement workbench</h1><div style={muted}>Request, approve, issue, acknowledge, return, transfer, adjust and count stock with backend controls.</div></div><button onClick={() => void load()} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button></section>
-    <div style={{ display: 'flex', gap: 5, marginBottom: 15, flexWrap: 'wrap' }}>{tabs.map(([key, icon, label]) => <button key={key} onClick={() => setTab(key)} style={{ ...tabButton, background: tab === key ? 'var(--accent-soft)' : 'var(--surface)', color: tab === key ? 'var(--accent)' : 'var(--text-muted)', borderColor: tab === key ? 'var(--accent)' : 'var(--border)' }}><Icon name={icon} size={17} />{label}</button>)}</div>
+    <section className="workbench-hero" style={{ ...card, padding: 20, display: 'flex', alignItems: 'center', gap: 13, marginBottom: 15 }}><span style={hero}><Icon name="warehouse" size={24} color="#fff" /></span><div><div style={eyebrow}>STORES & CONSUMPTION</div><h1 style={{ margin: '3px 0', fontSize: 23 }}>Department supply & stores</h1><div style={muted}>Follow a department request from item entry through approval, stores issue and receipt confirmation.</div></div><button onClick={() => void load()} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button></section>
+    {(can(tabPermissions.requests.view) || can(tabPermissions.issues.view)) && <WorkflowPath
+      title="Department material request journey"
+      summary="Each person completes only their assigned stage. Requests created by a Department Head skip department review and go directly to Stores."
+      activeKey={supplyPathActive}
+      onSelect={selectSupplyStep}
+      steps={[
+        { key: 'request', label: 'Prepare request', actor: 'Department requester', description: 'Choose the draft, add all articles and submit.', icon: 'playlist_add', disabled: !can(tabPermissions.requests.change || tabPermissions.requests.view) },
+        { key: 'department-review', label: 'Department review', actor: 'Department Head', description: 'Confirm the need, then approve or reject it.', icon: 'approval', disabled: !isDepartmentActor || !can(tabPermissions.requests.change || tabPermissions.requests.view) },
+        { key: 'stores-review', label: 'Stores review', actor: 'Stores manager', description: 'Check availability, approve quantities and reserve stock.', icon: 'inventory', disabled: !isStoresApprover || !can(tabPermissions.requests.change || tabPermissions.requests.view) },
+        { key: 'pick', label: 'Pick articles', actor: 'Stores team', description: 'Create the issue voucher and add approved pick lines.', icon: 'shopping_basket', disabled: !isStoresIssuer || !can(tabPermissions.issues.change || tabPermissions.issues.view) },
+        { key: 'post', label: 'Post issue', actor: 'Stores team', description: 'Release stock and record department consumption.', icon: 'outbox', disabled: !isStoresIssuer || !can(tabPermissions.issues.change || tabPermissions.issues.view) },
+        { key: 'acknowledge', label: 'Confirm receipt', actor: 'Stores team at handover', description: 'Record the employee who physically received the articles.', icon: 'how_to_reg', disabled: !isStoresIssuer || !can(tabPermissions.issues.change || tabPermissions.issues.view) },
+      ]}
+    />}
+    {otherTabs.length > 0 && <><div style={{ marginBottom: 7, color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>Other stores and inventory tasks</div><div style={{ display: 'flex', gap: 5, marginBottom: 15, flexWrap: 'wrap' }}>{otherTabs.map(([key, icon, label]) => <button key={key} onClick={() => { setSupplyPathHint(''); setTab(key) }} style={{ ...tabButton, background: tab === key ? 'var(--accent-soft)' : 'var(--surface)', color: tab === key ? 'var(--accent)' : 'var(--text-muted)', borderColor: tab === key ? 'var(--accent)' : 'var(--border)' }}><Icon name={icon} size={17} />{label}</button>)}</div></>}
     {error && <div style={{ ...card, padding: 12, color: 'var(--bad)', fontSize: 12, marginBottom: 14 }}>{error}</div>}
-    {loading ? <div style={{ ...card, padding: 50, textAlign: 'center', color: 'var(--text-faint)' }}>Loading inventory controls…</div> : <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) minmax(350px,.7fr)', gap: 16, alignItems: 'start' }}>
+    {loading ? <div style={{ ...card, padding: 50, textAlign: 'center', color: 'var(--text-faint)' }}>Loading inventory controls…</div> : <div className="workbench-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) minmax(350px,.7fr)', gap: 16, alignItems: 'start' }}>
       <Records tab={tab} data={scopedData} app={app} onSelect={setSelectedRecord} />
       <aside style={{ ...card, padding: 18 }}>
         {!canChangeTab && !['batches', 'consumption'].includes(tab) && <ReadOnlyPanel title="Read-only access" note="Your role can review these records but cannot create, approve or post them." />}
@@ -172,7 +203,10 @@ function RequestPanel({ app, data, form, setForm, busy, execute }: any) {
   const departmentPending = data.requests.find((row: Row) => id(row.id) === id(form.departmentPending))
   const procurementPending = data.requests.find((row: Row) => id(row.id) === id(form.procurementPending))
   return <Panel title="Department store requisition" note="Employee requests go to the Department Head first; Department Head requests go directly to Stores.">
-    <StepHeading number="1" title="Choose the draft request" />
+    <RoleAction actor="Department requester" title="Prepare and submit the required articles" note="Complete all three steps below before sending the request for approval." />
+    <Action disabled={busy} click={() => app.openCreate('storeRequisitions', 'New department material request')}>Start a new material request</Action>
+    <Rule />
+    <StepHeading number="1" title="Choose a saved draft request" />
     <Field label="Draft request"><Select value={form.request} change={(v) => setForm({ request: v })} rows={drafts} label={(r) => `${id(r.requisition_no)} · ${departmentName(app, r.department)}`} /></Field>
     {!drafts.length && <Hint>Create a new Department Material Request first. After saving it, the system returns here automatically.</Hint>}
     {draftRequest && <div style={{ marginBottom: 12, padding: 10, borderRadius: 6, background: 'var(--surface-2)', color: 'var(--text-muted)', fontSize: 11.5 }}><strong style={{ color: 'var(--text)' }}>Active issuing store:</strong> {storeName(app, draftRequest.store)}<br /><span>{id(draftRequest.purpose) || 'No purpose entered'}</span></div>}
@@ -192,6 +226,7 @@ function RequestPanel({ app, data, form, setForm, busy, execute }: any) {
     <Action disabled={busy || !form.request || !draftLines.length} click={() => execute(() => runBackendAction('store-requisitions', id(form.request), 'submit'), isDepartmentHead ? 'Store requisition sent to Stores' : 'Store requisition sent to Department Head')}>Submit request with {draftLines.length} item{draftLines.length === 1 ? '' : 's'}</Action>
     {isDepartmentHead && <>
       <Rule />
+      <RoleAction actor="Department Head" title="Review the business need" note="This section contains only requests waiting for department approval." />
       <Field label="Waiting for department approval"><Select value={form.departmentPending} change={(v) => setForm({ departmentPending: v })} rows={data.requests.filter((r: Row) => id(r.status) === 'pending_department_approval')} label={(r) => `${id(r.requisition_no)} · ${departmentName(app, r.department)}`} /></Field>
       <Field label="Department approval comment"><Input value={form.departmentComment} change={(v) => setForm({ ...form, departmentComment: v })} /></Field>
       <Action tone="good" disabled={busy || !departmentPending} click={() => execute(() => runBackendAction('store-requisitions', id(form.departmentPending), 'department-approve', { comments: form.departmentComment || '' }), 'Department request approved and sent to Stores')}>Approve for department</Action>
@@ -200,6 +235,7 @@ function RequestPanel({ app, data, form, setForm, busy, execute }: any) {
     </>}
     {isStoresApprover && <>
     <Rule />
+    <RoleAction actor="Stores manager" title="Decide quantities and reserve stock" note="Review every line before approving the full request. Use the shortage action when stock is unavailable." />
     <Field label="Submitted request"><Select value={form.submitted} change={(v) => setForm({ submitted: v })} rows={data.requests.filter((r: Row) => id(r.status) === 'submitted')} label={(r) => id(r.requisition_no)} /></Field>
     <Field label="Line decision"><Select value={form.decisionLine} change={(v) => { const line = submittedLines.find((r: Row) => id(r.id) === v); setForm({ ...form, decisionLine: v, approved: line?.quantity_approved || line?.base_quantity_requested || '', decisionComment: line?.remarks || '' }) }} rows={submittedLines} label={(r) => `${itemName(app, r.item)} · requested ${r.base_quantity_requested}`} /></Field>
     <Field label="Approved quantity"><Input type="number" value={form.approved} change={(v) => setForm({ ...form, approved: v })} /></Field>
@@ -217,6 +253,7 @@ function RequestPanel({ app, data, form, setForm, busy, execute }: any) {
     <Action tone="good" disabled={busy || !procurementPending} click={() => execute(() => runBackendAction('store-requisitions', id(form.procurementPending), 'resume-after-procurement'), 'Department request returned to Stores review')}>Purchased stock received — resume request</Action>
     </>}
     <Rule />
+    <RoleAction actor="Request owner or administrator" title="Cancel an unfinished request" note="Cancellation releases any reservation already made for the request." />
     <Field label="Request to cancel"><Select value={form.cancelRequest} change={(v) => setForm({ cancelRequest: v })} rows={data.requests.filter((r: Row) => !['issued', 'cancelled'].includes(id(r.status)))} label={(r) => `${id(r.requisition_no)} · ${r.status}`} /></Field>
     <Action tone="danger" disabled={busy || !form.cancelRequest} click={() => execute(() => runBackendAction('store-requisitions', id(form.cancelRequest), 'cancel'), 'Store requisition cancelled and reservation released')}>Cancel request</Action>
   </Panel>
@@ -229,6 +266,7 @@ function IssuePanel({ app, data, form, setForm, busy, execute }: any) {
   const issue = data.issues.find((row: Row) => id(row.id) === id(form.issue))
   const issueRequestLines = data.requestItems.filter((row: Row) => id(row.requisition) === id(issue?.requisition))
   return <Panel title="Pick, issue and acknowledge" note="Issue lines are costed from batches using FEFO/FIFO when posted.">
+    <StepHeading number="4" title="Create the issue voucher and pick approved articles" />
     <Field label="Approved requisition"><Select value={form.request} change={(v) => setForm({ request: v })} rows={approved} label={(r) => id(r.requisition_no)} /></Field>
     <Field label="Issued by"><Select value={form.employee} change={(v) => setForm({ ...form, employee: v })} rows={app.data.employees} /></Field>
     <Action disabled={busy || !request || !form.employee} click={() => execute(() => createBackendRecord('stock-issues', { requisition: request.id, store: request.store, issued_by: form.employee, note: '' }), 'Issue voucher created')}>Create issue voucher</Action>
@@ -238,7 +276,12 @@ function IssuePanel({ app, data, form, setForm, busy, execute }: any) {
     <Field label="Approved request line"><Select value={form.requestLine} change={(v) => setForm({ ...form, requestLine: v })} rows={issueRequestLines} label={(r) => `${itemName(app, r.item)} · ${r.outstanding_quantity} outstanding`} /></Field>
     <Field label="Pick quantity"><Input type="number" value={form.quantity} change={(v) => setForm({ ...form, quantity: v })} /></Field>
     <Action disabled={busy || !form.issue || !form.requestLine} click={() => execute(() => createBackendRecord('stock-issue-items', { issue: form.issue, requisition_item: form.requestLine, unit: null, quantity: num(form.quantity) }), 'Article added to pick list')}>Add pick line</Action>
+    <Rule />
+    <StepHeading number="5" title="Post the completed issue" />
+    <div style={{ margin: '-3px 0 9px', color: 'var(--text-faint)', fontSize: 11.5 }}>Posting reduces store stock and records department consumption. Check the voucher first.</div>
     <Action tone="good" disabled={busy || !form.issue} click={() => execute(() => runBackendAction('stock-issues', id(form.issue), 'apply'), 'Stock issued and consumption posted')}>Post issue</Action>
+    <Rule />
+    <StepHeading number="6" title="Confirm who received the articles" />
     <Field label="Receiving employee"><Select value={form.receiver} change={(v) => setForm({ ...form, receiver: v })} rows={app.data.employees} optional /></Field>
     <Field label="Receiver name"><Input value={form.receiverName} change={(v) => setForm({ ...form, receiverName: v })} /></Field>
     <Action disabled={busy || !form.issue} click={() => execute(() => runBackendAction('stock-issues', id(form.issue), 'acknowledge', { received_by: form.receiver || null, received_by_name: form.receiverName || '' }), 'Department receipt acknowledged')}>Acknowledge receipt</Action>
@@ -343,7 +386,8 @@ function Records({ tab, data, app, onSelect }: { tab: Tab; data: Record<string, 
       : tab === 'reorder' ? [itemName(app, row.item), storeName(app, row.store) || 'All stores', `Min ${row.minimum_level}`, `Reorder ${row.reorder_quantity}`]
         : tab === 'batches' ? [itemName(app, row.item), storeName(app, row.store), `Remaining ${row.remaining_quantity}`, id(row.expiry_date) || 'No expiry']
           : [departmentName(app, row.department), itemName(app, row.item), `${row.quantity} × ${row.unit_cost}`, id(row.consumed_on)]
-  return <section style={{ ...card, overflow: 'hidden' }}><div style={{ padding: '15px 17px', borderBottom: '1px solid var(--border)', fontSize: 13, fontWeight: 800 }}>Backend records</div>{rows.map((row) => <button type="button" onClick={() => onSelect(row)} className="procurement-record-row" key={id(row.id)} style={{ ...recordRow, width: '100%', alignItems: 'center', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>{cells(row).map((cell, index) => <span key={index} style={{ color: index ? 'var(--text-muted)' : 'var(--text)', fontWeight: index ? 500 : 700 }}>{cell || '—'}</span>)}</button>)}{!rows.length && <div style={{ padding: 45, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>No records at this stage.</div>}</section>
+  const titles: Record<Tab, string> = { requests: 'Department material requests', issues: 'Issue vouchers', transfers: 'Inter-store transfers', adjustments: 'Stock adjustments', counts: 'Stock counts', returns: 'Department returns', reorder: 'Low-stock reorder queue', batches: 'Inventory batches and expiry', consumption: 'Department consumption' }
+  return <section style={{ ...card, overflow: 'hidden' }}><div style={{ padding: '15px 17px', borderBottom: '1px solid var(--border)', fontSize: 13, fontWeight: 800 }}>{titles[tab]}</div>{rows.map((row) => <button type="button" onClick={() => onSelect(row)} className="procurement-record-row" key={id(row.id)} style={{ ...recordRow, width: '100%', alignItems: 'center', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>{cells(row).map((cell, index) => <span key={index} style={{ color: index ? 'var(--text-muted)' : 'var(--text)', fontWeight: index ? 500 : 700 }}>{cell || '—'}</span>)}</button>)}{!rows.length && <div style={{ padding: 45, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>No {titles[tab].toLowerCase()} are waiting here.</div>}</section>
 }
 
 function InventoryRecordDrawer({ tab, row, data, app, close }: { tab: Tab; row: Row; data: Record<string, Row[]>; app: any; close: () => void }) {
@@ -441,6 +485,7 @@ const storeName = (app: any, value: unknown) => id(app.data.locations.find((r: R
 const departmentName = (app: any, value: unknown) => id(app.data.departments.find((r: Row) => id(r.id) === id(value))?.name) || id(value)
 const employeeName = (app: any, value: unknown) => id(app.data.employees.find((r: Row) => id(r.id) === id(value))?.name) || id(value)
 function Panel({ title, note, children }: { title: string; note: string; children: ReactNode }) { return <><div style={{ fontSize: 14, fontWeight: 800 }}>{title}</div><div style={{ ...muted, margin: '4px 0 15px', lineHeight: 1.5 }}>{note}</div>{children}</> }
+function RoleAction({ actor, title, note }: { actor: string; title: string; note: string }) { return <div style={{ margin: '0 0 14px', padding: '10px 11px', borderLeft: '3px solid var(--accent)', borderRadius: '0 6px 6px 0', background: 'var(--accent-soft)' }}><div style={{ color: 'var(--accent)', fontSize: 9, fontWeight: 850, letterSpacing: '.07em', textTransform: 'uppercase' }}>{actor}</div><div style={{ marginTop: 3, color: 'var(--text)', fontSize: 12, fontWeight: 750 }}>{title}</div><div style={{ marginTop: 3, color: 'var(--text-muted)', fontSize: 10.5, lineHeight: 1.4 }}>{note}</div></div> }
 function StepHeading({ number, title }: { number: string; title: string }) { return <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 10px', color: 'var(--text)', fontSize: 12, fontWeight: 750 }}><span style={{ width: 22, height: 22, display: 'grid', placeItems: 'center', borderRadius: 20, color: '#fff', background: 'var(--accent)', fontSize: 10 }}>{number}</span>{title}</div> }
 function Field({ label, children }: { label: string; children: ReactNode }) { return <label style={{ display: 'block', marginBottom: 10 }}><HelpLabel label={label} style={labelStyle} />{children}</label> }
 function Input({ value, change, type = 'text' }: { value: unknown; change: (value: string) => void; type?: string }) { return <input type={type} value={id(value)} onChange={(e) => change(e.target.value)} style={control} /> }

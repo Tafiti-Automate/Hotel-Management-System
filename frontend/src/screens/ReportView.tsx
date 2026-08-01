@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { useApp } from '../state/AppContext'
 import { Icon } from '../components/Icon'
+import RecordDetailDrawer from '../components/RecordDetailDrawer'
 import { errorMessage, fetchOperationalReport, isOperationalReport } from '../lib/api'
 import { buildOperationalReport, buildReport } from '../lib/reports'
 
@@ -27,6 +28,7 @@ export default function ReportView() {
   const [livePayload, setLivePayload] = useState<Record<string, unknown>>({})
   const [liveLoading, setLiveLoading] = useState(false)
   const [liveError, setLiveError] = useState('')
+  const [selectedReportRow, setSelectedReportRow] = useState<Record<string, unknown> | null>(null)
   const reportId = app.reportId || 'valuation'
   const operationalReportId = isOperationalReport(reportId) ? reportId : null
   const live = Boolean(operationalReportId)
@@ -53,6 +55,7 @@ export default function ReportView() {
     setLivePayload({})
     setLiveError('')
     setLiveLoading(false)
+    setSelectedReportRow(null)
     if (!operationalReportId) return
     if (reportId === 'movement' && !item) return
     let active = true
@@ -155,9 +158,9 @@ export default function ReportView() {
         {liveLoading && <div style={{ padding: 42, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12.5 }}>Loading live report from the backend…</div>}
         {!liveLoading && !visibleRows.length && <div style={{ padding: 42, textAlign: 'center', color: liveError ? 'var(--bad)' : 'var(--text-muted)', fontSize: 12.5 }}>{emptyMessage}</div>}
         {!liveLoading && visibleRows.map((row, ri) => (
-          <div key={ri} className="hover-surface2" style={{ display: 'grid', gridTemplateColumns: report.grid, borderBottom: '1px solid var(--border)', padding: '0 8px' }}>
+          <button type="button" onClick={() => setSelectedReportRow(Object.fromEntries(report.columns.map((column, index) => [column.label, row.cells[index]?.text || '—'])))} key={ri} className="report-record-row hover-surface2" style={{ width: '100%', display: 'grid', gridTemplateColumns: report.grid, border: 0, borderBottom: '1px solid var(--border)', padding: '0 8px', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
             {row.cells.map((cell, ci) => <div key={ci} style={cell.style}>{cell.text}</div>)}
-          </div>
+          </button>
         ))}
         {!liveLoading && !liveError && report.hasTotals && report.rows.length > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: report.grid, padding: '0 8px', background: 'var(--surface-2)' }}>
@@ -166,6 +169,7 @@ export default function ReportView() {
         )}
         <div style={{ minHeight: 46, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, padding: '0 14px' }}><button disabled={page === 1} onClick={() => setPage((value) => Math.max(1, value - 1))} style={pager}>Previous</button><span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{page} / {pageCount}</span><button disabled={page === pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))} style={pager}>Next</button></div>
       </div>
+      {selectedReportRow && <RecordDetailDrawer title={report.title} subtitle={String(Object.values(selectedReportRow)[0] || 'Report row')} record={selectedReportRow} onClose={() => setSelectedReportRow(null)} />}
     </div>
   )
 }

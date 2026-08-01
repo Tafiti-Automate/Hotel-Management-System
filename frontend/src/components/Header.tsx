@@ -82,13 +82,13 @@ export default function Header() {
 
   const primary = (() => {
     if (canAccessRoute(app.user, 'workflow-stores')) {
-      return { label: 'Open stores workbench', icon: 'warehouse', action: () => app.navTo('workflow-stores', 'Stores workbench') }
+      return { label: 'Continue department supply', icon: 'warehouse', action: () => app.navTo('workflow-stores', 'Department supply & stores') }
     }
     if (canAccessRoute(app.user, 'workflow-pay')) {
-      return { label: 'Open finance workbench', icon: 'account_balance', action: () => app.navTo('workflow-pay', 'Finance control centre') }
+      return { label: 'Continue invoice to payment', icon: 'account_balance', action: () => app.navTo('workflow-pay', 'Supplier invoices & payment') }
     }
     if (canAccessRoute(app.user, 'workflow-procure')) {
-      return { label: 'Open receiving workbench', icon: 'move_to_inbox', action: () => app.navTo('workflow-procure', 'Receiving workbench') }
+      return { label: 'Continue procurement', icon: 'move_to_inbox', action: () => app.navTo('workflow-procure', 'Procurement to receiving') }
     }
     if (hasPermission('approvals.change_approvalworkflow')) {
       return { label: 'Review approvals', icon: 'approval', action: () => app.navTo('approvals', 'Approvals') }

@@ -68,9 +68,9 @@ export function operationsLandingFor(user: AccessUser): { route: string; crumb: 
     return { route: 'dashboard', crumb: 'Stores overview' }
   }
   const candidates = [
-    ['workflow-stores', 'Stores workbench'],
-    ['workflow-procure', 'Procurement workbench'],
-    ['workflow-pay', 'Finance control centre'],
+    ['workflow-stores', 'Department supply & stores'],
+    ['workflow-procure', 'Procurement to receiving'],
+    ['workflow-pay', 'Supplier invoices & payment'],
     ['requisitions', 'Purchase requisitions'],
   ]
   const match = candidates.find(([route]) => canAccessRoute(user, route))
