@@ -3,7 +3,7 @@
 export type Row = Record<string, any>
 
 export type EntityKey =
-  | 'items' | 'categories' | 'uoms' | 'locations' | 'suppliers'
+  | 'items' | 'categories' | 'uoms' | 'itemUnits' | 'locations' | 'suppliers'
   | 'supplierItems'
   | 'departments' | 'employees' | 'branches'
   | 'balances' | 'ledgers' | 'batches'
@@ -68,7 +68,7 @@ export const cfg: Record<string, EntityConfig> = {
       { key: 'sku', label: 'SKU', type: 'text' },
       { key: 'category', label: 'Category', type: 'select', opts: 'categories' },
       { key: 'businessType', label: 'Business classification', type: 'select', opts: 'businessTypes' },
-      { key: 'uom', label: 'Unit of measure', type: 'select', opts: 'uoms' },
+      { key: 'uom', label: 'Base stock unit', type: 'select', opts: 'uoms' },
       { key: 'reorder', label: 'Reorder level', type: 'number' },
     ],
   },
@@ -99,6 +99,26 @@ export const cfg: Record<string, EntityConfig> = {
     fields: [
       { key: 'name', label: 'Unit name', type: 'text' },
       { key: 'abbr', label: 'Abbreviation', type: 'text' },
+    ],
+  },
+  itemUnits: {
+    title: 'Article Unit Conversions', sub: 'Controlled purchase and issue units converted into each article’s base stock unit', icon: 'calculate', add: 'Add conversion', singular: 'Article Unit Conversion', editable: true,
+    cols: [
+      { key: 'item', label: 'Article', w: 'minmax(0,1.5fr)', kind: 'bold' },
+      { key: 'sku', label: 'SKU', w: '1fr', kind: 'mono' },
+      { key: 'unit', label: 'Selected unit', w: '1fr', kind: 'text' },
+      { key: 'role', label: 'Used for', w: '1fr', kind: 'status' },
+      { key: 'baseEquivalent', label: 'Base equivalent', w: 'minmax(0,1.4fr)', kind: 'text' },
+      { key: 'sellingPrice', label: 'Selling price', w: '110px', kind: 'money2', align: 'right' },
+      { key: 'status', label: 'Status', w: '90px', kind: 'status', align: 'right' },
+    ],
+    fields: [
+      { key: 'item', label: 'Article', type: 'select', opts: 'items' },
+      { key: 'role', label: 'How this unit is used', type: 'select', opts: 'unitRoles' },
+      { key: 'unit', label: 'Purchase, issue, alternate, or base unit', type: 'select', opts: 'uoms' },
+      { key: 'conversionFactor', label: 'Number of base units in one selected unit', type: 'number' },
+      { key: 'sellingPrice', label: 'Optional selling price per selected unit', type: 'number' },
+      { key: 'status', label: 'Status', type: 'select', opts: 'genStatus' },
     ],
   },
   locations: {
@@ -402,6 +422,7 @@ export function getOptions(key: string, data: Record<EntityKey, Row[]>): string[
   if (key === 'employees') return (data.employees || []).map((e) => e.name)
   if (key === 'items') return (data.items || []).map((i) => i.name)
   if (key === 'businessTypes') return ['Consumable / Operating Expense', 'Resale / Revenue Item', 'Fixed Asset', 'Service']
+  if (key === 'unitRoles') return ['Purchase unit', 'Issue unit', 'Alternate unit', 'Base unit']
   if (key === 'reqTypes') return ['department', 'hotel_purchase']
   if (key === 'supStatus') return ['Active', 'On hold', 'Inactive']
   if (key === 'genStatus') return ['Active', 'Inactive']

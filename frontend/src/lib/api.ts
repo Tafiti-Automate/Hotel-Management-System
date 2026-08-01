@@ -13,6 +13,7 @@ export interface BackendDataResult {
 const endpoints = {
   categories: 'categories',
   units: 'units',
+  unitPrices: 'item-unit-prices',
   items: 'items',
   stores: 'stores',
   balances: 'inventory-balances',
@@ -42,6 +43,7 @@ const endpoints = {
 const entityEndpoints: Partial<Record<EntityKey, string>> = {
   categories: 'categories',
   uoms: 'units',
+  itemUnits: 'item-unit-prices',
   items: 'items',
   locations: 'stores',
   suppliers: 'vendors',
@@ -453,10 +455,13 @@ function dateOnly(value: unknown): string {
 
 function toBackendBusinessType(value: unknown): string {
   const raw = text(value).toLowerCase()
+  if (raw === 'consumable_expense' || raw.includes('consumable') || raw.includes('operating expense')) {
+    return 'consumable_expense'
+  }
   if (raw.includes('resale') || raw.includes('revenue')) return 'resale_revenue'
   if (raw.includes('asset')) return 'fixed_asset'
   if (raw.includes('service')) return 'service'
-  return raw || 'consumable_expense'
+  return 'consumable_expense'
 }
 
 function fromBackendBusinessType(value: unknown): string {
@@ -578,6 +583,27 @@ function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey
       name: text(values.name),
       abbreviation: text(values.abbr),
       is_active: true,
+    }
+  }
+
+  if (entity === 'itemUnits') {
+    const itemId = findDataId(data, 'items', values.item)
+    const unitId = findDataId(data, 'uoms', values.unit)
+    if (!itemId) throw new Error('Choose the Article this conversion belongs to.')
+    if (!unitId) throw new Error('Choose the purchase, issue, or alternate unit.')
+    const roles: Record<string, string> = {
+      'Purchase unit': 'purchase',
+      'Issue unit': 'issue',
+      'Alternate unit': 'alternate',
+      'Base unit': 'base',
+    }
+    return {
+      item: itemId,
+      unit: unitId,
+      role: roles[text(values.role)] || 'alternate',
+      conversion_factor: num(values.conversionFactor),
+      selling_price: num(values.sellingPrice),
+      is_active: text(values.status, 'Active') !== 'Inactive',
     }
   }
 
@@ -922,6 +948,20 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
       abbr: text(row.abbreviation),
       itemsCount: itemsByUnit.get(idOf(row)) || 0,
     })),
+    itemUnits: raw.unitPrices.map((row) => ({
+      id: idOf(row),
+      item: text(row.item_name) || itemNames.get(text(row.item)) || shortId(row.item),
+      itemId: text(row.item),
+      sku: text(row.item_sku),
+      unit: text(row.unit_name) || unitNames.get(text(row.unit)) || shortId(row.unit),
+      unitId: text(row.unit),
+      role: text(row.role) === 'purchase' ? 'Purchase unit' : text(row.role) === 'issue' ? 'Issue unit' : text(row.role) === 'base' ? 'Base unit' : 'Alternate unit',
+      conversionFactor: num(row.conversion_factor),
+      baseUnit: text(row.base_unit_name),
+      baseEquivalent: text(row.base_equivalent),
+      sellingPrice: num(row.selling_price),
+      status: activeStatus(row.is_active),
+    })),
     locations: raw.stores.map((row) => ({
       id: idOf(row),
       name: text(row.name),
@@ -972,6 +1012,7 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
       category: categoryNames.get(text(row.category)) || shortId(row.category),
       businessType: fromBackendBusinessType(row.business_type),
       uom: unitNames.get(text(row.base_unit)) || text(row.unit),
+      baseUnitId: text(row.base_unit),
       store: storeNames.get(text(balance?.store)) || '',
       onHand,
       reorder,

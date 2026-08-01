@@ -8,6 +8,7 @@ const routePermissions: Record<string, string[]> = {
   items: ['inventory.view_item'],
   categories: ['inventory.view_category'],
   uoms: ['inventory.view_unitofmeasure'],
+  itemUnits: ['inventory.view_itemunitprice'],
   locations: ['inventory.view_storelocation'],
   balances: ['inventory.view_inventorybalance'],
   ledgers: ['inventory.view_stockledger'],

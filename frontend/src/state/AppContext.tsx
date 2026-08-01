@@ -151,6 +151,7 @@ const entityKeys: EntityKey[] = [
   'items',
   'categories',
   'uoms',
+  'itemUnits',
   'locations',
   'suppliers',
   'supplierItems',

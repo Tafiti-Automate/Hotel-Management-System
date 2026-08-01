@@ -8,6 +8,7 @@ export interface WorkflowPathStep {
   description: string
   icon: string
   disabled?: boolean
+  count?: number
 }
 
 interface WorkflowPathProps {
@@ -16,9 +17,10 @@ interface WorkflowPathProps {
   steps: WorkflowPathStep[]
   activeKey: string
   onSelect?: (key: string) => void
+  badge?: string
 }
 
-export function WorkflowPath({ title, summary, steps, activeKey, onSelect }: WorkflowPathProps) {
+export function WorkflowPath({ title, summary, steps, activeKey, onSelect, badge = 'FOLLOW IN ORDER' }: WorkflowPathProps) {
   return (
     <section className="workflow-path" style={container} aria-label={title}>
       <div className="workflow-path-header">
@@ -26,7 +28,7 @@ export function WorkflowPath({ title, summary, steps, activeKey, onSelect }: Wor
           <div style={{ color: 'var(--text)', fontSize: 13, fontWeight: 800 }}>{title}</div>
           <div style={{ marginTop: 3, color: 'var(--text-muted)', fontSize: 11.5, lineHeight: 1.45 }}>{summary}</div>
         </div>
-        <span style={{ flex: 'none', padding: '5px 9px', borderRadius: 20, color: 'var(--accent)', background: 'var(--accent-soft)', fontSize: 10, fontWeight: 800 }}>FOLLOW IN ORDER</span>
+        <span style={{ flex: 'none', padding: '5px 9px', borderRadius: 20, color: 'var(--accent)', background: 'var(--accent-soft)', fontSize: 10, fontWeight: 800 }}>{badge}</span>
       </div>
       <div className="workflow-path-steps" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(135px, 1fr))` }}>
         {steps.map((step, index) => {
@@ -45,7 +47,7 @@ export function WorkflowPath({ title, summary, steps, activeKey, onSelect }: Wor
               <span className="workflow-path-number">{index + 1}</span>
               <span style={{ minWidth: 0 }}>
                 <span className="workflow-path-actor">{step.actor}</span>
-                <span className="workflow-path-label"><Icon name={step.icon} size={16} />{step.label}</span>
+                <span className="workflow-path-label"><Icon name={step.icon} size={16} />{step.label}{step.count != null && <span style={{ marginLeft: 'auto', minWidth: 21, padding: '2px 6px', borderRadius: 20, color: active ? '#fff' : 'var(--accent)', background: active ? 'var(--accent)' : 'var(--accent-soft)', fontSize: 9.5, fontWeight: 850, textAlign: 'center' }}>{step.count}</span>}</span>
                 <span className="workflow-path-description">{step.description}</span>
               </span>
               {index < steps.length - 1 && <Icon name="chevron_right" size={17} color="var(--text-faint)" style={{ position: 'absolute', right: -13, top: 28, zIndex: 2 }} />}

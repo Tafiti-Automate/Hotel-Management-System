@@ -34,7 +34,7 @@ export default function ListView() {
 
   const source = (route === 'approvals' ? 'requisitions' : route) as EntityKey
   const permissionModel: Partial<Record<EntityKey, string>> = {
-    items: 'inventory.item', categories: 'inventory.category', uoms: 'inventory.unitofmeasure',
+    items: 'inventory.item', categories: 'inventory.category', uoms: 'inventory.unitofmeasure', itemUnits: 'inventory.itemunitprice',
     locations: 'inventory.storelocation', suppliers: 'vendors.supplier',
     supplierItems: 'inventory.supplieritemprice', departments: 'departments.department',
     employees: 'employees.employee', requisitions: 'procurement.purchaserequisition',

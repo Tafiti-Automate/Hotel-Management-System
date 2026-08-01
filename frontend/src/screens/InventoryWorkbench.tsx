@@ -7,6 +7,7 @@ import type { Row } from '../lib/data'
 import { useApp } from '../state/AppContext'
 
 type Tab = 'requests' | 'issues' | 'transfers' | 'adjustments' | 'counts' | 'returns' | 'reorder' | 'batches' | 'consumption'
+type SupplyTask = 'prepare' | 'department' | 'stores' | 'shortage' | 'issue'
 const inventoryPaths = {
   requests: 'store-requisitions', requestItems: 'store-requisition-items',
   issues: 'stock-issues', issueItems: 'stock-issue-items',
@@ -86,7 +87,7 @@ export default function InventoryWorkbench() {
   useEffect(() => {
     if (!app.inventoryDraftId) return
     setTab('requests')
-    setSupplyPathHint('request')
+    setSupplyPathHint('prepare')
     setForm({ request: app.inventoryDraftId })
     app.consumeInventoryDraft()
   }, [app.inventoryDraftId, app.consumeInventoryDraft])
@@ -143,13 +144,15 @@ export default function InventoryWorkbench() {
   const isDepartmentActor = isAdministrator || role === 'department head'
   const isStoresApprover = isAdministrator || ['stores manager', 'store manager'].includes(role)
   const isStoresIssuer = isStoresApprover || role === 'store keeper'
-  const requestRoleStage = isStoresApprover
-    ? 'stores-review'
-    : role === 'department head' ? 'department-review' : 'request'
-  const supplyPathActive = supplyPathHint || (tab === 'issues' ? 'pick' : tab === 'requests' ? requestRoleStage : '')
+  const requestRoleStage: SupplyTask = isStoresApprover
+    ? 'stores'
+    : role === 'department head' ? 'department' : 'prepare'
+  const supplyPathActive = supplyPathHint || (tab === 'issues' ? 'issue' : tab === 'requests' ? requestRoleStage : '')
   const selectSupplyStep = (key: string) => {
     setSupplyPathHint(key)
-    setTab(['pick', 'post', 'acknowledge'].includes(key) ? 'issues' : 'requests')
+    setForm({})
+    setSelectedRecord(null)
+    setTab(key === 'issue' ? 'issues' : 'requests')
   }
   const common = { app, data: scopedData, form, setForm, busy, execute }
   return <div style={{ maxWidth: 1460, margin: '0 auto' }}>
@@ -159,13 +162,13 @@ export default function InventoryWorkbench() {
       summary="Each person completes only their assigned stage. Requests created by a Department Head skip department review and go directly to Stores."
       activeKey={supplyPathActive}
       onSelect={selectSupplyStep}
+      badge="ROLE-BASED TASKS"
       steps={[
-        { key: 'request', label: 'Prepare request', actor: 'Department requester', description: 'Choose the draft, add all articles and submit.', icon: 'playlist_add', disabled: !can(tabPermissions.requests.change || tabPermissions.requests.view) },
-        { key: 'department-review', label: 'Department review', actor: 'Department Head', description: 'Confirm the need, then approve or reject it.', icon: 'approval', disabled: !isDepartmentActor || !can(tabPermissions.requests.change || tabPermissions.requests.view) },
-        { key: 'stores-review', label: 'Stores review', actor: 'Stores manager', description: 'Check availability, approve quantities and reserve stock.', icon: 'inventory', disabled: !isStoresApprover || !can(tabPermissions.requests.change || tabPermissions.requests.view) },
-        { key: 'pick', label: 'Pick articles', actor: 'Stores team', description: 'Create the issue voucher and add approved pick lines.', icon: 'shopping_basket', disabled: !isStoresIssuer || !can(tabPermissions.issues.change || tabPermissions.issues.view) },
-        { key: 'post', label: 'Post issue', actor: 'Stores team', description: 'Release stock and record department consumption.', icon: 'outbox', disabled: !isStoresIssuer || !can(tabPermissions.issues.change || tabPermissions.issues.view) },
-        { key: 'acknowledge', label: 'Confirm receipt', actor: 'Stores team at handover', description: 'Record the employee who physically received the articles.', icon: 'how_to_reg', disabled: !isStoresIssuer || !can(tabPermissions.issues.change || tabPermissions.issues.view) },
+        { key: 'prepare', label: 'Prepare request', actor: 'Department requester', description: 'Create the request, add every article and submit it.', icon: 'playlist_add', count: scopedData.requests.filter((row: Row) => ['draft', 'rejected'].includes(id(row.status))).length, disabled: !can(tabPermissions.requests.change || tabPermissions.requests.view) },
+        { key: 'department', label: 'Department approval', actor: 'Department Head', description: 'Review the need, then approve or reject it.', icon: 'approval', count: scopedData.requests.filter((row: Row) => id(row.status) === 'pending_department_approval').length, disabled: !isDepartmentActor || !can(tabPermissions.requests.change || tabPermissions.requests.view) },
+        { key: 'stores', label: 'Stores availability decision', actor: 'Stores Manager', description: 'Check stock, decide quantities and reserve them.', icon: 'inventory', count: scopedData.requests.filter((row: Row) => id(row.status) === 'submitted').length, disabled: !isStoresApprover || !can(tabPermissions.requests.change || tabPermissions.requests.view) },
+        { key: 'shortage', label: 'Procurement shortage', actor: 'Stores Manager', description: 'Create linked demand when stock is unavailable.', icon: 'shopping_cart_checkout', count: scopedData.requests.filter((row: Row) => id(row.status) === 'awaiting_procurement').length, disabled: !isStoresApprover || !can(tabPermissions.requests.change || tabPermissions.requests.view) },
+        { key: 'issue', label: 'Pick and issue', actor: 'Stores team', description: 'Pick, post and confirm the department handover.', icon: 'outbox', count: scopedData.requests.filter((row: Row) => ['approved', 'partially_approved', 'partially_issued'].includes(id(row.status))).length, disabled: !isStoresIssuer || !can(tabPermissions.issues.change || tabPermissions.issues.view) },
       ]}
     />}
     {otherTabs.length > 0 && <><div style={{ marginBottom: 7, color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>Other stores and inventory tasks</div><div style={{ display: 'flex', gap: 5, marginBottom: 15, flexWrap: 'wrap' }}>{otherTabs.map(([key, icon, label]) => <button key={key} onClick={() => { setSupplyPathHint(''); setTab(key) }} style={{ ...tabButton, background: tab === key ? 'var(--accent-soft)' : 'var(--surface)', color: tab === key ? 'var(--accent)' : 'var(--text-muted)', borderColor: tab === key ? 'var(--accent)' : 'var(--border)' }}><Icon name={icon} size={17} />{label}</button>)}</div></>}
@@ -174,7 +177,7 @@ export default function InventoryWorkbench() {
       <Records tab={tab} data={scopedData} app={app} onSelect={setSelectedRecord} />
       <aside style={{ ...card, padding: 18 }}>
         {!canChangeTab && !['batches', 'consumption'].includes(tab) && <ReadOnlyPanel title="Read-only access" note="Your role can review these records but cannot create, approve or post them." />}
-        {canChangeTab && tab === 'requests' && <RequestPanel {...common} />}
+        {canChangeTab && tab === 'requests' && <RequestPanel {...common} stage={(supplyPathActive || requestRoleStage) as SupplyTask} />}
         {canChangeTab && tab === 'issues' && <IssuePanel {...common} />}
         {canChangeTab && tab === 'transfers' && <TransferPanel {...common} />}
         {canChangeTab && tab === 'adjustments' && <AdjustmentPanel {...common} />}
@@ -189,10 +192,9 @@ export default function InventoryWorkbench() {
   </div>
 }
 
-function RequestPanel({ app, data, form, setForm, busy, execute }: any) {
+function RequestPanel({ app, data, form, setForm, busy, execute, stage }: any) {
   const role = String(app.user.role || '').toLowerCase()
   const isDepartmentHead = app.user.isSuperuser || ['system administrator', 'department head'].includes(role)
-  const isStoresApprover = app.user.isSuperuser || ['system administrator', 'stores manager'].includes(role)
   const drafts = data.requests.filter((row: Row) => ['draft', 'rejected'].includes(id(row.status)))
   const draftRequest = drafts.find((row: Row) => id(row.id) === id(form.request))
   const draftLines = data.requestItems.filter((row: Row) => id(row.requisition) === id(form.request))
@@ -201,62 +203,108 @@ function RequestPanel({ app, data, form, setForm, busy, execute }: any) {
   const submittedLines = data.requestItems.filter((row: Row) => id(row.requisition) === id(form.submitted))
   const decisionLine = submittedLines.find((row: Row) => id(row.id) === id(form.decisionLine))
   const departmentPending = data.requests.find((row: Row) => id(row.id) === id(form.departmentPending))
+  const departmentLines = data.requestItems.filter((row: Row) => id(row.requisition) === id(form.departmentPending))
+  const shortageRequest = data.requests.find((row: Row) => id(row.id) === id(form.shortageRequest))
+  const shortageLines = data.requestItems.filter((row: Row) => id(row.requisition) === id(form.shortageRequest))
   const procurementPending = data.requests.find((row: Row) => id(row.id) === id(form.procurementPending))
-  return <Panel title="Department store requisition" note="Employee requests go to the Department Head first; Department Head requests go directly to Stores.">
-    <RoleAction actor="Department requester" title="Prepare and submit the required articles" note="Complete all three steps below before sending the request for approval." />
-    <Action disabled={busy} click={() => app.openCreate('storeRequisitions', 'New department material request')}>Start a new material request</Action>
-    <Rule />
-    <StepHeading number="1" title="Choose a saved draft request" />
-    <Field label="Draft request"><Select value={form.request} change={(v) => setForm({ request: v })} rows={drafts} label={(r) => `${id(r.requisition_no)} · ${departmentName(app, r.department)}`} /></Field>
-    {!drafts.length && <Hint>Create a new Department Material Request first. After saving it, the system returns here automatically.</Hint>}
-    {draftRequest && <div style={{ marginBottom: 12, padding: 10, borderRadius: 6, background: 'var(--surface-2)', color: 'var(--text-muted)', fontSize: 11.5 }}><strong style={{ color: 'var(--text)' }}>Active issuing store:</strong> {storeName(app, draftRequest.store)}<br /><span>{id(draftRequest.purpose) || 'No purpose entered'}</span></div>}
-    <Rule />
-    <StepHeading number="2" title="Add requested items and quantities" />
-    <div style={{ margin: '-3px 0 10px', color: 'var(--text-faint)', fontSize: 11.5 }}>Add each Article required by the department. You can add multiple lines before submitting.</div>
-    <Field label="Existing draft line"><Select optional value={form.requestLine} change={(v) => { const line = draftLines.find((r: Row) => id(r.id) === v); setForm({ ...form, requestLine: v, item: line?.item || '', unit: line?.unit || '', quantity: line?.quantity_requested || '' }) }} rows={draftLines} label={(r) => `${itemName(app, r.item)} · ${r.quantity_requested}`} /></Field>
-    <Field label="Article"><Select value={form.item} change={(v) => setForm({ ...form, item: v })} rows={app.data.items} /></Field>
-    <Field label="Unit"><Select value={form.unit} change={(v) => setForm({ ...form, unit: v })} rows={app.data.uoms} optional /></Field>
-    <Field label="Requested quantity"><Input type="number" value={form.quantity} change={(v) => setForm({ ...form, quantity: v })} /></Field>
-    {!draftLine && <Action disabled={busy || !form.request || !form.item || num(form.quantity) <= 0} click={() => execute(() => createBackendRecord('store-requisition-items', { requisition: form.request, item: form.item, unit: form.unit || null, quantity_requested: num(form.quantity), quantity_approved: 0, quantity_issued: 0, remarks: '' }), 'Requested item added', { request: form.request })}>Add item to this request</Action>}
-    {draftLine && <><Action disabled={busy || num(form.quantity) <= 0} click={() => execute(() => updateBackendRecord('store-requisition-items', id(draftLine.id), { requisition: form.request, item: form.item, unit: form.unit || null, quantity_requested: num(form.quantity) }), 'Requested item updated', { request: form.request })}>Save item changes</Action><Action tone="danger" disabled={busy} click={() => execute(() => deleteBackendPath('store-requisition-items', id(draftLine.id)), 'Requested item removed', { request: form.request })}>Remove item</Action></>}
-    {draftLines.length > 0 && <div style={{ marginTop: 12, border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>{draftLines.map((line: Row, index: number) => <div key={id(line.id)} style={{ display: 'grid', gridTemplateColumns: '26px 1fr auto', gap: 8, padding: '9px 10px', borderBottom: index < draftLines.length - 1 ? '1px solid var(--border)' : 0, fontSize: 11.5 }}><span style={{ color: 'var(--text-faint)' }}>{index + 1}</span><strong style={{ color: 'var(--text)' }}>{itemName(app, line.item)}</strong><span style={{ color: 'var(--text-muted)' }}>{line.quantity_requested}</span></div>)}</div>}
-    {!draftLines.length && form.request && <Hint>No items have been added yet. Select an Article, enter its quantity, then click “Add item to this request”.</Hint>}
-    <Rule />
-    <StepHeading number="3" title="Submit the completed request" />
-    <Action disabled={busy || !form.request || !draftLines.length} click={() => execute(() => runBackendAction('store-requisitions', id(form.request), 'submit'), isDepartmentHead ? 'Store requisition sent to Stores' : 'Store requisition sent to Department Head')}>Submit request with {draftLines.length} item{draftLines.length === 1 ? '' : 's'}</Action>
-    {isDepartmentHead && <>
+  const decisionsComplete = submittedLines.length > 0 && submittedLines.every((line: Row) => num(line.quantity_approved) > 0 || Boolean(id(line.remarks).trim()))
+  const hasApprovedQuantity = submittedLines.some((line: Row) => num(line.quantity_approved) > 0)
+  const stageMeta: Record<SupplyTask, { title: string; note: string }> = {
+    prepare: { title: 'Prepare request', note: 'Create one request, add every required article, review the list, then submit it.' },
+    department: { title: 'Department approval', note: 'Only requests awaiting the Department Head appear in this queue.' },
+    stores: { title: 'Stores availability decision', note: 'Review requested and available quantities before reserving stock.' },
+    shortage: { title: 'Procurement shortage', note: 'Use this only when the issuing store cannot fulfil a submitted request.' },
+    issue: { title: 'Pick and issue', note: 'This task is completed in the Pick and issue workspace.' },
+  }
+  const meta = stageMeta[stage as SupplyTask] || stageMeta.prepare
+
+  return <Panel title={meta.title} note={meta.note}>
+    {stage === 'prepare' && <>
+      <RoleAction actor="Department requester" title="Prepare and submit the required articles" note="A Department Head's own request goes directly to Stores; other employee requests go to the Department Head first." />
+      <Action disabled={busy} click={() => app.openCreate('storeRequisitions', 'New department material request')}>Start a new material request</Action>
       <Rule />
-      <RoleAction actor="Department Head" title="Review the business need" note="This section contains only requests waiting for department approval." />
-      <Field label="Waiting for department approval"><Select value={form.departmentPending} change={(v) => setForm({ departmentPending: v })} rows={data.requests.filter((r: Row) => id(r.status) === 'pending_department_approval')} label={(r) => `${id(r.requisition_no)} · ${departmentName(app, r.department)}`} /></Field>
-      <Field label="Department approval comment"><Input value={form.departmentComment} change={(v) => setForm({ ...form, departmentComment: v })} /></Field>
-      <Action tone="good" disabled={busy || !departmentPending} click={() => execute(() => runBackendAction('store-requisitions', id(form.departmentPending), 'department-approve', { comments: form.departmentComment || '' }), 'Department request approved and sent to Stores')}>Approve for department</Action>
-      <Field label="Department rejection reason"><Input value={form.departmentReason} change={(v) => setForm({ ...form, departmentReason: v })} /></Field>
-      <Action tone="danger" disabled={busy || !departmentPending} click={() => execute(() => runBackendAction('store-requisitions', id(form.departmentPending), 'reject', { reason: form.departmentReason || '' }), 'Department request rejected')}>Reject department request</Action>
+      <StepHeading number="1" title="Choose a saved draft request" />
+      <Field label="Saved draft request"><Select value={form.request} change={(v) => setForm({ request: v })} rows={drafts} label={(r) => `${id(r.requisition_no)} · ${departmentName(app, r.department)}`} /></Field>
+      {!drafts.length && <Hint>No drafts are available. Start a new material request and save its details first.</Hint>}
+      {draftRequest && <RequestSummary request={draftRequest} lines={draftLines} data={data} app={app} />}
+      <Rule />
+      <StepHeading number="2" title="Add every requested article" />
+      <Field label="Edit an item already added (optional)"><Select optional emptyLabel="Add a new item" value={form.requestLine} change={(v) => { const line = draftLines.find((r: Row) => id(r.id) === v); setForm({ ...form, requestLine: v, item: line?.item || '', unit: line?.unit || '', quantity: line?.quantity_requested || '' }) }} rows={draftLines} label={(r) => `${itemName(app, r.item)} · ${r.quantity_requested}`} /></Field>
+      <Field label="Article"><Select value={form.item} change={(v) => setForm({ ...form, item: v })} rows={app.data.items} /></Field>
+      <Field label="Unit"><Select value={form.unit} change={(v) => setForm({ ...form, unit: v })} rows={app.data.uoms} optional emptyLabel="Use article base unit" /></Field>
+      <Field label="Requested quantity"><Input type="number" value={form.quantity} change={(v) => setForm({ ...form, quantity: v })} /></Field>
+      {!draftLine && <Action disabled={busy || !form.request || !form.item || num(form.quantity) <= 0} click={() => execute(() => createBackendRecord('store-requisition-items', { requisition: form.request, item: form.item, unit: form.unit || null, quantity_requested: num(form.quantity), quantity_approved: 0, quantity_issued: 0, remarks: '' }), 'Requested item added', { request: form.request })}>Add item to this request</Action>}
+      {draftLine && <><Action disabled={busy || num(form.quantity) <= 0} click={() => execute(() => updateBackendRecord('store-requisition-items', id(draftLine.id), { requisition: form.request, item: form.item, unit: form.unit || null, quantity_requested: num(form.quantity) }), 'Requested item updated', { request: form.request })}>Save item changes</Action><Action tone="danger" disabled={busy} click={() => execute(() => deleteBackendPath('store-requisition-items', id(draftLine.id)), 'Requested item removed', { request: form.request })}>Remove selected item</Action></>}
+      {!draftLines.length && form.request && <Hint>No items have been added. Choose an Article, enter the quantity, then add it to the request.</Hint>}
+      <Rule />
+      <StepHeading number="3" title="Review and submit" />
+      <Action disabled={busy || !form.request || !draftLines.length} click={() => execute(() => runBackendAction('store-requisitions', id(form.request), 'submit'), isDepartmentHead ? 'Store requisition sent to Stores' : 'Store requisition sent to Department Head')}>Submit request with {draftLines.length} item{draftLines.length === 1 ? '' : 's'}</Action>
+      <details style={{ marginTop: 18 }}><summary style={{ color: 'var(--bad)', cursor: 'pointer', fontSize: 11.5, fontWeight: 750 }}>Cancel an unfinished request</summary><div style={{ paddingTop: 10 }}><Field label="Unfinished request"><Select value={form.cancelRequest} change={(v) => setForm({ cancelRequest: v })} rows={data.requests.filter((r: Row) => !['issued', 'cancelled'].includes(id(r.status)))} label={(r) => `${id(r.requisition_no)} · ${id(r.status).replace(/_/g, ' ')}`} /></Field><Action tone="danger" disabled={busy || !form.cancelRequest} click={() => { if (window.confirm('Cancel this request and release any reserved stock?')) void execute(() => runBackendAction('store-requisitions', id(form.cancelRequest), 'cancel'), 'Store requisition cancelled and reservation released') }}>Cancel selected request</Action></div></details>
     </>}
-    {isStoresApprover && <>
-    <Rule />
-    <RoleAction actor="Stores manager" title="Decide quantities and reserve stock" note="Review every line before approving the full request. Use the shortage action when stock is unavailable." />
-    <Field label="Submitted request"><Select value={form.submitted} change={(v) => setForm({ submitted: v })} rows={data.requests.filter((r: Row) => id(r.status) === 'submitted')} label={(r) => id(r.requisition_no)} /></Field>
-    <Field label="Line decision"><Select value={form.decisionLine} change={(v) => { const line = submittedLines.find((r: Row) => id(r.id) === v); setForm({ ...form, decisionLine: v, approved: line?.quantity_approved || line?.base_quantity_requested || '', decisionComment: line?.remarks || '' }) }} rows={submittedLines} label={(r) => `${itemName(app, r.item)} · requested ${r.base_quantity_requested}`} /></Field>
-    <Field label="Approved quantity"><Input type="number" value={form.approved} change={(v) => setForm({ ...form, approved: v })} /></Field>
-    <Field label="Line decision comment"><Input value={form.decisionComment} change={(v) => setForm({ ...form, decisionComment: v })} /></Field>
-    <Action disabled={busy || !decisionLine} click={() => execute(() => updateBackendRecord('store-requisition-items', id(decisionLine?.id), { quantity_approved: num(form.approved), remarks: form.decisionComment || '' }), 'Line decision saved')}>Save line decision</Action>
-    <Field label="Approval comments"><Input value={form.approvalComments} change={(v) => setForm({ ...form, approvalComments: v })} /></Field>
-    <Action tone="good" disabled={busy || !submittedRequest} click={() => execute(() => runBackendAction('store-requisitions', id(form.submitted), 'approve', { comments: form.approvalComments || '' }), 'Store requisition approved and stock reserved')}>Approve / reserve decided quantities</Action>
-    <Field label="Rejection reason"><Input value={form.reason} change={(v) => setForm({ ...form, reason: v })} /></Field>
-    <Action tone="danger" disabled={busy || !form.submitted} click={() => execute(() => runBackendAction('store-requisitions', id(form.submitted), 'reject', { reason: form.reason || '' }), 'Store requisition rejected')}>Reject</Action>
-    <Rule />
-    <Field label="Unavailable request"><Select value={form.shortageRequest} change={(v) => setForm({ shortageRequest: v })} rows={data.requests.filter((r: Row) => id(r.status) === 'submitted')} label={(r) => `${id(r.requisition_no)} · ${departmentName(app, r.department)}`} /></Field>
-    <Field label="Shortage explanation"><Input value={form.shortageReason} change={(v) => setForm({ ...form, shortageReason: v })} /></Field>
-    <Action disabled={busy || !form.shortageRequest} click={() => execute(() => runBackendAction('store-requisitions', id(form.shortageRequest), 'send-to-procurement', { reason: form.shortageReason || '' }), 'Shortage sent to Procurement without duplicating the department request')}>Confirm shortage & send to Procurement</Action>
-    <Field label="Waiting for purchased stock"><Select value={form.procurementPending} change={(v) => setForm({ procurementPending: v })} rows={data.requests.filter((r: Row) => id(r.status) === 'awaiting_procurement')} label={(r) => id(r.requisition_no)} /></Field>
-    <Action tone="good" disabled={busy || !procurementPending} click={() => execute(() => runBackendAction('store-requisitions', id(form.procurementPending), 'resume-after-procurement'), 'Department request returned to Stores review')}>Purchased stock received — resume request</Action>
+
+    {stage === 'department' && <>
+      <RoleAction actor="Department Head" title="Confirm the department's business need" note="Open one waiting request, review its purpose and item list, then make one decision." />
+      <Field label="Request awaiting department approval"><Select value={form.departmentPending} change={(v) => setForm({ departmentPending: v })} rows={data.requests.filter((r: Row) => id(r.status) === 'pending_department_approval')} label={(r) => `${id(r.requisition_no)} · ${departmentName(app, r.department)}`} /></Field>
+      {!data.requests.some((r: Row) => id(r.status) === 'pending_department_approval') && <Hint>No requests are waiting for Department Head approval.</Hint>}
+      {departmentPending && <RequestSummary request={departmentPending} lines={departmentLines} data={data} app={app} />}
+      <Field label="Approval comment"><Input value={form.departmentComment} change={(v) => setForm({ ...form, departmentComment: v })} /></Field>
+      <Action tone="good" disabled={busy || !departmentPending} click={() => execute(() => runBackendAction('store-requisitions', id(form.departmentPending), 'department-approve', { comments: form.departmentComment || '' }), 'Department request approved and sent to Stores')}>Approve and send to Stores</Action>
+      <Rule />
+      <Field label="Rejection reason"><Input value={form.departmentReason} change={(v) => setForm({ ...form, departmentReason: v })} /></Field>
+      <Action tone="danger" disabled={busy || !departmentPending || !id(form.departmentReason).trim()} click={() => execute(() => runBackendAction('store-requisitions', id(form.departmentPending), 'reject', { reason: form.departmentReason || '' }), 'Department request rejected')}>Reject department request</Action>
     </>}
-    <Rule />
-    <RoleAction actor="Request owner or administrator" title="Cancel an unfinished request" note="Cancellation releases any reservation already made for the request." />
-    <Field label="Request to cancel"><Select value={form.cancelRequest} change={(v) => setForm({ cancelRequest: v })} rows={data.requests.filter((r: Row) => !['issued', 'cancelled'].includes(id(r.status)))} label={(r) => `${id(r.requisition_no)} · ${r.status}`} /></Field>
-    <Action tone="danger" disabled={busy || !form.cancelRequest} click={() => execute(() => runBackendAction('store-requisitions', id(form.cancelRequest), 'cancel'), 'Store requisition cancelled and reservation released')}>Cancel request</Action>
+
+    {stage === 'stores' && <>
+      <RoleAction actor="Stores Manager" title="Decide quantities and reserve available stock" note="Review each item. Save an approved quantity, or enter zero with a decision comment when it cannot be supplied." />
+      <Field label="Request awaiting Stores review"><Select value={form.submitted} change={(v) => setForm({ submitted: v })} rows={data.requests.filter((r: Row) => id(r.status) === 'submitted')} label={(r) => `${id(r.requisition_no)} · ${departmentName(app, r.department)}`} /></Field>
+      {!data.requests.some((r: Row) => id(r.status) === 'submitted') && <Hint>No requests are waiting for a Stores availability decision.</Hint>}
+      {submittedRequest && <RequestSummary request={submittedRequest} lines={submittedLines} data={data} app={app} showAvailability />}
+      <Field label="Item to review"><Select value={form.decisionLine} change={(v) => { const line = submittedLines.find((r: Row) => id(r.id) === v); setForm({ ...form, decisionLine: v, approved: num(line?.quantity_approved) > 0 ? line?.quantity_approved : line?.base_quantity_requested || '', decisionComment: line?.remarks || '' }) }} rows={submittedLines} label={(r) => `${itemName(app, r.item)} · requested ${r.base_quantity_requested}`} /></Field>
+      <Field label="Quantity Stores can approve"><Input type="number" value={form.approved} change={(v) => setForm({ ...form, approved: v })} /></Field>
+      <Field label="Decision comment"><Input value={form.decisionComment} change={(v) => setForm({ ...form, decisionComment: v })} /></Field>
+      <Action disabled={busy || !decisionLine || num(form.approved) < 0 || num(form.approved) > num(decisionLine?.base_quantity_requested) || (num(form.approved) === 0 && !id(form.decisionComment).trim())} click={() => execute(() => updateBackendRecord('store-requisition-items', id(decisionLine?.id), { quantity_approved: num(form.approved), remarks: form.decisionComment || '' }), 'Stores line decision saved', { submitted: form.submitted })}>Save this item decision</Action>
+      <Rule />
+      {!decisionsComplete && submittedRequest && <Hint>Review every item before approving. An unavailable item needs quantity 0 and a decision comment.</Hint>}
+      {decisionsComplete && !hasApprovedQuantity && <Hint>No quantity can be reserved. Use the Procurement shortage card instead of approving this request.</Hint>}
+      <Field label="Overall approval comment"><Input value={form.approvalComments} change={(v) => setForm({ ...form, approvalComments: v })} /></Field>
+      <Action tone="good" disabled={busy || !submittedRequest || !decisionsComplete || !hasApprovedQuantity} click={() => execute(() => runBackendAction('store-requisitions', id(form.submitted), 'approve', { comments: form.approvalComments || '' }), 'Store requisition approved and stock reserved')}>Approve and reserve reviewed quantities</Action>
+      <Field label="Overall rejection reason"><Input value={form.reason} change={(v) => setForm({ ...form, reason: v })} /></Field>
+      <Action tone="danger" disabled={busy || !form.submitted || !id(form.reason).trim()} click={() => execute(() => runBackendAction('store-requisitions', id(form.submitted), 'reject', { reason: form.reason || '' }), 'Store requisition rejected')}>Reject entire request</Action>
+    </>}
+
+    {stage === 'shortage' && <>
+      <RoleAction actor="Stores Manager" title="Escalate unavailable stock without duplicating demand" note="The system creates one linked purchase requisition and pauses the department request until purchased stock is posted." />
+      <StepHeading number="1" title="Send confirmed shortage to Procurement" />
+      <Field label="Submitted request with unavailable stock"><Select value={form.shortageRequest} change={(v) => setForm({ shortageRequest: v })} rows={data.requests.filter((r: Row) => id(r.status) === 'submitted')} label={(r) => `${id(r.requisition_no)} · ${departmentName(app, r.department)}`} /></Field>
+      {shortageRequest && <RequestSummary request={shortageRequest} lines={shortageLines} data={data} app={app} showAvailability />}
+      <Field label="Shortage explanation for Procurement"><Input value={form.shortageReason} change={(v) => setForm({ ...form, shortageReason: v })} /></Field>
+      <Action disabled={busy || !form.shortageRequest || !id(form.shortageReason).trim()} click={() => execute(() => runBackendAction('store-requisitions', id(form.shortageRequest), 'send-to-procurement', { reason: form.shortageReason || '' }), 'Shortage sent to Procurement without duplicating the department request')}>Create linked Procurement request</Action>
+      <Rule />
+      <StepHeading number="2" title="Resume after purchased stock is posted" />
+      <Field label="Request awaiting purchased stock"><Select value={form.procurementPending} change={(v) => setForm({ procurementPending: v })} rows={data.requests.filter((r: Row) => id(r.status) === 'awaiting_procurement')} label={(r) => `${id(r.requisition_no)} · ${departmentName(app, r.department)}`} /></Field>
+      {!data.requests.some((r: Row) => id(r.status) === 'awaiting_procurement') && <Hint>No department requests are currently waiting for Procurement.</Hint>}
+      {procurementPending && <RequestSummary request={procurementPending} lines={data.requestItems.filter((row: Row) => id(row.requisition) === id(procurementPending.id))} data={data} app={app} showAvailability />}
+      <Action tone="good" disabled={busy || !procurementPending} click={() => execute(() => runBackendAction('store-requisitions', id(form.procurementPending), 'resume-after-procurement'), 'Department request returned to Stores review')}>Stock has been posted — return to Stores review</Action>
+    </>}
   </Panel>
+}
+
+function RequestSummary({ request, lines, data, app, showAvailability = false }: { request: Row; lines: Row[]; data: Record<string, Row[]>; app: any; showAvailability?: boolean }) {
+  return <section style={{ marginBottom: 13, overflow: 'hidden', border: '1px solid var(--border)', borderRadius: 7 }}>
+    <div style={{ padding: '10px 11px', background: 'var(--surface-2)' }}>
+      <div style={{ color: 'var(--text)', fontSize: 11.5, fontWeight: 800 }}>{id(request.requisition_no)} · {departmentName(app, request.department)}</div>
+      <div style={{ marginTop: 3, color: 'var(--text-muted)', fontSize: 10.5 }}>{storeName(app, request.store)} · {id(request.purpose) || 'No purpose entered'}</div>
+    </div>
+    {lines.map((line: Row, index: number) => {
+      const balance = data.balances.find((row: Row) => id(row.item) === id(line.item) && id(row.store) === id(request.store))
+      return <div key={id(line.id)} style={{ display: 'grid', gridTemplateColumns: showAvailability ? '1fr auto auto' : '1fr auto', gap: 9, padding: '9px 11px', borderTop: '1px solid var(--border)', fontSize: 10.5 }}>
+        <span style={{ minWidth: 0, color: 'var(--text)', fontWeight: 700 }}>{index + 1}. {itemName(app, line.item)}</span>
+        <span style={{ color: 'var(--text-muted)' }}>Requested {line.base_quantity_requested || line.quantity_requested}</span>
+        {showAvailability && <span style={{ color: num(balance?.available_quantity) >= num(line.base_quantity_requested) ? 'var(--good)' : 'var(--warn)', fontWeight: 750 }}>Available {balance?.available_quantity ?? 0}</span>}
+      </div>
+    })}
+    {!lines.length && <div style={{ padding: 11, borderTop: '1px solid var(--border)', color: 'var(--warn)', fontSize: 10.5 }}>No items are recorded on this request.</div>}
+  </section>
 }
 
 function IssuePanel({ app, data, form, setForm, busy, execute }: any) {
@@ -265,26 +313,30 @@ function IssuePanel({ app, data, form, setForm, busy, execute }: any) {
   const requestLines = data.requestItems.filter((row: Row) => id(row.requisition) === id(form.request))
   const issue = data.issues.find((row: Row) => id(row.id) === id(form.issue))
   const issueRequestLines = data.requestItems.filter((row: Row) => id(row.requisition) === id(issue?.requisition))
-  return <Panel title="Pick, issue and acknowledge" note="Issue lines are costed from batches using FEFO/FIFO when posted.">
-    <StepHeading number="4" title="Create the issue voucher and pick approved articles" />
-    <Field label="Approved requisition"><Select value={form.request} change={(v) => setForm({ request: v })} rows={approved} label={(r) => id(r.requisition_no)} /></Field>
+  return <Panel title="Pick and issue" note="Complete one issue voucher from picking through the department handover.">
+    <RoleAction actor="Stores team" title="Pick, post and hand over approved articles" note="Posting reduces store stock using FEFO/FIFO batches and records department consumption." />
+    <StepHeading number="1" title="Create the issue voucher" />
+    <Field label="Approved department request"><Select value={form.request} change={(v) => setForm({ request: v })} rows={approved} label={(r) => `${id(r.requisition_no)} · ${departmentName(app, r.department)}`} /></Field>
+    {!approved.length && <Hint>No approved department requests are ready for picking.</Hint>}
     <Field label="Issued by"><Select value={form.employee} change={(v) => setForm({ ...form, employee: v })} rows={app.data.employees} /></Field>
     <Action disabled={busy || !request || !form.employee} click={() => execute(() => createBackendRecord('stock-issues', { requisition: request.id, store: request.store, issued_by: form.employee, note: '' }), 'Issue voucher created')}>Create issue voucher</Action>
     {!requestLines.length && form.request && <Hint>No approved lines exist on this requisition.</Hint>}
     <Rule />
-    <Field label="Issue voucher"><Select value={form.issue} change={(v) => setForm({ issue: v })} rows={data.issues} label={(r) => id(r.issue_no)} /></Field>
-    <Field label="Approved request line"><Select value={form.requestLine} change={(v) => setForm({ ...form, requestLine: v })} rows={issueRequestLines} label={(r) => `${itemName(app, r.item)} · ${r.outstanding_quantity} outstanding`} /></Field>
+    <StepHeading number="2" title="Add the approved pick quantities" />
+    <Field label="Draft issue voucher"><Select value={form.issue} change={(v) => setForm({ issue: v })} rows={data.issues.filter((row: Row) => !row.inventory_changes_applied)} label={(r) => id(r.issue_no)} /></Field>
+    <Field label="Approved item to pick"><Select value={form.requestLine} change={(v) => setForm({ ...form, requestLine: v })} rows={issueRequestLines} label={(r) => `${itemName(app, r.item)} · ${r.outstanding_quantity} outstanding`} /></Field>
     <Field label="Pick quantity"><Input type="number" value={form.quantity} change={(v) => setForm({ ...form, quantity: v })} /></Field>
-    <Action disabled={busy || !form.issue || !form.requestLine} click={() => execute(() => createBackendRecord('stock-issue-items', { issue: form.issue, requisition_item: form.requestLine, unit: null, quantity: num(form.quantity) }), 'Article added to pick list')}>Add pick line</Action>
+    <Action disabled={busy || !form.issue || !form.requestLine || num(form.quantity) <= 0} click={() => execute(() => createBackendRecord('stock-issue-items', { issue: form.issue, requisition_item: form.requestLine, unit: null, quantity: num(form.quantity) }), 'Article added to pick list', { issue: form.issue })}>Add item to pick list</Action>
     <Rule />
-    <StepHeading number="5" title="Post the completed issue" />
+    <StepHeading number="3" title="Post the completed issue" />
     <div style={{ margin: '-3px 0 9px', color: 'var(--text-faint)', fontSize: 11.5 }}>Posting reduces store stock and records department consumption. Check the voucher first.</div>
     <Action tone="good" disabled={busy || !form.issue} click={() => execute(() => runBackendAction('stock-issues', id(form.issue), 'apply'), 'Stock issued and consumption posted')}>Post issue</Action>
     <Rule />
-    <StepHeading number="6" title="Confirm who received the articles" />
+    <StepHeading number="4" title="Confirm the department handover" />
+    <Field label="Posted issue voucher"><Select value={form.postedIssue} change={(v) => setForm({ postedIssue: v })} rows={data.issues.filter((row: Row) => row.inventory_changes_applied && !row.received_by_name && !row.received_by)} label={(r) => id(r.issue_no)} /></Field>
     <Field label="Receiving employee"><Select value={form.receiver} change={(v) => setForm({ ...form, receiver: v })} rows={app.data.employees} optional /></Field>
     <Field label="Receiver name"><Input value={form.receiverName} change={(v) => setForm({ ...form, receiverName: v })} /></Field>
-    <Action disabled={busy || !form.issue} click={() => execute(() => runBackendAction('stock-issues', id(form.issue), 'acknowledge', { received_by: form.receiver || null, received_by_name: form.receiverName || '' }), 'Department receipt acknowledged')}>Acknowledge receipt</Action>
+    <Action disabled={busy || !form.postedIssue || (!form.receiver && !id(form.receiverName).trim())} click={() => execute(() => runBackendAction('stock-issues', id(form.postedIssue), 'acknowledge', { received_by: form.receiver || null, received_by_name: form.receiverName || '' }), 'Department receipt acknowledged')}>Confirm department receipt</Action>
   </Panel>
 }
 
@@ -489,7 +541,7 @@ function RoleAction({ actor, title, note }: { actor: string; title: string; note
 function StepHeading({ number, title }: { number: string; title: string }) { return <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 10px', color: 'var(--text)', fontSize: 12, fontWeight: 750 }}><span style={{ width: 22, height: 22, display: 'grid', placeItems: 'center', borderRadius: 20, color: '#fff', background: 'var(--accent)', fontSize: 10 }}>{number}</span>{title}</div> }
 function Field({ label, children }: { label: string; children: ReactNode }) { return <label style={{ display: 'block', marginBottom: 10 }}><HelpLabel label={label} style={labelStyle} />{children}</label> }
 function Input({ value, change, type = 'text' }: { value: unknown; change: (value: string) => void; type?: string }) { return <input type={type} value={id(value)} onChange={(e) => change(e.target.value)} style={control} /> }
-function Select({ value, change, rows, label = (r: Row) => id(r.name), optional = false }: { value: unknown; change: (value: string) => void; rows: Row[]; label?: (row: Row) => string; optional?: boolean }) { return <select value={id(value)} onChange={(e) => change(e.target.value)} style={control}><option value="">{optional ? 'None' : 'Select…'}</option>{rows.map((row) => <option key={id(row.id)} value={id(row.id)}>{label(row)}</option>)}</select> }
+function Select({ value, change, rows, label = (r: Row) => id(r.name), optional = false, emptyLabel }: { value: unknown; change: (value: string) => void; rows: Row[]; label?: (row: Row) => string; optional?: boolean; emptyLabel?: string }) { return <select value={id(value)} onChange={(e) => change(e.target.value)} style={control}><option value="">{emptyLabel || (optional ? 'None' : 'Select…')}</option>{rows.map((row) => <option key={id(row.id)} value={id(row.id)}>{label(row)}</option>)}</select> }
 function Action({ children, click, disabled, tone = 'accent' }: any) { return <button type="button" onClick={click} disabled={disabled} style={{ ...action, opacity: disabled ? .45 : 1, background: tone === 'good' ? 'var(--good)' : tone === 'danger' ? 'var(--bad)' : 'var(--accent)' }}>{children}</button> }
 function Rule() { return <div style={{ borderTop: '1px solid var(--border)', margin: '16px 0' }} /> }
 function Hint({ children }: { children: ReactNode }) { return <div style={{ padding: 9, color: 'var(--warn)', background: 'var(--warn-soft)', borderRadius: 6, fontSize: 11 }}>{children}</div> }

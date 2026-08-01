@@ -102,10 +102,25 @@ export default function FormDrawer() {
         next.department = ''
         next.requester = ''
       }
+      if (f.entity === 'itemUnits' && key === 'role') {
+        next.unit = ''
+        if (raw === 'Base unit') next.conversionFactor = 1
+      }
       return next
     })
 
   const submit = () => {
+    if (f.entity === 'itemUnits' && values.role !== 'Base unit' && Number(values.conversionFactor || 0) <= 1) {
+      app.showWorkflowAlert(
+        'Invalid unit conversion',
+        'The selected unit must contain more than one base stock unit. Example: 1 carton = 12 pieces.',
+      )
+      return
+    }
+    if (f.entity === 'itemUnits' && values.role === 'Base unit' && Number(values.conversionFactor || 0) !== 1) {
+      app.showWorkflowAlert('Invalid base-unit conversion', 'The Article base stock unit must always have a conversion factor of 1.')
+      return
+    }
     // Coerce numeric fields one more time on save (mirrors prototype).
     const out: Row = {}
     visibleFields.forEach((fd) => {
@@ -133,12 +148,28 @@ export default function FormDrawer() {
 
         <div className="form-body" style={{ flex: 1, overflowY: 'auto', padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
           {f.entity === 'storeRequisitions' && !f.id && <div style={{ padding: 12, border: '1px solid var(--accent)', borderRadius: 8, background: 'var(--accent-soft)', color: 'var(--text)', fontSize: 12, lineHeight: 1.55 }}><strong>Step 1 of 2 — Request details.</strong><br />After saving, the system will open Step 2 so you can add every Article and quantity before submitting the request.</div>}
+          {f.entity === 'items' && <div style={{ padding: 12, border: '1px solid var(--accent)', borderRadius: 8, background: 'var(--accent-soft)', color: 'var(--text)', fontSize: 12, lineHeight: 1.55 }}><strong>Choose the smallest stock-counting unit.</strong><br />If you buy cartons of 12 bottles, the base stock unit is Bottle. Configure Carton separately under Article unit conversions.</div>}
+          {f.entity === 'itemUnits' && <div style={{ padding: 12, border: '1px solid var(--accent)', borderRadius: 8, background: 'var(--accent-soft)', color: 'var(--text)', fontSize: 12, lineHeight: 1.55 }}><strong>One selected unit must equal an exact number of base units.</strong><br />Example: 1 carton = 12 bottles. Once used in a transaction, this ratio is locked to protect stock and valuation history.</div>}
+          {f.entity === 'itemUnits' && values.item && values.unit && Number(values.conversionFactor || 0) > 0 && <div style={{ padding: 12, borderRadius: 8, background: 'var(--good-soft)', color: 'var(--good)', fontSize: 12, fontWeight: 750 }}>1 {String(values.unit)} = {Number(values.conversionFactor)} {String(app.data.items.find((item) => item.name === values.item)?.uom || 'base units')}</div>}
           {pageFields.map((fd) => {
             const isSelect = fd.type === 'select'
             const numeric = fd.type === 'number'
-            const options = fd.opts === 'categoryParents'
+            let options = fd.opts === 'categoryParents'
               ? categoryParentOptions(getOptions(fd.opts, app.data), app.data.categories, editingCategoryName)
               : getOptions(fd.opts || '', app.data)
+            if (fd.opts === 'uoms' && f.entity === 'itemUnits' && values.item) {
+              const article = app.data.items.find((item) => item.name === values.item)
+              options = values.role === 'Base unit'
+                ? options.filter((option) => option === article?.uom)
+                : options.filter((option) => option !== article?.uom)
+            }
+            if (fd.opts === 'uoms' && f.entity === 'supplierItems' && values.article) {
+              const article = app.data.items.find((item) => item.name === values.article)
+              const configured = app.data.itemUnits
+                .filter((entry) => entry.itemId === article?.id && entry.status === 'Active' && ['Purchase unit', 'Alternate unit'].includes(String(entry.role)))
+                .map((entry) => String(entry.unit))
+              options = Array.from(new Set([String(article?.uom || ''), ...configured].filter(Boolean)))
+            }
             const identityLocked = (locksStoreIdentity && ['department', 'requester', 'store'].includes(fd.key))
               || (locksPurchaseIdentity && ['request_type', 'department', 'requester'].includes(fd.key))
             return (

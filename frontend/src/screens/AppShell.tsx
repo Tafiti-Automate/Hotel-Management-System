@@ -18,7 +18,7 @@ import AccessManagement from './AccessManagement'
 import { canAccessRoute, isStoresManager } from '../lib/access'
 
 const listRoutes: string[] = [
-  'items', 'categories', 'uoms', 'locations', 'suppliers',
+  'items', 'categories', 'uoms', 'itemUnits', 'locations', 'suppliers',
   'balances', 'ledgers', 'batches', 'requisitions', 'approvals', 'orders', 'grns',
   'reorderRules', 'storeRequisitions', 'stockIssues', 'storeReturns', 'inspections',
   'supplierReturns',

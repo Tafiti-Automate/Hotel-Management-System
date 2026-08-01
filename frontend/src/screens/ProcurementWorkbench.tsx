@@ -233,8 +233,8 @@ export default function ProcurementWorkbench() {
           <aside style={{ ...card, padding: 18 }}>
             {!canChangeStage && <ReadOnlyStage />}
             {canChangeStage && stage === 'request' && <RequestPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel }} items={app.data.items} />}
-            {canChangeStage && stage === 'quote' && <QuotePanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, names }} suppliers={app.data.suppliers} units={app.data.uoms} />}
-            {canChangeStage && stage === 'lpo' && <LpoPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, orderLabel, names }} suppliers={app.data.suppliers} employees={app.data.employees} stores={app.data.locations} units={app.data.uoms} />}
+            {canChangeStage && stage === 'quote' && <QuotePanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, names }} suppliers={app.data.suppliers} units={app.data.uoms} items={app.data.items} itemUnits={app.data.itemUnits} />}
+            {canChangeStage && stage === 'lpo' && <LpoPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, orderLabel, names }} suppliers={app.data.suppliers} employees={app.data.employees} stores={app.data.locations} units={app.data.uoms} items={app.data.items} itemUnits={app.data.itemUnits} />}
             {canChangeStage && stage === 'receipt' && <ReceiptPanel {...{ data: scopedData, form, setForm, busy, run, orderLabel, receiptLabel, names }} employees={app.data.employees} stores={app.data.locations} />}
             {canChangeStage && stage === 'inspect' && <InspectionPanel {...{ data: scopedData, form, setForm, busy, run, receiptLabel, names }} employees={app.data.employees} />}
             {canChangeStage && stage === 'return' && <ReturnPanel {...{ data: scopedData, form, setForm, busy, run, receiptLabel, names }} employees={app.data.employees} stores={app.data.locations} />}
@@ -257,13 +257,15 @@ function RequestPanel({ data, form, setForm, busy, run, requisitionLabel, items 
   const lines = data.requisitionItems.filter((row: Row) => id(row.requisition) === id(form.requisition))
   const editing = lines.find((row: Row) => id(row.id) === id(form.requestLine))
   const duplicate = !editing && lines.some((row: Row) => id(row.item) === id(form.item))
+  const selectedItem = items.find((item: Row) => id(item.id) === id(form.item))
   return <Panel title="Requisition Articles" note="Add requested Articles and estimated prices before submission.">
     <Action disabled={busy} onClick={() => app.openCreate('requisitions', 'New purchase requisition')}>Start a new purchase requisition</Action>
     <Divider />
     <Field label="Draft requisition"><Select value={form.requisition} onChange={(v) => setForm({ ...form, requisition: v })} rows={drafts} label={requisitionLabel} /></Field>
     <Field label="Existing line"><Select optional value={form.requestLine} onChange={(v) => { const line = lines.find((row: Row) => id(row.id) === v); setForm({ ...form, requestLine: v, item: line?.item || '', quantity: line?.quantity || '', cost: line?.estimated_unit_cost || '' }) }} rows={lines} label={(row: Row) => `${items.find((item: Row) => id(item.id) === id(row.item))?.name || id(row.item)} · ${row.quantity}`} /></Field>
     <Field label="Article"><Select value={form.item} onChange={(v) => setForm({ ...form, item: v })} rows={items} /></Field>
-    <Two><Field label="Quantity"><Input type="number" value={form.quantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><Field label="Estimated unit cost"><Input type="number" value={form.cost} onChange={(v) => setForm({ ...form, cost: v })} /></Field></Two>
+    <Two><Field label={`Quantity${selectedItem?.uom ? ` (${selectedItem.uom})` : ''}`}><Input type="number" value={form.quantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><Field label={`Estimated cost per ${selectedItem?.uom || 'base unit'}`}><Input type="number" value={form.cost} onChange={(v) => setForm({ ...form, cost: v })} /></Field></Two>
+    {selectedItem && <Hint>Purchase demand is recorded in the base stock unit: {selectedItem.uom}. Procurement may later request supplier prices in a configured carton, case, or pallet.</Hint>}
     {duplicate && <Hint>This Article already exists. Select its existing line to edit it.</Hint>}
     {!editing && <Action disabled={busy || duplicate || !form.requisition || !form.item} onClick={() => run(() => createBackendRecord('requisition-items', { requisition: form.requisition, item: form.item, quantity: num(form.quantity), estimated_unit_cost: num(form.cost) }), 'Requisition line added')}>Add line</Action>}
     {editing && <><Action disabled={busy || !form.item} onClick={() => run(() => updateBackendRecord('requisition-items', id(editing.id), { requisition: form.requisition, item: form.item, quantity: num(form.quantity), estimated_unit_cost: num(form.cost) }), 'Requisition line updated')}>Save line changes</Action><Action tone="danger" disabled={busy} onClick={() => run(() => deleteBackendPath('requisition-items', id(editing.id)), 'Requisition line removed')}>Remove line</Action></>}
@@ -273,7 +275,7 @@ function RequestPanel({ data, form, setForm, busy, run, requisitionLabel, items 
   </Panel>
 }
 
-function QuotePanel({ data, form, setForm, busy, run, requisitionLabel, names, suppliers, units }: any) {
+function QuotePanel({ data, form, setForm, busy, run, requisitionLabel, names, suppliers, units, items, itemUnits }: any) {
   const reqLines = data.requisitionItems.filter((row: Row) => id(row.requisition) === id(form.requisition))
   const quotes = data.quotations.filter((row: Row) => !form.requisition || id(row.requisition) === id(form.requisition))
   const selectedQuote = data.quotations.find((row: Row) => id(row.id) === id(form.quotation))
@@ -281,6 +283,11 @@ function QuotePanel({ data, form, setForm, busy, run, requisitionLabel, names, s
   const quoteLines = data.quotationItems.filter((row: Row) => id(row.quotation) === id(form.quotation))
   const editing = quoteLines.find((row: Row) => id(row.id) === id(form.quoteLine))
   const duplicate = !editing && quoteLines.some((row: Row) => id(row.requisition_item) === id(form.reqLine))
+  const selectedReqLine = quoteReqLines.find((row: Row) => id(row.id) === id(form.reqLine))
+  const selectedItem = items.find((item: Row) => id(item.id) === id(selectedReqLine?.item))
+  const availableUnits = configuredUnitsForItem(selectedItem, units, itemUnits)
+  const conversion = conversionFactorFor(selectedItem, form.unit, itemUnits)
+  const requestedBase = num(selectedReqLine?.requested_base_quantity || selectedReqLine?.quantity)
   return <Panel title="Supplier quotations" note="Record comparable supplier prices, then award one complete quotation.">
     <Field label="Requisition"><Select value={form.requisition} onChange={(v) => setForm({ requisition: v })} rows={data.requisitions} label={requisitionLabel} /></Field>
     <Field label="Supplier"><Select value={form.supplier} onChange={(v) => setForm({ ...form, supplier: v })} rows={suppliers} /></Field>
@@ -295,23 +302,27 @@ function QuotePanel({ data, form, setForm, busy, run, requisitionLabel, names, s
     <Action disabled={busy || !form.quotation} onClick={() => run(() => updateBackendRecord('quotations', id(form.quotation), { tax_amount: num(form.tax), transport_cost: num(form.transport), discount_amount: num(form.discount), payment_terms: form.terms || '', delivery_date: form.deliveryDate || null, valid_until: form.validUntil || null, evaluation_score: num(form.score), evaluation_notes: form.evaluationNotes || '' }), 'Quotation commercial terms saved')}>Save commercial evaluation</Action>
     <Divider />
     <Field label="Existing quoted line"><Select optional value={form.quoteLine} onChange={(v) => { const line = quoteLines.find((row: Row) => id(row.id) === v); setForm({ ...form, quoteLine: v, reqLine: line?.requisition_item || '', unit: line?.unit || '', quantity: line?.quantity || '', price: line?.unit_price || '', days: line?.delivery_days || '' }) }} rows={quoteLines} label={(row: Row) => `${names.items.get(id(row.item)) || id(row.item)} · ${money(row.unit_price)}`} /></Field>
-    <Field label="Requisition line"><Select value={form.reqLine} onChange={(v) => { const line = quoteReqLines.find((r: Row) => id(r.id) === v); setForm({ ...form, reqLine: v, quantity: line?.quantity }) }} rows={quoteReqLines} label={(row: Row) => `${names.items.get(id(row.item)) || 'Article'} · ${row.quantity}`} /></Field>
-    <Field label="Purchase unit"><Select value={form.unit} onChange={(v) => setForm({ ...form, unit: v })} rows={units} optional /></Field>
-    <Two><Field label="Quantity"><Input type="number" value={form.quantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><Field label="Unit price"><Input type="number" value={form.price} onChange={(v) => setForm({ ...form, price: v })} /></Field></Two>
+    <Field label="Requisition line"><Select value={form.reqLine} onChange={(v) => { const line = quoteReqLines.find((r: Row) => id(r.id) === v); const article = items.find((item: Row) => id(item.id) === id(line?.item)); const unit = id(line?.unit) || id(article?.baseUnitId); setForm({ ...form, reqLine: v, unit, quantity: num(line?.requested_base_quantity || line?.quantity) }) }} rows={quoteReqLines} label={(row: Row) => `${names.items.get(id(row.item)) || 'Article'} · ${row.requested_base_quantity || row.quantity} base units`} /></Field>
+    <Field label="Supplier's purchase unit"><Select value={form.unit} onChange={(v) => { const factor = conversionFactorFor(selectedItem, v, itemUnits); setForm({ ...form, unit: v, quantity: factor > 0 ? Number((requestedBase / factor).toFixed(4)) : '' }) }} rows={availableUnits} /></Field>
+    <Two><Field label={`Quoted quantity (${names.units.get(id(form.unit)) || selectedItem?.uom || 'unit'})`}><Input type="number" value={form.quantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><Field label="Price per selected purchase unit"><Input type="number" value={form.price} onChange={(v) => setForm({ ...form, price: v })} /></Field></Two>
+    {selectedReqLine && form.unit && <UnitConversionNote quantity={num(form.quantity)} factor={conversion} selectedUnit={names.units.get(id(form.unit)) || 'selected unit'} baseUnit={selectedItem?.uom || 'base units'} unitPrice={num(form.price)} />}
     <Field label="Delivery days"><Input type="number" value={form.days} onChange={(v) => setForm({ ...form, days: v })} /></Field>
     {duplicate && <Hint>This supplier already quoted this Article. Select the existing line to edit it.</Hint>}
-    {!editing && <Action disabled={busy || duplicate || !form.quotation || !form.reqLine} onClick={() => run(() => createBackendRecord('quotation-items', { quotation: form.quotation, requisition_item: form.reqLine, unit: form.unit || null, quantity: num(form.quantity), unit_price: num(form.price), delivery_days: num(form.days) }), 'Quotation line added')}>Add quoted line</Action>}
+    {!editing && <Action disabled={busy || duplicate || !form.quotation || !form.reqLine || !form.unit || num(form.quantity) <= 0 || num(form.price) <= 0} onClick={() => run(() => createBackendRecord('quotation-items', { quotation: form.quotation, requisition_item: form.reqLine, unit: form.unit, quantity: num(form.quantity), unit_price: num(form.price), delivery_days: num(form.days) }), 'Quotation line added')}>Add quoted line</Action>}
     {editing && <><Action disabled={busy || !form.reqLine || Boolean(editing.selected)} onClick={() => run(() => updateBackendRecord('quotation-items', id(editing.id), { quotation: form.quotation, requisition_item: form.reqLine, unit: form.unit || null, quantity: num(form.quantity), unit_price: num(form.price), delivery_days: num(form.days) }), 'Quotation line updated')}>Save quoted line</Action><Action tone="danger" disabled={busy || Boolean(editing.selected)} onClick={() => run(() => deleteBackendPath('quotation-items', id(editing.id)), 'Quotation line removed')}>Remove quoted line</Action></>}
     <Action tone="good" disabled={busy || !form.quotation || !form.evaluationNotes} onClick={() => run(() => runBackendAction('quotations', id(form.quotation), 'award', { selection_reason: form.evaluationNotes }), 'Winning quotation selected')}>Select as winner</Action>
     {!reqLines.length && form.requisition && <Hint>No requisition lines exist yet.</Hint>}
   </Panel>
 }
 
-function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel, names, suppliers, employees, stores, units }: any) {
+function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel, names, suppliers, employees, stores, units, items, itemUnits }: any) {
   const approved = data.requisitions.filter((row: Row) => ['approved', 'partially_ordered'].includes(id(row.status)))
   const order = data.orders.find((row: Row) => id(row.id) === id(form.order))
   const lines = data.orderItems.filter((row: Row) => id(row.purchase_order) === id(form.order))
   const line = lines.find((row: Row) => id(row.id) === id(form.orderLine))
+  const selectedItem = items.find((item: Row) => id(item.id) === id(line?.item))
+  const availableUnits = configuredUnitsForItem(selectedItem, units, itemUnits)
+  const conversion = conversionFactorFor(selectedItem, form.unit || line?.unit, itemUnits)
   return <Panel title="Local Purchase Order" note="Generate only from an approved requisition. Lines remain editable until issue.">
     <Field label="Approved requisition"><Select value={form.requisition} onChange={(v) => setForm({ requisition: v })} rows={approved} label={requisitionLabel} /></Field>
     <Field label="Supplier"><Select value={form.supplier} onChange={(v) => setForm({ ...form, supplier: v })} rows={suppliers} optional /></Field>
@@ -321,8 +332,9 @@ function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel
     <Divider />
     <Field label="Draft LPO"><Select value={form.order} onChange={(v) => setForm({ order: v })} rows={data.orders.filter((r: Row) => id(r.status) === 'draft')} label={orderLabel} /></Field>
     <Field label="LPO line"><Select value={form.orderLine} onChange={(v) => { const found = lines.find((r: Row) => id(r.id) === v); setForm({ ...form, order: form.order, orderLine: v, quantity: found?.quantity, cost: found?.unit_cost, unit: found?.unit }) }} rows={lines} label={(row: Row) => names.items.get(id(row.item)) || id(row.item)} /></Field>
-    <Field label="Unit"><Select value={form.unit} onChange={(v) => setForm({ ...form, unit: v })} rows={units} optional /></Field>
-    <Two><Field label="Quantity"><Input type="number" value={form.quantity ?? line?.quantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><Field label="Unit cost"><Input type="number" value={form.cost ?? line?.unit_cost} onChange={(v) => setForm({ ...form, cost: v })} /></Field></Two>
+    <Field label="Purchase unit"><Select value={form.unit} onChange={(v) => { const factor = conversionFactorFor(selectedItem, v, itemUnits); setForm({ ...form, unit: v, quantity: factor > 0 ? Number((num(line?.base_quantity) / factor).toFixed(4)) : form.quantity }) }} rows={availableUnits} /></Field>
+    <Two><Field label={`Order quantity (${names.units.get(id(form.unit || line?.unit)) || selectedItem?.uom || 'unit'})`}><Input type="number" value={form.quantity ?? line?.quantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><Field label="Cost per selected purchase unit"><Input type="number" value={form.cost ?? line?.unit_cost} onChange={(v) => setForm({ ...form, cost: v })} /></Field></Two>
+    {line && <UnitConversionNote quantity={num(form.quantity ?? line.quantity)} factor={conversion} selectedUnit={names.units.get(id(form.unit || line.unit)) || 'selected unit'} baseUnit={selectedItem?.uom || 'base units'} unitPrice={num(form.cost ?? line.unit_cost)} />}
     <Action disabled={busy || !form.orderLine} onClick={() => run(() => updateBackendRecord('purchase-order-items', id(form.orderLine), { quantity: num(form.quantity), unit_cost: num(form.cost), unit: form.unit || null }), 'LPO line updated')}>Save line changes</Action>
     <Field label="Supplier email"><Input type="email" value={form.email} onChange={(v) => setForm({ ...form, email: v })} placeholder={order ? 'Defaults to supplier email' : ''} /></Field>
     <Action tone="good" disabled={busy || !form.order} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'issue', { sent_to_email: form.email || '' }), 'LPO issued to supplier')}>Issue / send LPO</Action>
@@ -354,7 +366,8 @@ function ReceiptPanel({ data, form, setForm, busy, run, orderLabel, receiptLabel
     <Field label="Existing delivered line"><Select optional value={form.receiptLine} onChange={(v) => { const found = receiptLines.find((row: Row) => id(row.id) === v); setForm({ ...form, receipt: form.receipt, receiptLine: v, orderLine: found?.purchase_order_item || '', store: found?.store || '', quantity: found?.quantity_received || '', cost: found?.unit_cost || '', expiry: found?.expiry_date || '' }) }} rows={receiptLines} label={(row: Row) => `${names.items.get(id(row.item)) || id(row.item)} · ${row.quantity_received}`} /></Field>
     <Field label="LPO line"><Select value={form.orderLine} onChange={(v) => { const found = lines.find((r: Row) => id(r.id) === v); setForm({ ...form, receipt: form.receipt, orderLine: v, quantity: found?.quantity, cost: found?.unit_cost }) }} rows={lines} label={(row: Row) => names.items.get(id(row.item)) || id(row.item)} /></Field>
     <Field label="Receiving store"><Select value={form.store} onChange={(v) => setForm({ ...form, store: v })} rows={stores} /></Field>
-    <Two><Field label="Delivered quantity"><Input type="number" value={form.quantity ?? line?.quantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><Field label="Unit cost"><Input type="number" value={form.cost ?? line?.unit_cost} onChange={(v) => setForm({ ...form, cost: v })} /></Field></Two>
+    <Two><Field label={`Delivered quantity (${names.units.get(id(line?.unit)) || 'LPO unit'})`}><Input type="number" value={form.quantity ?? line?.quantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><Field label="Cost per LPO purchase unit"><Input type="number" value={form.cost ?? line?.unit_cost} onChange={(v) => setForm({ ...form, cost: v })} /></Field></Two>
+    {line && <UnitConversionNote quantity={num(form.quantity ?? line.quantity)} factor={num(line.base_quantity) && num(line.quantity) ? num(line.base_quantity) / num(line.quantity) : 1} selectedUnit={names.units.get(id(line.unit)) || 'LPO unit'} baseUnit="base stock units" unitPrice={num(form.cost ?? line.unit_cost)} />}
     <Field label="Expiry date"><Input type="date" value={form.expiry} onChange={(v) => setForm({ ...form, expiry: v })} /></Field>
     {duplicate && <Hint>This LPO line is already on the GRN. Select it above to correct it.</Hint>}
     {!editing && <Action disabled={busy || duplicate || !form.receipt || !form.orderLine || !form.store} onClick={() => run(() => createBackendRecord('grn-items', { goods_receipt: form.receipt, purchase_order_item: form.orderLine, store: form.store, quantity_received: num(form.quantity), unit_cost: num(form.cost), expiry_date: form.expiry || null }), 'Delivered line added')}>Add delivered line</Action>}
@@ -375,7 +388,7 @@ function InspectionPanel({ data, form, setForm, busy, run, receiptLabel, names, 
     <Divider />
     <Field label="Inspection"><Select value={form.inspection} onChange={(v) => setForm({ inspection: v })} rows={data.inspections} label={(row: Row) => `${receiptLabel({ id: row.goods_receipt })} · ${id(row.status)}`} /></Field>
     <Field label="Delivered Article"><Select value={form.receiptLine} onChange={(v) => { const found = inspectionReceiptItems.find((r: Row) => id(r.id) === v); setForm({ ...form, receiptLine: v, received: found?.base_quantity || found?.quantity_received }) }} rows={inspectionReceiptItems} label={(row: Row) => `${names.items.get(id(row.item)) || id(row.item)} · ${row.quantity_received}`} /></Field>
-    <Two><Field label="Accepted"><Input type="number" value={form.accepted} onChange={(v) => setForm({ ...form, accepted: v })} /></Field><Field label="Rejected"><Input type="number" value={form.rejected} onChange={(v) => setForm({ ...form, rejected: v })} /></Field></Two>
+    <Two><Field label="Accepted (base stock units)"><Input type="number" value={form.accepted} onChange={(v) => setForm({ ...form, accepted: v })} /></Field><Field label="Rejected (base stock units)"><Input type="number" value={form.rejected} onChange={(v) => setForm({ ...form, rejected: v })} /></Field></Two>
     <Field label="Rejection reason"><Input value={form.reason} onChange={(v) => setForm({ ...form, reason: v })} /></Field>
     <Action disabled={busy || !form.inspection || !form.receiptLine} onClick={() => run(() => createBackendRecord('goods-inspection-items', { inspection: form.inspection, goods_receipt_item: form.receiptLine, quantity_received: num(form.received ?? receiptLine?.base_quantity), quantity_accepted: num(form.accepted), quantity_rejected: num(form.rejected), rejection_reason: form.reason || '' }), 'Inspection quantities recorded')}>Record decision</Action>
     <Action tone="good" disabled={busy || !inspection?.goods_receipt} onClick={() => run(() => runBackendAction('grns', id(inspection.goods_receipt), 'post-to-inventory'), 'Accepted goods posted to inventory')}>Post accepted goods</Action>
@@ -777,6 +790,30 @@ function ProcurementPrintSheet({ propertyName, stage, title, reference, status, 
       <footer className="print-sheet-footer">Generated from the Hotel Management System · {reference}</footer>
     </article>
   )
+}
+
+function configuredUnitsForItem(item: Row | undefined, units: Row[], itemUnits: Row[]): Row[] {
+  if (!item) return []
+  const allowed = new Set<string>([id(item.baseUnitId)])
+  itemUnits
+    .filter((entry: Row) => id(entry.itemId) === id(item.id) && id(entry.status) === 'Active')
+    .forEach((entry: Row) => allowed.add(id(entry.unitId)))
+  return units.filter((unit: Row) => allowed.has(id(unit.id)))
+}
+
+function conversionFactorFor(item: Row | undefined, unitId: unknown, itemUnits: Row[]): number {
+  if (!item || !unitId || id(unitId) === id(item.baseUnitId)) return 1
+  return num(itemUnits.find((entry: Row) => id(entry.itemId) === id(item.id) && id(entry.unitId) === id(unitId) && id(entry.status) === 'Active')?.conversionFactor)
+}
+
+function UnitConversionNote({ quantity, factor, selectedUnit, baseUnit, unitPrice }: { quantity: number; factor: number; selectedUnit: string; baseUnit: string; unitPrice: number }) {
+  if (factor <= 0) return <Hint>This unit has no active conversion for the selected Article. Configure it before continuing.</Hint>
+  const baseQuantity = quantity * factor
+  const baseCost = factor ? unitPrice / factor : 0
+  return <div style={{ marginBottom: 11, padding: 10, border: '1px solid var(--accent)', borderRadius: 6, color: 'var(--text)', background: 'var(--accent-soft)', fontSize: 10.5, lineHeight: 1.55 }}>
+    <strong>Conversion check:</strong> {quantity || 0} {selectedUnit} × {factor} = <strong>{Number(baseQuantity.toFixed(4))} {baseUnit}</strong>.
+    {unitPrice > 0 && <> Price per {selectedUnit}: <strong>{money(unitPrice)}</strong>; inventory cost per {baseUnit}: <strong>{money(baseCost)}</strong>.</>}
+  </div>
 }
 
 function Panel({ title, note, children }: { title: string; note: string; children: ReactNode }) {

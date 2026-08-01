@@ -22,6 +22,7 @@ const operationsGroups: NavGroup[] = [
   { heading: 'Inventory records', icon: 'inventory_2', items: [
     { route: 'items', label: 'Article catalogue', icon: 'inventory_2' },
     { route: 'categories', label: 'Categories', icon: 'category' },
+    { route: 'itemUnits', label: 'Article unit conversions', icon: 'calculate' },
     { route: 'balances', label: 'Stock balances', icon: 'equalizer' },
     { route: 'ledgers', label: 'Stock ledger', icon: 'menu_book' },
     { route: 'batches', label: 'Batches & expiry', icon: 'layers' },
