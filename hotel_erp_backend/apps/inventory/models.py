@@ -1113,12 +1113,44 @@ class StoreRequisition(BaseModel):
                 "status", "department_approved_by", "department_approved_at",
                 "department_approval_comments", "updated_at",
             ])
+            self._notify_stores(
+                title=f"{self.requisition_no} needs a stock decision",
+                message=(
+                    f"{self.department} submitted a department store request. "
+                    "Check availability and decide the quantities to reserve."
+                ),
+                created_by=actor,
+            )
             return
         self.status = (
             StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL
             if actor else StoreRequisitionStatus.SUBMITTED
         )
         self.save(update_fields=["status", "updated_at"])
+        if self.status == StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL:
+            from apps.notifications.services import notify_roles
+
+            notify_roles(
+                ("Department Head",),
+                title=f"{self.requisition_no} needs department approval",
+                message=(
+                    f"{self.requested_by} submitted a store request for {self.department}. "
+                    "Review the articles and approve or reject the request."
+                ),
+                branch=self.store.branch,
+                department=self.department,
+                created_by=actor,
+                exclude_employee=self.requested_by,
+            )
+        else:
+            self._notify_stores(
+                title=f"{self.requisition_no} needs a stock decision",
+                message=(
+                    f"{self.department} submitted a department store request. "
+                    "Check availability and decide the quantities to reserve."
+                ),
+                created_by=actor,
+            )
 
     def approve_department(self, approved_by, comments=""):
         if self.status != StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL:
@@ -1134,6 +1166,14 @@ class StoreRequisition(BaseModel):
             "status", "department_approved_by", "department_approved_at",
             "department_approval_comments", "updated_at",
         ])
+        self._notify_stores(
+            title=f"{self.requisition_no} needs a stock decision",
+            message=(
+                f"{self.department} approved its store request. "
+                "Check availability and decide the quantities to reserve."
+            ),
+            created_by=approved_by.user,
+        )
 
     def create_shortage_purchase_requisition(self, created_by=None, reason=""):
         if self.status != StoreRequisitionStatus.SUBMITTED:
@@ -1171,9 +1211,21 @@ class StoreRequisition(BaseModel):
         self.procurement_requisition = purchase
         self.status = StoreRequisitionStatus.AWAITING_PROCUREMENT
         self.save(update_fields=["procurement_requisition", "status", "updated_at"])
+        from apps.notifications.services import notify_roles
+
+        notify_roles(
+            ("Procurement Manager",),
+            title=f"{self.requisition_no} has a confirmed stock shortage",
+            message=(
+                f"Stores created {purchase.requisition_number} for unavailable items. "
+                "Prepare and submit the linked purchase request."
+            ),
+            branch=self.store.branch,
+            created_by=created_by,
+        )
         return purchase
 
-    def resume_after_procurement(self):
+    def resume_after_procurement(self, actor=None):
         if self.status != StoreRequisitionStatus.AWAITING_PROCUREMENT:
             raise ValidationError("Only requests awaiting Procurement can be resumed.")
         shortages = []
@@ -1190,6 +1242,14 @@ class StoreRequisition(BaseModel):
             )
         self.status = StoreRequisitionStatus.SUBMITTED
         self.save(update_fields=["status", "updated_at"])
+        self._notify_stores(
+            title=f"{self.requisition_no} is ready for a stock decision",
+            message=(
+                "Purchased stock is now available in the issuing store. "
+                "Review and reserve the request quantities."
+            ),
+            created_by=actor,
+        )
 
     def approve(self, approved_by=None, comments=""):
         if self.status not in (StoreRequisitionStatus.SUBMITTED, StoreRequisitionStatus.PARTIALLY_APPROVED):
@@ -1233,7 +1293,25 @@ class StoreRequisition(BaseModel):
             )
             self.save(update_fields=["approved_by", "approved_at", "approval_comments", "status", "updated_at"])
 
-    def reject(self, reason=""):
+        from apps.notifications.services import notify_employee, notify_roles
+
+        actor = approved_by.user if approved_by else None
+        notify_employee(
+            self.requested_by,
+            title=f"{self.requisition_no} was approved by Stores",
+            message="Stock has been reserved and the request is waiting to be picked and issued.",
+            created_by=actor,
+        )
+        notify_roles(
+            ("Store Keeper",),
+            title=f"{self.requisition_no} is ready to pick and issue",
+            message=f"Reserved stock for {self.department} is ready for picking and handover.",
+            branch=self.store.branch,
+            created_by=actor,
+            exclude_employee=approved_by,
+        )
+
+    def reject(self, reason="", actor=None):
         if self.status not in (
             StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL,
             StoreRequisitionStatus.SUBMITTED,
@@ -1243,8 +1321,16 @@ class StoreRequisition(BaseModel):
         self.status = StoreRequisitionStatus.REJECTED
         self.rejection_reason = reason
         self.save(update_fields=["status", "rejection_reason", "updated_at"])
+        from apps.notifications.services import notify_employee
 
-    def cancel(self):
+        notify_employee(
+            self.requested_by,
+            title=f"{self.requisition_no} was rejected",
+            message=reason or "Open the request to review the decision and make corrections.",
+            created_by=actor,
+        )
+
+    def cancel(self, actor=None):
         if self.status in (StoreRequisitionStatus.ISSUED, StoreRequisitionStatus.CANCELLED):
             raise ValidationError("Issued or already-cancelled requisitions cannot be cancelled.")
         with transaction.atomic():
@@ -1267,6 +1353,17 @@ class StoreRequisition(BaseModel):
                         balance.save(update_fields=["quantity_reserved", "updated_at"])
             self.status = StoreRequisitionStatus.CANCELLED
             self.save(update_fields=["status", "updated_at"])
+
+    def _notify_stores(self, *, title, message, created_by=None):
+        from apps.notifications.services import notify_roles
+
+        return notify_roles(
+            ("Stores Manager",),
+            title=title,
+            message=message,
+            branch=self.store.branch,
+            created_by=created_by,
+        )
 
     def mark_issued_if_complete(self):
         items = list(self.items.all())
@@ -1471,6 +1568,17 @@ class StockIssue(BaseModel):
             issue.inventory_changes_applied = True
             issue.save(update_fields=["inventory_changes_applied", "updated_at"])
             issue.requisition.mark_issued_if_complete()
+            from apps.notifications.services import notify_employee
+
+            notify_employee(
+                issue.requisition.requested_by,
+                title=f"{issue.requisition.requisition_no} stock was issued",
+                message=(
+                    f"{issue.issue_no} was posted for {issue.requisition.department}. "
+                    "The requested articles are ready for department handover."
+                ),
+                created_by=issue.created_by,
+            )
             self.inventory_changes_applied = True
 
     def posting_readiness(self):

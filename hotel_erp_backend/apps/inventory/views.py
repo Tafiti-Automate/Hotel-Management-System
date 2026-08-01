@@ -367,7 +367,7 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
         ):
             raise PermissionDenied("Only the Stores Manager can resume this request.")
         try:
-            requisition.resume_after_procurement()
+            requisition.resume_after_procurement(actor=request.user)
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
         return Response(self.get_serializer(requisition).data)
@@ -386,7 +386,10 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
         if not allowed:
             raise PermissionDenied("Your role cannot reject this request at its current stage.")
         try:
-            requisition.reject(reason=request.data.get("reason", ""))
+            requisition.reject(
+                reason=request.data.get("reason", ""),
+                actor=request.user,
+            )
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
         return Response(self.get_serializer(requisition).data)
@@ -395,7 +398,7 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     def cancel(self, request, pk=None):
         requisition = self.get_object()
         try:
-            requisition.cancel()
+            requisition.cancel(actor=request.user)
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
         return Response(self.get_serializer(requisition).data)
