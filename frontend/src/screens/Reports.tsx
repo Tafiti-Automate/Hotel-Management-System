@@ -19,7 +19,10 @@ export default function Reports() {
               <div style={{ width: 40, height: 40, borderRadius: 11, background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Icon name={rc.icon} size={21} color="var(--accent)" />
               </div>
-              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-faint)', background: 'var(--surface-2)', border: '1px solid var(--border)', padding: '3px 8px', borderRadius: 20 }}>{rc.grp}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 9.5, fontWeight: 750, color: rc.source === 'backend' ? 'var(--good)' : 'var(--text-faint)', background: rc.source === 'backend' ? 'var(--good-soft)' : 'var(--surface-2)', border: '1px solid var(--border)', padding: '3px 7px', borderRadius: 20 }}>{rc.source === 'backend' ? 'LIVE API' : 'SESSION'}</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-faint)', background: 'var(--surface-2)', border: '1px solid var(--border)', padding: '3px 8px', borderRadius: 20 }}>{rc.grp}</span>
+              </div>
             </div>
             <div style={{ fontSize: 14.5, fontWeight: 800, color: 'var(--text)', letterSpacing: '-.01em' }}>{rc.title}</div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.5 }}>{rc.desc}</div>

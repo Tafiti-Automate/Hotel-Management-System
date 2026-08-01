@@ -46,6 +46,7 @@ export interface ReportCard {
   desc: string
   icon: string
   grp: string
+  source: 'backend' | 'local'
 }
 
 export const cfg: Record<string, EntityConfig> = {
@@ -378,15 +379,16 @@ export const cfg: Record<string, EntityConfig> = {
 }
 
 export const reports: ReportCard[] = [
-  { id: 'valuation', title: 'Stock Valuation', desc: 'Current value of all stock by item and store.', icon: 'savings', grp: 'Inventory' },
-  { id: 'lowstock', title: 'Low Stock & Reorder', desc: 'Items at or below their reorder level.', icon: 'warning', grp: 'Inventory' },
-  { id: 'movement', title: 'Stock Movement', desc: 'Ledger of all stock in / out transactions.', icon: 'sync_alt', grp: 'Inventory' },
-  { id: 'aging', title: 'Stock Aging & Expiry', desc: 'Batches by expiry date and status.', icon: 'schedule', grp: 'Inventory' },
-  { id: 'req', title: 'Requisition Summary', desc: 'Requisitions by department and status.', icon: 'request_quote', grp: 'Procurement' },
-  { id: 'po', title: 'Purchase Order Summary', desc: 'POs by supplier, value and status.', icon: 'receipt_long', grp: 'Procurement' },
-  { id: 'grn', title: 'Goods Receipt Report', desc: 'GRNs and inspection outcomes.', icon: 'move_to_inbox', grp: 'Procurement' },
-  { id: 'supplier', title: 'Supplier Performance', desc: 'Ratings, fulfilment and status.', icon: 'local_shipping', grp: 'Vendors' },
-  { id: 'consumption', title: 'Consumption by Department', desc: 'Issued stock value per department.', icon: 'pie_chart', grp: 'Analytics' },
+  { id: 'valuation', title: 'Stock Valuation', desc: 'Weighted-average stock value by article and store.', icon: 'savings', grp: 'Inventory', source: 'backend' },
+  { id: 'lowstock', title: 'Low Stock & Reorder', desc: 'Live balances at or below effective reorder levels.', icon: 'warning', grp: 'Inventory', source: 'backend' },
+  { id: 'movement', title: 'Stock Card', desc: 'Chronological movements and running balance for an article.', icon: 'sync_alt', grp: 'Inventory', source: 'backend' },
+  { id: 'aging', title: 'Stock Expiry', desc: 'Non-depleted batches expiring within the selected period.', icon: 'schedule', grp: 'Inventory', source: 'backend' },
+  { id: 'consumption', title: 'Stock Consumption', desc: 'Outbound quantity by article, store and source.', icon: 'pie_chart', grp: 'Analytics', source: 'backend' },
+  { id: 'procurement', title: 'Procurement Status Summary', desc: 'PR, PO and supplier-return totals by status.', icon: 'monitoring', grp: 'Procurement', source: 'backend' },
+  { id: 'req', title: 'Requisition Register', desc: 'Detailed requisitions currently loaded in this session.', icon: 'request_quote', grp: 'Procurement', source: 'local' },
+  { id: 'po', title: 'Purchase Order Register', desc: 'Detailed purchase orders currently loaded in this session.', icon: 'receipt_long', grp: 'Procurement', source: 'local' },
+  { id: 'grn', title: 'Goods Receipt Register', desc: 'GRNs and inspection outcomes currently loaded.', icon: 'move_to_inbox', grp: 'Procurement', source: 'local' },
+  { id: 'supplier', title: 'Supplier Directory', desc: 'Supplier contacts and current account status.', icon: 'local_shipping', grp: 'Vendors', source: 'local' },
 ]
 
 export function getOptions(key: string, data: Record<EntityKey, Row[]>): string[] {

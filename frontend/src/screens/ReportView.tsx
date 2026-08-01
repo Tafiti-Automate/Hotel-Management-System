@@ -1,7 +1,8 @@
-import { useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { useApp } from '../state/AppContext'
 import { Icon } from '../components/Icon'
-import { buildReport } from '../lib/reports'
+import { errorMessage, fetchOperationalReport, isOperationalReport } from '../lib/api'
+import { buildOperationalReport, buildReport } from '../lib/reports'
 
 const exportBtn: CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 7, height: 38, padding: '0 14px', border: '1px solid var(--border)',
@@ -20,8 +21,18 @@ export default function ReportView() {
   const [category, setCategory] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [item, setItem] = useState('')
   const [page, setPage] = useState(1)
+  const [refreshKey, setRefreshKey] = useState(0)
+  const [livePayload, setLivePayload] = useState<Record<string, unknown>>({})
+  const [liveLoading, setLiveLoading] = useState(false)
+  const [liveError, setLiveError] = useState('')
   const reportId = app.reportId || 'valuation'
+  const operationalReportId = isOperationalReport(reportId) ? reportId : null
+  const live = Boolean(operationalReportId)
+  const branchId = String(app.data.branches.find((row) => row.name === app.currentBranch)?.id || '')
+  const selectedStoreName = String(app.data.locations.find((row) => String(row.id) === store)?.name || '')
+  const selectedCategoryName = String(app.data.categories.find((row) => String(row.id) === category)?.name || '')
   const filteredData = useMemo(() => {
     const next = { ...app.data }
     const inDateRange = (row: Record<string, any>) => {
@@ -29,17 +40,56 @@ export default function ReportView() {
       return (!dateFrom || !value || value >= dateFrom) && (!dateTo || !value || value <= dateTo)
     }
     ;(['balances', 'ledgers', 'batches', 'reorderRules'] as const).forEach((key) => {
-      next[key] = app.data[key].filter((row) => (!store || row.store === store) && (!category || row.category === category) && inDateRange(row))
+      next[key] = app.data[key].filter((row) => (!store || row.store === selectedStoreName) && (!category || row.category === selectedCategoryName) && inDateRange(row))
     })
     ;(['requisitions', 'orders', 'grns', 'storeRequisitions', 'stockIssues', 'storeReturns', 'supplierReturns'] as const).forEach((key) => {
       next[key] = app.data[key].filter(inDateRange)
     })
     return next
-  }, [app.data, category, dateFrom, dateTo, store])
-  const report = buildReport(reportId, filteredData)
+  }, [app.data, category, dateFrom, dateTo, selectedCategoryName, selectedStoreName, store])
+
+  useEffect(() => {
+    setPage(1)
+    setLivePayload({})
+    setLiveError('')
+    setLiveLoading(false)
+    if (!operationalReportId) return
+    if (reportId === 'movement' && !item) return
+    let active = true
+    setLiveLoading(true)
+    void fetchOperationalReport(operationalReportId, {
+      branch: branchId,
+      store,
+      category,
+      item,
+      dateFrom,
+      dateTo,
+    }).then((payload) => {
+      if (active) setLivePayload(payload)
+    }).catch((reason) => {
+      if (active) setLiveError(errorMessage(reason))
+    }).finally(() => {
+      if (active) setLiveLoading(false)
+    })
+    return () => { active = false }
+  }, [branchId, category, dateFrom, dateTo, item, live, operationalReportId, refreshKey, reportId, store])
+
+  const report = operationalReportId
+    ? buildOperationalReport(operationalReportId, livePayload)
+    : buildReport(reportId, filteredData)
   const pageSize = 25
   const pageCount = Math.max(1, Math.ceil(report.rows.length / pageSize))
   const visibleRows = report.rows.slice((page - 1) * pageSize, page * pageSize)
+  const supportsStore = !live || reportId !== 'procurement'
+  const supportsCategory = !live || ['valuation', 'lowstock', 'aging', 'consumption'].includes(reportId)
+  const supportsDates = !live || ['movement', 'aging', 'procurement', 'consumption'].includes(reportId)
+  const supportsItem = ['movement', 'consumption'].includes(reportId)
+  const needsItem = reportId === 'movement' && !item
+  const emptyMessage = needsItem
+    ? 'Choose an article to generate its stock card.'
+    : liveError
+      ? liveError
+      : 'No records match the selected criteria.'
 
   const exportCsv = () => {
     const quote = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`
@@ -78,7 +128,7 @@ export default function ReportView() {
 
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 18 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: '-.02em', color: 'var(--text)' }}>{report.title}</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}><h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: '-.02em', color: 'var(--text)' }}>{report.title}</h1><span style={{ fontSize: 9.5, fontWeight: 800, color: live ? 'var(--good)' : 'var(--text-faint)', background: live ? 'var(--good-soft)' : 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 20, padding: '3px 8px' }}>{live ? 'LIVE API' : 'SESSION DATA'}</span></div>
           <p style={{ margin: '5px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>{report.subtitle}</p>
         </div>
         <div style={{ display: 'flex', gap: 9 }}>
@@ -90,23 +140,26 @@ export default function ReportView() {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '11px 14px', marginBottom: 'var(--gap)', boxShadow: 'var(--shadow-sm)' }}>
         <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>Filters</span>
-        <input type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setPage(1) }} style={filterControl} title="From date" />
-        <input type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setPage(1) }} style={filterControl} title="To date" />
-        <select value={store} onChange={(event) => { setStore(event.target.value); setPage(1) }} style={filterControl}><option value="">All stores</option>{app.data.locations.map((row) => <option key={row.id}>{row.name}</option>)}</select>
-        <select value={category} onChange={(event) => { setCategory(event.target.value); setPage(1) }} style={filterControl}><option value="">All categories</option>{app.data.categories.map((row) => <option key={row.id}>{row.name}</option>)}</select>
+        {supportsDates && <><input type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setPage(1) }} style={filterControl} title="From date" /><input type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setPage(1) }} style={filterControl} title="To date" /></>}
+        {supportsStore && <select value={store} onChange={(event) => { setStore(event.target.value); setPage(1) }} style={filterControl}><option value="">All stores</option>{app.data.locations.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select>}
+        {supportsCategory && <select value={category} onChange={(event) => { setCategory(event.target.value); setPage(1) }} style={filterControl}><option value="">All categories</option>{app.data.categories.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select>}
+        {supportsItem && <select value={item} onChange={(event) => { setItem(event.target.value); setPage(1) }} style={filterControl}><option value="">{reportId === 'movement' ? 'Choose article…' : 'All articles'}</option>{app.data.items.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select>}
         <span style={filterChip}>Branch: {app.currentBranch || 'All'}</span>
+        {live && <button onClick={() => setRefreshKey((value) => value + 1)} style={{ ...filterControl, display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}><Icon name="sync" size={15} />Refresh</button>}
       </div>
 
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, boxShadow: 'var(--shadow)', overflow: 'hidden' }}>
         <div style={{ display: 'grid', gridTemplateColumns: report.grid, borderBottom: '1px solid var(--border)', padding: '0 8px', background: 'var(--surface-2)' }}>
           {report.columns.map((col, i) => <div key={i} style={col.style}>{col.label}</div>)}
         </div>
-        {visibleRows.map((row, ri) => (
+        {liveLoading && <div style={{ padding: 42, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12.5 }}>Loading live report from the backend…</div>}
+        {!liveLoading && !visibleRows.length && <div style={{ padding: 42, textAlign: 'center', color: liveError ? 'var(--bad)' : 'var(--text-muted)', fontSize: 12.5 }}>{emptyMessage}</div>}
+        {!liveLoading && visibleRows.map((row, ri) => (
           <div key={ri} className="hover-surface2" style={{ display: 'grid', gridTemplateColumns: report.grid, borderBottom: '1px solid var(--border)', padding: '0 8px' }}>
             {row.cells.map((cell, ci) => <div key={ci} style={cell.style}>{cell.text}</div>)}
           </div>
         ))}
-        {report.hasTotals && (
+        {!liveLoading && !liveError && report.hasTotals && report.rows.length > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: report.grid, padding: '0 8px', background: 'var(--surface-2)' }}>
             {report.totals.map((cell, ci) => <div key={ci} style={cell.style}>{cell.text}</div>)}
           </div>

@@ -735,6 +735,60 @@ export async function readBackendRecords(path: string): Promise<Row[]> {
   return (await readList(path)) as Row[]
 }
 
+export type OperationalReportId =
+  | 'valuation'
+  | 'lowstock'
+  | 'movement'
+  | 'aging'
+  | 'procurement'
+  | 'consumption'
+
+export interface OperationalReportFilters {
+  branch?: string
+  store?: string
+  category?: string
+  item?: string
+  dateFrom?: string
+  dateTo?: string
+}
+
+const operationalReportPaths: Record<OperationalReportId, string> = {
+  valuation: 'reports/stock-summary',
+  lowstock: 'reports/low-stock',
+  movement: 'reports/stock-card',
+  aging: 'reports/expiry',
+  procurement: 'reports/procurement-summary',
+  consumption: 'reports/consumption',
+}
+
+export function isOperationalReport(id: string): id is OperationalReportId {
+  return id in operationalReportPaths
+}
+
+export async function fetchOperationalReport(
+  id: OperationalReportId,
+  filters: OperationalReportFilters,
+): Promise<Record<string, unknown>> {
+  const query = new URLSearchParams()
+  if (filters.branch) query.set('branch', filters.branch)
+  if (filters.store) query.set('store', filters.store)
+  if (filters.category) query.set('category', filters.category)
+  if (filters.item) query.set('item', filters.item)
+  if (filters.dateFrom) query.set('date_from', filters.dateFrom)
+  if (filters.dateTo) query.set('date_to', filters.dateTo)
+  const suffix = query.size ? `?${query.toString()}` : ''
+  const path = `${operationalReportPaths[id]}${suffix}`
+  const response = await fetch(endpointUrl(path), {
+    headers: { Accept: 'application/json', ...authHeaders() },
+  })
+  if (!response.ok) {
+    let body: unknown = null
+    try { body = await response.json() } catch { /* non-JSON response */ }
+    throw new Error(apiErrorDetail(body, `Report request failed (${response.status}).`))
+  }
+  return response.json() as Promise<Record<string, unknown>>
+}
+
 export async function createBackendRecord(path: string, body: Row): Promise<Row> {
   return (await sendJson(path, 'POST', body)) as Row
 }
