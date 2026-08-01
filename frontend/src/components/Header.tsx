@@ -135,7 +135,7 @@ export default function Header() {
                 <div className="notification-list">
                   {notificationsLoading && <NotificationState icon="progress_activity" text="Loading your notifications…" />}
                   {!notificationsLoading && notificationsError && <NotificationState icon="error" text="Notifications could not be loaded." detail={notificationsError} action={() => void loadNotifications()} />}
-                  {!notificationsLoading && !notificationsError && notifications.length === 0 && <NotificationState icon="notifications_none" text="No notifications yet" detail="New tasks and operational alerts will appear here." />}
+                  {!notificationsLoading && !notificationsError && notifications.length === 0 && <NotificationState icon="notifications_none" text="No notifications yet" detail={app.user.isSuperuser ? "Operational alerts are sent to the employee account assigned to each workflow task. Use the relevant role account to test recipient notifications." : "New tasks assigned to your employee account will appear here."} />}
                   {!notificationsLoading && !notificationsError && notifications.map((notification) => (
                     <button
                       key={notification.id}
