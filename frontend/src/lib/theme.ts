@@ -98,23 +98,68 @@ export function money(v: number | string | null | undefined): string {
   return 'UGX ' + Math.round(Number.isFinite(n) ? n : 0).toLocaleString('en-UG')
 }
 
-/** Inline style string for a status chip, colored by its semantic meaning. */
-export function chipStyleFor(v: string): React.CSSProperties {
-  const good = ['OK', 'Active', 'Approved', 'Completed', 'Accepted', 'Inspected', 'In', 'Fresh']
-  const warn = ['Low', 'Pending', 'Draft', 'In transit', 'Awaiting GRN', 'On hold', 'Out', 'Expiring']
-  const bad = ['Critical', 'Rejected', 'Inactive']
-  let c = 'var(--accent)'
-  let b = 'var(--accent-soft)'
-  if (good.includes(v)) { c = 'var(--good)'; b = 'var(--good-soft)' }
-  else if (warn.includes(v)) { c = 'var(--warn)'; b = 'var(--warn-soft)' }
-  else if (bad.includes(v)) { c = 'var(--bad)'; b = 'var(--bad-soft)' }
+export interface StatusPresentation {
+  label: string
+  tone: 'good' | 'warn' | 'bad' | 'info' | 'neutral'
+}
+
+const STATUS_PRESENTATION: Record<string, StatusPresentation> = {
+  draft: { label: 'Draft', tone: 'neutral' },
+  submitted: { label: 'Submitted', tone: 'info' },
+  pending: { label: 'Pending', tone: 'warn' },
+  pending_department_approval: { label: 'Pending Department Approval', tone: 'warn' },
+  pending_stores_approval: { label: 'Pending Stores Approval', tone: 'warn' },
+  awaiting_procurement: { label: 'Awaiting Procurement', tone: 'warn' },
+  partially_issued: { label: 'Partially Issued', tone: 'warn' },
+  partially_received: { label: 'Partially Received', tone: 'warn' },
+  partially_paid: { label: 'Partially Paid', tone: 'warn' },
+  approved: { label: 'Approved', tone: 'good' },
+  accepted: { label: 'Accepted', tone: 'good' },
+  matched: { label: 'Matched', tone: 'good' },
+  posted: { label: 'Posted', tone: 'good' },
+  paid: { label: 'Paid', tone: 'good' },
+  issued: { label: 'Issued', tone: 'info' },
+  completed: { label: 'Completed', tone: 'good' },
+  active: { label: 'Active', tone: 'good' },
+  rejected: { label: 'Rejected', tone: 'bad' },
+  cancelled: { label: 'Cancelled', tone: 'bad' },
+  inactive: { label: 'Inactive', tone: 'bad' },
+  exception: { label: 'Exception', tone: 'bad' },
+  low: { label: 'Low', tone: 'warn' },
+  critical: { label: 'Critical', tone: 'bad' },
+}
+
+function statusKey(value: string): string {
+  return value.trim().toLowerCase().replace(/[\s-]+/g, '_')
+}
+
+export function statusPresentation(value: string): StatusPresentation {
+  const key = statusKey(value)
+  return STATUS_PRESENTATION[key] || {
+    label: value.includes('_') ? value.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()) : value,
+    tone: 'neutral',
+  }
+}
+
+/** Inline style for a canonical status badge. */
+export function chipStyleFor(value: string): React.CSSProperties {
+  const { tone } = statusPresentation(value)
+  const tones = {
+    good: ['var(--good)', 'var(--good-soft)'],
+    warn: ['var(--warn)', 'var(--warn-soft)'],
+    bad: ['var(--bad)', 'var(--bad-soft)'],
+    info: ['var(--accent)', 'var(--accent-soft)'],
+    neutral: ['var(--text-muted)', 'var(--surface-2)'],
+  } as const
+  const [color, background] = tones[tone]
   return {
     display: 'inline-block',
     fontSize: 11,
     fontWeight: 700,
     padding: '3px 10px',
     borderRadius: 20,
-    color: c,
-    background: b,
+    color,
+    background,
   }
 }
+

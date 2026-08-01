@@ -1084,18 +1084,38 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
     }
   })
 
-  data.storeRequisitions = raw.storeRequisitions.map((row) => ({
-    id: text(row.requisition_no, idOf(row)),
-    apiId: idOf(row),
-    department: departmentNames.get(text(row.department)) || shortId(row.department),
-    store: storeNames.get(text(row.store)) || shortId(row.store),
-    requester: employeeNames.get(text(row.requested_by)) || shortId(row.requested_by),
-    required_date: dateOnly(row.required_date),
-    purpose: text(row.purpose),
-    count: (raw.storeReqItems || []).filter((item) => text(item.requisition) === idOf(row)).length,
-    status: titleCaseStatus(row.status),
-    branchId: storeBranches.get(text(row.store)) || '',
-  }))
+  data.storeRequisitions = raw.storeRequisitions.map((row) => {
+    const requestItems = (raw.storeReqItems || [])
+      .filter((line) => text(line.requisition) === idOf(row))
+      .map((line) => ({
+        item: itemNames.get(text(line.item)) || shortId(line.item),
+        unit: itemUnits.get(text(line.unit)) || shortId(line.unit),
+        requested: num(line.quantity_requested),
+        approved: num(line.quantity_approved),
+        issued: num(line.quantity_issued),
+        outstanding: num(line.outstanding_quantity),
+        remarks: text(line.remarks),
+      }))
+    const itemSummary = requestItems.length
+      ? requestItems.slice(0, 2).map((line) => `${line.item} × ${line.requested}`).join(', ') + (requestItems.length > 2 ? ` +${requestItems.length - 2}` : '')
+      : 'No items added'
+    return {
+      id: text(row.requisition_no, idOf(row)),
+      apiId: idOf(row),
+      department: departmentNames.get(text(row.department)) || shortId(row.department),
+      store: storeNames.get(text(row.store)) || shortId(row.store),
+      requester: employeeNames.get(text(row.requested_by)) || shortId(row.requested_by),
+      date: dateOnly(row.created_at),
+      required_date: dateOnly(row.required_date),
+      purpose: text(row.purpose),
+      itemSummary,
+      items: requestItems,
+      count: requestItems.length,
+      status: titleCaseStatus(row.status),
+      statusCode: text(row.status),
+      branchId: storeBranches.get(text(row.store)) || '',
+    }
+  })
 
   data.stockIssues = raw.stockIssues.map((row) => ({
     id: text(row.issue_no, idOf(row)),

@@ -283,12 +283,12 @@ export const cfg: Record<string, EntityConfig> = {
   storeRequisitions: {
     title: 'Store Requests', sub: 'Department requests and fulfilment status', icon: 'assignment', add: 'New request', singular: 'Store Request', editable: true, detail: true,
     cols: [
-      { key: 'id', label: 'Request', w: '1.1fr', kind: 'mono' },
-      { key: 'department', label: 'Department', w: '1.3fr', kind: 'text' },
-      { key: 'store', label: 'Store', w: '1.2fr', kind: 'text' },
-      { key: 'requester', label: 'Requested by', w: '1.2fr', kind: 'text' },
-      { key: 'count', label: 'Items', w: '70px', kind: 'num', align: 'right' },
-      { key: 'status', label: 'Status', w: '130px', kind: 'status', align: 'right' },
+      { key: 'id', label: 'Request', w: '1.05fr', kind: 'mono' },
+      { key: 'date', label: 'Date', w: '100px', kind: 'text' },
+      { key: 'department', label: 'Department', w: '1.1fr', kind: 'text' },
+      { key: 'itemSummary', label: 'Requested items', w: 'minmax(0,2fr)', kind: 'text' },
+      { key: 'count', label: 'Lines', w: '64px', kind: 'num', align: 'right' },
+      { key: 'status', label: 'Status', w: '155px', kind: 'status', align: 'right' },
     ],
     fields: [
       { key: 'department', label: 'Department', type: 'select', opts: 'departments' },

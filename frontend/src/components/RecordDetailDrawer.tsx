@@ -1,5 +1,5 @@
 import { useEffect, type CSSProperties, type ReactNode } from 'react'
-import { chipStyleFor } from '../lib/theme'
+import { chipStyleFor, statusPresentation } from '../lib/theme'
 import { Icon } from './Icon'
 
 type DetailRecord = Record<string, unknown>
@@ -54,12 +54,11 @@ export default function RecordDetailDrawer({
             <span style={{ display: 'block', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>{title}</span>
             <span style={{ display: 'block', marginTop: 3, overflow: 'hidden', color: 'var(--text)', fontSize: 18, fontWeight: 800, textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{subtitle || reference || 'Record details'}</span>
           </span>
-          {status && <span style={chipStyleFor(displayValue(status))}>{displayValue(status)}</span>}
+          {status && <span style={chipStyleFor(status)}>{statusPresentation(status).label}</span>}
           <button type="button" onClick={onClose} title="Close details" aria-label="Close details" className="hover-surface2" style={closeButton}><Icon name="close" size={19} /></button>
         </header>
 
         <div style={{ padding: 20, overflowY: 'auto' }}>
-          <div style={{ marginBottom: 12, color: 'var(--text-muted)', fontSize: 11.5 }}>Complete information for the selected row.</div>
           <section className="record-detail-grid">
             {simpleKeys.map((key) => (
               <div key={key} style={fieldStyle}>
@@ -125,7 +124,7 @@ function displayValue(value: unknown): string {
   if (value === null || value === undefined || value === '') return '—'
   if (typeof value === 'boolean') return value ? 'Yes' : 'No'
   if (typeof value === 'number') return Number.isFinite(value) ? value.toLocaleString('en-UG') : '—'
-  if (typeof value === 'object') return Array.isArray(value) ? `${value.length} records` : 'Related information'
+  if (typeof value === 'object') return Array.isArray(value) ? `${value.length} records` : '—'
   const text = String(value)
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(text)) {
     const date = new Date(text)
