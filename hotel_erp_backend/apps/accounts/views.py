@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
 
-from apps.accounts.serializers import PermissionSerializer, RoleSerializer, UserSerializer
+from apps.accounts.serializers import PermissionSerializer, RoleSerializer, UserSerializer, TECHNICAL_ROLE_NAMES
 
 
 User = get_user_model()
@@ -65,6 +65,17 @@ class LoginView(APIView):
             return Response(
                 {"detail": "Invalid credentials."},
                 status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        employee = getattr(user, "employee_profile", None)
+        role_name = _user_role(user).strip().lower()
+        is_technical_account = user.is_superuser or (
+            user.account_type == User.ACCOUNT_SYSTEM and role_name in TECHNICAL_ROLE_NAMES
+        )
+        if employee is None and not is_technical_account:
+            return Response(
+                {"detail": "This account is not linked to an employee profile."},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         token, _ = Token.objects.get_or_create(user=user)
