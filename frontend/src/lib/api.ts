@@ -115,6 +115,8 @@ export interface AccountRecord {
   last_name: string
   employee_code: string
   phone: string
+  account_type: 'employee' | 'system'
+  linked_employee: { id: string; name: string; department: string } | null
   is_active: boolean
   is_staff: boolean
   date_joined: string

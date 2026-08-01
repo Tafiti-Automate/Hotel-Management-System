@@ -10,7 +10,7 @@ import {
 type Tab = 'accounts' | 'roles'
 type AccountDraft = Partial<AccountRecord> & { password?: string; role?: string }
 
-const emptyAccount: AccountDraft = { username: '', first_name: '', last_name: '', email: '', employee_code: '', phone: '', role: '', password: '', is_active: true, is_staff: true }
+const emptyAccount: AccountDraft = { username: '', first_name: '', last_name: '', email: '', employee_code: '', phone: '', account_type: 'system', role: '', password: '', is_active: true, is_staff: true }
 
 export default function AccessManagement() {
   const app = useApp()
@@ -94,12 +94,12 @@ export default function AccessManagement() {
   return <div className="access-page">
     <div className="access-heading">
       <div>
-        <h1>Roles & user accounts</h1>
-        <p>Control who can sign in and what they can access across the hotel.</p>
+        <h1>Roles & system access</h1>
+        <p>Employee accounts are created from Employee profiles. Standalone access is restricted to technical accounts.</p>
       </div>
       <button className="access-primary" onClick={() => tab === 'accounts' ? editAccount() : setRoleDraft({ name: '', permission_ids: [] })}>
         <Icon name={tab === 'accounts' ? 'person_add' : 'add_moderator'} size={18} color="#fff" />
-        {tab === 'accounts' ? 'Add user account' : 'Create role'}
+        {tab === 'accounts' ? 'Add system account' : 'Create role'}
       </button>
     </div>
 
@@ -121,10 +121,10 @@ export default function AccessManagement() {
 
       {error && <div className="access-error"><Icon name="error" size={17} />{error}<button onClick={() => setError('')}><Icon name="close" size={16} /></button></div>}
       {loading ? <div className="access-empty">Loading access controls…</div> : tab === 'accounts' ? <>
-        <div className="access-table-head account-grid"><span>User</span><span>Employee ID</span><span>Role</span><span>Last sign-in</span><span>Status</span><span /></div>
+        <div className="access-table-head account-grid"><span>User</span><span>Account</span><span>Role</span><span>Last sign-in</span><span>Status</span><span /></div>
         {visibleAccounts.map((account) => <div className="access-table-row account-grid" key={account.id} role="button" tabIndex={0} onClick={() => setSelectedAccessRecord({ title: 'User account', subtitle: fullName(account), record: { ...account } })} onKeyDown={(event) => { if (event.key === 'Enter') setSelectedAccessRecord({ title: 'User account', subtitle: fullName(account), record: { ...account } }) }} style={{ cursor: 'pointer' }}>
           <div className="access-person"><span className="access-avatar">{initials(account)}</span><span><b>{fullName(account)}</b><small>{account.email || `@${account.username}`}</small></span></div>
-          <code>{account.employee_code || '—'}</code>
+          <span><code>{account.employee_code || '—'}</code><small style={{ display: 'block', marginTop: 3, color: 'var(--text-faint)' }}>{account.linked_employee ? account.linked_employee.department : 'System account'}</small></span>
           <span className="access-role"><Icon name="shield" size={15} />{account.role_name}</span>
           <span className="muted">{account.last_login ? new Date(account.last_login).toLocaleDateString() : 'Never'}</span>
           <span className={`access-status ${account.is_active ? 'active' : 'inactive'}`}>{account.is_active ? 'Active' : 'Suspended'}</span>
@@ -146,19 +146,19 @@ export default function AccessManagement() {
 
     {selectedAccessRecord && <RecordDetailDrawer title={selectedAccessRecord.title} subtitle={selectedAccessRecord.subtitle} record={selectedAccessRecord.record} onClose={() => setSelectedAccessRecord(null)} />}
 
-    {accountDraft && <Modal title={accountDraft.id ? 'Edit user account' : 'Add user account'} subtitle="Sign-in details and role assignment" onClose={() => setAccountDraft(null)}>
+    {accountDraft && <Modal title={accountDraft.id ? 'Edit account' : 'Add system account'} subtitle={accountDraft.id ? 'Sign-in status and role assignment' : 'Standalone accounts are only for system administration and technical support'} onClose={() => setAccountDraft(null)}>
       <div className="access-form-grid">
         <Field label="First name"><input value={accountDraft.first_name || ''} onChange={(e) => setAccountDraft({ ...accountDraft, first_name: e.target.value })} /></Field>
         <Field label="Last name"><input value={accountDraft.last_name || ''} onChange={(e) => setAccountDraft({ ...accountDraft, last_name: e.target.value })} /></Field>
         <Field label="Username" required><input value={accountDraft.username || ''} onChange={(e) => setAccountDraft({ ...accountDraft, username: e.target.value })} /></Field>
-        <Field label="Employee ID"><input value={accountDraft.employee_code || ''} onChange={(e) => setAccountDraft({ ...accountDraft, employee_code: e.target.value })} /></Field>
+        {accountDraft.id && <Field label="Account reference"><input disabled value={accountDraft.employee_code || ''} /></Field>}
         <Field label="Email address"><input type="email" value={accountDraft.email || ''} onChange={(e) => setAccountDraft({ ...accountDraft, email: e.target.value })} /></Field>
         <Field label="Phone number"><input value={accountDraft.phone || ''} onChange={(e) => setAccountDraft({ ...accountDraft, phone: e.target.value })} /></Field>
-        <Field label="Role"><select value={accountDraft.role || ''} onChange={(e) => setAccountDraft({ ...accountDraft, role: e.target.value })}><option value="">No role assigned</option>{roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}</select></Field>
+        <Field label="Role"><select value={accountDraft.role || ''} onChange={(e) => setAccountDraft({ ...accountDraft, role: e.target.value })}><option value="">Select role</option>{roles.filter((role) => accountDraft.id || ['administrator', 'system administrator', 'platform administrator', 'technical support', 'implementation consultant'].includes(role.name.toLowerCase())).map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}</select></Field>
         <Field label={accountDraft.id ? 'New password (optional)' : 'Temporary password'}><input type="password" value={accountDraft.password || ''} onChange={(e) => setAccountDraft({ ...accountDraft, password: e.target.value })} /></Field>
       </div>
       <label className="access-check"><input type="checkbox" checked={Boolean(accountDraft.is_active)} onChange={(e) => setAccountDraft({ ...accountDraft, is_active: e.target.checked })} /><span><b>Account is active</b><small>User can sign in immediately.</small></span></label>
-      <ModalActions saving={saving} onCancel={() => setAccountDraft(null)} onSave={() => void submitAccount()} label={accountDraft.id ? 'Save changes' : 'Create account'} />
+      <ModalActions saving={saving} onCancel={() => setAccountDraft(null)} onSave={() => void submitAccount()} label={accountDraft.id ? 'Save changes' : 'Create system account'} />
     </Modal>}
 
   </div>
