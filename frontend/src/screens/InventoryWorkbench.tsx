@@ -92,9 +92,14 @@ export default function InventoryWorkbench() {
   }, [app.inventoryDraftId, app.consumeInventoryDraft])
   const scopedData = useMemo(() => {
     if (!app.currentBranch) return data
+    // The backend already scopes Department Requesters to their own branch and records.
+    // Requesters are not allowed to read the Stores endpoint, so app.data.locations is
+    // legitimately empty for them. Never erase valid requisitions just because the
+    // browser cannot load store master data.
+    if (app.data.locations.length === 0) return data
     const stores = new Set(app.data.locations.map((row) => id(row.id)))
     const next = { ...data }
-    next.requests = data.requests.filter((row) => stores.has(id(row.store)))
+    next.requests = data.requests.filter((row) => stores.has(id(row.store)) || stores.has(id(row.storeId)))
     next.issues = data.issues.filter((row) => stores.has(id(row.store)))
     next.transfers = data.transfers.filter((row) => stores.has(id(row.from_store)) || stores.has(id(row.to_store)))
     next.adjustments = data.adjustments.filter((row) => stores.has(id(row.store)))
@@ -184,8 +189,14 @@ export default function InventoryWorkbench() {
 }
 
 function RequestPanel({ app, data, form, setForm, busy, execute, stage }: any) {
-  const drafts = data.requests.filter((row: Row) => ['draft', 'rejected'].includes(id(row.status)))
-  const draftRequest = drafts.find((row: Row) => id(row.id) === id(form.request))
+  const normalizedStatus = (row: Row) => id(row.statusCode || row.status).trim().toLowerCase().replace(/\s+/g, '_')
+  const requestBackendId = (row: Row) => id(row.apiId || row.id)
+  // Selects and workflow actions must use the backend UUID, not the formatted
+  // requisition number shown to users (for example SR-2026-00001).
+  const drafts = data.requests
+    .filter((row: Row) => ['draft', 'rejected'].includes(normalizedStatus(row)))
+    .map((row: Row) => ({ ...row, id: requestBackendId(row) }))
+  const draftRequest = data.requests.find((row: Row) => requestBackendId(row) === id(form.request))
   const draftLines = data.requestItems.filter((row: Row) => id(row.requisition) === id(form.request))
   const draftLine = draftLines.find((row: Row) => id(row.id) === id(form.requestLine))
   const submittedRequest = data.requests.find((row: Row) => id(row.id) === id(form.submitted))
