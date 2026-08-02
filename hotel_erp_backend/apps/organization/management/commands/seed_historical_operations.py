@@ -16,8 +16,8 @@ from apps.finance.models import (
 )
 from apps.inventory.models import (
     Category, InventoryBalance, Item, ReorderRule, StockAdjustment,
-    StockAdjustmentItem, StockCount, StockIssue, StockIssueItem, StockTransfer,
-    StockTransferItem, StoreLocation, StoreRequisition, StoreRequisitionItem,
+    StockAdjustmentItem, StockCount, StockIssue, StockIssueItem,
+    StoreLocation, StoreRequisition, StoreRequisitionItem,
     StoreReturn, StoreReturnItem, UnitOfMeasure,
 )
 from apps.organization.models import Hotel
@@ -79,11 +79,13 @@ class Command(BaseCommand):
                 self.style.WARNING(
                     f"PREVIEW ONLY: {hotel.name} / {branch.name}, {start_date} to {end_date}. "
                     f"This will add about {round(days * 4 / 3)} F&B sales, 12 operating expenses, "
-                    "customers, payment methods, sale articles, and a branch store."
+                    "customers, payment methods, sale articles, and Main Store activity."
                 )
             )
             self.stdout.write("Run again with --commit after confirming the hotel and branch.")
             return
+
+        store = self._main_store_and_consolidate(branch)
 
         if Sale.objects.filter(receipt_no__startswith=batch).exists():
             self.stdout.write(self.style.SUCCESS(f"Batch {batch} already exists; nothing was changed."))
@@ -107,11 +109,6 @@ class Command(BaseCommand):
             return
 
         admin = get_user_model().objects.filter(is_superuser=True).first()
-        store, _ = StoreLocation.objects.get_or_create(
-            branch=branch,
-            name="Front Office & Bar Store",
-            defaults={"address": branch.physical_address or branch.location, "is_active": True},
-        )
         unit, _ = UnitOfMeasure.objects.get_or_create(
             name="Piece", defaults={"abbreviation": "pcs", "is_active": True}
         )
@@ -301,12 +298,6 @@ class Command(BaseCommand):
             )
             suppliers.append(supplier)
 
-        destination, _ = StoreLocation.objects.get_or_create(
-            branch=branch,
-            name="Housekeeping Floor Store",
-            defaults={"address": branch.physical_address or branch.location, "is_active": True},
-        )
-
         for index in range(15):
             event_date = start_date + timedelta(days=min(days - 1, 2 + index * max(1, days // 16)))
             item = items[index % len(items)]
@@ -433,19 +424,6 @@ class Command(BaseCommand):
 
         for index in range(5):
             item = items[index]
-            transfer = StockTransfer.objects.create(
-                from_store=store, to_store=destination, requested_by=requester,
-                required_date=start_date + timedelta(days=min(days - 1, 8 + index * 7)),
-                note=f"{batch}: replenish floor store.", created_by=admin,
-            )
-            StockTransferItem.objects.create(
-                stock_transfer=transfer, item=item, unit=unit,
-                quantity=Decimal("5.00"), created_by=admin,
-            )
-            transfer.approve(approved_by=approver)
-            transfer.dispatch(dispatched_by=operator)
-            transfer.receive(received_by=requester)
-
             store_return = StoreReturn.objects.create(
                 return_no=f"{batch}-RET-{index + 1:02d}", department=department,
                 store=store, received_by=operator,
@@ -489,6 +467,88 @@ class Command(BaseCommand):
             count.apply_variances()
 
         return {"procurement": 15, "requisitions": 15}
+
+    def _main_store_and_consolidate(self, branch):
+        main_store = StoreLocation.objects.filter(
+            branch=branch, name__iexact="Main Store"
+        ).first()
+        if main_store is None:
+            main_store = StoreLocation.objects.filter(
+                branch=branch, is_default=True, is_active=True
+            ).first()
+        if main_store is None:
+            main_store = StoreLocation.objects.create(
+                branch=branch,
+                name="Main Store",
+                address=branch.physical_address or branch.location,
+                is_active=True,
+                is_default=True,
+            )
+
+        generated_stores = StoreLocation.objects.filter(
+            branch=branch,
+            name__in=("Front Office & Bar Store", "Housekeeping Floor Store"),
+        ).exclude(pk=main_store.pk)
+        for old_store in generated_stores:
+            for old_balance in InventoryBalance.objects.filter(store=old_store):
+                main_balance, _ = InventoryBalance.objects.get_or_create(
+                    item=old_balance.item,
+                    store=main_store,
+                    defaults={
+                        "quantity_in_stock": Decimal("0.00"),
+                        "quantity_reserved": Decimal("0.00"),
+                        "reorder_level": old_balance.reorder_level,
+                    },
+                )
+                main_balance.quantity_in_stock += old_balance.quantity_in_stock
+                main_balance.quantity_reserved += old_balance.quantity_reserved
+                main_balance.reorder_level = max(
+                    main_balance.reorder_level, old_balance.reorder_level
+                )
+                main_balance.save(
+                    update_fields=[
+                        "quantity_in_stock", "quantity_reserved", "reorder_level", "updated_at"
+                    ]
+                )
+                old_balance.delete()
+
+            Sale.objects.filter(
+                store=old_store, receipt_no__startswith="HIST-"
+            ).update(store=main_store)
+            CashFlow.objects.filter(
+                store=old_store, reference__startswith="HIST-"
+            ).update(store=main_store)
+            Expense.objects.filter(
+                store=old_store, reference__startswith="HIST-"
+            ).update(store=main_store)
+            PurchaseOrder.objects.filter(
+                store=old_store, po_number__startswith="HIST-"
+            ).update(store=main_store)
+            GoodsReceiptItem.objects.filter(
+                store=old_store,
+                goods_receipt__grn_number__startswith="HIST-",
+            ).update(store=main_store)
+            StoreRequisition.objects.filter(
+                store=old_store, requisition_no__startswith="HIST-"
+            ).update(store=main_store)
+            StockIssue.objects.filter(
+                store=old_store, issue_no__startswith="HIST-"
+            ).update(store=main_store)
+            StoreReturn.objects.filter(
+                store=old_store, return_no__startswith="HIST-"
+            ).update(store=main_store)
+            StockAdjustment.objects.filter(
+                store=old_store, reference__startswith="HIST-"
+            ).update(store=main_store)
+            old_store.is_active = False
+            old_store.is_default = False
+            old_store.save(update_fields=["is_active", "is_default", "updated_at"])
+
+        if not main_store.is_active or not main_store.is_default:
+            main_store.is_active = True
+            main_store.is_default = True
+            main_store.save(update_fields=["is_active", "is_default", "updated_at"])
+        return main_store
 
     def _hotel(self, name):
         hotels = Hotel.objects.all()
