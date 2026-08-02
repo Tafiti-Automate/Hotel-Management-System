@@ -446,7 +446,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const continueToInventoryLines = (
           !target.id
           && target.entity === 'storeRequisitions'
-          && canAccessRoute(user, 'workflow-stores')
         )
         if (continueToProcurementLines) {
           patch({
@@ -462,7 +461,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             route: 'workflow-stores',
             navActive: 'workflow-stores',
             crumb: 'Add requested articles',
-            inventoryDraftId: String(saved.id || ''),
+            inventoryDraftId: String(saved.id || saved.apiId || ''),
           })
         } else {
           patch({ form: null })

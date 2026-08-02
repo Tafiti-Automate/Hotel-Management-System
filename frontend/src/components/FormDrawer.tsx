@@ -108,7 +108,7 @@ export default function FormDrawer() {
       return next
     })
 
-  const submit = () => {
+  const submit = async () => {
     if (f.entity === 'itemUnits' && values.role !== 'Base unit' && Number(values.conversionFactor || 0) <= 1) {
       app.showWorkflowAlert(
         'Invalid unit conversion',
@@ -129,7 +129,11 @@ export default function FormDrawer() {
     if (f.entity === 'requisitions') {
       out.request_type = values.request_type || 'department'
     }
-    void app.saveForm(out)
+    if (f.entity === 'storeRequisitions' && !String(values.purpose || '').trim()) {
+      app.showWorkflowAlert('Purpose required', 'Enter the reason for this store request before continuing.')
+      return
+    }
+    await app.saveForm(out)
   }
 
   return (
