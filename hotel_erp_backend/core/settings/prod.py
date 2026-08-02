@@ -194,3 +194,65 @@ CSRF_COOKIE_SAMESITE = os.environ.get(
     "CSRF_COOKIE_SAMESITE",
     "Lax",
 )
+
+
+# ---------------------------------------------------------
+# Persistent uploaded media (Cloudinary)
+# ---------------------------------------------------------
+# Vercel serverless functions cannot persist files under /var/task. Uploaded
+# hotel logos, employee photos and other ImageField media therefore use
+# Cloudinary whenever credentials are configured.
+#
+# Preferred configuration:
+# CLOUDINARY_URL=cloudinary://<api_key>:<api_secret>@<cloud_name>
+#
+# The individual CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY /
+# CLOUDINARY_API_SECRET variables are also supported by the storage package.
+CLOUDINARY_URL = os.environ.get("CLOUDINARY_URL", "").strip()
+CLOUDINARY_CREDENTIALS_PRESENT = bool(
+    CLOUDINARY_URL
+    or (
+        os.environ.get("CLOUDINARY_CLOUD_NAME")
+        and os.environ.get("CLOUDINARY_API_KEY")
+        and os.environ.get("CLOUDINARY_API_SECRET")
+    )
+)
+
+if CLOUDINARY_CREDENTIALS_PRESENT:
+    # cloudinary_storage is used for uploaded media only. Django static files
+    # remain served by WhiteNoise.
+    for app_name in ("cloudinary_storage", "cloudinary"):
+        if app_name not in INSTALLED_APPS:  # noqa: F405
+            INSTALLED_APPS.append(app_name)  # noqa: F405
+
+    CLOUDINARY_STORAGE = {
+        "SECURE": True,
+        "PREFIX": "hotel-management-system/media",
+        "UNIQUE_FILENAME": True,
+        "OVERWRITE": False,
+        "RESOURCE_TYPE": "image",
+    }
+
+    STORAGES = {
+        "default": {
+            "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
+
+    # ImageField.url returns the final HTTPS Cloudinary delivery URL.
+    MEDIA_URL = "https://res.cloudinary.com/"
+else:
+    # Local development can continue using MEDIA_ROOT. On Vercel, uploads are
+    # rejected by the API with a clear configuration message rather than
+    # crashing with a read-only-filesystem OSError.
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }

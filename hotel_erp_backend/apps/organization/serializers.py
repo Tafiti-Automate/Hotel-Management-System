@@ -1,3 +1,6 @@
+import os
+
+from django.conf import settings
 from rest_framework import serializers
 
 from apps.organization.models import Hotel
@@ -36,3 +39,26 @@ class HotelSerializer(serializers.ModelSerializer):
             "created_by",
         )
         read_only_fields = ("id", "created_at", "updated_at", "created_by", "branch_count")
+
+    def validate_logo(self, value):
+        """Reject Vercel uploads cleanly when external media is not configured."""
+        if value is None:
+            return value
+
+        max_size = 5 * 1024 * 1024
+        if value.size > max_size:
+            raise serializers.ValidationError("The hotel logo must be 5 MB or smaller.")
+
+        allowed_types = {"image/png", "image/jpeg", "image/webp", "image/gif"}
+        content_type = getattr(value, "content_type", "")
+        if content_type and content_type not in allowed_types:
+            raise serializers.ValidationError("Upload a PNG, JPG, WEBP, or GIF image.")
+
+        running_on_vercel = bool(os.environ.get("VERCEL") or os.environ.get("VERCEL_URL"))
+        cloudinary_ready = bool(getattr(settings, "CLOUDINARY_CREDENTIALS_PRESENT", False))
+        if running_on_vercel and not cloudinary_ready:
+            raise serializers.ValidationError(
+                "Media storage is not configured. Add CLOUDINARY_URL to the backend "
+                "Vercel environment variables, redeploy, and try again."
+            )
+        return value
