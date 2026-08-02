@@ -6,7 +6,7 @@ import type { Row } from '../lib/data'
 import { useApp } from '../state/AppContext'
 
 type Tab = 'requests' | 'issues' | 'transfers' | 'adjustments' | 'counts' | 'returns' | 'reorder' | 'batches' | 'consumption'
-type SupplyTask = 'prepare' | 'department' | 'stores' | 'shortage' | 'issue'
+type SupplyTask = 'prepare' | 'department' | 'department_approved' | 'department_rejected' | 'department_all' | 'stores' | 'shortage' | 'issue'
 const inventoryPaths = {
   requests: 'store-requisitions', requestItems: 'store-requisition-items',
   issues: 'stock-issues', issueItems: 'stock-issue-items',
@@ -163,7 +163,12 @@ export default function InventoryWorkbench() {
     <section className="workbench-hero" style={{ ...card, padding: 20, display: 'flex', alignItems: 'center', gap: 13, marginBottom: 15 }}><span style={hero}><Icon name="warehouse" size={24} color="#fff" /></span><div><div style={eyebrow}>INVENTORY</div><h1 style={{ margin: '3px 0', fontSize: 23 }}>{role === 'department head' ? 'Store Request Approvals' : isStoresApprover ? 'Stores Queue' : role === 'store keeper' ? 'Pick and Issue' : 'My Store Requests'}</h1><div style={muted}>{role === 'department head' ? 'Review requests from your department.' : isStoresApprover ? 'Review availability, shortages and fulfilment.' : role === 'store keeper' ? 'Process approved stock issues.' : 'Create and track your material requests.'}</div></div><button onClick={() => void load()} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button></section>
     {(can(tabPermissions.requests.view) || can(tabPermissions.issues.view)) && <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 15 }}>
       {!isDepartmentActor && !isStoresApprover && role !== 'store keeper' && <button onClick={() => selectSupplyStep('prepare')} style={{ ...tabButton, background: supplyPathActive === 'prepare' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'prepare' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'prepare' ? 'var(--accent)' : 'var(--border)' }}><Icon name="assignment" size={17} />My requests</button>}
-      {role === 'department head' && <button onClick={() => selectSupplyStep('department')} style={{ ...tabButton, background: supplyPathActive === 'department' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'department' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'department' ? 'var(--accent)' : 'var(--border)' }}><Icon name="approval" size={17} />Pending approvals ({scopedData.requests.filter((row: Row) => id(row.status) === 'pending_department_approval').length})</button>}
+      {role === 'department head' && <>
+        <button onClick={() => selectSupplyStep('department')} style={{ ...tabButton, background: supplyPathActive === 'department' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'department' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'department' ? 'var(--accent)' : 'var(--border)' }}><Icon name="approval" size={17} />Pending ({scopedData.requests.filter((row: Row) => id(row.status) === 'pending_department_approval').length})</button>
+        <button onClick={() => selectSupplyStep('department_approved')} style={{ ...tabButton, background: supplyPathActive === 'department_approved' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'department_approved' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'department_approved' ? 'var(--accent)' : 'var(--border)' }}><Icon name="check_circle" size={17} />Approved</button>
+        <button onClick={() => selectSupplyStep('department_rejected')} style={{ ...tabButton, background: supplyPathActive === 'department_rejected' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'department_rejected' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'department_rejected' ? 'var(--accent)' : 'var(--border)' }}><Icon name="cancel" size={17} />Rejected</button>
+        <button onClick={() => selectSupplyStep('department_all')} style={{ ...tabButton, background: supplyPathActive === 'department_all' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'department_all' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'department_all' ? 'var(--accent)' : 'var(--border)' }}><Icon name="history" size={17} />All requests</button>
+      </>}
       {isStoresApprover && <><button onClick={() => selectSupplyStep('stores')} style={{ ...tabButton, background: supplyPathActive === 'stores' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'stores' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'stores' ? 'var(--accent)' : 'var(--border)' }}><Icon name="inventory" size={17} />Stock review ({scopedData.requests.filter((row: Row) => id(row.status) === 'submitted').length})</button><button onClick={() => selectSupplyStep('shortage')} style={{ ...tabButton, background: supplyPathActive === 'shortage' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'shortage' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'shortage' ? 'var(--accent)' : 'var(--border)' }}><Icon name="shopping_cart_checkout" size={17} />Shortages ({scopedData.requests.filter((row: Row) => id(row.status) === 'awaiting_procurement').length})</button></>}
       {isStoresIssuer && <button onClick={() => selectSupplyStep('issue')} style={{ ...tabButton, background: supplyPathActive === 'issue' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'issue' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'issue' ? 'var(--accent)' : 'var(--border)' }}><Icon name="outbox" size={17} />Ready to issue ({scopedData.requests.filter((row: Row) => ['approved', 'partially_approved', 'partially_issued'].includes(id(row.status))).length})</button>}
     </div>}
@@ -173,7 +178,9 @@ export default function InventoryWorkbench() {
       <Records tab={tab} data={scopedData} app={app} stage={supplyPathActive} onSelect={setSelectedRecord} />
       <aside style={{ ...card, padding: 18 }}>
         {!canChangeTab && !['batches', 'consumption'].includes(tab) && <ReadOnlyPanel title="Read-only access" note="View only." />}
-        {canChangeTab && tab === 'requests' && <RequestPanel {...common} stage={(supplyPathActive || requestRoleStage) as SupplyTask} />}
+        {canChangeTab && tab === 'requests' && ['department_approved', 'department_rejected', 'department_all'].includes(supplyPathActive)
+          ? <ReadOnlyPanel title="Approval history" note="Select a request to review its items, approval details and current workflow stage." />
+          : canChangeTab && tab === 'requests' && <RequestPanel {...common} stage={(supplyPathActive || requestRoleStage) as SupplyTask} />}
         {canChangeTab && tab === 'issues' && <IssuePanel {...common} />}
         {canChangeTab && tab === 'transfers' && <TransferPanel {...common} />}
         {canChangeTab && tab === 'adjustments' && <AdjustmentPanel {...common} />}
@@ -215,6 +222,9 @@ function RequestPanel({ app, data, form, setForm, busy, execute, stage }: any) {
     stores: { title: 'Stock review', note: 'Review and allocate stock.' },
     shortage: { title: 'Shortages', note: 'Items awaiting procurement.' },
     issue: { title: 'Pick and issue', note: 'Approved requests ready for issue.' },
+    department_approved: { title: 'Approved requests', note: '' },
+    department_rejected: { title: 'Rejected requests', note: '' },
+    department_all: { title: 'Department request history', note: '' },
   }
   const meta = stageMeta[stage as SupplyTask] || stageMeta.prepare
 
@@ -224,17 +234,37 @@ function RequestPanel({ app, data, form, setForm, busy, execute, stage }: any) {
         <div><div style={{ color: 'var(--text)', fontSize: 13, fontWeight: 800 }}>Request items</div><div style={{ marginTop: 3, color: 'var(--text-muted)', fontSize: 11 }}>Add the articles you need, then submit the request.</div></div>
         <button type="button" disabled={busy} onClick={() => app.openCreate('storeRequisitions', 'New store request')} style={{ ...secondary, marginLeft: 'auto', color: 'var(--accent)', borderColor: 'var(--accent)' }}><Icon name="add" size={17} />New request</button>
       </div>
-      {drafts.length > 0 && <Field label="Draft request"><Select value={form.request} change={(v) => setForm({ request: v })} rows={drafts} label={(r) => `${id(r.requisition_no)} · ${id(r.purpose) || 'Untitled request'}`} /></Field>}
+      {drafts.length > 0 && <Field label="Draft request"><Select value={form.request} change={(v) => { const request = drafts.find((row: Row) => id(row.id) === v); setForm({ request: v, purpose: request?.purpose || '', requiredDate: request?.required_date || '' }) }} rows={drafts} label={(r) => `${id(r.requisition_no)} · ${id(r.purpose) || 'Untitled request'}`} /></Field>}
       {!drafts.length && <div style={{ padding: 20, textAlign: 'center', border: '1px dashed var(--border)', borderRadius: 8, background: 'var(--surface-2)' }}><Icon name="assignment" size={26} color="var(--text-faint)" /><div style={{ marginTop: 8, color: 'var(--text)', fontSize: 12.5, fontWeight: 750 }}>No draft requests</div><div style={{ marginTop: 4, color: 'var(--text-muted)', fontSize: 11 }}>Create a request to begin adding items.</div></div>}
       {draftRequest && <>
-        <RequestSummary request={draftRequest} lines={draftLines} data={data} app={app} />
+        <RequestSummary
+          request={draftRequest}
+          lines={draftLines}
+          data={data}
+          app={app}
+          editable
+          onEditLine={(line) => setForm({ ...form, requestLine: id(line.id), item: line.item || '', unit: line.unit || '', quantity: line.quantity_requested || line.base_quantity_requested || '' })}
+          onRemoveLine={(line) => {
+            if (!window.confirm(`Remove ${itemName(app, line.item)} from this draft?`)) return
+            void execute(() => deleteBackendPath('store-requisition-items', id(line.id)), 'Item removed', { request: form.request, purpose: form.purpose, requiredDate: form.requiredDate })
+          }}
+        />
+        <div style={{ marginBottom: 14, padding: 12, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface-2)' }}>
+          <div style={{ marginBottom: 10, color: 'var(--text)', fontSize: 12.5, fontWeight: 800 }}>Request details</div>
+          <Field label="Required date"><Input type="date" value={form.requiredDate || draftRequest.required_date} change={(v) => setForm({ ...form, requiredDate: v })} /></Field>
+          <Field label="Purpose"><Input value={form.purpose || draftRequest.purpose} change={(v) => setForm({ ...form, purpose: v })} /></Field>
+          <button type="button" disabled={busy || !id(form.purpose || draftRequest.purpose).trim()} onClick={() => execute(() => updateBackendRecord('store-requisitions', requestBackendId(draftRequest), { purpose: id(form.purpose || draftRequest.purpose).trim(), required_date: form.requiredDate || draftRequest.required_date || null }), 'Draft details updated', { request: form.request, purpose: form.purpose || draftRequest.purpose, requiredDate: form.requiredDate || draftRequest.required_date })} style={{ ...secondary, width: '100%', justifyContent: 'center' }}><Icon name="save" size={16} />Save changes</button>
+        </div>
         <Field label={draftLine ? 'Edit item' : 'Article'}><Select value={draftLine ? form.requestLine : form.item} change={(v) => { if (draftLine || form.requestLine) { const line = draftLines.find((r: Row) => id(r.id) === v); setForm({ ...form, requestLine: v, item: line?.item || '', unit: line?.unit || '', quantity: line?.quantity_requested || '' }) } else setForm({ ...form, item: v }) }} rows={draftLine || form.requestLine ? draftLines : app.data.items} optional={Boolean(draftLine || form.requestLine)} emptyLabel={draftLine || form.requestLine ? 'Add another item' : 'Choose article'} label={(r) => draftLine || form.requestLine ? `${itemName(app, r.item)} · ${r.quantity_requested}` : itemName(app, r.id)} /></Field>
         {(form.item || form.requestLine) && <><Field label="Unit"><Select value={form.unit} change={(v) => setForm({ ...form, unit: v })} rows={app.data.uoms} optional emptyLabel="Article base unit" /></Field><Field label="Quantity"><Input type="number" value={form.quantity} change={(v) => setForm({ ...form, quantity: v })} /></Field></>}
-        {!draftLine && <Action disabled={busy || !form.item || num(form.quantity) <= 0} click={() => execute(() => createBackendRecord('store-requisition-items', { requisition: form.request, item: form.item, unit: form.unit || null, quantity_requested: num(form.quantity), quantity_approved: 0, quantity_issued: 0, remarks: '' }), 'Item added', { request: form.request })}>Add item</Action>}
-        {draftLine && <><Action disabled={busy || num(form.quantity) <= 0} click={() => execute(() => updateBackendRecord('store-requisition-items', id(draftLine.id), { item: form.item, unit: form.unit || null, quantity_requested: num(form.quantity) }), 'Item updated', { request: form.request })}>Update item</Action><button type="button" disabled={busy} onClick={() => execute(() => deleteBackendPath('store-requisition-items', id(draftLine.id)), 'Item removed', { request: form.request })} style={{ ...action, background: 'var(--bad)' }}>Remove item</button></>}
+        {!draftLine && <Action disabled={busy || !form.item || num(form.quantity) <= 0} click={() => execute(() => createBackendRecord('store-requisition-items', { requisition: form.request, item: form.item, unit: form.unit || null, quantity_requested: num(form.quantity), quantity_approved: 0, quantity_issued: 0, remarks: '' }), 'Item added', { request: form.request, purpose: form.purpose, requiredDate: form.requiredDate })}>Add item</Action>}
+        {draftLine && <><Action disabled={busy || num(form.quantity) <= 0} click={() => execute(() => updateBackendRecord('store-requisition-items', id(draftLine.id), { item: form.item, unit: form.unit || null, quantity_requested: num(form.quantity) }), 'Item updated', { request: form.request, purpose: form.purpose, requiredDate: form.requiredDate })}>Update item</Action><button type="button" disabled={busy} onClick={() => execute(() => deleteBackendPath('store-requisition-items', id(draftLine.id)), 'Item removed', { request: form.request, purpose: form.purpose, requiredDate: form.requiredDate })} style={{ ...action, background: 'var(--bad)' }}>Remove item</button></>}
         <Rule />
         <Action tone="good" disabled={busy || !draftRequest || draftLines.length === 0} click={() => execute(() => runBackendAction('store-requisitions', id(form.request), 'submit'), 'Request submitted')}>Submit request</Action>
-        <Action disabled={busy || !draftRequest} tone="danger" click={() => execute(() => deleteBackendPath('store-requisitions', id(form.request)), 'Draft cancelled')}>Cancel draft</Action>
+        <Action disabled={busy || !draftRequest} tone="danger" click={() => {
+          if (!window.confirm(`Delete ${id(draftRequest.requisition_no)} and all its items? This cannot be undone.`)) return
+          void execute(() => deleteBackendPath('store-requisitions', requestBackendId(draftRequest)), 'Draft deleted')
+        }}>Delete draft</Action>
       </>}
     </>}
 
@@ -282,23 +312,27 @@ function RequestPanel({ app, data, form, setForm, busy, execute, stage }: any) {
   </Panel>
 }
 
-function RequestSummary({ request, lines, data, app, showAvailability = false }: { request: Row; lines: Row[]; data: Record<string, Row[]>; app: any; showAvailability?: boolean }) {
+function RequestSummary({ request, lines, data, app, showAvailability = false, editable = false, onEditLine, onRemoveLine }: { request: Row; lines: Row[]; data: Record<string, Row[]>; app: any; showAvailability?: boolean; editable?: boolean; onEditLine?: (line: Row) => void; onRemoveLine?: (line: Row) => void }) {
+  const columns = showAvailability
+    ? 'minmax(180px,1.6fr) repeat(4,minmax(78px,.6fr))'
+    : editable ? 'minmax(180px,1.6fr) repeat(3,minmax(70px,.55fr)) 82px' : 'minmax(180px,1.6fr) repeat(3,minmax(78px,.6fr))'
   return <section style={{ marginBottom: 14, overflow: 'hidden', border: '1px solid var(--border)', borderRadius: 8 }}>
     <div style={{ padding: '12px 13px', display: 'flex', alignItems: 'flex-start', gap: 10, background: 'var(--surface-2)' }}>
       <div style={{ flex: 1 }}><div style={{ color: 'var(--text)', fontSize: 12.5, fontWeight: 800 }}>{id(request.requisition_no)}</div><div style={{ marginTop: 3, color: 'var(--text-muted)', fontSize: 11 }}>{departmentName(app, request.department)} · {id(request.purpose) || 'No purpose entered'}</div></div>
       <StatusBadge value={id(request.status)} />
     </div>
-    <div className="request-summary-grid" style={{ display: 'grid', gridTemplateColumns: showAvailability ? 'minmax(180px,1.6fr) repeat(4,minmax(78px,.6fr))' : 'minmax(180px,1.6fr) repeat(3,minmax(78px,.6fr))', padding: '8px 12px', color: 'var(--text-faint)', background: 'var(--surface)', borderTop: '1px solid var(--border)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em' }}>
-      <span>Article</span><span>Requested</span>{showAvailability && <span>Available</span>}<span>Approved</span><span>Issued</span>
+    <div className="request-summary-grid" style={{ display: 'grid', gridTemplateColumns: columns, padding: '8px 12px', color: 'var(--text-faint)', background: 'var(--surface)', borderTop: '1px solid var(--border)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em' }}>
+      <span>Article</span><span>Requested</span>{showAvailability && <span>Available</span>}<span>Approved</span><span>Issued</span>{editable && <span>Actions</span>}
     </div>
     {lines.map((line: Row) => {
       const balance = data.balances.find((row: Row) => id(row.item) === id(line.item) && id(row.store) === id(request.store))
       const available = num(balance?.available_quantity)
-      return <div key={id(line.id)} className="request-summary-grid" style={{ display: 'grid', gridTemplateColumns: showAvailability ? 'minmax(180px,1.6fr) repeat(4,minmax(78px,.6fr))' : 'minmax(180px,1.6fr) repeat(3,minmax(78px,.6fr))', gap: 8, padding: '11px 12px', borderTop: '1px solid var(--border)', fontSize: 11.5, alignItems: 'center' }}>
+      return <div key={id(line.id)} className="request-summary-grid" style={{ display: 'grid', gridTemplateColumns: columns, gap: 8, padding: '11px 12px', borderTop: '1px solid var(--border)', fontSize: 11.5, alignItems: 'center' }}>
         <span style={{ minWidth: 0, color: 'var(--text)', fontWeight: 700 }}>{itemName(app, line.item)}</span>
         <span>{id(line.base_quantity_requested || line.quantity_requested || 0)}</span>
         {showAvailability && <span style={{ color: available >= num(line.base_quantity_requested || line.quantity_requested) ? 'var(--good)' : 'var(--warn)', fontWeight: 750 }}>{available}</span>}
         <span>{id(line.quantity_approved || 0)}</span><span>{id(line.quantity_issued || 0)}</span>
+        {editable && <span style={{ display: 'flex', gap: 5 }}><button type="button" onClick={() => onEditLine?.(line)} title="Edit item" style={lineAction}><Icon name="edit" size={15} /></button><button type="button" onClick={() => onRemoveLine?.(line)} title="Remove item" style={{ ...lineAction, color: 'var(--bad)' }}><Icon name="delete" size={15} /></button></span>}
       </div>
     })}
     {!lines.length && <div style={{ padding: 24, borderTop: '1px solid var(--border)', color: 'var(--text-faint)', textAlign: 'center', fontSize: 11.5 }}>No items have been added.</div>}
@@ -429,6 +463,9 @@ function Records({ tab, data, app, stage, onSelect }: { tab: Tab; data: Record<s
   const [dateTo, setDateTo] = useState('')
   const stageRows = tab !== 'requests' ? data[tab]
     : stage === 'department' ? data.requests.filter((row) => id(row.status) === 'pending_department_approval')
+      : stage === 'department_approved' ? data.requests.filter((row) => Boolean(row.department_approved_at) && id(row.status) !== 'pending_department_approval' && id(row.status) !== 'rejected')
+        : stage === 'department_rejected' ? data.requests.filter((row) => id(row.status) === 'rejected')
+          : stage === 'department_all' ? data.requests.filter((row) => id(row.status) !== 'draft')
       : stage === 'stores' ? data.requests.filter((row) => id(row.status) === 'submitted')
         : stage === 'shortage' ? data.requests.filter((row) => id(row.status) === 'awaiting_procurement')
           : stage === 'issue' ? data.requests.filter((row) => ['approved', 'partially_approved', 'partially_issued'].includes(id(row.status)))
@@ -451,7 +488,7 @@ function Records({ tab, data, app, stage, onSelect }: { tab: Tab; data: Record<s
       : tab === 'reorder' ? [itemName(app, row.item), storeName(app, row.store) || 'All stores', `Min ${row.minimum_level}`, `Reorder ${row.reorder_quantity}`]
         : tab === 'batches' ? [itemName(app, row.item), storeName(app, row.store), `Remaining ${row.remaining_quantity}`, id(row.expiry_date) || 'No expiry']
           : [departmentName(app, row.department), itemName(app, row.item), `${row.quantity} × ${row.unit_cost}`, id(row.consumed_on)]
-  const titles: Record<Tab, string> = { requests: stage === 'department' ? 'Pending approvals' : stage === 'stores' ? 'Requests awaiting stock review' : stage === 'shortage' ? 'Procurement shortages' : stage === 'issue' ? 'Requests ready to issue' : 'My requests', issues: 'Issue vouchers', transfers: 'Inter-store transfers', adjustments: 'Stock adjustments', counts: 'Stock counts', returns: 'Department returns', reorder: 'Low-stock reorder queue', batches: 'Inventory batches and expiry', consumption: 'Department consumption' }
+  const titles: Record<Tab, string> = { requests: stage === 'department' ? 'Pending approvals' : stage === 'department_approved' ? 'Approved requests' : stage === 'department_rejected' ? 'Rejected requests' : stage === 'department_all' ? 'All department requests' : stage === 'stores' ? 'Requests awaiting stock review' : stage === 'shortage' ? 'Procurement shortages' : stage === 'issue' ? 'Requests ready to issue' : 'My requests', issues: 'Issue vouchers', transfers: 'Inter-store transfers', adjustments: 'Stock adjustments', counts: 'Stock counts', returns: 'Department returns', reorder: 'Low-stock reorder queue', batches: 'Inventory batches and expiry', consumption: 'Department consumption' }
   const statuses = Array.from(new Set(stageRows.map((row) => id(row.status)).filter(Boolean)))
   return <section style={{ ...card, overflow: 'hidden' }}>
     <div style={{ padding: '15px 17px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}><div style={{ fontSize: 13, fontWeight: 800 }}>{titles[tab]}</div><span style={{ marginLeft: 'auto', color: 'var(--text-faint)', fontSize: 11 }}>{rows.length} record{rows.length === 1 ? '' : 's'}</span></div>
@@ -594,4 +631,5 @@ const tabButton: CSSProperties = { height: 38, display: 'flex', alignItems: 'cen
 const labelStyle: CSSProperties = { display: 'block', fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 5 }
 const control: CSSProperties = { width: '100%', height: 38, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text)', padding: '0 10px', font: 'inherit', fontSize: 12 }
 const action: CSSProperties = { width: '100%', minHeight: 38, border: 0, borderRadius: 6, color: '#fff', cursor: 'pointer', font: 'inherit', fontSize: 12, fontWeight: 700, marginTop: 5 }
+const lineAction: CSSProperties = { width: 30, height: 30, display: 'grid', placeItems: 'center', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--accent)', cursor: 'pointer' }
 const recordRow: CSSProperties = { display: 'grid', gridTemplateColumns: '1.2fr 1.3fr 1fr 1fr', gap: 10, padding: '12px 17px', borderBottom: '1px solid var(--border)', fontSize: 12 }

@@ -20,7 +20,8 @@ export default function Header() {
   const [notificationsLoading, setNotificationsLoading] = useState(true)
   const [notificationsError, setNotificationsError] = useState('')
   const storesManager = isStoresManager(app.user)
-  const moduleName = storesManager ? 'Stores & Inventory' : app.activeModule === 'hr' ? 'Human Resources' : `${app.user.role} workspace`
+  const departmentLabel = app.user.departmentName || app.user.role
+  const moduleName = storesManager ? 'Stores & Inventory' : app.activeModule === 'hr' ? 'Human Resources' : departmentLabel
   const initials = app.user.name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()
   const notificationCount = notifications.filter((notification) => !notification.is_read).length
   const hasPermission = (permission: string) => app.user.isSuperuser || app.user.permissions.includes(permission)
@@ -177,7 +178,7 @@ export default function Header() {
           <div style={{ position: 'relative' }}>
             <button onClick={() => setProfileOpen((open) => !open)} style={{ height: 40, display: 'flex', alignItems: 'center', gap: 9, border: 0, background: 'transparent', borderRadius: 7, padding: '0 4px 0 7px', cursor: 'pointer', font: 'inherit' }} className="hover-surface2">
               <span style={{ width: 31, height: 31, borderRadius: 7, display: 'grid', placeItems: 'center', background: '#E8EEF9', color: '#1D4ED8', fontSize: 11, fontWeight: 700 }}>{initials}</span>
-              <span className="header-user-copy" style={{ textAlign: 'left' }}><span style={{ display: 'block', color: 'var(--text)', fontSize: 12.5, fontWeight: 600 }}>{app.user.name}</span><span style={{ display: 'block', color: 'var(--text-faint)', fontSize: 10.5, marginTop: 1 }}>{app.user.role}</span></span>
+              <span className="header-user-copy" style={{ textAlign: 'left' }}><span style={{ display: 'block', color: 'var(--text)', fontSize: 12.5, fontWeight: 600 }}>{app.user.name}</span><span style={{ display: 'block', color: 'var(--text-faint)', fontSize: 10.5, marginTop: 1 }}>{departmentLabel}</span></span>
               <Icon name="expand_more" size={17} color="var(--text-faint)" />
             </button>
             {profileOpen && <>
