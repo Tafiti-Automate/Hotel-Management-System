@@ -184,8 +184,6 @@ export default function InventoryWorkbench() {
 }
 
 function RequestPanel({ app, data, form, setForm, busy, execute, stage }: any) {
-  const role = String(app.user.role || '').toLowerCase()
-  const isDepartmentHead = app.user.isSuperuser || ['system administrator', 'department head'].includes(role)
   const drafts = data.requests.filter((row: Row) => ['draft', 'rejected'].includes(id(row.status)))
   const draftRequest = drafts.find((row: Row) => id(row.id) === id(form.request))
   const draftLines = data.requestItems.filter((row: Row) => id(row.requisition) === id(form.request))
@@ -222,10 +220,10 @@ function RequestPanel({ app, data, form, setForm, busy, execute, stage }: any) {
         <Field label={draftLine ? 'Edit item' : 'Article'}><Select value={draftLine ? form.requestLine : form.item} change={(v) => { if (draftLine || form.requestLine) { const line = draftLines.find((r: Row) => id(r.id) === v); setForm({ ...form, requestLine: v, item: line?.item || '', unit: line?.unit || '', quantity: line?.quantity_requested || '' }) } else setForm({ ...form, item: v }) }} rows={draftLine || form.requestLine ? draftLines : app.data.items} optional={Boolean(draftLine || form.requestLine)} emptyLabel={draftLine || form.requestLine ? 'Add another item' : 'Choose article'} label={(r) => draftLine || form.requestLine ? `${itemName(app, r.item)} · ${r.quantity_requested}` : itemName(app, r.id)} /></Field>
         {(form.item || form.requestLine) && <><Field label="Unit"><Select value={form.unit} change={(v) => setForm({ ...form, unit: v })} rows={app.data.uoms} optional emptyLabel="Article base unit" /></Field><Field label="Quantity"><Input type="number" value={form.quantity} change={(v) => setForm({ ...form, quantity: v })} /></Field></>}
         {!draftLine && <Action disabled={busy || !form.item || num(form.quantity) <= 0} click={() => execute(() => createBackendRecord('store-requisition-items', { requisition: form.request, item: form.item, unit: form.unit || null, quantity_requested: num(form.quantity), quantity_approved: 0, quantity_issued: 0, remarks: '' }), 'Item added', { request: form.request })}>Add item</Action>}
-        {draftLine && <><Action disabled={busy || num(form.quantity) <= 0} click={() => execute(() => updateBackendRecord('store-requisition-items', id(draftLine.id), { item: form.item, unit: form.unit || null, quantity_requested: num(form.quantity) }), 'Item updated', { request: form.request })}>Update item</Action><button type="button" disabled={busy} onClick={() => execute(() => deleteBackendPath(`store-requisition-items/${id(draftLine.id)}`), 'Item removed', { request: form.request })} style={{ ...action, background: 'var(--bad)' }}>Remove item</button></>}
+        {draftLine && <><Action disabled={busy || num(form.quantity) <= 0} click={() => execute(() => updateBackendRecord('store-requisition-items', id(draftLine.id), { item: form.item, unit: form.unit || null, quantity_requested: num(form.quantity) }), 'Item updated', { request: form.request })}>Update item</Action><button type="button" disabled={busy} onClick={() => execute(() => deleteBackendPath('store-requisition-items', id(draftLine.id)), 'Item removed', { request: form.request })} style={{ ...action, background: 'var(--bad)' }}>Remove item</button></>}
         <Rule />
         <Action tone="good" disabled={busy || !draftRequest || draftLines.length === 0} click={() => execute(() => runBackendAction('store-requisitions', id(form.request), 'submit'), 'Request submitted')}>Submit request</Action>
-        <Action disabled={busy || !draftRequest} tone="danger" click={() => execute(() => deleteBackendPath(`store-requisitions/${id(form.request)}`), 'Draft cancelled')}>Cancel draft</Action>
+        <Action disabled={busy || !draftRequest} tone="danger" click={() => execute(() => deleteBackendPath('store-requisitions', id(form.request)), 'Draft cancelled')}>Cancel draft</Action>
       </>}
     </>}
 
@@ -258,14 +256,13 @@ function RequestPanel({ app, data, form, setForm, busy, execute, stage }: any) {
     </>}
 
     {stage === 'shortage' && <>
-      <RoleAction actor="Stores Manager" title="Send to procurement" note="" />
-      <StepHeading number="1" title="Send confirmed shortage to Procurement" />
+      <div style={{ marginBottom: 12, color: 'var(--text)', fontSize: 13, fontWeight: 800 }}>Send shortage to Procurement</div>
       <Field label="Submitted request with unavailable stock"><Select value={form.shortageRequest} change={(v) => setForm({ shortageRequest: v })} rows={data.requests.filter((r: Row) => id(r.status) === 'submitted')} label={(r) => `${id(r.requisition_no)} · ${departmentName(app, r.department)}`} /></Field>
       {shortageRequest && <RequestSummary request={shortageRequest} lines={shortageLines} data={data} app={app} showAvailability />}
       <Field label="Shortage explanation for Procurement"><Input value={form.shortageReason} change={(v) => setForm({ ...form, shortageReason: v })} /></Field>
       <Action disabled={busy || !form.shortageRequest || !id(form.shortageReason).trim()} click={() => execute(() => runBackendAction('store-requisitions', id(form.shortageRequest), 'send-to-procurement', { reason: form.shortageReason || '' }), 'Shortage sent to Procurement without duplicating the department request')}>Create linked Procurement request</Action>
       <Rule />
-      <StepHeading number="2" title="Resume after purchased stock is posted" />
+      <div style={{ marginBottom: 10, color: 'var(--text)', fontSize: 12.5, fontWeight: 800 }}>Resume after stock is received</div>
       <Field label="Request awaiting purchased stock"><Select value={form.procurementPending} change={(v) => setForm({ procurementPending: v })} rows={data.requests.filter((r: Row) => id(r.status) === 'awaiting_procurement')} label={(r) => `${id(r.requisition_no)} · ${departmentName(app, r.department)}`} /></Field>
       {!data.requests.some((r: Row) => id(r.status) === 'awaiting_procurement') && <Hint>No department requests are currently waiting for Procurement.</Hint>}
       {procurementPending && <RequestSummary request={procurementPending} lines={data.requestItems.filter((row: Row) => id(row.requisition) === id(procurementPending.id))} data={data} app={app} showAvailability />}
