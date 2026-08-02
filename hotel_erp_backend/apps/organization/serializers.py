@@ -55,10 +55,9 @@ class HotelSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Upload a PNG, JPG, WEBP, or GIF image.")
 
         running_on_vercel = bool(os.environ.get("VERCEL") or os.environ.get("VERCEL_URL"))
-        cloudinary_ready = bool(getattr(settings, "CLOUDINARY_CREDENTIALS_PRESENT", False))
-        if running_on_vercel and not cloudinary_ready:
+        blob_ready = bool(getattr(settings, "VERCEL_BLOB_CONFIGURED", False))
+        if running_on_vercel and not blob_ready:
             raise serializers.ValidationError(
-                "Media storage is not configured. Add CLOUDINARY_URL to the backend "
-                "Vercel environment variables, redeploy, and try again."
+                "Media storage is not configured. Connect a Vercel Blob store to the backend project or add BLOB_READ_WRITE_TOKEN, redeploy, and try again."
             )
         return value

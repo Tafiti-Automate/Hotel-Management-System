@@ -29,7 +29,7 @@ class Hotel(BaseModel):
     phone = models.CharField(max_length=30, blank=True)
     alternate_phone = models.CharField(max_length=30, blank=True)
     website = models.URLField(blank=True)
-    logo = models.ImageField(upload_to="hotel_logos/", blank=True, null=True)
+    logo = models.ImageField(upload_to="hotel_logos/", blank=True, null=True, max_length=500)
     address = models.TextField(blank=True)
     city = models.CharField(max_length=100, blank=True)
     country = models.CharField(max_length=100, default="Uganda")

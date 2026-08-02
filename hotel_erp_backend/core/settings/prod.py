@@ -203,57 +203,26 @@ CSRF_COOKIE_SAMESITE = os.environ.get(
 # not fail on missing *.map development files.
 
 # ---------------------------------------------------------
-# Persistent uploaded media (Cloudinary)
+# Persistent uploaded media (Vercel Blob)
 # ---------------------------------------------------------
-# Vercel serverless functions cannot persist files under /var/task. Uploaded
-# hotel logos, employee photos and other ImageField media therefore use
-# Cloudinary whenever credentials are configured.
-#
-# Preferred configuration:
-# CLOUDINARY_URL=cloudinary://<api_key>:<api_secret>@<cloud_name>
-#
-# The individual CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY /
-# CLOUDINARY_API_SECRET variables are also supported by the storage package.
-CLOUDINARY_URL = os.environ.get("CLOUDINARY_URL", "").strip()
-CLOUDINARY_CREDENTIALS_PRESENT = bool(
-    CLOUDINARY_URL
-    or (
-        os.environ.get("CLOUDINARY_CLOUD_NAME")
-        and os.environ.get("CLOUDINARY_API_KEY")
-        and os.environ.get("CLOUDINARY_API_SECRET")
-    )
-)
+# Vercel serverless functions cannot persist files under /var/task. When a
+# Blob store is connected to this backend project, Vercel injects
+# BLOB_READ_WRITE_TOKEN and Django stores ImageField/FileField uploads there.
+BLOB_READ_WRITE_TOKEN = os.environ.get("BLOB_READ_WRITE_TOKEN", "").strip()
+VERCEL_BLOB_CONFIGURED = bool(BLOB_READ_WRITE_TOKEN)
 
-if CLOUDINARY_CREDENTIALS_PRESENT:
-    # cloudinary_storage is used for uploaded media only. Django static files
-    # remain served by WhiteNoise.
-    for app_name in ("cloudinary_storage", "cloudinary"):
-        if app_name not in INSTALLED_APPS:  # noqa: F405
-            INSTALLED_APPS.append(app_name)  # noqa: F405
-
-    CLOUDINARY_STORAGE = {
-        "SECURE": True,
-        "PREFIX": "hotel-management-system/media",
-        "UNIQUE_FILENAME": True,
-        "OVERWRITE": False,
-        "RESOURCE_TYPE": "image",
-    }
-
+if VERCEL_BLOB_CONFIGURED:
     STORAGES = {
         "default": {
-            "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
+            "BACKEND": "core.storage.VercelBlobStorage",
         },
         "staticfiles": {
             "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
         },
     }
-
-    # ImageField.url returns the final HTTPS Cloudinary delivery URL.
-    MEDIA_URL = "https://res.cloudinary.com/"
 else:
-    # Local development can continue using MEDIA_ROOT. On Vercel, uploads are
-    # rejected by the API with a clear configuration message rather than
-    # crashing with a read-only-filesystem OSError.
+    # Local development keeps the normal writable media directory. Production
+    # uploads are rejected by serializer validation when Blob is not configured.
     STORAGES = {
         "default": {
             "BACKEND": "django.core.files.storage.FileSystemStorage",
