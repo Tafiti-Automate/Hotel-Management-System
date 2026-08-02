@@ -1050,7 +1050,7 @@ class StoreRequisition(BaseModel):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="source_store_requisition",
+        related_name="linked_store_requisition",
     )
     status = models.CharField(
         max_length=30,
