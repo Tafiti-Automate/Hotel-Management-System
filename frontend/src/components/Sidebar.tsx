@@ -59,8 +59,14 @@ export default function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const storesManager = isStoresManager(app.user)
   const baseGroups = app.activeModule === 'hr' ? hrGroups : operationsGroups
+  const role = String(app.user.role || '').toLowerCase()
+  const isRequester = ['department requester', 'department employee', 'employee'].includes(role)
   const groups = baseGroups
-    .map((group) => ({ ...group, items: group.items.filter((item) => canAccessRoute(app.user, item.route)) }))
+    .map((group) => ({ ...group, items: group.items.filter((item) => {
+      if (!canAccessRoute(app.user, item.route)) return false
+      if (isRequester && ['uoms', 'storeRequisitions'].includes(item.route)) return false
+      return true
+    }) }))
     .filter((group) => group.items.length > 0)
   const departmentLabel = app.user.departmentName || app.user.role
   const moduleTitle = storesManager ? 'Stores & Inventory' : app.activeModule === 'hr' ? 'Human Resources' : departmentLabel

@@ -498,7 +498,13 @@ function Records({ tab, data, app, stage, onSelect }: { tab: Tab; data: Record<s
       <input aria-label="From date" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={control} />
       <input aria-label="To date" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={control} />
     </div>
-    {rows.map((row) => <button type="button" onClick={() => onSelect(row)} className="procurement-record-row" key={id(row.id)} style={{ ...recordRow, width: '100%', alignItems: 'center', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>{cells(row).map((cell, index) => <span key={index} style={{ color: index ? 'var(--text-muted)' : 'var(--text)', fontWeight: index ? 500 : 700, textTransform: index === 3 ? 'capitalize' : undefined }}>{cell || '—'}</span>)}</button>)}
+    {rows.map((row) => tab === 'requests' ? <button type="button" onClick={() => onSelect(row)} className="procurement-record-row store-request-row" key={id(row.id)} style={{ ...recordRow, gridTemplateColumns: '1.05fr 1.15fr 1.25fr 1.25fr auto', width: '100%', alignItems: 'center', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
+      <span style={{ color: 'var(--text)', fontWeight: 750 }}>{id(row.requisition_no)}</span>
+      <span style={{ color: 'var(--text-muted)' }}>{id(row.purpose) || departmentName(app, row.department)}</span>
+      <span style={{ color: 'var(--text-muted)' }}>{data.requestItems.filter((line) => id(line.requisition) === id(row.id)).slice(0, 2).map((line) => `${itemName(app, line.item)} × ${id(line.base_quantity_requested || line.quantity_requested || line.quantity)}`).join(', ') || 'No items added'}</span>
+      <RequestProgress status={id(row.status)} />
+      <StatusBadge value={id(row.status)} />
+    </button> : <button type="button" onClick={() => onSelect(row)} className="procurement-record-row" key={id(row.id)} style={{ ...recordRow, width: '100%', alignItems: 'center', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>{cells(row).map((cell, index) => <span key={index} style={{ color: index ? 'var(--text-muted)' : 'var(--text)', fontWeight: index ? 500 : 700 }}>{cell || '—'}</span>)}</button>)}
     {!rows.length && <div style={{ padding: 45, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}><Icon name="inbox" size={28} color="var(--text-faint)" /><div style={{ marginTop: 8, color: 'var(--text)', fontWeight: 700 }}>No records found</div><div style={{ marginTop: 4 }}>Change the filters or create a new request.</div></div>}
   </section>
 }
@@ -600,9 +606,33 @@ const departmentName = (app: any, value: unknown) => id(app.data.departments.fin
 const employeeName = (app: any, value: unknown) => id(app.data.employees.find((r: Row) => id(r.id) === id(value))?.name) || id(value)
 function Panel({ title, note, children }: { title: string; note: string; children: ReactNode }) { return <><div style={{ fontSize: 14, fontWeight: 800 }}>{title}</div><div style={{ ...muted, margin: '4px 0 15px', lineHeight: 1.5 }}>{note}</div>{children}</> }
 function StatusBadge({ value }: { value: string }) {
-  const label = statusLabel(value)
-  const tone = ['approved', 'issued', 'completed'].includes(value) ? 'var(--good)' : ['rejected', 'cancelled'].includes(value) ? 'var(--bad)' : ['submitted', 'pending_department_approval', 'awaiting_procurement'].includes(value) ? 'var(--warn)' : 'var(--accent)'
-  return <span style={{ flexShrink: 0, padding: '4px 8px', borderRadius: 999, color: tone, background: `color-mix(in srgb, ${tone} 13%, transparent)`, fontSize: 9.5, fontWeight: 800 }}>{label}</span>
+  const status = id(value).trim().toLowerCase().replace(/\s+/g, '_')
+  const label = statusLabel(status)
+  const palette: Record<string, { fg: string; bg: string; icon: string }> = {
+    draft: { fg: 'var(--text-muted)', bg: 'var(--surface-2)', icon: 'edit_note' },
+    pending_department_approval: { fg: 'var(--warn)', bg: 'var(--warn-soft)', icon: 'approval' },
+    submitted: { fg: 'var(--accent)', bg: 'var(--accent-soft)', icon: 'inventory' },
+    approved: { fg: 'var(--accent)', bg: 'var(--accent-soft)', icon: 'check_circle' },
+    partially_approved: { fg: 'var(--warn)', bg: 'var(--warn-soft)', icon: 'pending_actions' },
+    awaiting_procurement: { fg: '#7C3AED', bg: 'rgba(124,58,237,.12)', icon: 'shopping_cart' },
+    partially_issued: { fg: '#D97706', bg: 'rgba(217,119,6,.12)', icon: 'outbox' },
+    issued: { fg: 'var(--good)', bg: 'var(--good-soft)', icon: 'task_alt' },
+    completed: { fg: 'var(--good)', bg: 'var(--good-soft)', icon: 'verified' },
+    rejected: { fg: 'var(--bad)', bg: 'var(--bad-soft)', icon: 'cancel' },
+    cancelled: { fg: 'var(--text-muted)', bg: 'var(--surface-2)', icon: 'block' },
+  }
+  const tone = palette[status] || { fg: 'var(--accent)', bg: 'var(--accent-soft)', icon: 'info' }
+  return <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 9px', borderRadius: 999, color: tone.fg, background: tone.bg, fontSize: 9.5, fontWeight: 800 }}><Icon name={tone.icon} size={13} color={tone.fg} />{label}</span>
+}
+function RequestProgress({ status }: { status: string }) {
+  const normalized = id(status).trim().toLowerCase().replace(/\s+/g, '_')
+  const stages = ['Created', 'HOD Approval', 'Stores Review', 'Issue', 'Completed']
+  const indexMap: Record<string, number> = { draft: 0, pending_department_approval: 1, submitted: 2, awaiting_procurement: 2, approved: 3, partially_approved: 3, partially_issued: 3, issued: 4, completed: 4, rejected: 1, cancelled: 0 }
+  const current = indexMap[normalized] ?? 0
+  return <div aria-label={`Request progress: ${stages[current]}`} style={{ minWidth: 150 }}>
+    <div style={{ display: 'flex', gap: 3, marginBottom: 4 }}>{stages.map((stage, index) => <span key={stage} title={stage} style={{ height: 5, flex: 1, borderRadius: 5, background: index <= current ? (normalized === 'rejected' ? 'var(--bad)' : normalized === 'cancelled' ? 'var(--text-faint)' : index === current ? 'var(--accent)' : 'var(--good)') : 'var(--border)' }} />)}</div>
+    <div style={{ color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 650 }}>{normalized === 'rejected' ? 'Rejected' : normalized === 'cancelled' ? 'Cancelled' : stages[current]}</div>
+  </div>
 }
 function RequestTimeline({ row, app }: { row: Row; app: any }) {
   const events = [

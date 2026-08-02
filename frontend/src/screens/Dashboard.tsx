@@ -92,21 +92,59 @@ function buildDashboard(role: string, data: any): DashboardConfig {
   const departments = data.departments || []
   const low = items.filter((r: any) => ['Low', 'Critical'].includes(String(r.status)))
 
+  if (role === 'department requester' || role === 'department employee' || role === 'employee') {
+    const mine = storeReqs
+    const drafts = mine.filter((r: any) => normalStatus(r.status) === 'draft')
+    const pending = mine.filter((r: any) => ['pending_department_approval','submitted','approved','partially_approved','awaiting_procurement','partially_issued'].includes(normalStatus(r.status)))
+    const issued = mine.filter((r: any) => ['issued','completed'].includes(normalStatus(r.status)))
+    return {
+      subtitle: 'Your store requests and fulfilment progress',
+      kpis: [
+        { label: 'Total requests', value: mine.length, icon: 'assignment' },
+        { label: 'Drafts', value: drafts.length, icon: 'edit_note', tone: drafts.length ? 'warning' : 'neutral' },
+        { label: 'In progress', value: pending.length, icon: 'hourglass_top', tone: pending.length ? 'warning' : 'neutral' },
+        { label: 'Issued', value: issued.length, icon: 'task_alt', tone: issued.length ? 'success' : 'neutral' },
+      ],
+      trend: { title: 'My request trend', subtitle: 'Store requests created during the last six months', series: [{ name: 'Requests', points: monthly(mine, 'created_at') }] },
+      status: { title: 'My requests by status', subtitle: 'Current fulfilment stage', data: byStatus(mine) },
+      bars: { title: 'Requests by purpose', subtitle: 'Most common request purposes', data: groupCount(mine, 'purpose') },
+      queue: { title: 'Recent store requests', subtitle: 'Your latest requests and current status', action: 'View all requests', route: 'workflow-stores', rows: mine.map((r: any) => queueStoreReq(r)) },
+    }
+  }
+
+  if (role === 'store keeper') {
+    const ready = storeReqs.filter((r: any) => ['approved','partially_approved','partially_issued'].includes(normalStatus(r.status)))
+    const completedToday = issues.filter((r: any) => String(r.issue_date || r.date || '').slice(0,10) === today && Boolean(r.inventory_changes_applied))
+    return {
+      subtitle: 'Picking, issuing and handover workload',
+      kpis: [
+        { label: 'Ready to pick', value: ready.length, icon: 'inventory_2', tone: ready.length ? 'warning' : 'neutral' },
+        { label: 'Issues today', value: completedToday.length, icon: 'outbox', tone: completedToday.length ? 'success' : 'neutral' },
+        { label: 'Partially issued', value: countStatus(storeReqs, /partially_issued/i), icon: 'pending_actions' },
+        { label: 'Open issue vouchers', value: issues.filter((r: any) => !r.inventory_changes_applied).length, icon: 'receipt_long' },
+      ],
+      trend: { title: 'Issues completed', subtitle: 'Posted stock issues during the last six months', series: [{ name: 'Issues', points: monthly(issues.filter((r:any)=>r.inventory_changes_applied), 'issue_date') }] },
+      status: { title: 'Issue queue by status', subtitle: 'Requests available to the stores team', data: byStatus(storeReqs) },
+      bars: { title: 'Issues by store', subtitle: 'Visible issue vouchers by store', data: groupCount(issues, 'store') },
+      queue: { title: 'Pick and issue queue', subtitle: 'Approved requests ready for fulfilment', action: 'Open pick list', route: 'workflow-stores', rows: ready.map((r:any)=>queueStoreReq(r)) },
+    }
+  }
+
   if (role === 'department head') {
-    const actionable = reqs.filter((r: any) => r.approvalActionable)
-    const fulfilled = reqs.filter((r: any) => /approved|completed|fulfilled/i.test(String(r.status)))
+    const actionable = storeReqs.filter((r: any) => normalStatus(r.status) === 'pending_department_approval')
+    const fulfilled = storeReqs.filter((r: any) => /approved|issued|completed/i.test(String(r.status)))
     return {
       subtitle: 'Department request workload and approvals',
       kpis: [
         { label: 'Awaiting your approval', value: actionable.length, icon: 'approval', tone: actionable.length ? 'warning' : 'neutral' },
         { label: 'Waiting for Stores', value: countStatus(storeReqs, /submitted|approved|pending/i), icon: 'warehouse' },
-        { label: 'Waiting for Procurement', value: countStatus(reqs, /submitted|procurement|pending/i), icon: 'shopping_cart' },
+        { label: 'Waiting for Procurement', value: countStatus(storeReqs, /awaiting_procurement/i), icon: 'shopping_cart' },
         { label: 'Fulfilled this month', value: fulfilled.filter((r: any) => monthKey(r.date) === monthKey(today)).length, icon: 'task_alt', tone: 'success' },
       ],
-      trend: { title: 'Monthly department requests', subtitle: 'Requests visible to this department', series: [{ name: 'Requests', points: monthly(reqs, 'date') }] },
-      status: { title: 'Requests by status', subtitle: 'Department-only pipeline', data: byStatus(reqs) },
-      bars: { title: 'Request value by status', subtitle: 'Estimated UGX value of visible requests', data: groupSum(reqs, 'status', 'total'), money: true },
-      queue: { title: 'Approval queue', subtitle: 'Requests requiring this department head', action: 'Approvals', route: 'approvals', rows: actionable.map((r: any) => queueReq(r)) },
+      trend: { title: 'Monthly department requests', subtitle: 'Requests visible to this department', series: [{ name: 'Requests', points: monthly(storeReqs, 'created_at') }] },
+      status: { title: 'Requests by status', subtitle: 'Department-only pipeline', data: byStatus(storeReqs) },
+      bars: { title: 'Request value by status', subtitle: 'Estimated UGX value of visible requests', data: groupCount(storeReqs, 'status') },
+      queue: { title: 'Approval queue', subtitle: 'Requests requiring this department head', action: 'Open approvals', route: 'workflow-stores', rows: actionable.map((r: any) => queueStoreReq(r)) },
     }
   }
 
@@ -272,7 +310,9 @@ function groupCount(rows:any[], key:string):Point[]{const m=new Map<string,numbe
 function groupSum(rows:any[], key:string, valueKey:string):Point[]{const m=new Map<string,number>();rows.forEach(r=>{const k=clean(r[key]);m.set(k,(m.get(k)||0)+Number(r[valueKey]||0))});return [...m].map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value)}
 function monthly(rows:any[], dateKey:string, valueKey?:string):Point[]{const months:string[]=[];const now=new Date();for(let i=5;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);months.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`)}return months.map(label=>({label,value:rows.filter(r=>monthKey(r[dateKey])===label).reduce((s,r)=>s+(valueKey?Number(r[valueKey]||0):1),0)}))}
 function ledgerSeries(rows:any[]):Series[]{return [{name:'Received',points:monthly(rows.filter(r=>/in/i.test(String(r.type))),'date','qty')},{name:'Issued',points:monthly(rows.filter(r=>/out/i.test(String(r.type))),'date','qty')}]}
+function normalStatus(value:unknown){return String(value||'').trim().toLowerCase().replace(/\s+/g,'_')}
 function queueReq(r:any){return{id:r.id,primary:r.id,secondary:`${r.dept||r.department||'Department'} · ${r.requester||'Requester'}`,value:money(r.total||0),status:r.status}}
+function queueStoreReq(r:any){return{id:r.id,primary:r.requisition_no||r.reference||r.id,secondary:r.purpose||'Store request',value:'',status:r.status}}
 
 const iconButton: CSSProperties = { width: 31, height: 31, display: 'grid', placeItems: 'center', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer' }
 const queueRow: CSSProperties = { width:'100%',display:'grid',gridTemplateColumns:'minmax(0,1.6fr) auto auto 18px',alignItems:'center',gap:13,padding:'11px 16px',border:0,borderBottom:'1px solid var(--border)',background:'transparent',textAlign:'left',cursor:'pointer',font:'inherit' }
