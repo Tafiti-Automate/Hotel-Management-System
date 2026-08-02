@@ -231,7 +231,7 @@ function RequestPanel({ app, data, form, setForm, busy, execute, stage }: any) {
   return <Panel title={meta.title} note={meta.note}>
     {stage === 'prepare' && <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-        <div><div style={{ color: 'var(--text)', fontSize: 13, fontWeight: 800 }}>Request items</div><div style={{ marginTop: 3, color: 'var(--text-muted)', fontSize: 11 }}>Add the articles you need, then submit the request.</div></div>
+        <div><div style={{ color: 'var(--text)', fontSize: 13, fontWeight: 800 }}>Request items</div><div style={{ marginTop: 3, color: 'var(--text-muted)', fontSize: 11 }}>Add all required articles to this requisition.</div></div>
         <button type="button" disabled={busy} onClick={() => app.openCreate('storeRequisitions', 'New store request')} style={{ ...secondary, marginLeft: 'auto', color: 'var(--accent)', borderColor: 'var(--accent)' }}><Icon name="add" size={17} />New request</button>
       </div>
       {drafts.length > 0 && <Field label="Draft request"><Select value={form.request} change={(v) => { const request = drafts.find((row: Row) => id(row.id) === v); setForm({ request: v, purpose: request?.purpose || '', requiredDate: request?.required_date || '' }) }} rows={drafts} label={(r) => `${id(r.requisition_no)} · ${id(r.purpose) || 'Untitled request'}`} /></Field>}
@@ -255,9 +255,9 @@ function RequestPanel({ app, data, form, setForm, busy, execute, stage }: any) {
           <Field label="Purpose"><Input value={form.purpose || draftRequest.purpose} change={(v) => setForm({ ...form, purpose: v })} /></Field>
           <button type="button" disabled={busy || !id(form.purpose || draftRequest.purpose).trim()} onClick={() => execute(() => updateBackendRecord('store-requisitions', requestBackendId(draftRequest), { purpose: id(form.purpose || draftRequest.purpose).trim(), required_date: form.requiredDate || draftRequest.required_date || null }), 'Draft details updated', { request: form.request, purpose: form.purpose || draftRequest.purpose, requiredDate: form.requiredDate || draftRequest.required_date })} style={{ ...secondary, width: '100%', justifyContent: 'center' }}><Icon name="save" size={16} />Save changes</button>
         </div>
-        <Field label={draftLine ? 'Edit item' : 'Article'}><Select value={draftLine ? form.requestLine : form.item} change={(v) => { if (draftLine || form.requestLine) { const line = draftLines.find((r: Row) => id(r.id) === v); setForm({ ...form, requestLine: v, item: line?.item || '', unit: line?.unit || '', quantity: line?.quantity_requested || '' }) } else setForm({ ...form, item: v }) }} rows={draftLine || form.requestLine ? draftLines : app.data.items} optional={Boolean(draftLine || form.requestLine)} emptyLabel={draftLine || form.requestLine ? 'Add another item' : 'Choose article'} label={(r) => draftLine || form.requestLine ? `${itemName(app, r.item)} · ${r.quantity_requested}` : itemName(app, r.id)} /></Field>
-        {(form.item || form.requestLine) && <><Field label="Unit"><Select value={form.unit} change={(v) => setForm({ ...form, unit: v })} rows={app.data.uoms} optional emptyLabel="Article base unit" /></Field><Field label="Quantity"><Input type="number" value={form.quantity} change={(v) => setForm({ ...form, quantity: v })} /></Field></>}
-        {!draftLine && <Action disabled={busy || !form.item || num(form.quantity) <= 0} click={() => execute(() => createBackendRecord('store-requisition-items', { requisition: form.request, item: form.item, unit: form.unit || null, quantity_requested: num(form.quantity), quantity_approved: 0, quantity_issued: 0, remarks: '' }), 'Item added', { request: form.request, purpose: form.purpose, requiredDate: form.requiredDate })}>Add item</Action>}
+        <Field label={draftLine ? 'Edit item' : 'Article'}><Select value={draftLine ? form.requestLine : form.item} change={(v) => { if (draftLine || form.requestLine) { const line = draftLines.find((r: Row) => id(r.id) === v); const article = app.data.items.find((item: Row) => id(item.id) === id(line?.item)); setForm({ ...form, requestLine: v, item: line?.item || '', unit: line?.unit || article?.baseUnitId || '', quantity: line?.quantity_requested || '' }) } else { const article = app.data.items.find((item: Row) => id(item.id) === v); setForm({ ...form, item: v, unit: article?.baseUnitId || '', quantity: '' }) } }} rows={draftLine || form.requestLine ? draftLines : app.data.items} optional={Boolean(draftLine || form.requestLine)} emptyLabel={draftLine || form.requestLine ? 'Add another item' : 'Choose article'} label={(r) => draftLine || form.requestLine ? `${itemName(app, r.item)} · ${r.quantity_requested}` : itemName(app, r.id)} /></Field>
+        {(form.item || form.requestLine) && (() => { const article = app.data.items.find((item: Row) => id(item.id) === id(form.item || draftLine?.item)); return <><div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 10, marginBottom: 10 }}><div style={{ padding: '9px 10px', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface-2)' }}><div style={{ color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em' }}>Category</div><div style={{ marginTop: 3, color: 'var(--text)', fontSize: 11.5, fontWeight: 700 }}>{id(article?.category) || 'Not configured'}</div></div><div style={{ padding: '9px 10px', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface-2)' }}><div style={{ color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em' }}>Issue unit</div><div style={{ marginTop: 3, color: 'var(--text)', fontSize: 11.5, fontWeight: 700 }}>{id(article?.uom) || 'Base unit'}</div></div></div><Field label="Quantity"><Input type="number" value={form.quantity} change={(v) => setForm({ ...form, quantity: v })} /></Field></> })()}
+        {!draftLine && <Action disabled={busy || !form.item || num(form.quantity) <= 0} click={() => execute(() => createBackendRecord('store-requisition-items', { requisition: form.request, item: form.item, unit: form.unit || null, quantity_requested: num(form.quantity), quantity_approved: 0, quantity_issued: 0, remarks: '' }), 'Item added', { request: form.request, purpose: form.purpose, requiredDate: form.requiredDate, item: '', unit: '', quantity: '', requestLine: '' })}>Add item</Action>}
         {draftLine && <><Action disabled={busy || num(form.quantity) <= 0} click={() => execute(() => updateBackendRecord('store-requisition-items', id(draftLine.id), { item: form.item, unit: form.unit || null, quantity_requested: num(form.quantity) }), 'Item updated', { request: form.request, purpose: form.purpose, requiredDate: form.requiredDate })}>Update item</Action><button type="button" disabled={busy} onClick={() => execute(() => deleteBackendPath('store-requisition-items', id(draftLine.id)), 'Item removed', { request: form.request, purpose: form.purpose, requiredDate: form.requiredDate })} style={{ ...action, background: 'var(--bad)' }}>Remove item</button></>}
         <Rule />
         <Action tone="good" disabled={busy || !draftRequest || draftLines.length === 0} click={() => execute(() => runBackendAction('store-requisitions', id(form.request), 'submit'), 'Request submitted')}>Submit request</Action>
@@ -314,24 +314,46 @@ function RequestPanel({ app, data, form, setForm, busy, execute, stage }: any) {
 
 function RequestSummary({ request, lines, data, app, showAvailability = false, editable = false, onEditLine, onRemoveLine }: { request: Row; lines: Row[]; data: Record<string, Row[]>; app: any; showAvailability?: boolean; editable?: boolean; onEditLine?: (line: Row) => void; onRemoveLine?: (line: Row) => void }) {
   const columns = showAvailability
-    ? 'minmax(180px,1.6fr) repeat(4,minmax(78px,.6fr))'
-    : editable ? 'minmax(180px,1.6fr) repeat(3,minmax(70px,.55fr)) 82px' : 'minmax(180px,1.6fr) repeat(3,minmax(78px,.6fr))'
+    ? 'minmax(165px,1.35fr) minmax(105px,.8fr) repeat(5,minmax(72px,.55fr))'
+    : editable
+      ? 'minmax(165px,1.35fr) minmax(105px,.8fr) repeat(4,minmax(72px,.55fr)) 82px'
+      : 'minmax(165px,1.35fr) minmax(105px,.8fr) repeat(4,minmax(72px,.55fr))'
+  const categoryOf = (line: Row) => id(line.category_name) || id(app.data.items.find((r: Row) => id(r.id) === id(line.item))?.category) || 'Uncategorised'
+  const lineStatus = (line: Row, available: number) => {
+    const requested = num(line.base_quantity_requested || line.quantity_requested)
+    const approved = num(line.quantity_approved)
+    const issued = num(line.quantity_issued)
+    if (issued >= approved && approved > 0) return { label: 'Issued', tone: 'var(--good)', bg: 'var(--good-soft)' }
+    if (issued > 0) return { label: 'Partially issued', tone: 'var(--warn)', bg: 'var(--warn-soft)' }
+    if (approved > 0 && available < Math.max(0, approved - issued)) return { label: 'Shortage', tone: 'var(--bad)', bg: 'var(--bad-soft)' }
+    if (approved > 0) return { label: approved < requested ? 'Partially approved' : 'Approved', tone: 'var(--accent)', bg: 'var(--accent-soft)' }
+    if (id(request.status) === 'pending_department_approval') return { label: 'HOD review', tone: 'var(--warn)', bg: 'var(--warn-soft)' }
+    return { label: 'Draft', tone: 'var(--text-muted)', bg: 'var(--surface-3)' }
+  }
+  const categoryCount = new Set(lines.map(categoryOf)).size
   return <section style={{ marginBottom: 14, overflow: 'hidden', border: '1px solid var(--border)', borderRadius: 8 }}>
     <div style={{ padding: '12px 13px', display: 'flex', alignItems: 'flex-start', gap: 10, background: 'var(--surface-2)' }}>
-      <div style={{ flex: 1 }}><div style={{ color: 'var(--text)', fontSize: 12.5, fontWeight: 800 }}>{id(request.requisition_no)}</div><div style={{ marginTop: 3, color: 'var(--text-muted)', fontSize: 11 }}>{departmentName(app, request.department)} · {id(request.purpose) || 'No purpose entered'}</div></div>
+      <div style={{ flex: 1 }}>
+        <div style={{ color: 'var(--text)', fontSize: 12.5, fontWeight: 800 }}>{id(request.requisition_no)}</div>
+        <div style={{ marginTop: 3, color: 'var(--text-muted)', fontSize: 11 }}>{departmentName(app, request.department)} · {id(request.purpose) || 'No purpose entered'}</div>
+        {lines.length > 0 && <div style={{ marginTop: 5, color: 'var(--text-faint)', fontSize: 10.5 }}>{lines.length} item{lines.length === 1 ? '' : 's'} across {categoryCount} categor{categoryCount === 1 ? 'y' : 'ies'}</div>}
+      </div>
       <StatusBadge value={id(request.status)} />
     </div>
     <div className="request-summary-grid" style={{ display: 'grid', gridTemplateColumns: columns, padding: '8px 12px', color: 'var(--text-faint)', background: 'var(--surface)', borderTop: '1px solid var(--border)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em' }}>
-      <span>Article</span><span>Requested</span>{showAvailability && <span>Available</span>}<span>Approved</span><span>Issued</span>{editable && <span>Actions</span>}
+      <span>Article</span><span>Category</span><span>Requested</span>{showAvailability && <span>Available</span>}<span>Approved</span><span>Issued</span><span>Status</span>{editable && <span>Actions</span>}
     </div>
     {lines.map((line: Row) => {
       const balance = data.balances.find((row: Row) => id(row.item) === id(line.item) && id(row.store) === id(request.store))
       const available = num(balance?.available_quantity)
+      const state = lineStatus(line, available)
       return <div key={id(line.id)} className="request-summary-grid" style={{ display: 'grid', gridTemplateColumns: columns, gap: 8, padding: '11px 12px', borderTop: '1px solid var(--border)', fontSize: 11.5, alignItems: 'center' }}>
         <span style={{ minWidth: 0, color: 'var(--text)', fontWeight: 700 }}>{itemName(app, line.item)}</span>
+        <span style={{ color: 'var(--text-muted)' }}>{categoryOf(line)}</span>
         <span>{id(line.base_quantity_requested || line.quantity_requested || 0)}</span>
         {showAvailability && <span style={{ color: available >= num(line.base_quantity_requested || line.quantity_requested) ? 'var(--good)' : 'var(--warn)', fontWeight: 750 }}>{available}</span>}
         <span>{id(line.quantity_approved || 0)}</span><span>{id(line.quantity_issued || 0)}</span>
+        <span><span style={{ display: 'inline-flex', padding: '3px 7px', borderRadius: 999, color: state.tone, background: state.bg, fontSize: 9.5, fontWeight: 800 }}>{state.label}</span></span>
         {editable && <span style={{ display: 'flex', gap: 5 }}><button type="button" onClick={() => onEditLine?.(line)} title="Edit item" style={lineAction}><Icon name="edit" size={15} /></button><button type="button" onClick={() => onRemoveLine?.(line)} title="Remove item" style={{ ...lineAction, color: 'var(--bad)' }}><Icon name="delete" size={15} /></button></span>}
       </div>
     })}
