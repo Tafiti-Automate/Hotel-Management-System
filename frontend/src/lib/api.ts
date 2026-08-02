@@ -156,6 +156,22 @@ export type HotelInput = Omit<
 const TOKEN_KEY = 'hms_token'
 const USER_KEY = 'hms_user'
 const inFlightMutations = new Map<string, Promise<unknown>>()
+const API_TIMEOUT_MS = 20_000
+
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), API_TIMEOUT_MS)
+  try {
+    return await fetch(input, { ...init, signal: controller.signal })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('The server took too long to respond. Please retry.')
+    }
+    throw error
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
 
 function singleFlightMutation<T>(key: string, operation: () => Promise<T>): Promise<T> {
   const existing = inFlightMutations.get(key)
@@ -293,7 +309,7 @@ async function readList(path: string): Promise<ApiRecord[]> {
 
   while (url && pages < 20) {
     pages += 1
-    const response = await fetch(url, { headers: { Accept: 'application/json', ...authHeaders() } })
+    const response = await fetchWithTimeout(url, { headers: { Accept: 'application/json', ...authHeaders() } })
     if (!response.ok) {
       throw new Error(`GET ${path} failed with ${response.status}`)
     }
@@ -795,6 +811,14 @@ async function sendJson(path: string, method: string, body?: Row): Promise<unkno
 
 export async function readBackendRecords(path: string): Promise<Row[]> {
   return (await readList(path)) as Row[]
+}
+
+export async function readBackendPayload(path: string): Promise<Record<string, Row[]>> {
+  const response = await fetchWithTimeout(endpointUrl(path), {
+    headers: { Accept: 'application/json', ...authHeaders() },
+  })
+  if (!response.ok) throw new Error(`GET ${path} failed with ${response.status}`)
+  return response.json() as Promise<Record<string, Row[]>>
 }
 
 export type OperationalReportId =

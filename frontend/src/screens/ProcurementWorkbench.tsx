@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { Icon } from '../components/Icon'
 import { HelpLabel } from '../components/HelpLabel'
 import { WorkflowPath } from '../components/WorkflowPath'
-import { createBackendRecord, deleteBackendPath, downloadProcurementAttachment, errorMessage, readBackendRecords, runBackendAction, updateBackendRecord, uploadProcurementAttachment } from '../lib/api'
+import { createBackendRecord, deleteBackendPath, downloadProcurementAttachment, errorMessage, readBackendPayload, readBackendRecords, runBackendAction, updateBackendRecord, uploadProcurementAttachment } from '../lib/api'
 import type { Row } from '../lib/data'
 import { chipStyleFor, money } from '../lib/theme'
 import { useApp } from '../state/AppContext'
@@ -82,23 +82,14 @@ export default function ProcurementWorkbench() {
     setLoading(true)
     setMessage('')
     try {
-      const optional = new Set(['attachments', 'communications', 'history', 'requisitionHistory'])
-      const entries = await Promise.all(Object.entries(paths).map(async ([key, path]) => {
-        const typedKey = key as keyof typeof paths
-        if (!can(pathViewPermissions[typedKey])) return [key, []]
-        try { return [key, await readBackendRecords(path)] }
-        catch (error) {
-          if (optional.has(key)) return [key, []]
-          throw error
-        }
-      }))
-      setData(Object.fromEntries(entries))
+      const payload = await readBackendPayload(`requisitions/workspace?stage=${stage}`)
+      setData((current) => ({ ...current, ...payload }))
     } catch (error) {
       setMessage(errorMessage(error))
     } finally {
       setLoading(false)
     }
-  }, [can])
+  }, [stage])
 
   useEffect(() => { void load() }, [load])
   useEffect(() => { setForm({}); setMessage(''); setSelectedRecord(null) }, [stage])
@@ -151,6 +142,33 @@ export default function ProcurementWorkbench() {
     } finally {
       setBusy(false)
     }
+  }
+
+  const openRecord = async (row: Row) => {
+    setSelectedRecord(row)
+    const documentType = stage === 'request' ? 'purchase_requisition'
+      : stage === 'quote' ? 'vendor_quotation'
+        : stage === 'lpo' ? 'purchase_order'
+          : stage === 'receipt' ? 'goods_receipt'
+            : stage === 'inspect' ? 'inspection'
+              : 'supplier_return'
+    const requisitionId = stage === 'request' || stage === 'quote' || stage === 'lpo'
+      ? id(stage === 'request' ? row.requisition : row.requisition)
+      : ''
+    const requests: Array<Promise<[string, Row[]]>> = []
+    if (can(pathViewPermissions.attachments)) {
+      requests.push(readBackendRecords(`procurement-attachments?document_type=${documentType}&document_id=${id(row.id)}`).then((rows) => ['attachments', rows]))
+    }
+    if (stage === 'lpo' && can(pathViewPermissions.communications)) {
+      requests.push(readBackendRecords(`procurement-communications?purchase_order=${id(row.id)}`).then((rows) => ['communications', rows]))
+    }
+    if (requisitionId && can(pathViewPermissions.requisitionHistory)) {
+      requests.push(readBackendRecords(`requisition-history?requisition=${requisitionId}`).then((rows) => ['requisitionHistory', rows]))
+    } else if (can(pathViewPermissions.history)) {
+      requests.push(readBackendRecords(`audit-logs?entity_id=${id(row.id)}`).then((rows) => ['history', rows]))
+    }
+    const evidence = await Promise.all(requests.map((request) => request.catch(() => ['', []] as [string, Row[]])))
+    setData((current) => ({ ...current, ...Object.fromEntries(evidence.filter(([key]) => key)) }))
   }
 
   const names = useMemo(() => ({
@@ -224,11 +242,11 @@ export default function ProcurementWorkbench() {
         steps={tabs.map(([key, , label]) => ({ key, label, ...stageGuidance[key] }))}
       />
 
-      {message && <div style={{ ...card, padding: 13, marginBottom: 14, borderColor: 'rgba(220,38,38,.3)', color: 'var(--bad)', fontSize: 12.5 }}>{message}</div>}
+      {message && <div style={{ ...card, padding: 13, marginBottom: 14, borderColor: 'rgba(220,38,38,.3)', color: 'var(--bad)', fontSize: 12.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}><span>{message}</span><button type="button" onClick={() => void load()} style={secondary}>Retry</button></div>}
       {loading ? <div style={{ ...card, padding: 50, textAlign: 'center', color: 'var(--text-faint)' }}>Loading procurement records from the backend…</div> : (
         <div className="workbench-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.45fr) minmax(340px,.75fr)', gap: 16, alignItems: 'start' }}>
           <section style={{ ...card, overflow: 'hidden' }}>
-            <StageTable stage={stage} data={scopedData} names={names} onSelect={setSelectedRecord} />
+            <StageTable stage={stage} data={scopedData} names={names} onSelect={(row) => void openRecord(row)} />
           </section>
           <aside style={{ ...card, padding: 18 }}>
             {!canChangeStage && <ReadOnlyStage />}
