@@ -8,7 +8,7 @@ from django.core.management.base import CommandError
 from apps.customers.models import Customer
 from apps.departments.models import Branch, Department
 from apps.employees.models import Employee
-from apps.finance.models import SupplierInvoice
+from apps.finance.models import Expense, SupplierInvoice
 from apps.inventory.models import InventoryBalance, Item, StockIssue, StockTransfer
 from apps.notifications.models import Notification
 from apps.organization.models import Hotel
@@ -141,3 +141,54 @@ def test_seed_presentation_data_builds_connected_uganda_workflows(monkeypatch):
         assert not user.is_staff
         assert not user.is_superuser
         assert not user.user_permissions.exists()
+
+
+@pytest.mark.django_db
+def test_seed_historical_operations_adds_to_existing_branch_idempotently():
+    hotel = Hotel.objects.create(name="Existing Hotel")
+    branch = Branch.objects.create(
+        hotel=hotel,
+        name="Kampala Property",
+        branch_code="KLA",
+        is_active=True,
+    )
+    department = Department.objects.create(name="Operations")
+    user = get_user_model().objects.create_user(username="history.operator")
+    Employee.objects.create(
+        user=user,
+        department=department,
+        branch=branch,
+        designation="Operations Manager",
+    )
+
+    preview = StringIO()
+    call_command("seed_historical_operations", branch="KLA", days=28, stdout=preview)
+    assert "PREVIEW ONLY" in preview.getvalue()
+    assert Sale.objects.count() == 0
+
+    call_command(
+        "seed_historical_operations",
+        branch="KLA",
+        days=28,
+        commit=True,
+        verbosity=0,
+    )
+    assert Sale.objects.count() == 38
+    assert Expense.objects.count() == 12
+    assert PurchaseRequisition.objects.count() == 15
+    assert PurchaseOrder.objects.count() == 15
+    assert GoodsReceiptNote.objects.count() == 15
+    assert StockIssue.objects.count() == 15
+    assert all(sale.inventory_changes_applied for sale in Sale.objects.all())
+
+    call_command(
+        "seed_historical_operations",
+        branch="KLA",
+        days=28,
+        commit=True,
+        verbosity=0,
+    )
+    assert Sale.objects.count() == 38
+    assert Expense.objects.count() == 12
+    assert PurchaseRequisition.objects.count() == 15
+    assert StockIssue.objects.count() == 15

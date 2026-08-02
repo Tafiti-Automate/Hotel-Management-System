@@ -1287,7 +1287,9 @@ class GoodsReceiptItem(BaseModel):
 
     def save(self, *args, **kwargs):
         self.item = self.purchase_order_item.item
-        self.base_quantity = self.quantity_received * self.purchase_order_item.conversion_factor
+        self.base_quantity = (
+            self.quantity_received * self.purchase_order_item.conversion_factor
+        ).quantize(Decimal("0.01"))
         if not self.store_id and not self.direct_issue_department_id:
             self.store = self.goods_receipt.purchase_order.store
         if not self.unit_cost:
