@@ -63,11 +63,16 @@ function apiRoot(): string {
 
 export interface AuthUser {
   id: string
+  user_id?: string
+  employee_id?: string
+  employee_code?: string
   name: string
   role: string
   username: string
   branch_id?: string
   branch_name?: string
+  department_id?: string
+  department_name?: string
   is_staff?: boolean
   is_superuser?: boolean
   permissions?: string[]
@@ -742,14 +747,15 @@ function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey
     const departmentId = findDataId(data, 'departments', values.department)
     const storeId = findDataId(data, 'locations', values.store)
     const requesterId = findDataId(data, 'employees', values.requester)
-    if (!departmentId) throw new Error('Choose a department before saving this store requisition.')
-    if (!requesterId) throw new Error('Choose a requester before saving this store requisition.')
     const payload: Row = {
-      department: departmentId,
-      requested_by: requesterId,
       required_date: text(values.required_date) || null,
       purpose: text(values.purpose, 'Department stock request'),
     }
+    // Only privileged users submit identity fields. For ordinary employees the
+    // API derives requester, department, branch and issuing store from the
+    // authenticated employee profile.
+    if (departmentId) payload.department = departmentId
+    if (requesterId) payload.requested_by = requesterId
     if (storeId) payload.store = storeId
     return payload
   }

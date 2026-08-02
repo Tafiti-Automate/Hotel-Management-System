@@ -36,14 +36,9 @@ export default function FormDrawer() {
   const canRequestOnBehalf = app.user.isSuperuser || ['system administrator', 'stores manager'].includes(roleKey)
   const canPurchaseOnBehalf = app.user.isSuperuser || ['system administrator', 'procurement manager', 'general manager'].includes(roleKey)
   const signedInEmployee = app.data.employees.find((employee) =>
-    String(employee.employeeCode) === app.user.id || String(employee.userId) === app.user.id,
-  )
-  const assignedStore = app.data.locations.find((location) =>
-    location.branch === signedInEmployee?.branch
-    && location.status === 'Active'
-    && location.isDefault === 'Yes',
-  ) || app.data.locations.find((location) =>
-    location.branch === signedInEmployee?.branch && location.status === 'Active',
+    String(employee.id) === app.user.employeeId
+    || String(employee.employeeCode) === app.user.employeeCode
+    || String(employee.userId) === app.user.id,
   )
   const locksStoreIdentity = f?.entity === 'storeRequisitions' && !canRequestOnBehalf
   const locksPurchaseIdentity = f?.entity === 'requisitions' && !canPurchaseOnBehalf
@@ -74,18 +69,22 @@ export default function FormDrawer() {
     if (f.entity === 'storeRequisitions' && !canRequestOnBehalf && signedInEmployee) {
       seed.department = signedInEmployee.department
       seed.requester = signedInEmployee.name
-      seed.store = assignedStore?.name || ''
     }
     setValues(seed)
     setStep(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [f?.entity, f?.id, canPurchaseOnBehalf, canRequestOnBehalf, signedInEmployee?.id, assignedStore?.id])
+  }, [f?.entity, f?.id, canPurchaseOnBehalf, canRequestOnBehalf, signedInEmployee?.id])
 
   if (!f) return null
   const conf = cfg[f.entity]
   const fields = conf.fields || []
   const isHotelPurchase = f.entity === 'requisitions' && values.request_type === 'hotel_purchase'
-  const visibleFields = fields.filter((fd) => !(isHotelPurchase && ['department', 'requester'].includes(fd.key)))
+  const visibleFields = fields.filter((fd) => {
+    if (isHotelPurchase && ['department', 'requester'].includes(fd.key)) return false
+    if (locksStoreIdentity && ['department', 'requester', 'store'].includes(fd.key)) return false
+    if (locksPurchaseIdentity && ['request_type', 'department', 'requester'].includes(fd.key)) return false
+    return true
+  })
   const wizard = visibleFields.length > 6
   const pageSize = 4
   const pageCount = wizard ? Math.ceil(visibleFields.length / pageSize) : 1
@@ -167,15 +166,14 @@ export default function FormDrawer() {
                 .map((entry) => String(entry.unit))
               options = Array.from(new Set([String(article?.uom || ''), ...configured].filter(Boolean)))
             }
-            const identityLocked = (locksStoreIdentity && ['department', 'requester', 'store'].includes(fd.key))
-              || (locksPurchaseIdentity && ['request_type', 'department', 'requester'].includes(fd.key))
+            const identityLocked = false
             return (
               <div key={fd.key}>
                 <label><HelpLabel label={fd.label} style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 7 }} /></label>
                 {identityLocked ? (
                   <div style={{ minHeight: 42, display: 'flex', alignItems: 'center', gap: 9, border: '1px solid var(--border)', background: 'var(--surface-2)', borderRadius: 10, padding: '0 12px', color: 'var(--text)', fontSize: 13.5 }}>
                     <Icon name={fd.key === 'department' ? 'account_tree' : fd.key === 'request_type' ? 'request_quote' : fd.key === 'store' ? 'warehouse' : 'person'} size={18} color="var(--text-faint)" />
-                    <span style={{ flex: 1 }}>{fd.key === 'request_type' ? 'Department request' : fd.key === 'store' ? values.store || 'No active store configured for your branch' : values[fd.key] || 'No employee profile found'}</span>
+                    <span style={{ flex: 1 }}>{fd.key === 'request_type' ? 'Department request' : fd.key === 'store' ? values.store || 'Assigned automatically' : values[fd.key] || 'Assigned automatically'}</span>
                     <span style={{ color: 'var(--text-faint)', fontSize: 10.5 }}>{fd.key === 'store' ? 'Active issuing store' : 'From your account'}</span>
                   </div>
                 ) : isSelect ? (
