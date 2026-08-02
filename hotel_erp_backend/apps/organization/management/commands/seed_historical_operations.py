@@ -494,6 +494,12 @@ class Command(BaseCommand):
                 raise CommandError(f"Branch '{value}' was not found under {hotel.name}.")
             return branch
         if branches.count() != 1:
+            head_office = branches.filter(is_head_office=True)
+            if head_office.count() == 1:
+                return head_office.get()
+            main_property = branches.filter(branch_type=Branch.BRANCH_TYPE_MAIN)
+            if main_property.count() == 1:
+                return main_property.get()
             choices = ", ".join(f"{b.name} ({b.branch_code or 'no code'})" for b in branches)
             raise CommandError(f"Use --branch. Available branches: {choices}")
         return branches.get()
