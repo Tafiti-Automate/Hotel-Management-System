@@ -146,3 +146,31 @@ def test_ensure_superuser_creates_and_updates_from_env(monkeypatch):
 
     user.refresh_from_db()
     assert user.check_password("new-password")
+
+@pytest.mark.django_db
+def test_current_user_payload_has_stable_user_and_employee_identifiers(client):
+    from apps.departments.models import Branch, Department
+    from apps.employees.models import Employee
+
+    branch = Branch.objects.create(name="Main Branch", branch_code="MAIN")
+    department = Department.objects.create(name="Housekeeping")
+    user = User.objects.create_user(
+        username="payload-user",
+        employee_code="EMP-PAYLOAD",
+        password="test-pass-123",
+    )
+    employee = Employee.objects.create(
+        user=user,
+        department=department,
+        branch=branch,
+        designation="Attendant",
+    )
+    client.force_login(user)
+    response = client.get("/api/v1/auth/me/")
+    assert response.status_code == 200
+    assert response.data["id"] == str(user.pk)
+    assert response.data["user_id"] == str(user.pk)
+    assert response.data["employee_id"] == str(employee.pk)
+    assert response.data["employee_code"] == "EMP-PAYLOAD"
+    assert response.data["branch_id"] == str(branch.pk)
+    assert response.data["department_id"] == str(department.pk)

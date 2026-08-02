@@ -551,3 +551,41 @@ def test_reorder_rule_does_not_create_purchase_requisition_when_stock_is_enough(
 
     with pytest.raises(ValidationError):
         rule.create_purchase_requisition(requester=employee, department=department)
+
+@pytest.mark.django_db
+def test_employee_store_request_resolves_default_store_from_authenticated_branch(api_client):
+    from apps.accounts.models import User
+    from apps.departments.models import Branch, Department
+    from apps.employees.models import Employee
+    from apps.inventory.models import StoreLocation, StoreRequisition
+
+    branch = Branch.objects.create(name="Main Branch", branch_code="RES")
+    department = Department.objects.create(name="Housekeeping")
+    user = User.objects.create_user(
+        username="requester-resolution",
+        employee_code="EMP-RESOLVE",
+        password="test-pass-123",
+    )
+    employee = Employee.objects.create(
+        user=user,
+        department=department,
+        branch=branch,
+        designation="Attendant",
+    )
+    store = StoreLocation.objects.create(
+        name="Main Store",
+        branch=branch,
+        is_default=True,
+        is_active=True,
+    )
+    api_client.force_authenticate(user=user)
+    response = api_client.post(
+        "/api/v1/store-requisitions/",
+        {"purpose": "Daily cleaning operations"},
+        format="json",
+    )
+    assert response.status_code == 201, response.data
+    request = StoreRequisition.objects.get(pk=response.data["id"])
+    assert request.requested_by == employee
+    assert request.department == department
+    assert request.store == store

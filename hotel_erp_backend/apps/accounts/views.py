@@ -24,12 +24,17 @@ def _user_role(user) -> str:
 def _user_payload(user) -> dict:
     employee = getattr(user, "employee_profile", None)
     return {
-        "id": user.employee_code or str(user.pk),
+        "id": str(user.pk),
+        "user_id": str(user.pk),
+        "employee_id": str(employee.pk) if employee else "",
+        "employee_code": user.employee_code or "",
         "name": user.get_full_name() or user.username,
         "role": _user_role(user),
         "username": user.username,
         "branch_id": str(employee.branch_id) if employee and employee.branch_id else "",
         "branch_name": employee.branch.name if employee and employee.branch_id else "",
+        "department_id": str(employee.department_id) if employee and employee.department_id else "",
+        "department_name": employee.department.name if employee and employee.department_id else "",
         "is_staff": user.is_staff,
         "is_superuser": user.is_superuser,
         "permissions": sorted(user.get_all_permissions()),

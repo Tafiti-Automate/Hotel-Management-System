@@ -590,6 +590,10 @@ class StoreRequisitionSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "Your employee profile is not assigned to a department."
             )
+        if not employee.branch_id:
+            raise serializers.ValidationError(
+                "Your employee profile is not assigned to a branch."
+            )
 
         store = attrs.get("store", getattr(self.instance, "store", None))
         if self.instance is None:
