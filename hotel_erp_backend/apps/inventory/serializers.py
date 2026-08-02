@@ -499,6 +499,44 @@ class ReorderRuleSerializer(serializers.ModelSerializer):
 
 class StoreRequisitionItemSerializer(serializers.ModelSerializer):
     outstanding_quantity = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    category_name = serializers.CharField(source="item.category.name", read_only=True)
+    item_name = serializers.CharField(source="item.name", read_only=True)
+    shortage_quantity = serializers.SerializerMethodField()
+    line_status = serializers.SerializerMethodField()
+
+    def get_shortage_quantity(self, obj):
+        approved = obj.quantity_approved or Decimal("0.00")
+        issued = obj.quantity_issued or Decimal("0.00")
+        remaining = max(Decimal("0.00"), approved - issued)
+        if remaining <= 0:
+            return Decimal("0.00")
+        balance = InventoryBalance.objects.filter(
+            item=obj.item,
+            store=obj.requisition.store,
+        ).first()
+        available = balance.available_quantity if balance else Decimal("0.00")
+        return max(Decimal("0.00"), remaining - available)
+
+    def get_line_status(self, obj):
+        requested = obj.base_quantity_requested or Decimal("0.00")
+        approved = obj.quantity_approved or Decimal("0.00")
+        issued = obj.quantity_issued or Decimal("0.00")
+        request_status = obj.requisition.status
+        if issued >= approved > 0:
+            return "issued"
+        if issued > 0:
+            return "partially_issued"
+        if request_status in (StoreRequisitionStatus.DRAFT, StoreRequisitionStatus.REJECTED):
+            return "draft"
+        if request_status == StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL:
+            return "pending_department_approval"
+        if approved == 0 and request_status == StoreRequisitionStatus.SUBMITTED:
+            return "pending_stores_review"
+        if approved < requested:
+            return "partially_approved"
+        if approved > 0:
+            return "approved"
+        return str(request_status)
 
     class Meta:
         model = StoreRequisitionItem
