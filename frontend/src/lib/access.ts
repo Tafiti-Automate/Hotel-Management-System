@@ -69,7 +69,7 @@ export function operationsLandingFor(user: AccessUser): { route: string; crumb: 
     return { route: 'dashboard', crumb: 'Stores overview' }
   }
   const candidates = [
-    ['workflow-stores', 'Department supply & stores'],
+    ['workflow-stores', 'Store Requests'],
     ['workflow-procure', 'Procurement to receiving'],
     ['workflow-pay', 'Supplier invoices & payment'],
     ['requisitions', 'Purchase requisitions'],

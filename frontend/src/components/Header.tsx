@@ -84,7 +84,7 @@ export default function Header() {
 
   const primary = (() => {
     if (canAccessRoute(app.user, 'workflow-stores')) {
-      return { label: 'Continue department supply', icon: 'warehouse', action: () => app.navTo('workflow-stores', 'Department supply & stores') }
+      return { label: 'Open store requests', icon: 'warehouse', action: () => app.navTo('workflow-stores', 'Store Requests') }
     }
     if (canAccessRoute(app.user, 'workflow-pay')) {
       return { label: 'Continue invoice to payment', icon: 'account_balance', action: () => app.navTo('workflow-pay', 'Supplier invoices & payment') }

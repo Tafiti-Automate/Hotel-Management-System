@@ -1543,3 +1543,13 @@ input, select, textarea, button { color-scheme: inherit; }
   .data-cell { gap: 10px !important; }
   .data-cell::before { flex-basis: 38%; max-width: 38%; }
 }
+@media (max-width: 760px) {
+  .inventory-record-filters { grid-template-columns: 1fr !important; }
+}
+@media (max-width: 720px) {
+  .request-summary-grid {
+    grid-template-columns: minmax(140px, 1.5fr) repeat(3, minmax(62px, .65fr)) !important;
+    overflow-x: auto;
+  }
+  .request-summary-grid > span:nth-child(3):nth-last-child(3) { display: none; }
+}
