@@ -35,6 +35,10 @@ class Hotel(BaseModel):
     country = models.CharField(max_length=100, default="Uganda")
     currency = models.CharField(max_length=10, default="UGX")
     timezone = models.CharField(max_length=50, default="Africa/Kampala")
+    brand_primary_color = models.CharField(max_length=7, blank=True, default="#1D4ED8")
+    brand_secondary_color = models.CharField(max_length=7, blank=True, default="#0F766E")
+    brand_accent_color = models.CharField(max_length=7, blank=True, default="#D97706")
+    use_logo_theme = models.BooleanField(default=True)
     is_active = models.BooleanField(default=True)
 
     class Meta(BaseModel.Meta):

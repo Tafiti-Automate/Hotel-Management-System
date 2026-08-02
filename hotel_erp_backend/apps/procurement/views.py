@@ -274,13 +274,17 @@ class VendorQuotationViewSet(CreatedByModelMixin, ModelViewSet):
             quotation.requisition.estimated_total >= threshold
             and quotation_count < required_quotes
         ):
+            remaining_quotes = required_quotes - quotation_count
             raise ValidationError(
                 {
-                    "detail": "The quotation threshold requires competitive sourcing.",
+                    "detail": "Competitive sourcing is not complete.",
                     "blockers": [
-                        f"Enter at least {required_quotes} supplier quotations for requisitions "
-                        f"valued at or above {threshold}. Currently entered: {quotation_count}."
+                        f"This requisition is valued at or above UGX {threshold:,.0f} and requires "
+                        f"at least {required_quotes} supplier quotations. "
+                        f"Add {remaining_quotes} more quotation{'s' if remaining_quotes != 1 else ''}."
                     ],
+                    "quotation_count": quotation_count,
+                    "required_quotation_count": required_quotes,
                 }
             )
         requisition_line_ids = set(quotation.requisition.items.values_list("id", flat=True))

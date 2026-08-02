@@ -26,6 +26,13 @@ class EmployeeSerializer(serializers.ModelSerializer):
     department_name = serializers.CharField(source="department.name", read_only=True)
     branch_name = serializers.CharField(source="branch.name", read_only=True)
 
+
+    def validate_gender(self, value):
+        value = str(value or "").strip().title()
+        if value and value not in {"Male", "Female"}:
+            raise serializers.ValidationError("Gender must be Male or Female.")
+        return value
+
     class Meta:
         model = Employee
         fields = (

@@ -28,6 +28,7 @@ class Designation(BaseModel):
 
 
 class Employee(BaseModel):
+    GENDER_CHOICES = (("Male", "Male"), ("Female", "Female"))
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -53,7 +54,7 @@ class Employee(BaseModel):
         blank=True,
     )
     designation = models.CharField(max_length=100)
-    gender = models.CharField(max_length=20, blank=True)
+    gender = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True)
     contact = models.CharField(max_length=30, blank=True)
     address = models.TextField(blank=True)
     date_joined = models.DateField(null=True, blank=True)
