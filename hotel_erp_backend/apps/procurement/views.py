@@ -8,12 +8,14 @@ from django.core.mail import send_mail
 from django.utils import timezone
 from django.utils.http import content_disposition_header
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
 
 from apps.employees.models import Employee
+from apps.approvals.models import ApprovalWorkflow
+from apps.approvals.serializers import ApprovalWorkflowSerializer
 from apps.procurement.models import (
     GoodsInspection,
     GoodsInspectionItem,
@@ -90,6 +92,75 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
         "preferred_supplier__name",
     )
     ordering_fields = ("requisition_number", "status", "created_at", "expected_date")
+
+    @action(detail=False, methods=["get"], url_path="workspace")
+    def workspace(self, request):
+        """Return the connected records needed by one procurement tab in one request."""
+        stage = request.query_params.get("stage", "request")
+        allowed = {"request", "quote", "lpo", "receipt", "inspect", "return"}
+        if stage not in allowed:
+            raise ValidationError({"stage": "Choose request, quote, lpo, receipt, inspect, or return."})
+        stage_permission = {
+            "request": "procurement.view_purchaserequisition",
+            "quote": "procurement.view_vendorquotation",
+            "lpo": "procurement.view_purchaseorder",
+            "receipt": "procurement.view_goodsreceiptnote",
+            "inspect": "procurement.view_goodsinspection",
+            "return": "procurement.view_supplierreturn",
+        }[stage]
+        if not request.user.is_superuser and not request.user.has_perm(stage_permission):
+            raise PermissionDenied("You do not have permission to view this procurement stage.")
+
+        requisitions = self.get_queryset()
+        requisition_ids = requisitions.values_list("id", flat=True)
+        payload = {
+            "requisitions": PurchaseRequisitionSerializer(requisitions, many=True, context={"request": request}).data,
+        }
+
+        if stage in {"request", "quote"}:
+            lines = RequisitionItem.objects.filter(requisition_id__in=requisition_ids)
+            payload["requisitionItems"] = RequisitionItemSerializer(lines, many=True, context={"request": request}).data
+        if stage == "request" and (
+            request.user.is_superuser or request.user.has_perm("approvals.view_approvalworkflow")
+        ):
+            approvals = ApprovalWorkflow.objects.filter(requisition_id__in=requisition_ids)
+            payload["approvals"] = ApprovalWorkflowSerializer(approvals, many=True, context={"request": request}).data
+        if stage == "quote":
+            quotations = VendorQuotation.objects.filter(requisition_id__in=requisition_ids)
+            payload["quotations"] = VendorQuotationSerializer(quotations, many=True, context={"request": request}).data
+            payload["quotationItems"] = VendorQuotationItemSerializer(
+                VendorQuotationItem.objects.filter(quotation__requisition_id__in=requisition_ids),
+                many=True, context={"request": request},
+            ).data
+        if stage in {"lpo", "receipt", "inspect", "return"}:
+            orders = PurchaseOrder.objects.filter(requisition_id__in=requisition_ids)
+            payload["orders"] = PurchaseOrderSerializer(orders, many=True, context={"request": request}).data
+            payload["orderItems"] = PurchaseOrderItemSerializer(
+                PurchaseOrderItem.objects.filter(purchase_order__requisition_id__in=requisition_ids),
+                many=True, context={"request": request},
+            ).data
+        if stage in {"receipt", "inspect", "return"}:
+            receipts = GoodsReceiptNote.objects.filter(purchase_order__requisition_id__in=requisition_ids)
+            payload["receipts"] = GoodsReceiptNoteSerializer(receipts, many=True, context={"request": request}).data
+            payload["receiptItems"] = GoodsReceiptItemSerializer(
+                GoodsReceiptItem.objects.filter(goods_receipt__purchase_order__requisition_id__in=requisition_ids),
+                many=True, context={"request": request},
+            ).data
+        if stage == "inspect":
+            inspections = GoodsInspection.objects.filter(goods_receipt__purchase_order__requisition_id__in=requisition_ids)
+            payload["inspections"] = GoodsInspectionSerializer(inspections, many=True, context={"request": request}).data
+            payload["inspectionItems"] = GoodsInspectionItemSerializer(
+                GoodsInspectionItem.objects.filter(inspection__goods_receipt__purchase_order__requisition_id__in=requisition_ids),
+                many=True, context={"request": request},
+            ).data
+        if stage == "return":
+            returns = SupplierReturn.objects.filter(goods_receipt__purchase_order__requisition_id__in=requisition_ids)
+            payload["returns"] = SupplierReturnSerializer(returns, many=True, context={"request": request}).data
+            payload["returnItems"] = SupplierReturnItemSerializer(
+                SupplierReturnItem.objects.filter(supplier_return__goods_receipt__purchase_order__requisition_id__in=requisition_ids),
+                many=True, context={"request": request},
+            ).data
+        return Response(payload)
 
     def get_queryset(self):
         queryset = super().get_queryset()
