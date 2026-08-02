@@ -196,6 +196,12 @@ CSRF_COOKIE_SAMESITE = os.environ.get(
 )
 
 
+
+# Jazzmin/Bootstrap bundles can reference optional source-map files that are
+# not shipped in some package builds. CompressedStaticFilesStorage compresses
+# and serves those assets without manifest URL rewriting, so collectstatic does
+# not fail on missing *.map development files.
+
 # ---------------------------------------------------------
 # Persistent uploaded media (Cloudinary)
 # ---------------------------------------------------------
@@ -238,7 +244,7 @@ if CLOUDINARY_CREDENTIALS_PRESENT:
             "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
         },
         "staticfiles": {
-            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+            "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
         },
     }
 
@@ -253,6 +259,6 @@ else:
             "BACKEND": "django.core.files.storage.FileSystemStorage",
         },
         "staticfiles": {
-            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+            "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
         },
     }
