@@ -89,6 +89,23 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f"Batch {batch} already exists; nothing was changed."))
             return
 
+        branch_marker = f"HIST-{branch.branch_code or str(branch.pk)[:8]}-"
+        existing_historical_sales = Sale.objects.filter(
+            receipt_no__startswith=branch_marker
+        )
+        if existing_historical_sales.exists():
+            example = existing_historical_sales.order_by("receipt_no").values_list(
+                "receipt_no", flat=True
+            ).first()
+            self.stdout.write(
+                self.style.WARNING(
+                    f"Historical seed data already exists for {branch.name} "
+                    f"({existing_historical_sales.count()} sales; example {example}). "
+                    "No additional batch was created."
+                )
+            )
+            return
+
         admin = get_user_model().objects.filter(is_superuser=True).first()
         store, _ = StoreLocation.objects.get_or_create(
             branch=branch,
