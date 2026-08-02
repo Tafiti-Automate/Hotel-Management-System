@@ -145,6 +145,10 @@ function HotelForm({ hotel, onClose, onSaved }: { hotel: HotelRecord | null; onC
     country: hotel.country,
     currency: hotel.currency,
     timezone: hotel.timezone,
+    brand_primary_color: hotel.brand_primary_color || emptyHotel.brand_primary_color,
+    brand_secondary_color: hotel.brand_secondary_color || emptyHotel.brand_secondary_color,
+    brand_accent_color: hotel.brand_accent_color || emptyHotel.brand_accent_color,
+    use_logo_theme: hotel.use_logo_theme ?? emptyHotel.use_logo_theme,
     is_active: hotel.is_active,
   } : emptyHotel)
   const [logo, setLogo] = useState<File | null>(null)
