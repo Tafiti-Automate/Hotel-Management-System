@@ -423,7 +423,7 @@ export function getOptions(key: string, data: Record<EntityKey, Row[]>): string[
   if (key === 'procurementSources') return ['manual', 'capital_asset', 'emergency', 'project', 'service']
   if (key === 'supStatus') return ['Active', 'On hold', 'Inactive']
   if (key === 'genStatus') return ['Active', 'Inactive']
-  if (key === 'gender') return ['Female', 'Male', 'Other', 'Prefer not to say']
+  if (key === 'gender') return ['Female', 'Male']
   if (key === 'yesNo') return ['Yes', 'No']
   return []
 }

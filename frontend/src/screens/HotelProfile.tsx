@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties, type For
 import { Icon } from '../components/Icon'
 import { errorMessage, fetchHotels, saveHotel, type HotelInput, type HotelRecord } from '../lib/api'
 import { useApp } from '../state/AppContext'
+import { extractPaletteFromImage, type BrandPalette } from '../lib/brandTheme'
 
 const emptyHotel: HotelInput = {
   name: '',
@@ -18,6 +19,10 @@ const emptyHotel: HotelInput = {
   country: 'Uganda',
   currency: 'UGX',
   timezone: 'Africa/Kampala',
+  brand_primary_color: '#1D4ED8',
+  brand_secondary_color: '#0F766E',
+  brand_accent_color: '#D97706',
+  use_logo_theme: true,
   is_active: true,
 }
 
@@ -143,6 +148,7 @@ function HotelForm({ hotel, onClose, onSaved }: { hotel: HotelRecord | null; onC
     is_active: hotel.is_active,
   } : emptyHotel)
   const [logo, setLogo] = useState<File | null>(null)
+  const [extractingTheme, setExtractingTheme] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const preview = useMemo(() => logo ? URL.createObjectURL(logo) : cleanLogoUrl(hotel?.logo || null), [hotel?.logo, logo])
@@ -153,6 +159,30 @@ function HotelForm({ hotel, onClose, onSaved }: { hotel: HotelRecord | null; onC
 
   const setValue = <K extends keyof HotelInput>(key: K, value: HotelInput[K]) => setValues((current) => ({ ...current, [key]: value }))
 
+  const applyExtractedPalette = async (source: File | string) => {
+    setExtractingTheme(true)
+    setError(null)
+    try {
+      const palette: BrandPalette = await extractPaletteFromImage(source)
+      setValues((current) => ({
+        ...current,
+        brand_primary_color: palette.primary,
+        brand_secondary_color: palette.secondary,
+        brand_accent_color: palette.accent,
+        use_logo_theme: true,
+      }))
+    } catch (err) {
+      setError(errorMessage(err))
+    } finally {
+      setExtractingTheme(false)
+    }
+  }
+
+  const onLogoSelected = (file: File | null) => {
+    setLogo(file)
+    if (file) void applyExtractedPalette(file)
+  }
+
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     if (!values.name.trim()) {
@@ -162,7 +192,12 @@ function HotelForm({ hotel, onClose, onSaved }: { hotel: HotelRecord | null; onC
     setSaving(true)
     setError(null)
     try {
-      onSaved(await saveHotel(hotel?.id || null, { ...values, name: values.name.trim() }, logo))
+      const saved = await saveHotel(hotel?.id || null, { ...values, name: values.name.trim() }, logo)
+      try {
+        localStorage.setItem('hms_hotel_brand_theme', JSON.stringify({ primary: saved.brand_primary_color, secondary: saved.brand_secondary_color, accent: saved.brand_accent_color, enabled: saved.use_logo_theme }))
+        window.dispatchEvent(new CustomEvent('hotel-theme-updated', { detail: saved }))
+      } catch { /* ignore storage failures */ }
+      onSaved(saved)
     } catch (err) {
       setError(errorMessage(err))
     } finally {
@@ -199,10 +234,37 @@ function HotelForm({ hotel, onClose, onSaved }: { hotel: HotelRecord | null; onC
               <Field label="Registration number"><input value={values.registration_number} onChange={(e) => setValue('registration_number', e.target.value)} style={controlStyle} /></Field>
               <Field label="Tax identification number (TIN)"><input value={values.tax_identification_number} onChange={(e) => setValue('tax_identification_number', e.target.value)} style={controlStyle} /></Field>
               <Field label="Hotel logo">
-                <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(e) => setLogo(e.target.files?.[0] || null)} style={{ ...controlStyle, padding: 8 }} />
+                <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(e) => onLogoSelected(e.target.files?.[0] || null)} style={{ ...controlStyle, padding: 8 }} />
               </Field>
             </div>
             {preview && <img src={preview} alt="Hotel logo preview" style={{ marginTop: 12, width: 72, height: 72, objectFit: 'contain', border: '1px solid var(--border)', borderRadius: 12, background: '#fff' }} />}
+          </section>
+
+          <section style={{ marginBottom: 24 }}>
+            <div style={sectionTitleStyle}>Brand theme</div>
+            <div style={{ padding: 16, border: '1px solid var(--border)', borderRadius: 12, background: 'var(--surface-2)' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5, fontWeight: 700, color: 'var(--text)', marginBottom: 14 }}>
+                <input type="checkbox" checked={values.use_logo_theme} onChange={(e) => setValue('use_logo_theme', e.target.checked)} style={{ width: 17, height: 17, accentColor: 'var(--accent)' }} />
+                Use colors generated from the hotel logo
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+                {([
+                  ['Primary', 'brand_primary_color'],
+                  ['Secondary', 'brand_secondary_color'],
+                  ['Accent', 'brand_accent_color'],
+                ] as const).map(([label,key]) => <Field key={key} label={label}>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input type="color" value={values[key]} onChange={(e) => setValue(key, e.target.value.toUpperCase())} style={{ width: 44, height: 38, border: '1px solid var(--border)', borderRadius: 8, padding: 3, background: 'var(--surface)' }} />
+                    <input value={values[key]} onChange={(e) => setValue(key, e.target.value.toUpperCase())} maxLength={7} style={{ ...controlStyle, minWidth: 0 }} />
+                  </div>
+                </Field>)}
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 14, alignItems: 'center' }}>
+                {[values.brand_primary_color, values.brand_secondary_color, values.brand_accent_color].map((color, index) => <span key={index} style={{ width: 46, height: 28, borderRadius: 7, background: color, border: '1px solid rgba(0,0,0,.12)' }} />)}
+                {preview && <button type="button" disabled={extractingTheme} onClick={() => void applyExtractedPalette(preview)} className="hover-surface2" style={{ marginLeft: 'auto', height: 36, padding: '0 12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)', color: 'var(--text)', font: 'inherit', fontSize: 12, fontWeight: 700, cursor: extractingTheme ? 'wait' : 'pointer' }}>{extractingTheme ? 'Generating…' : 'Regenerate from logo'}</button>}
+              </div>
+              <div style={{ marginTop: 11, fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.5 }}>The system creates accessible light and dark palettes. You can adjust the generated colors before saving.</div>
+            </div>
           </section>
 
           <section style={{ marginBottom: 24 }}>

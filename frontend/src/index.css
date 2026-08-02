@@ -1,11 +1,13 @@
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg, #F6F7F9); color: var(--text, #111827); }
-#root { min-height: 100vh; background: var(--bg, #F6F7F9); }
+html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg, #EAF0F7); color: var(--text, #10233F); }
+#root { min-height: 100vh; background: var(--bg, #EAF0F7); }
 body {
   font-family: 'Inter', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
-  background: var(--bg, #F6F7F9);
-  color: var(--text, #111827);
+  background:
+    radial-gradient(circle at 82% 0%, rgba(37,99,235,.055), transparent 28%),
+    linear-gradient(180deg, var(--bg, #EAF0F7), var(--bg, #EAF0F7));
+  color: var(--text, #10233F);
   font-size: 14px;
   line-height: 1.45;
 }
@@ -1552,4 +1554,23 @@ input, select, textarea, button { color-scheme: inherit; }
     overflow-x: auto;
   }
   .request-summary-grid > span:nth-child(3):nth-last-child(3) { display: none; }
+}
+
+
+/* Commercial light-mode depth: reduce the flat all-white appearance. */
+html:not([data-theme="dark"]) .app-header,
+html:not([data-theme="dark"]) .sidebar {
+  background: rgba(251,252,254,.96) !important;
+}
+html:not([data-theme="dark"]) .procurement-record-row:hover,
+html:not([data-theme="dark"]) .report-record-row:hover {
+  background: #F1F6FC !important;
+}
+html:not([data-theme="dark"]) input,
+html:not([data-theme="dark"]) select,
+html:not([data-theme="dark"]) textarea {
+  background-color: #F8FAFD !important;
+}
+html:not([data-theme="dark"]) .form-drawer {
+  background: #F7F9FC !important;
 }

@@ -298,7 +298,23 @@ function QuotePanel({ data, form, setForm, busy, run, requisitionLabel, names, s
   const availableUnits = configuredUnitsForItem(selectedItem, units, itemUnits)
   const conversion = conversionFactorFor(selectedItem, form.unit, itemUnits)
   const requestedBase = num(selectedReqLine?.requested_base_quantity || selectedReqLine?.quantity)
-  return <Panel title="Supplier quotations" note="Compare supplier quotations.">
+  const selectedRequisition = data.requisitions.find((row: Row) => id(row.id) === id(form.requisition || selectedQuote?.requisition))
+  const quotationThreshold = 1000000
+  const requiredQuotationCount = num(selectedRequisition?.estimated_total) >= quotationThreshold ? 3 : 1
+  const receivedQuotationCount = quotes.filter((row: Row) => id(row.requisition) === id(selectedRequisition?.id)).length
+  const missingQuotationCount = Math.max(0, requiredQuotationCount - receivedQuotationCount)
+  const pricedLineIds = new Set(quoteLines.map((row: Row) => id(row.requisition_item)))
+  const missingPricedLines = quoteReqLines.filter((row: Row) => !pricedLineIds.has(id(row.id))).length
+  const quoteExpired = Boolean(selectedQuote?.valid_until && String(selectedQuote.valid_until) < new Date().toISOString().slice(0, 10))
+  const sourcingReady = Boolean(selectedQuote) && missingQuotationCount === 0 && missingPricedLines === 0 && !quoteExpired && Boolean(form.evaluationNotes)
+  const sourcingSteps = [
+    { label: 'Quotation received', done: Boolean(selectedQuote) },
+    { label: `Competitive quotations (${receivedQuotationCount}/${requiredQuotationCount})`, done: missingQuotationCount === 0 },
+    { label: 'All requisition lines priced', done: Boolean(selectedQuote) && missingPricedLines === 0 },
+    { label: 'Commercial evaluation recorded', done: Boolean(form.evaluationNotes) },
+    { label: 'Winner selection', done: Boolean(selectedQuote?.is_awarded || selectedQuote?.awarded) },
+  ]
+  return <Panel title="Supplier quotations" note="Compare supplier quotations and complete sourcing controls before awarding.">
     <Field label="Requisition"><Select value={form.requisition} onChange={(v) => setForm({ requisition: v })} rows={data.requisitions} label={requisitionLabel} /></Field>
     <Field label="Supplier"><Select value={form.supplier} onChange={(v) => setForm({ ...form, supplier: v })} rows={suppliers} /></Field>
     <Action disabled={busy || !form.requisition || !form.supplier} onClick={() => run(() => createBackendRecord('quotations', { requisition: form.requisition, supplier: form.supplier, total_amount: 0 }), 'Supplier quotation created')}>Create quotation</Action>
@@ -320,7 +336,24 @@ function QuotePanel({ data, form, setForm, busy, run, requisitionLabel, names, s
     {duplicate && <Hint>This supplier already quoted this Article. Select the existing line to edit it.</Hint>}
     {!editing && <Action disabled={busy || duplicate || !form.quotation || !form.reqLine || !form.unit || num(form.quantity) <= 0 || num(form.price) <= 0} onClick={() => run(() => createBackendRecord('quotation-items', { quotation: form.quotation, requisition_item: form.reqLine, unit: form.unit, quantity: num(form.quantity), unit_price: num(form.price), delivery_days: num(form.days) }), 'Quotation line added')}>Add quoted line</Action>}
     {editing && <><Action disabled={busy || !form.reqLine || Boolean(editing.selected)} onClick={() => run(() => updateBackendRecord('quotation-items', id(editing.id), { quotation: form.quotation, requisition_item: form.reqLine, unit: form.unit || null, quantity: num(form.quantity), unit_price: num(form.price), delivery_days: num(form.days) }), 'Quotation line updated')}>Save quoted line</Action><Action tone="danger" disabled={busy || Boolean(editing.selected)} onClick={() => run(() => deleteBackendPath('quotation-items', id(editing.id)), 'Quotation line removed')}>Remove quoted line</Action></>}
-    <Action tone="good" disabled={busy || !form.quotation || !form.evaluationNotes} onClick={() => run(() => runBackendAction('quotations', id(form.quotation), 'award', { selection_reason: form.evaluationNotes }), 'Winning quotation selected')}>Select as winner</Action>
+    <Divider />
+    <section style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', background: 'var(--surface-2)' }}>
+      <div style={{ padding: '11px 12px', display: 'flex', justifyContent: 'space-between', gap: 10, borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
+        <div><div style={{ color: 'var(--text)', fontSize: 12, fontWeight: 800 }}>Competitive sourcing</div><div style={{ marginTop: 2, color: 'var(--text-muted)', fontSize: 10.5 }}>{num(selectedRequisition?.estimated_total) >= quotationThreshold ? `Policy threshold: ${money(quotationThreshold)} · Minimum ${requiredQuotationCount} quotations` : 'Standard sourcing controls apply'}</div></div>
+        <span style={{ alignSelf: 'center', padding: '4px 8px', borderRadius: 20, color: sourcingReady ? 'var(--good)' : 'var(--warn)', background: sourcingReady ? 'var(--good-soft)' : 'var(--warn-soft)', fontSize: 10, fontWeight: 800 }}>{sourcingReady ? 'Ready to award' : `${receivedQuotationCount}/${requiredQuotationCount} quotations`}</span>
+      </div>
+      <div style={{ padding: 12 }}>
+        <div style={{ height: 7, borderRadius: 10, overflow: 'hidden', background: 'var(--border)' }}><div style={{ width: `${Math.round((sourcingSteps.filter((step) => step.done).length / sourcingSteps.length) * 100)}%`, height: '100%', borderRadius: 10, background: sourcingReady ? 'var(--good)' : 'var(--accent)', transition: 'width .2s ease' }} /></div>
+        <div style={{ marginTop: 11, display: 'grid', gap: 7 }}>{sourcingSteps.map((step) => <div key={step.label} style={{ display: 'flex', alignItems: 'center', gap: 8, color: step.done ? 'var(--text)' : 'var(--text-muted)', fontSize: 10.8 }}><span style={{ width: 18, height: 18, display: 'grid', placeItems: 'center', borderRadius: 20, color: step.done ? 'var(--good)' : 'var(--text-faint)', background: step.done ? 'var(--good-soft)' : 'var(--surface-3)' }}><Icon name={step.done ? 'check' : 'schedule'} size={13} /></span>{step.label}</div>)}</div>
+        {!sourcingReady && selectedRequisition && <div style={{ marginTop: 12, padding: '9px 10px', borderRadius: 6, color: 'var(--warn)', background: 'var(--warn-soft)', fontSize: 10.8, lineHeight: 1.5 }}>
+          {missingQuotationCount > 0 && <div>{`Add ${missingQuotationCount} more supplier quotation${missingQuotationCount === 1 ? '' : 's'} before selecting a winner.`}</div>}
+          {missingPricedLines > 0 && <div>{`Price ${missingPricedLines} remaining requisition line${missingPricedLines === 1 ? '' : 's'} in the selected quotation.`}</div>}
+          {quoteExpired && <div>The selected quotation has expired.</div>}
+          {!form.evaluationNotes && <div>Record the commercial evaluation and award justification.</div>}
+        </div>}
+      </div>
+    </section>
+    <Action tone="good" disabled={busy || !sourcingReady} onClick={() => run(() => runBackendAction('quotations', id(form.quotation), 'award', { selection_reason: form.evaluationNotes }), 'Winning quotation selected')}>Select as winner</Action>
     {!reqLines.length && form.requisition && <Hint>No requisition lines exist yet.</Hint>}
   </Panel>
 }

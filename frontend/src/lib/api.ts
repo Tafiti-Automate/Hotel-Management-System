@@ -95,6 +95,10 @@ export interface HotelRecord {
   country: string
   currency: string
   timezone: string
+  brand_primary_color: string
+  brand_secondary_color: string
+  brand_accent_color: string
+  use_logo_theme: boolean
   is_active: boolean
   branch_count: number
   created_at: string

@@ -16,22 +16,24 @@ export const accentMap: Record<AccentName, string> = {
 export const accentOrder: AccentName[] = ['Violet', 'Blue', 'Emerald', 'Brass', 'Rose', 'Slate']
 
 const LIGHT: Record<string, string> = {
-  '--bg': '#F6F7F9',
-  '--surface': '#FFFFFF',
-  '--surface-2': '#F3F4F6',
-  '--text': '#111827',
-  '--text-muted': '#4B5563',
-  '--text-faint': '#7C8797',
-  '--border': '#E1E5EA',
-  '--border-2': '#CBD2DA',
-  '--shadow': '0 1px 2px rgba(15,23,42,.04),0 4px 12px rgba(15,23,42,.04)',
-  '--shadow-sm': '0 1px 2px rgba(15,23,42,.06)',
+  '--bg': '#EAF0F7',
+  '--surface': '#FBFCFE',
+  '--surface-2': '#F1F5F9',
+  '--surface-3': '#E7EDF5',
+  '--text': '#10233F',
+  '--text-muted': '#465A73',
+  '--text-faint': '#718198',
+  '--border': '#D4DEE9',
+  '--border-2': '#BFCBDC',
+  '--shadow': '0 1px 2px rgba(15,35,63,.06),0 8px 22px rgba(15,35,63,.07)',
+  '--shadow-sm': '0 1px 3px rgba(15,35,63,.08)',
 }
 
 const DARK: Record<string, string> = {
   '--bg': '#0C0C10',
   '--surface': '#15151B',
   '--surface-2': '#1E1E26',
+  '--surface-3': '#272731',
   '--text': '#F3F3F5',
   '--text-muted': '#A0A0AA',
   '--text-faint': '#6E6E78',
