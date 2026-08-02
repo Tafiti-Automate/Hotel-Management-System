@@ -1184,10 +1184,12 @@ class StoreRequisition(BaseModel):
             raise ValidationError("The department request has no items.")
 
         from apps.procurement.models import PurchaseRequisition, RequisitionItem
-        from core.constants.choices import RequisitionType
+        from core.constants.choices import ProcurementSource, RequisitionType
 
         purchase = PurchaseRequisition.objects.create(
             request_type=RequisitionType.DEPARTMENT,
+            procurement_source=ProcurementSource.STORE_SHORTAGE,
+            source_store_requisition=self,
             requester=self.requested_by,
             department=self.department,
             branch=self.store.branch,
@@ -1199,15 +1201,30 @@ class StoreRequisition(BaseModel):
             control_notes=f"Generated from department material request {self.requisition_no}.",
             created_by=created_by,
         )
+        shortage_lines = []
         for line in self.items.select_related("item", "unit"):
+            required = line.quantity_approved or line.base_quantity_requested
+            balance = InventoryBalance.objects.filter(item=line.item, store=self.store).first()
+            available = balance.available_quantity if balance else Decimal("0.00")
+            shortage = max(Decimal("0.00"), required - available)
+            if shortage <= 0:
+                continue
+            shortage_lines.append((line, shortage))
             RequisitionItem.objects.create(
                 requisition=purchase,
                 item=line.item,
-                unit=line.unit,
-                quantity=line.base_quantity_requested,
+                unit=line.item.base_unit,
+                quantity=shortage,
                 estimated_unit_cost=Decimal("0.00"),
+                description=(
+                    f"Shortage from {self.requisition_no}: required {required}, "
+                    f"available {available}, shortage {shortage}."
+                ),
                 created_by=created_by,
             )
+        if not shortage_lines:
+            purchase.delete()
+            raise ValidationError("No stock shortage remains for this request.")
         self.procurement_requisition = purchase
         self.status = StoreRequisitionStatus.AWAITING_PROCUREMENT
         self.save(update_fields=["procurement_requisition", "status", "updated_at"])

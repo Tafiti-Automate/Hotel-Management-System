@@ -6,7 +6,7 @@ from django.db import models
 from django.db import transaction
 from django.utils import timezone
 
-from core.constants.choices import GoodsInspectionStatus, POStatus, PRStatus, RequisitionType, SupplierReturnStatus
+from core.constants.choices import GoodsInspectionStatus, POStatus, PRStatus, ProcurementSource, RequisitionType, SupplierReturnStatus
 from core.mixins.models import BaseModel
 from core.validators.quantities import validate_non_negative_decimal, validate_positive_decimal
 
@@ -71,6 +71,19 @@ class PurchaseRequisition(BaseModel):
         max_length=30,
         choices=RequisitionType.choices,
         default=RequisitionType.DEPARTMENT,
+    )
+    procurement_source = models.CharField(
+        max_length=30,
+        choices=ProcurementSource.choices,
+        default=ProcurementSource.MANUAL,
+        db_index=True,
+    )
+    source_store_requisition = models.OneToOneField(
+        "inventory.StoreRequisition",
+        on_delete=models.PROTECT,
+        related_name="generated_purchase_requisition",
+        null=True,
+        blank=True,
     )
     requester = models.ForeignKey(
         "employees.Employee",
@@ -139,8 +152,11 @@ class PurchaseRequisition(BaseModel):
                 self.requester_id
                 and self.department_id
                 and self.requester.department_id != self.department_id
+                and self.procurement_source != ProcurementSource.STORE_SHORTAGE
             ):
                 errors["requester"] = "The requester must belong to the selected department."
+        if self.procurement_source == ProcurementSource.STORE_SHORTAGE and not self.source_store_requisition_id:
+            errors["source_store_requisition"] = "Store-shortage requisitions require a source Store Request."
             if (
                 self.requester_id
                 and self.branch_id

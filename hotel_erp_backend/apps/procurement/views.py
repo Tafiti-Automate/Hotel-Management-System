@@ -75,11 +75,12 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
         "requester",
         "department",
         "preferred_supplier",
+        "source_store_requisition",
     ).prefetch_related(
         "approval_workflow__approver__user",
     )
     serializer_class = PurchaseRequisitionSerializer
-    filterset_fields = ("request_type", "status", "requester", "department", "preferred_supplier")
+    filterset_fields = ("request_type", "procurement_source", "status", "requester", "department", "preferred_supplier", "source_store_requisition")
     search_fields = (
         "reason",
         "control_notes",

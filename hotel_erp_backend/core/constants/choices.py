@@ -39,6 +39,17 @@ class RequisitionType(models.TextChoices):
     HOTEL_PURCHASE = "hotel_purchase", "Hotel purchase requisition"
 
 
+
+
+class ProcurementSource(models.TextChoices):
+    STORE_SHORTAGE = "store_shortage", "Store shortage"
+    MANUAL = "manual", "Manual procurement"
+    CAPITAL_ASSET = "capital_asset", "Capital asset"
+    EMERGENCY = "emergency", "Emergency purchase"
+    PROJECT = "project", "Project purchase"
+    SERVICE = "service", "Service / non-stock purchase"
+
+
 class ApprovalStatus(models.TextChoices):
     PENDING = "pending", "Pending"
     APPROVED = "approved", "Approved"
