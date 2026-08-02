@@ -320,22 +320,21 @@ export const cfg: Record<string, EntityConfig> = {
     ],
   },
   requisitions: {
-    title: 'Purchase Requisitions', sub: 'Purchase requirements and approval status', icon: 'request_quote', add: 'New requisition', singular: 'Requisition', prefix: 'PR-', editable: true, detail: true,
+    title: 'Procurement Inbox', sub: 'Store shortages and exceptional purchase requests', icon: 'request_quote', add: 'New requisition', singular: 'Requisition', prefix: 'PR-', editable: true, detail: true,
     cols: [
       { key: 'id', label: 'Requisition', w: '1.1fr', kind: 'mono' },
       { key: 'date', label: 'Date', w: '1fr', kind: 'text' },
+      { key: 'sourceLabel', label: 'Source', w: '1.15fr', kind: 'text' },
       { key: 'dept', label: 'Department', w: '1.2fr', kind: 'text' },
-      { key: 'requester', label: 'Requested by', w: '1.2fr', kind: 'text' },
       { key: 'count', label: 'Items', w: '70px', kind: 'num', align: 'right' },
       { key: 'total', label: 'Total', w: '110px', kind: 'money', align: 'right' },
       { key: 'status', label: 'Status', w: '120px', kind: 'status', align: 'right' },
     ],
     fields: [
-      { key: 'department', label: 'Department', type: 'select', opts: 'departments' },
-      { key: 'preferred_supplier', label: 'Preferred supplier', type: 'select', opts: 'suppliers' },
-      { key: 'expected_date', label: 'Expected date', type: 'date' },
-      { key: 'reason', label: 'Reason', type: 'textarea' },
-      { key: 'control_notes', label: 'Control notes', type: 'textarea' },
+      { key: 'procurement_source', label: 'Purchase type', type: 'select', opts: 'procurementSources' },
+      { key: 'expected_date', label: 'Required by', type: 'date' },
+      { key: 'reason', label: 'Business justification', type: 'textarea' },
+      { key: 'control_notes', label: 'Internal notes', type: 'textarea' },
       { key: 'currency', label: 'Currency', type: 'text' },
     ],
   },
@@ -421,6 +420,7 @@ export function getOptions(key: string, data: Record<EntityKey, Row[]>): string[
   if (key === 'businessTypes') return ['Consumable / Operating Expense', 'Resale / Revenue Item', 'Fixed Asset', 'Service']
   if (key === 'unitRoles') return ['Purchase unit', 'Issue unit', 'Alternate unit', 'Base unit']
   if (key === 'reqTypes') return ['department', 'hotel_purchase']
+  if (key === 'procurementSources') return ['manual', 'capital_asset', 'emergency', 'project', 'service']
   if (key === 'supStatus') return ['Active', 'On hold', 'Inactive']
   if (key === 'genStatus') return ['Active', 'Inactive']
   if (key === 'gender') return ['Female', 'Male', 'Other', 'Prefer not to say']

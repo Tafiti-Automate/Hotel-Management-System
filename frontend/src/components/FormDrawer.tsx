@@ -7,6 +7,11 @@ import { cfg, getOptions, type Row } from '../lib/data'
 function optionLabel(value: string): string {
   if (value === 'hotel_purchase') return 'Hotel purchase'
   if (value === 'department') return 'Department'
+  if (value === 'manual') return 'Manual operational purchase'
+  if (value === 'capital_asset') return 'Capital asset'
+  if (value === 'emergency') return 'Emergency purchase'
+  if (value === 'project') return 'Project purchase'
+  if (value === 'service') return 'Service / non-stock purchase'
   return value
 }
 
@@ -34,7 +39,7 @@ export default function FormDrawer() {
   const [step, setStep] = useState(0)
   const roleKey = app.user.role.trim().toLowerCase()
   const canRequestOnBehalf = app.user.isSuperuser || ['system administrator', 'stores manager'].includes(roleKey)
-  const canPurchaseOnBehalf = app.user.isSuperuser || ['system administrator', 'procurement manager', 'general manager'].includes(roleKey)
+  const canPurchaseOnBehalf = app.user.isSuperuser || ['system administrator', 'general manager'].includes(roleKey)
   const signedInEmployee = app.data.employees.find((employee) =>
     String(employee.id) === app.user.employeeId
     || String(employee.employeeCode) === app.user.employeeCode
@@ -61,6 +66,7 @@ export default function FormDrawer() {
     })
     if (f.entity === 'requisitions') {
       seed.request_type = existing?.request_type || 'department'
+      seed.procurement_source = existing?.procurement_source || 'manual'
       if (!canPurchaseOnBehalf && signedInEmployee) {
         seed.department = signedInEmployee.department
         seed.requester = signedInEmployee.name
@@ -127,7 +133,8 @@ export default function FormDrawer() {
       out[fd.key] = fd.type === 'number' ? Number(v || 0) : v
     })
     if (f.entity === 'requisitions') {
-      out.request_type = values.request_type || 'department'
+      out.request_type = 'department'
+      out.procurement_source = values.procurement_source || 'manual'
     }
     if (f.entity === 'storeRequisitions' && !String(values.purpose || '').trim()) {
       app.showWorkflowAlert('Purpose required', 'Enter the reason for this store request before continuing.')

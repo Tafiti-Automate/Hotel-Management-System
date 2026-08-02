@@ -87,6 +87,7 @@ export default function DetailView() {
           )}
 
           <div style={{ padding: '18px 22px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 16, borderBottom: '1px solid var(--border)' }}>
+            {isReq && <div><div style={fieldLabel}>Source</div><div style={fieldValue}>{r.sourceLabel || 'Manual procurement'}</div></div>}
             <div><div style={fieldLabel}>{f1label}</div><div style={fieldValue}>{f1}</div></div>
             <div><div style={fieldLabel}>{f2label}</div><div style={fieldValue}>{f2}</div></div>
             <div><div style={fieldLabel}>Date</div><div style={fieldValue}>{r.date}</div></div>

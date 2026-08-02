@@ -692,22 +692,15 @@ function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey
   }
 
   if (entity === 'requisitions') {
-    const requestType = text(values.request_type, 'department')
-    const supplierId = findDataId(data, 'suppliers', values.preferred_supplier || values.supplier)
-    const departmentId = findDataId(data, 'departments', values.department)
-    const requesterId = findDataId(data, 'employees', values.requester)
-
     const payload: Row = {
-      request_type: requestType,
+      request_type: 'department',
+      procurement_source: text(values.procurement_source, 'manual'),
       reason: text(values.reason, 'Purchase request'),
       expected_date: text(values.expected_date) || null,
       control_notes: text(values.control_notes),
     }
     const currency = text(values.currency)
     if (currency) payload.currency = currency.toUpperCase()
-    if (supplierId) payload.preferred_supplier = supplierId
-    if (departmentId) payload.department = departmentId
-    if (requesterId) payload.requester = requesterId
     return payload
   }
 
@@ -1171,6 +1164,9 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
       apiId: idOf(row),
       date: dateOnly(row.created_at || row.expected_date),
       request_type: text(row.request_type, 'department'),
+      procurement_source: text(row.procurement_source, 'manual'),
+      sourceStoreRequestId: text(row.source_store_requisition),
+      sourceLabel: text(row.procurement_source) === 'store_shortage' ? 'Store shortage' : titleCaseStatus(row.procurement_source || 'manual'),
       branch: branchNames.get(text(row.branch)) || '',
       dept: departmentNames.get(text(row.department)) || titleCaseStatus(row.request_type),
       department: departmentNames.get(text(row.department)) || '',
