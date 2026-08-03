@@ -863,6 +863,12 @@ class StockAdjustment(BaseModel):
                 new_quantity = balance.quantity_in_stock + item.quantity_change
                 if new_quantity < Decimal("0"):
                     raise ValidationError(f"Adjustment would make {item.item} stock negative.")
+                if new_quantity < balance.quantity_reserved:
+                    raise ValidationError(
+                        f"Adjustment would reduce {item.item} to {new_quantity}, below "
+                        f"{balance.quantity_reserved} reserved for approved department requests. "
+                        "Cancel or fulfil those requests before reducing stock."
+                    )
                 balance.quantity_in_stock = new_quantity
                 balance.save(update_fields=["quantity_in_stock", "updated_at"])
 
@@ -1976,6 +1982,12 @@ class StockCount(BaseModel):
                 variance = line.physical_quantity - balance.quantity_in_stock
                 if variance == Decimal("0.00"):
                     continue
+                if line.physical_quantity < balance.quantity_reserved:
+                    raise ValidationError(
+                        f"Counted quantity for {line.item} is {line.physical_quantity}, below "
+                        f"{balance.quantity_reserved} reserved for approved department requests. "
+                        "Investigate the variance and release or fulfil the reservations first."
+                    )
                 balance.quantity_in_stock = line.physical_quantity
                 balance.save(update_fields=["quantity_in_stock", "updated_at"])
                 StockLedger.objects.create(

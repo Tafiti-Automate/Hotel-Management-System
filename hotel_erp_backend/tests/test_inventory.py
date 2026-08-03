@@ -16,6 +16,8 @@ from apps.inventory.models import (
     ReorderRule,
     StockCount,
     StockCountItem,
+    StockAdjustment,
+    StockAdjustmentItem,
     StockIssue,
     StockIssueItem,
     StockLedger,
@@ -480,6 +482,45 @@ def test_store_requisition_issue_and_department_return_update_stock():
     assert InventoryBalance.objects.get(item=item, store=store).quantity_in_stock == Decimal("32.00")
     assert StockLedger.objects.filter(reference_id=issue.id).count() == 1
     assert StockLedger.objects.filter(reference_id=store_return.id).count() == 1
+
+
+@pytest.mark.django_db
+def test_cancelling_approved_request_releases_outstanding_reservation():
+    _, employee, store, item = create_inventory_operations_context()
+    requisition = StoreRequisition.objects.create(
+        department=employee.department, store=store, requested_by=employee, purpose="Cancelled need"
+    )
+    StoreRequisitionItem.objects.create(requisition=requisition, item=item, quantity_requested=Decimal("12.00"))
+    requisition.submit()
+    requisition.approve(approved_by=employee)
+    requisition.cancel(actor=employee.user)
+
+    balance = InventoryBalance.objects.get(item=item, store=store)
+    assert balance.quantity_reserved == Decimal("0.00")
+    requisition.refresh_from_db()
+    assert requisition.status == StoreRequisitionStatus.CANCELLED
+
+
+@pytest.mark.django_db
+def test_adjustment_and_count_cannot_reduce_stock_below_reserved_quantity():
+    _, employee, store, item = create_inventory_operations_context()
+    balance = InventoryBalance.objects.get(item=item, store=store)
+    balance.quantity_reserved = Decimal("15.00")
+    balance.save(update_fields=["quantity_reserved"])
+
+    adjustment = StockAdjustment.objects.create(store=store, reason="Damage", approved_by=employee)
+    StockAdjustmentItem.objects.create(stock_adjustment=adjustment, item=item, quantity_change=Decimal("-30.00"))
+    adjustment.submit()
+    adjustment.approve(approved_by=employee)
+    with pytest.raises(ValidationError, match="below 15.00 reserved"):
+        adjustment.apply()
+
+    stock_count = StockCount.objects.create(store=store, conducted_by=employee)
+    StockCountItem.objects.create(stock_count=stock_count, item=item, system_quantity=Decimal("40.00"), physical_quantity=Decimal("10.00"))
+    stock_count.submit()
+    stock_count.approve(approved_by=employee)
+    with pytest.raises(ValidationError, match="below 15.00 reserved"):
+        stock_count.apply_variances()
 
 
 @pytest.mark.django_db

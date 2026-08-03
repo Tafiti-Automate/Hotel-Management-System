@@ -135,6 +135,32 @@ class InventoryBalanceViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("item__name", "item__sku", "store__name")
     ordering_fields = ("quantity_in_stock", "reorder_level", "last_updated")
 
+    @action(detail=True, methods=["post"], url_path="reconcile-reservation")
+    def reconcile_reservation(self, request, pk=None):
+        if not (
+            request.user.is_superuser
+            or request.user.groups.filter(name__in=("System Administrator", "Stores Manager")).exists()
+        ):
+            raise PermissionDenied("Only the Stores Manager can reconcile reserved stock.")
+        with transaction.atomic():
+            balance = InventoryBalance.objects.select_for_update().get(pk=self.get_object().pk)
+            lines = StoreRequisitionItem.objects.filter(
+                item=balance.item,
+                requisition__store=balance.store,
+                requisition__status__in=(
+                    StoreRequisitionStatus.APPROVED,
+                    StoreRequisitionStatus.PARTIALLY_APPROVED,
+                    StoreRequisitionStatus.PARTIALLY_ISSUED,
+                ),
+            )
+            calculated = sum(
+                (line.outstanding_quantity for line in lines if line.outstanding_quantity > 0),
+                Decimal("0.00"),
+            )
+            balance.quantity_reserved = calculated
+            balance.save(update_fields=["quantity_reserved", "updated_at"])
+        return Response(self.get_serializer(balance).data)
+
 
 class SupplierItemPriceViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = SupplierItemPrice.objects.select_related("supplier", "item", "item__category", "unit")
@@ -507,6 +533,23 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
         requisition = self.get_object()
+        employee = getattr(request.user, "employee_profile", None)
+        stores_control = request.user.is_superuser or request.user.groups.filter(
+            name__in=("System Administrator", "Stores Manager")
+        ).exists()
+        requester_can_cancel = (
+            employee
+            and requisition.requested_by_id == employee.id
+            and requisition.status in (
+                StoreRequisitionStatus.DRAFT,
+                StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL,
+                StoreRequisitionStatus.SUBMITTED,
+            )
+        )
+        if not (stores_control or requester_can_cancel):
+            raise PermissionDenied(
+                "Only the requester may cancel an unapproved request; approved reservations require the Stores Manager."
+            )
         try:
             requisition.cancel(actor=request.user)
         except DjangoValidationError as error:

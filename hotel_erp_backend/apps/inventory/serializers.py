@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import transaction
+from django.db import models, transaction
 from django.db.models import Count
 from django.utils import timezone
 from rest_framework import serializers
@@ -310,11 +310,54 @@ class StoreLocationSerializer(serializers.ModelSerializer):
 class InventoryBalanceSerializer(serializers.ModelSerializer):
     is_below_reorder = serializers.BooleanField(read_only=True)
     available_quantity = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    reserved_allocations = serializers.SerializerMethodField()
+    calculated_reserved_quantity = serializers.SerializerMethodField()
+    reservation_variance = serializers.SerializerMethodField()
+
+    def get_reserved_allocations(self, balance):
+        cache = getattr(self, "_reserved_allocations_cache", {})
+        if balance.pk in cache:
+            return cache[balance.pk]
+        lines = StoreRequisitionItem.objects.filter(
+            item=balance.item,
+            requisition__store=balance.store,
+            requisition__status__in=(
+                StoreRequisitionStatus.APPROVED,
+                StoreRequisitionStatus.PARTIALLY_APPROVED,
+                StoreRequisitionStatus.PARTIALLY_ISSUED,
+            ),
+            quantity_approved__gt=models.F("quantity_issued"),
+        ).select_related("requisition", "requisition__department", "requisition__requested_by")
+        allocations = [
+            {
+                "request_id": str(line.requisition_id),
+                "request_number": line.requisition.requisition_no,
+                "department": line.requisition.department.name,
+                "requester": str(line.requisition.requested_by),
+                "approved_quantity": line.quantity_approved,
+                "issued_quantity": line.quantity_issued,
+                "outstanding_quantity": line.outstanding_quantity,
+                "status": line.requisition.status,
+            }
+            for line in lines
+        ]
+        cache[balance.pk] = allocations
+        self._reserved_allocations_cache = cache
+        return allocations
+
+    def get_calculated_reserved_quantity(self, balance):
+        return sum(
+            (row["outstanding_quantity"] for row in self.get_reserved_allocations(balance)),
+            Decimal("0.00"),
+        )
+
+    def get_reservation_variance(self, balance):
+        return balance.quantity_reserved - self.get_calculated_reserved_quantity(balance)
 
     class Meta:
         model = InventoryBalance
         fields = "__all__"
-        read_only_fields = ("id", "is_below_reorder", "available_quantity", "created_at", "updated_at", "created_by")
+        read_only_fields = ("id", "is_below_reorder", "available_quantity", "reserved_allocations", "calculated_reserved_quantity", "reservation_variance", "created_at", "updated_at", "created_by")
 
 
 class SupplierItemPriceSerializer(serializers.ModelSerializer):
