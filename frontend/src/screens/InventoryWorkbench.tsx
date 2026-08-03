@@ -312,7 +312,7 @@ function RequestPanel({ app, data, form, setForm, busy, execute, stage }: any) {
   </Panel>
 }
 
-function RequestSummary({ request, lines, data, app, showAvailability = false, editable = false, onEditLine, onRemoveLine }: { request: Row; lines: Row[]; data: Record<string, Row[]>; app: any; showAvailability?: boolean; editable?: boolean; onEditLine?: (line: Row) => void; onRemoveLine?: (line: Row) => void }) {
+function RequestSummary({ request, lines, data, app, showAvailability = false, showOperationalContext = false, editable = false, onEditLine, onRemoveLine }: { request: Row; lines: Row[]; data: Record<string, Row[]>; app: any; showAvailability?: boolean; showOperationalContext?: boolean; editable?: boolean; onEditLine?: (line: Row) => void; onRemoveLine?: (line: Row) => void }) {
   const columns = showAvailability
     ? 'minmax(165px,1.35fr) minmax(105px,.8fr) repeat(5,minmax(72px,.55fr))'
     : editable
@@ -331,11 +331,23 @@ function RequestSummary({ request, lines, data, app, showAvailability = false, e
     return { label: 'Draft', tone: 'var(--text-muted)', bg: 'var(--surface-3)' }
   }
   const categoryCount = new Set(lines.map(categoryOf)).size
+  const shortageLines = showAvailability ? lines.flatMap((line: Row) => {
+    const balance = data.balances.find((row: Row) => id(row.item) === id(line.item) && id(row.store) === id(request.store))
+    const available = num(balance?.available_quantity)
+    const outstanding = Math.max(0, num(line.quantity_approved) - num(line.quantity_issued))
+    const shortage = Math.max(0, outstanding - available)
+    return shortage > 0 ? [{ article: itemName(app, line.item), shortage, available, outstanding }] : []
+  }) : []
   return <section style={{ marginBottom: 14, overflow: 'hidden', border: '1px solid var(--border)', borderRadius: 8 }}>
     <div style={{ padding: '12px 13px', display: 'flex', alignItems: 'flex-start', gap: 10, background: 'var(--surface-2)' }}>
       <div style={{ flex: 1 }}>
         <div style={{ color: 'var(--text)', fontSize: 12.5, fontWeight: 800 }}>{id(request.requisition_no)}</div>
         <div style={{ marginTop: 3, color: 'var(--text-muted)', fontSize: 11 }}>{departmentName(app, request.department)} · {id(request.purpose) || 'No purpose entered'}</div>
+        {showOperationalContext && <div style={{ marginTop: 7, display: 'flex', flexWrap: 'wrap', gap: '5px 14px', color: 'var(--text-muted)', fontSize: 11.5 }}>
+          <span><b style={{ color: 'var(--text)' }}>Requester:</b> {employeeName(app, request.requested_by) || 'Not recorded'}</span>
+          <span><b style={{ color: 'var(--text)' }}>Required:</b> {id(request.required_date || request.requiredDate) || 'Not specified'}</span>
+          <span><b style={{ color: 'var(--text)' }}>Issuing store:</b> {storeName(app, request.store)}</span>
+        </div>}
         {lines.length > 0 && <div style={{ marginTop: 5, color: 'var(--text-faint)', fontSize: 10.5 }}>{lines.length} item{lines.length === 1 ? '' : 's'} across {categoryCount} categor{categoryCount === 1 ? 'y' : 'ies'}</div>}
       </div>
       <StatusBadge value={id(request.status)} />
@@ -357,6 +369,11 @@ function RequestSummary({ request, lines, data, app, showAvailability = false, e
         {editable && <span style={{ display: 'flex', gap: 5 }}><button type="button" onClick={() => onEditLine?.(line)} title="Edit item" style={lineAction}><Icon name="edit" size={15} /></button><button type="button" onClick={() => onRemoveLine?.(line)} title="Remove item" style={{ ...lineAction, color: 'var(--bad)' }}><Icon name="delete" size={15} /></button></span>}
       </div>
     })}
+    {showOperationalContext && shortageLines.length > 0 && <div style={{ padding: '11px 13px', borderTop: '1px solid rgba(220,38,38,.2)', background: 'var(--bad-soft)', color: 'var(--bad)', fontSize: 12, lineHeight: 1.5 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700 }}><Icon name="warning" size={16} color="var(--bad)" />Stock shortage — do not complete this issue yet</div>
+      {shortageLines.map((line) => <div key={line.article} style={{ marginTop: 3 }}>{line.article}: {line.outstanding} outstanding, {line.available} available, {line.shortage} short.</div>)}
+    </div>}
+    {showOperationalContext && lines.length > 0 && shortageLines.length === 0 && <div style={{ padding: '10px 13px', borderTop: '1px solid rgba(22,163,74,.2)', background: 'var(--good-soft)', color: 'var(--good)', fontSize: 12, fontWeight: 650 }}><Icon name="check_circle" size={15} color="var(--good)" style={{ verticalAlign: 'middle', marginRight: 6 }} />Available stock covers every outstanding approved quantity.</div>}
     {!lines.length && <div style={{ padding: 24, borderTop: '1px solid var(--border)', color: 'var(--text-faint)', textAlign: 'center', fontSize: 11.5 }}>No items have been added.</div>}
   </section>
 }
@@ -371,6 +388,7 @@ function IssuePanel({ app, data, form, setForm, busy, execute }: any) {
     <SectionLabel>Issue voucher</SectionLabel>
     <Field label="Approved department request"><Select value={form.request} change={(v) => setForm({ request: v })} rows={approved} label={(r) => `${id(r.requisition_no)} · ${departmentName(app, r.department)}`} /></Field>
     {!approved.length && <Hint>No approved department requests are ready for picking.</Hint>}
+    {request && <RequestSummary request={request} lines={requestLines} data={data} app={app} showAvailability showOperationalContext />}
     <Field label="Issued by"><Select value={form.employee} change={(v) => setForm({ ...form, employee: v })} rows={app.data.employees} /></Field>
     <Action disabled={busy || !request || !form.employee} click={() => execute(() => createBackendRecord('stock-issues', { requisition: request.id, store: request.store, issued_by: form.employee, note: '' }), 'Issue voucher created')}>Create issue voucher</Action>
     {!requestLines.length && form.request && <Hint>No approved lines exist on this requisition.</Hint>}
