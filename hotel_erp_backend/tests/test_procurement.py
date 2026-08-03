@@ -2,8 +2,9 @@ from decimal import Decimal
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIClient, APIRequestFactory
 
 from apps.departments.models import Branch, Department
 from apps.employees.models import Employee
@@ -244,6 +245,42 @@ def test_direct_workspace_route_flows_from_requisition_to_po_and_grn():
 
     assert receipt_line.store is None
     assert receipt_line.direct_issue_department == department
+
+
+@pytest.mark.django_db
+def test_store_keeper_can_read_lpo_workspace_for_receiving_without_lpo_permission():
+    employee, department, supplier, item = create_procurement_context()
+    branch = Branch.objects.create(name="Receiving Branch")
+    employee.branch = branch
+    employee.save(update_fields=["branch", "updated_at"])
+    employee.user.groups.add(Group.objects.create(name="Store Keeper"))
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        branch=branch,
+        reason="Receiving visibility",
+        status=PRStatus.APPROVED,
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity=Decimal("2.00"),
+        approved_quantity=Decimal("2.00"),
+        estimated_unit_cost=Decimal("5000.00"),
+    )
+    PurchaseOrder.objects.create(
+        requisition=requisition,
+        supplier=supplier,
+        ordered_by=employee,
+        po_number="PO-STORE-VIEW",
+    )
+
+    client = APIClient()
+    client.force_authenticate(employee.user)
+    response = client.get("/api/v1/requisitions/workspace/?stage=lpo")
+
+    assert response.status_code == 200
+    assert [row["po_number"] for row in response.data["orders"]] == ["PO-STORE-VIEW"]
 
 
 @pytest.mark.django_db

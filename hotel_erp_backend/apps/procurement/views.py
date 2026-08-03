@@ -108,7 +108,13 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             "inspect": "procurement.view_goodsinspection",
             "return": "procurement.view_supplierreturn",
         }[stage]
-        if not request.user.is_superuser and not request.user.has_perm(stage_permission):
+        stores_receiver = request.user.groups.filter(
+            name__in=("Stores Manager", "Store Manager", "Store Keeper")
+        ).exists()
+        stores_readable_stages = {"lpo", "receipt", "inspect", "return"}
+        if not request.user.is_superuser and not request.user.has_perm(stage_permission) and not (
+            stores_receiver and stage in stores_readable_stages
+        ):
             raise PermissionDenied("You do not have permission to view this procurement stage.")
 
         requisitions = self.get_queryset()
@@ -178,6 +184,8 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
         employee = getattr(user, "employee_profile", None)
         if not employee:
             return queryset.none()
+        if user.groups.filter(name__in=("Stores Manager", "Store Manager", "Store Keeper")).exists():
+            return queryset.filter(branch=employee.branch)
         if user.groups.filter(name="Department Head").exists():
             return queryset.filter(
                 department=employee.department,
