@@ -5,7 +5,7 @@ import RecordDetailDrawer from '../components/RecordDetailDrawer'
 import { cfg, type ColumnDef, type EntityKey, type Row } from '../lib/data'
 import { chipStyleFor, money } from '../lib/theme'
 import { helpText } from '../lib/help'
-import { errorMessage, fetchSupplierPriceHistory, importSupplierCatalogue } from '../lib/api'
+import { errorMessage, fetchSupplierPriceHistory, importSupplierCatalogue, runBackendAction } from '../lib/api'
 
 function valueFor(column: ColumnDef, row: Row) {
   const value = row[column.key]
@@ -240,9 +240,10 @@ export default function ListView() {
         preferredKeys={config.cols.map((column) => column.key)}
         labels={{ ...Object.fromEntries(config.cols.map((column) => [column.key, column.label])), priceHistory: 'Previous prices' }}
         onClose={() => setDetailRecord(null)}
-        actions={(route === 'categories' || route === 'suppliers' || (config.editable && (canChange || canDelete))) ? <>
+        actions={(route === 'categories' || route === 'suppliers' || route === 'balances' || (config.editable && (canChange || canDelete))) ? <>
           {route === 'categories' && <button type="button" onClick={() => app.viewCategoryItems(detailRecord)} style={drawerPrimary}><Icon name="inventory_2" size={17} color="#fff" />View articles ({String(detailRecord.itemsCount || 0)})</button>}
           {route === 'suppliers' && <button type="button" onClick={() => { app.navTo('supplierItems', 'Supplier catalogue'); app.setSearchTerm(String(detailRecord.name || '')) }} style={drawerSecondary}><Icon name="contract" size={17} />View supplied goods</button>}
+          {route === 'balances' && Number(detailRecord.reservationVariance || 0) !== 0 && (app.user.isSuperuser || ['administrator', 'system administrator', 'stores manager', 'store manager'].includes(app.user.role.toLowerCase())) && <button type="button" onClick={() => { const recordId = String(detailRecord.id); void runBackendAction('inventory-balances', recordId, 'reconcile-reservation').then(() => { setDetailRecord(null); app.refreshData(); app.showToast('Reserved stock reconciled to open approved requests') }).catch((error) => app.showWorkflowAlert('Reservation reconciliation blocked', errorMessage(error))) }} style={drawerPrimary}><Icon name="sync" size={17} color="#fff" />Reconcile reservation</button>}
           {canChange && <button type="button" onClick={() => { const recordId = detailRecord.id; setDetailRecord(null); app.openEdit(recordId) }} style={drawerSecondary}><Icon name="edit" size={17} />Edit record</button>}
           {canDelete && <button type="button" onClick={() => { const recordId = detailRecord.id; setDetailRecord(null); app.requestDelete(recordId) }} style={drawerDanger}><Icon name="delete" size={17} />Deactivate or delete</button>}
         </> : undefined}
