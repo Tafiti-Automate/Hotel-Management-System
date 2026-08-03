@@ -1,7 +1,14 @@
+import csv
+import io
+from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
+
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
+from rest_framework import status
 from rest_framework.viewsets import ModelViewSet
 
 from apps.employees.models import Employee
@@ -130,11 +137,114 @@ class InventoryBalanceViewSet(CreatedByModelMixin, ModelViewSet):
 
 
 class SupplierItemPriceViewSet(CreatedByModelMixin, ModelViewSet):
-    queryset = SupplierItemPrice.objects.select_related("supplier", "item", "unit")
+    queryset = SupplierItemPrice.objects.select_related("supplier", "item", "item__category", "unit")
     serializer_class = SupplierItemPriceSerializer
-    filterset_fields = ("supplier", "item", "unit", "is_preferred", "is_active")
+    filterset_fields = ("supplier", "item", "item__category", "unit", "is_preferred", "is_active")
     search_fields = ("supplier__name", "item__name", "item__sku", "supplier_sku")
     ordering_fields = ("unit_price", "lead_time_days", "minimum_order_quantity", "last_quoted_at", "created_at")
+
+    @action(detail=True, methods=["get"])
+    def history(self, request, pk=None):
+        from apps.inventory.serializers import SupplierItemPriceHistorySerializer
+
+        price = self.get_object()
+        return Response(SupplierItemPriceHistorySerializer(price.price_history.all(), many=True).data)
+
+    @action(detail=False, methods=["post"], url_path="import")
+    def import_catalogue(self, request):
+        upload = request.FILES.get("file")
+        if not upload:
+            raise ValidationError({"file": "Choose a CSV or Excel (.xlsx) supplier catalogue."})
+        try:
+            rows = self._spreadsheet_rows(upload)
+        except (ValueError, UnicodeDecodeError) as error:
+            raise ValidationError({"file": str(error)})
+
+        created = updated = 0
+        errors = []
+        with transaction.atomic():
+            for number, raw in enumerate(rows, start=2):
+                try:
+                    result = self._import_row(raw, request)
+                    created += result == "created"
+                    updated += result == "updated"
+                except Exception as error:  # collect row-specific validation feedback
+                    detail = getattr(error, "detail", None) or getattr(error, "message_dict", None) or str(error)
+                    errors.append({"row": number, "error": detail})
+            if errors:
+                transaction.set_rollback(True)
+        if errors:
+            return Response(
+                {"detail": "Nothing was imported. Correct the listed rows and try again.", "errors": errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response({"created": created, "updated": updated, "total": created + updated})
+
+    @staticmethod
+    def _spreadsheet_rows(upload):
+        name = upload.name.lower()
+        if name.endswith(".csv"):
+            content = upload.read().decode("utf-8-sig")
+            return list(csv.DictReader(io.StringIO(content)))
+        if name.endswith(".xlsx"):
+            try:
+                from openpyxl import load_workbook
+            except ImportError as error:
+                raise ValueError("Excel support is not installed on the server; upload CSV instead.") from error
+            sheet = load_workbook(upload, read_only=True, data_only=True).active
+            values = sheet.iter_rows(values_only=True)
+            try:
+                headers = [str(value or "").strip() for value in next(values)]
+            except StopIteration:
+                return []
+            return [dict(zip(headers, row)) for row in values if any(value is not None for value in row)]
+        raise ValueError("Unsupported file type. Upload .csv or .xlsx.")
+
+    @staticmethod
+    def _import_row(raw, request):
+        from apps.vendors.models import Supplier
+
+        normalized = {str(key).strip().lower().replace(" ", "_"): value for key, value in raw.items()}
+        supplier_code = str(normalized.get("supplier_code") or "").strip()
+        supplier_name = str(normalized.get("supplier") or normalized.get("supplier_name") or "").strip()
+        item_sku = str(normalized.get("item_sku") or normalized.get("sku") or "").strip()
+        unit_name = str(normalized.get("unit") or normalized.get("purchase_unit") or "").strip()
+        if not item_sku or not (supplier_code or supplier_name):
+            raise ValueError("supplier/supplier_code and item_sku are required")
+        supplier_query = Supplier.objects.filter(supplier_code__iexact=supplier_code) if supplier_code else Supplier.objects.filter(name__iexact=supplier_name)
+        supplier = supplier_query.get()
+        item = Item.objects.get(sku__iexact=item_sku)
+        unit = UnitOfMeasure.objects.filter(abbreviation__iexact=unit_name).first() or UnitOfMeasure.objects.filter(name__iexact=unit_name).first()
+        if unit_name and not unit:
+            raise ValueError(f"Unknown purchase unit '{unit_name}'")
+        try:
+            price = Decimal(str(normalized.get("unit_price") or normalized.get("price") or ""))
+        except InvalidOperation as error:
+            raise ValueError("unit_price must be a number") from error
+        effective = normalized.get("effective_from") or date.today()
+        if isinstance(effective, datetime):
+            effective = effective.date()
+        payload = {
+            "supplier": supplier.pk,
+            "item": item.pk,
+            "unit": unit.pk if unit else None,
+            "supplier_sku": str(normalized.get("supplier_sku") or "").strip(),
+            "unit_price": price,
+            "currency": str(normalized.get("currency") or "UGX").strip().upper(),
+            "effective_from": effective,
+            "minimum_order_quantity": normalized.get("minimum_order_quantity") or 1,
+            "lead_time_days": normalized.get("lead_time_days") or 0,
+            "is_preferred": str(normalized.get("is_preferred") or "").strip().lower() in {"yes", "true", "1"},
+            "is_active": str(normalized.get("is_active") or "yes").strip().lower() not in {"no", "false", "0", "inactive"},
+        }
+        existing = SupplierItemPrice.objects.filter(supplier=supplier, item=item).first()
+        serializer = SupplierItemPriceSerializer(existing, data=payload, context={"request": request}) if existing else SupplierItemPriceSerializer(data=payload, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save(created_by=request.user if not existing else existing.created_by)
+        if existing and existing.price_history.exists():
+            existing.price_history.first().source = "import"
+            existing.price_history.first().save(update_fields=["source", "updated_at"])
+        return "updated" if existing else "created"
 
 
 class StockLedgerViewSet(CreatedByModelMixin, ModelViewSet):

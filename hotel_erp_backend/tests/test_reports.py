@@ -10,6 +10,26 @@ from apps.inventory.models import Category, InventoryBalance, InventoryBatch, It
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize("path", [
+    "daily-crucial-activities", "pending-actions", "exceptions", "user-activity",
+    "stock-movement-control", "approval-trail", "direct-workspace",
+    "supplier-price-changes", "management-summary",
+])
+def test_control_reports_are_live_and_available_to_authorized_users(path):
+    user = get_user_model().objects.create_superuser(
+        username=f"control-{path}", employee_code=f"CTRL-{path[:12]}", password="test-pass-123",
+    )
+    client = APIClient()
+    client.force_authenticate(user=user)
+
+    response = client.get(f"/api/v1/reports/{path}/")
+
+    assert response.status_code == 200
+    assert "results" in response.data
+    assert response.data["count"] == len(response.data["results"])
+
+
+@pytest.mark.django_db
 def test_stock_summary_report_returns_valuation_for_permitted_user():
     user = get_user_model().objects.create_user(
         username="auditor",

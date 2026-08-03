@@ -23,6 +23,7 @@ from apps.inventory.models import (
     StoreReturn,
     StoreReturnItem,
     SupplierItemPrice,
+    SupplierItemPriceHistory,
     UnitOfMeasure,
 )
 from core.mixins.admin import CreatedByAdminMixin
@@ -94,6 +95,23 @@ class SupplierItemPriceAdmin(CreatedByAdminMixin, admin.ModelAdmin):
     autocomplete_fields = ("supplier", "item", "unit")
     search_fields = ("supplier__name", "item__name", "item__sku")
     date_hierarchy = "created_at"
+
+
+@admin.register(SupplierItemPriceHistory)
+class SupplierItemPriceHistoryAdmin(admin.ModelAdmin):
+    list_display = ("supplier", "item", "unit_price", "currency", "effective_from", "effective_to", "changed_by", "source")
+    list_filter = ("supplier", "item", "currency", "source")
+    search_fields = ("supplier__name", "item__name", "item__sku")
+    readonly_fields = tuple(field.name for field in SupplierItemPriceHistory._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(StockLedger)

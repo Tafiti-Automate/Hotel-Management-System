@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import Count
+from django.utils import timezone
 from rest_framework import serializers
 
 from apps.inventory.models import (
@@ -28,6 +29,7 @@ from apps.inventory.models import (
     StoreReturn,
     StoreReturnItem,
     SupplierItemPrice,
+    SupplierItemPriceHistory,
     UnitOfMeasure,
 )
 from core.constants.choices import StoreRequisitionStatus
@@ -320,6 +322,11 @@ class SupplierItemPriceSerializer(serializers.ModelSerializer):
     item_name = serializers.CharField(source="item.name", read_only=True)
     item_sku = serializers.CharField(source="item.sku", read_only=True)
     unit_name = serializers.CharField(source="unit.name", read_only=True)
+    category_id = serializers.UUIDField(source="item.category_id", read_only=True)
+    category_name = serializers.CharField(source="item.category.name", read_only=True)
+    base_unit_price = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+    is_lowest = serializers.SerializerMethodField()
+    history_count = serializers.IntegerField(source="price_history.count", read_only=True)
 
     class Meta:
         model = SupplierItemPrice
@@ -332,11 +339,18 @@ class SupplierItemPriceSerializer(serializers.ModelSerializer):
             "item_sku",
             "unit",
             "unit_name",
+            "category_id",
+            "category_name",
             "supplier_sku",
             "unit_price",
+            "base_unit_price",
+            "currency",
+            "effective_from",
             "minimum_order_quantity",
             "lead_time_days",
             "is_preferred",
+            "is_lowest",
+            "history_count",
             "last_quoted_at",
             "is_active",
             "created_at",
@@ -345,6 +359,7 @@ class SupplierItemPriceSerializer(serializers.ModelSerializer):
         )
         read_only_fields = (
             "id", "supplier_name", "item_name", "item_sku", "unit_name",
+            "category_id", "category_name", "base_unit_price", "is_lowest", "history_count",
             "created_at", "updated_at", "created_by",
         )
 
@@ -370,6 +385,44 @@ class SupplierItemPriceSerializer(serializers.ModelSerializer):
             setattr(instance, field, value)
         instance.clean()
         return attrs
+
+    def get_is_lowest(self, obj):
+        if not obj.is_active:
+            return False
+        candidates = SupplierItemPrice.objects.filter(item=obj.item, is_active=True).select_related("item", "unit")
+        return obj.base_unit_price == min(price.base_unit_price for price in candidates)
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        old_price = instance.unit_price
+        price_changed = "unit_price" in validated_data and validated_data["unit_price"] != old_price
+        if price_changed:
+            request = self.context.get("request")
+            SupplierItemPriceHistory.objects.create(
+                supplier_item_price=instance,
+                supplier=instance.supplier,
+                item=instance.item,
+                unit=instance.unit,
+                unit_price=old_price,
+                currency=instance.currency,
+                effective_from=instance.effective_from,
+                effective_to=timezone.localdate(),
+                changed_by=request.user if request and request.user.is_authenticated else None,
+            )
+            validated_data.setdefault("effective_from", timezone.localdate())
+        return super().update(instance, validated_data)
+
+
+class SupplierItemPriceHistorySerializer(serializers.ModelSerializer):
+    supplier_name = serializers.CharField(source="supplier.name", read_only=True)
+    item_name = serializers.CharField(source="item.name", read_only=True)
+    unit_name = serializers.CharField(source="unit.name", read_only=True)
+    changed_by_name = serializers.CharField(source="changed_by.get_full_name", read_only=True)
+
+    class Meta:
+        model = SupplierItemPriceHistory
+        fields = "__all__"
+        read_only_fields = tuple(field.name for field in SupplierItemPriceHistory._meta.fields)
 
 
 class StockLedgerSerializer(serializers.ModelSerializer):

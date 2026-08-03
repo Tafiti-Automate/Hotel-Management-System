@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils import timezone
@@ -416,6 +417,8 @@ class SupplierItemPrice(BaseModel):
     lead_time_days = models.PositiveIntegerField(default=0)
     is_preferred = models.BooleanField(default=False)
     last_quoted_at = models.DateField(null=True, blank=True)
+    effective_from = models.DateField(default=timezone.localdate)
+    currency = models.CharField(max_length=10, default="UGX")
     is_active = models.BooleanField(default=True)
 
     class Meta(BaseModel.Meta):
@@ -450,6 +453,43 @@ class SupplierItemPrice(BaseModel):
                 raise ValidationError(
                     {"unit": "Choose the article base unit or an active configured purchase unit."}
                 )
+
+    @property
+    def base_unit_price(self):
+        """Comparable price expressed in the article's base stock unit."""
+        factor = self.item.conversion_factor_for_unit(self.unit)
+        return (self.unit_price / factor).quantize(Decimal("0.01"))
+
+
+class SupplierItemPriceHistory(BaseModel):
+    """Immutable snapshot retained whenever a supplier catalogue price changes."""
+
+    supplier_item_price = models.ForeignKey(
+        SupplierItemPrice,
+        on_delete=models.PROTECT,
+        related_name="price_history",
+    )
+    supplier = models.ForeignKey("vendors.Supplier", on_delete=models.PROTECT)
+    item = models.ForeignKey(Item, on_delete=models.PROTECT)
+    unit = models.ForeignKey(UnitOfMeasure, on_delete=models.PROTECT, null=True, blank=True)
+    unit_price = models.DecimalField(max_digits=15, decimal_places=2)
+    currency = models.CharField(max_length=10, default="UGX")
+    effective_from = models.DateField()
+    effective_to = models.DateField()
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="supplier_price_changes",
+    )
+    source = models.CharField(max_length=30, default="manual")
+
+    class Meta(BaseModel.Meta):
+        ordering = ("-effective_to", "-created_at")
+
+    def __str__(self):
+        return f"{self.supplier} - {self.item}: {self.unit_price} until {self.effective_to}"
 
 
 class StockLedger(BaseModel):
@@ -988,6 +1028,7 @@ class ReorderRule(BaseModel):
             item=self.item,
             supplier=self.preferred_supplier,
             is_active=True,
+            effective_from__lte=timezone.localdate(),
         ).first()
 
         scope = self.store.name if self.store_id else "all stores"
@@ -1006,6 +1047,8 @@ class ReorderRule(BaseModel):
             estimated_unit_cost=(
                 supplier_price.unit_price if supplier_price else Decimal("0.00")
             ),
+            destination_type=RequisitionItem.DESTINATION_STORE,
+            destination_store=self.store,
             created_by=created_by,
         )
         return purchase_requisition
@@ -1220,6 +1263,8 @@ class StoreRequisition(BaseModel):
                     f"Shortage from {self.requisition_no}: required {required}, "
                     f"available {available}, shortage {shortage}."
                 ),
+                destination_type=RequisitionItem.DESTINATION_STORE,
+                destination_store=self.store,
                 created_by=created_by,
             )
         if not shortage_lines:

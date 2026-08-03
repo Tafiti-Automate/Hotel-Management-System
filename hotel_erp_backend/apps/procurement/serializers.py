@@ -228,6 +228,10 @@ class RequisitionItemSerializer(serializers.ModelSerializer):
             "quantity",
             "approved_quantity",
             "estimated_unit_cost",
+            "destination_type",
+            "destination_store",
+            "destination_department",
+            "destination_justification",
             "estimated_total",
             "requested_base_quantity",
             "approved_base_quantity",
@@ -262,6 +266,18 @@ class RequisitionItemSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         requisition = attrs.get("requisition") or getattr(self.instance, "requisition", None)
         item = attrs.get("item") or getattr(self.instance, "item", None)
+        destination_type = attrs.get("destination_type", getattr(self.instance, "destination_type", RequisitionItem.DESTINATION_STORE))
+        if destination_type == RequisitionItem.DESTINATION_WORKSPACE:
+            attrs.setdefault("destination_department", attrs.get("destination_department") or (requisition.department if requisition else None))
+            attrs["destination_store"] = None
+        elif not attrs.get("destination_store") and not getattr(self.instance, "destination_store_id", None):
+            from apps.inventory.models import StoreLocation
+
+            store = StoreLocation.objects.filter(branch=getattr(requisition, "branch", None), is_active=True).order_by("-is_default", "name").first()
+            if not store:
+                raise serializers.ValidationError({"destination_store": "Choose the receiving store for this Article."})
+            attrs["destination_store"] = store
+            attrs["destination_department"] = None
         validate_configured_item_unit(
             item,
             attrs.get("unit", getattr(self.instance, "unit", None)),
@@ -400,6 +416,10 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "created_by",
+            "destination_type",
+            "destination_store",
+            "destination_department",
+            "destination_justification",
         )
 
     def validate(self, attrs):
@@ -457,6 +477,8 @@ class GoodsReceiptItemSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "created_by",
+            "store",
+            "direct_issue_department",
         )
 
     def validate(self, attrs):
@@ -485,6 +507,7 @@ class GoodsReceiptItemSerializer(serializers.ModelSerializer):
 
 class VendorQuotationItemSerializer(serializers.ModelSerializer):
     line_total = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+    unit_price = serializers.DecimalField(max_digits=15, decimal_places=2, required=False)
 
     class Meta:
         model = VendorQuotationItem
@@ -494,6 +517,23 @@ class VendorQuotationItemSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         quotation = attrs.get("quotation") or getattr(self.instance, "quotation", None)
         requisition_item = attrs.get("requisition_item") or getattr(self.instance, "requisition_item", None)
+        if self.instance is None and quotation and requisition_item and not attrs.get("unit_price"):
+            from apps.inventory.models import SupplierItemPrice
+            from django.utils import timezone
+
+            catalogue_price = SupplierItemPrice.objects.filter(
+                supplier=quotation.supplier,
+                item=requisition_item.item,
+                is_active=True,
+                effective_from__lte=timezone.localdate(),
+            ).select_related("unit").first()
+            if catalogue_price:
+                attrs["unit_price"] = catalogue_price.unit_price
+                attrs.setdefault("unit", catalogue_price.unit)
+            else:
+                raise serializers.ValidationError(
+                    {"unit_price": "Enter a price or add an active supplier catalogue price for this Article."}
+                )
         validate_configured_item_unit(
             requisition_item.item if requisition_item else None,
             attrs.get("unit", getattr(self.instance, "unit", None)),

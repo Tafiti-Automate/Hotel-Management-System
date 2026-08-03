@@ -507,6 +507,10 @@ class PurchaseRequisition(BaseModel):
                     unit=unit,
                     quantity=quantity,
                     unit_cost=unit_cost,
+                    destination_type=requisition_item.destination_type,
+                    destination_store=requisition_item.destination_store or store,
+                    destination_department=requisition_item.destination_department,
+                    destination_justification=requisition_item.destination_justification,
                     created_by=created_by,
                 )
             if not order.items.exists():
@@ -567,6 +571,7 @@ class PurchaseRequisition(BaseModel):
                 supplier=supplier,
                 item=requisition_item.item,
                 is_active=True,
+                effective_from__lte=timezone.localdate(),
             )
             .select_related("unit")
             .first()
@@ -646,6 +651,12 @@ class PurchaseRequisition(BaseModel):
 
 
 class RequisitionItem(BaseModel):
+    DESTINATION_STORE = "store"
+    DESTINATION_WORKSPACE = "workspace"
+    DESTINATION_CHOICES = (
+        (DESTINATION_STORE, "Store inventory"),
+        (DESTINATION_WORKSPACE, "Direct to workspace"),
+    )
     requisition = models.ForeignKey(
         PurchaseRequisition,
         on_delete=models.CASCADE,
@@ -682,6 +693,16 @@ class RequisitionItem(BaseModel):
         default=Decimal("0.00"),
         validators=[validate_non_negative_decimal],
     )
+    destination_type = models.CharField(max_length=20, choices=DESTINATION_CHOICES, default=DESTINATION_STORE)
+    destination_store = models.ForeignKey(
+        "inventory.StoreLocation", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="planned_requisition_receipts",
+    )
+    destination_department = models.ForeignKey(
+        "departments.Department", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="planned_direct_requisition_receipts",
+    )
+    destination_justification = models.TextField(blank=True)
 
     class Meta(BaseModel.Meta):
         constraints = [
@@ -708,6 +729,15 @@ class RequisitionItem(BaseModel):
             raise ValidationError(
                 {"approved_quantity": "Approved quantity cannot exceed the requested quantity."}
             )
+        if self.destination_type == self.DESTINATION_WORKSPACE:
+            if not self.destination_department_id:
+                raise ValidationError({"destination_department": "Choose the workspace department for direct delivery."})
+            if self.destination_store_id:
+                raise ValidationError({"destination_store": "Direct-to-workspace lines cannot also target a store."})
+            if not self.destination_justification.strip():
+                raise ValidationError({"destination_justification": "Explain why this Article should bypass store inventory."})
+        elif self.destination_department_id:
+            raise ValidationError({"destination_department": "Store-routed lines cannot also target a workspace department."})
 
     def save(self, *args, **kwargs):
         if not self.description and self.item_id:
@@ -1085,6 +1115,16 @@ class PurchaseOrderItem(BaseModel):
         validators=[validate_positive_decimal],
     )
     expiry_date = models.DateField(null=True, blank=True)
+    destination_type = models.CharField(max_length=20, choices=RequisitionItem.DESTINATION_CHOICES, default=RequisitionItem.DESTINATION_STORE)
+    destination_store = models.ForeignKey(
+        "inventory.StoreLocation", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="planned_purchase_order_receipts",
+    )
+    destination_department = models.ForeignKey(
+        "departments.Department", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="planned_direct_purchase_order_receipts",
+    )
+    destination_justification = models.TextField(blank=True)
 
     class Meta(BaseModel.Meta):
         constraints = [
@@ -1118,6 +1158,14 @@ class PurchaseOrderItem(BaseModel):
         self.base_quantity = self.item.quantity_in_base_units(self.quantity, self.unit)
         super().save(*args, **kwargs)
         self.purchase_order.update_total_amount()
+
+    def clean(self):
+        super().clean()
+        if self.destination_type == RequisitionItem.DESTINATION_WORKSPACE:
+            if not self.destination_department_id or self.destination_store_id:
+                raise ValidationError("A direct-delivery LPO line requires one workspace department and no store.")
+        elif self.destination_department_id:
+            raise ValidationError("A store-routed LPO line cannot target a workspace department.")
 
     def __str__(self):
         return f"{self.purchase_order} - {self.item} x {self.base_quantity}"
@@ -1290,8 +1338,13 @@ class GoodsReceiptItem(BaseModel):
         self.base_quantity = (
             self.quantity_received * self.purchase_order_item.conversion_factor
         ).quantize(Decimal("0.01"))
-        if not self.store_id and not self.direct_issue_department_id:
-            self.store = self.goods_receipt.purchase_order.store
+        planned_line = self.purchase_order_item
+        if planned_line.destination_type == RequisitionItem.DESTINATION_WORKSPACE:
+            self.store = None
+            self.direct_issue_department = planned_line.destination_department
+        else:
+            self.direct_issue_department = None
+            self.store = planned_line.destination_store or self.goods_receipt.purchase_order.store
         if not self.unit_cost:
             self.unit_cost = self.purchase_order_item.unit_cost
         if not self.expiry_date:
@@ -1312,6 +1365,13 @@ class GoodsReceiptItem(BaseModel):
             raise ValidationError(
                 "A receipt line cannot be posted to both a store and a department."
             )
+        if self.purchase_order_item_id:
+            planned = self.purchase_order_item
+            if planned.destination_type == RequisitionItem.DESTINATION_WORKSPACE:
+                if self.direct_issue_department_id != planned.destination_department_id or self.store_id:
+                    raise ValidationError("The GRN destination must match the approved direct-to-workspace LPO route.")
+            elif self.direct_issue_department_id or self.store_id != (planned.destination_store_id or planned.purchase_order.store_id):
+                raise ValidationError("The GRN destination must match the approved store route on the LPO.")
         if self.purchase_order_item_id and self.quantity_received:
             previous = GoodsReceiptItem.objects.filter(
                 purchase_order_item_id=self.purchase_order_item_id,

@@ -16,6 +16,7 @@ from apps.inventory.models import (
     StockLedger,
     StoreLocation,
     UnitOfMeasure,
+    SupplierItemPrice,
 )
 from apps.procurement.models import (
     GoodsInspection,
@@ -213,6 +214,36 @@ def test_purchase_order_requires_approved_requisition_for_form_validation():
     requisition.status = PRStatus.APPROVED
     requisition.save(update_fields=["status", "updated_at"])
     order.full_clean()
+
+
+@pytest.mark.django_db
+def test_direct_workspace_route_flows_from_requisition_to_po_and_grn():
+    employee, department, supplier, item = create_procurement_context()
+    SupplierItemPrice.objects.create(supplier=supplier, item=item, unit=item.base_unit, unit_price=Decimal("5000.00"))
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee, department=department, reason="Use immediately in kitchen", status=PRStatus.APPROVED,
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition, item=item, quantity=Decimal("4.00"),
+        approved_quantity=Decimal("4.00"), estimated_unit_cost=Decimal("5000.00"),
+        destination_type=RequisitionItem.DESTINATION_WORKSPACE,
+        destination_department=department,
+        destination_justification="Fresh input required directly at the kitchen workspace.",
+    )
+
+    order = requisition.create_purchase_order(supplier=supplier, ordered_by=employee)
+    order_line = order.items.get()
+    assert order_line.destination_type == RequisitionItem.DESTINATION_WORKSPACE
+    assert order_line.destination_department == department
+    order.issue(sent_by=employee)
+    receipt = GoodsReceiptNote.objects.create(purchase_order=order, received_by=employee)
+    receipt_line = GoodsReceiptItem.objects.create(
+        goods_receipt=receipt, purchase_order_item=order_line,
+        quantity_received=Decimal("4.00"), unit_cost=Decimal("5000.00"),
+    )
+
+    assert receipt_line.store is None
+    assert receipt_line.direct_issue_department == department
 
 
 @pytest.mark.django_db
