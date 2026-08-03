@@ -43,7 +43,7 @@ export default function App() {
     position: 'relative',
     background: 'var(--bg)',
     color: 'var(--text)',
-    fontFamily: "'Inter',system-ui,sans-serif",
+    fontFamily: "var(--font-sans)",
   }
 
   return (

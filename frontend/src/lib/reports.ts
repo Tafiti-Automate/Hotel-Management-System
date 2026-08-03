@@ -10,7 +10,7 @@ export interface BuiltReport {
   subtitle: string
   grid: string
   columns: ReportColumn[]
-  rows: { cells: ReportCell[] }[]
+  rows: { cells: ReportCell[]; data?: ReportRecord }[]
   hasTotals: boolean
   totals: ReportCell[]
 }
@@ -109,6 +109,27 @@ export function buildOperationalReport(
     R.rows = records(payload.results).map((row) => ({ cells: [
       rcell(text(row.item), undefined, true), rcell(text(row.sku)), rcell(text(row.store)),
       rcell(title(row.reference_type)), rcell(number(row.total_quantity), 'right'),
+    ] }))
+  } else if (['dailyActivities', 'pendingActions', 'exceptions', 'userActivity', 'stockMovementControl', 'approvalTrail', 'directWorkspace', 'supplierPriceChanges', 'managementSummary'].includes(id)) {
+    const names: Record<string, [string, string]> = {
+      dailyActivities: ['Daily Crucial Activities', 'Important system actions completed today or in the selected period'],
+      pendingActions: ['Pending Actions', 'Controlled documents still awaiting the next responsible action'],
+      exceptions: ['Exception Report', 'Operational exceptions requiring investigation or resolution'],
+      userActivity: ['User Activity', 'Important actions grouped by their responsible system actor'],
+      stockMovementControl: ['Stock Movement Control', 'Posted inventory movements with source references and responsible actors'],
+      approvalTrail: ['Approval Trail', 'Sequential maker-checker decisions, comments and timestamps'],
+      directWorkspace: ['Direct-to-Workspace', 'Accepted goods delivered directly to an operating department'],
+      supplierPriceChanges: ['Supplier Price Changes', 'Auditable old-to-new supplier price movements'],
+      managementSummary: ['Management Summary', 'Current commitments, exceptions and operational risk indicators'],
+    }
+    ;[R.title, R.subtitle] = names[id]
+    R.grid = '1.1fr 1.1fr 1.1fr 1.25fr 1fr 1.2fr 1.2fr 95px minmax(0,1.8fr)'
+    R.columns = head([{ t: 'Date' }, { t: 'Document' }, { t: 'Reference' }, { t: 'Action' }, { t: 'Status' }, { t: 'Actor' }, { t: 'Location' }, { t: 'Value', a: 'right' }, { t: 'Detail' }])
+    R.rows = records(payload.results).map((row) => ({ data: row, cells: [
+      rcell(text(row.date).slice(0, 19).replace('T', ' ')), rcell(title(row.document_type)), rcell(text(row.reference), undefined, true),
+      rcell(title(row.action)), rcell(title(row.status)), rcell(text(row.actor, '—')),
+      rcell(text(row.store_workspace || row.department || row.branch, '—')),
+      rcell(row.value === '' ? '—' : money(number(row.value)), 'right'), rcell(text(row.detail, '—')),
     ] }))
   } else {
     R.title = 'Procurement Status Summary'; R.subtitle = 'Live requisition, purchase-order and supplier-return totals by status'

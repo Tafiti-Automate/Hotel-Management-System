@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useApp } from '../state/AppContext'
 import { Icon } from '../components/Icon'
 import RecordDetailDrawer from '../components/RecordDetailDrawer'
 import { cfg, type ColumnDef, type EntityKey, type Row } from '../lib/data'
 import { chipStyleFor, money } from '../lib/theme'
 import { helpText } from '../lib/help'
+import { errorMessage, fetchSupplierPriceHistory, importSupplierCatalogue } from '../lib/api'
 
 function valueFor(column: ColumnDef, row: Row) {
   const value = row[column.key]
@@ -55,6 +56,11 @@ export default function ListView() {
   const [detailRecord, setDetailRecord] = useState<Row | null>(null)
   const [columnsOpen, setColumnsOpen] = useState(false)
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set())
+  const [supplierFilter, setSupplierFilter] = useState('')
+  const [articleFilter, setArticleFilter] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('')
+  const [importing, setImporting] = useState(false)
+  const importInput = useRef<HTMLInputElement>(null)
   let rows = [...(app.data[source] || [])]
   if (route === 'approvals') {
     rows = rows.filter((row) => row.status === 'Pending' && Boolean(row.approvalActionable))
@@ -62,6 +68,9 @@ export default function ListView() {
   const term = app.searchTerm.toLowerCase()
   if (term) rows = rows.filter((row) => config.cols.some((column) => String(row[column.key] ?? '').toLowerCase().includes(term)))
   if (statusFilter) rows = rows.filter((row) => String(row.status || '') === statusFilter)
+  if (route === 'supplierItems' && supplierFilter) rows = rows.filter((row) => row.supplier === supplierFilter)
+  if (route === 'supplierItems' && articleFilter) rows = rows.filter((row) => row.article === articleFilter)
+  if (route === 'supplierItems' && categoryFilter) rows = rows.filter((row) => row.category === categoryFilter)
   const rowDate = (row: Row) => String(row.date || row.created_at || row.issue_date || row.return_date || row.receipt_date || row.count_date || '').slice(0, 10)
   if (dateFrom) rows = rows.filter((row) => rowDate(row) && rowDate(row) >= dateFrom)
   if (dateTo) rows = rows.filter((row) => rowDate(row) && rowDate(row) <= dateTo)
@@ -87,7 +96,7 @@ export default function ListView() {
     : statusFilter
       ? `No records match the selected status${branchLabel}.`
       : `No ${config.title.toLowerCase()} are available${branchLabel}.`
-  useEffect(() => { setPage(1); setSelected(new Set()); setDetailRecord(null) }, [route, term, statusFilter, dateFrom, dateTo])
+  useEffect(() => { setPage(1); setSelected(new Set()); setDetailRecord(null) }, [route, term, statusFilter, supplierFilter, articleFilter, categoryFilter, dateFrom, dateTo])
   useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
 
   const exportRows = (records: Row[]) => {
@@ -106,7 +115,26 @@ export default function ListView() {
   const openRow = (row: Row) => {
     if (route === 'requisitions' || route === 'approvals') app.openDetail('requisitions', row.id, route)
     else if (route === 'orders') app.openDetail('orders', row.id, 'orders')
-    else setDetailRecord(row)
+    else {
+      setDetailRecord(row)
+      if (route === 'supplierItems') void fetchSupplierPriceHistory(row.id).then((history) => {
+        const summary = history.length
+          ? history.map((entry) => `${entry.effective_from}–${entry.effective_to}: ${entry.currency} ${entry.unit_price}${entry.changed_by_name ? ` by ${entry.changed_by_name}` : ''}`).join('\n')
+          : 'No previous prices — this is the first recorded price.'
+        setDetailRecord((current) => current?.id === row.id ? { ...current, priceHistory: summary } : current)
+      }).catch(() => undefined)
+    }
+  }
+  const catalogueValues = (key: string) => Array.from(new Set((app.data.supplierItems || []).map((row) => String(row[key] || '')).filter(Boolean))).sort()
+  const importFile = async (file?: File) => {
+    if (!file) return
+    setImporting(true)
+    try {
+      const result = await importSupplierCatalogue(file)
+      app.showToast(`Catalogue imported: ${result.created} added, ${result.updated} updated`)
+      app.refreshData()
+    } catch (error) { app.showWorkflowAlert('Catalogue import failed', errorMessage(error)) }
+    finally { setImporting(false); if (importInput.current) importInput.current.value = '' }
   }
 
   return (
@@ -117,6 +145,7 @@ export default function ListView() {
           <p style={{ margin: '5px 0 0', color: 'var(--text-muted)', fontSize: 13.5 }}>{config.sub}</p>
         </div>
         <div className="list-actions" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {route === 'supplierItems' && canAdd && <><input ref={importInput} type="file" accept=".csv,.xlsx" hidden onChange={(event) => void importFile(event.target.files?.[0])} /><button disabled={importing} onClick={() => importInput.current?.click()} style={secondaryAction}><Icon name="upload_file" size={17} />{importing ? 'Importing…' : 'Import Excel / CSV'}</button></>}
           <button onClick={() => exportRows(rows)} style={secondaryAction}><Icon name="download" size={17} />Export CSV</button>
           {config.editable && canAdd && <button onClick={() => app.openCreate()} className="hover-accent" style={primaryAction}><Icon name="add" size={18} color="#fff" />{config.add}</button>}
         </div>
@@ -128,9 +157,14 @@ export default function ListView() {
           <input value={app.searchTerm} onChange={(event) => app.setSearchTerm(event.target.value)} placeholder={`Search ${config.title.toLowerCase()}`} style={{ width: 280, height: 34, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', padding: '0 11px 0 34px', color: 'var(--text)', fontSize: 12.5, outline: 'none' }} />
         </div>
         <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} style={{ height: 34, border: '1px solid var(--border)', borderRadius: 5, padding: '0 8px', background: 'var(--surface)', color: 'var(--text-muted)', fontSize: 12 }}><option value="">All statuses</option>{statuses.map((status) => <option key={status}>{status}</option>)}</select>
+        {route === 'supplierItems' && <>
+          <select value={supplierFilter} onChange={(event) => setSupplierFilter(event.target.value)} style={filterSelect}><option value="">All suppliers</option>{catalogueValues('supplier').map((value) => <option key={value}>{value}</option>)}</select>
+          <select value={articleFilter} onChange={(event) => setArticleFilter(event.target.value)} style={filterSelect}><option value="">All articles</option>{catalogueValues('article').map((value) => <option key={value}>{value}</option>)}</select>
+          <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} style={filterSelect}><option value="">All categories</option>{catalogueValues('category').map((value) => <option key={value}>{value}</option>)}</select>
+        </>}
         <label className="date-filter" title="From date"><span>From</span><input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label>
         <label className="date-filter" title="To date"><span>To</span><input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} /></label>
-        {(statusFilter || dateFrom || dateTo || app.searchTerm) && <button onClick={() => { setStatusFilter(''); setDateFrom(''); setDateTo(''); app.setSearchTerm('') }} className="hover-surface2" style={commandAction}><Icon name="filter_alt_off" size={17} />Clear</button>}
+        {(statusFilter || supplierFilter || articleFilter || categoryFilter || dateFrom || dateTo || app.searchTerm) && <button onClick={() => { setStatusFilter(''); setSupplierFilter(''); setArticleFilter(''); setCategoryFilter(''); setDateFrom(''); setDateTo(''); app.setSearchTerm('') }} className="hover-surface2" style={commandAction}><Icon name="filter_alt_off" size={17} />Clear</button>}
         <span style={{ flex: 1 }} />
         <button title="Export selected records" disabled={!selected.size} onClick={() => exportRows(rows.filter((row) => selected.has(row.id)))} className="hover-surface2" style={{ ...iconCommand, opacity: selected.size ? 1 : .4 }}><Icon name="download_for_offline" size={19} /></button>
         <div style={{ position: 'relative' }}><button title="Choose columns" onClick={() => setColumnsOpen((open) => !open)} className="hover-surface2" style={iconCommand}><Icon name="view_column" size={18} /></button>{columnsOpen && <div style={{ position: 'absolute', right: 0, top: 36, zIndex: 10, width: 210, padding: 8, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 7, boxShadow: 'var(--shadow)' }}>{config.cols.map((column) => <label key={column.key} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 7, fontSize: 11.5, color: 'var(--text-muted)' }}><input type="checkbox" checked={!hiddenColumns.has(column.key)} onChange={() => setHiddenColumns((current) => { const next = new Set(current); next.has(column.key) ? next.delete(column.key) : next.add(column.key); return next })} />{column.label}</label>)}</div>}</div>
@@ -186,9 +220,10 @@ export default function ListView() {
         subtitle={String(detailRecord.name || detailRecord.id || 'Record details')}
         record={detailRecord}
         preferredKeys={config.cols.map((column) => column.key)}
-        labels={Object.fromEntries(config.cols.map((column) => [column.key, column.label]))}
+        labels={{ ...Object.fromEntries(config.cols.map((column) => [column.key, column.label])), priceHistory: 'Previous prices' }}
         onClose={() => setDetailRecord(null)}
         actions={config.editable && (canChange || canDelete) ? <>
+          {route === 'suppliers' && <button type="button" onClick={() => { app.navTo('supplierItems', 'Supplier catalogue'); app.setSearchTerm(String(detailRecord.name || '')) }} style={drawerSecondary}><Icon name="contract" size={17} />View supplied goods</button>}
           {canChange && <button type="button" onClick={() => { const recordId = detailRecord.id; setDetailRecord(null); app.openEdit(recordId) }} style={drawerSecondary}><Icon name="edit" size={17} />Edit record</button>}
           {canDelete && <button type="button" onClick={() => { const recordId = detailRecord.id; setDetailRecord(null); app.requestDelete(recordId) }} style={drawerDanger}><Icon name="delete" size={17} />Deactivate or delete</button>}
         </> : undefined}
@@ -205,3 +240,4 @@ const iconAction: CSSProperties = { width: 30, height: 30, display: 'grid', plac
 const pager: CSSProperties = { width: 30, height: 30, display: 'grid', placeItems: 'center', border: '1px solid var(--border)', borderRadius: 5, background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer' }
 const drawerSecondary: CSSProperties = { minHeight: 36, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 12px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer', font: 'inherit', fontSize: 11.5, fontWeight: 650 }
 const drawerDanger: CSSProperties = { ...drawerSecondary, borderColor: 'rgba(220,38,38,.25)', color: 'var(--bad)' }
+const filterSelect: CSSProperties = { height: 34, maxWidth: 170, border: '1px solid var(--border)', borderRadius: 5, padding: '0 8px', background: 'var(--surface)', color: 'var(--text-muted)', fontSize: 12 }

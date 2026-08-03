@@ -91,6 +91,15 @@ export function themeVars({ mode, accentName, density }: ThemeOptions): Record<s
     '--accent-strong': shade(accent, -14),
     '--pad': airy ? '24px' : '16px',
     '--gap': airy ? '16px' : '10px',
+    '--font-sans': "'Inter',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif",
+    '--font-mono': "'JetBrains Mono','SFMono-Regular',Consolas,monospace",
+    '--text-xs': '12px',
+    '--text-sm': '13px',
+    '--text-body': '14px',
+    '--text-lead': '15px',
+    '--text-section': '18px',
+    '--text-page': '27px',
+    '--leading-body': '1.55',
   }
 }
 
@@ -156,12 +165,11 @@ export function chipStyleFor(value: string): React.CSSProperties {
   const [color, background] = tones[tone]
   return {
     display: 'inline-block',
-    fontSize: 11,
-    fontWeight: 700,
+    fontSize: 12,
+    fontWeight: 650,
     padding: '3px 10px',
     borderRadius: 20,
     color,
     background,
   }
 }
-

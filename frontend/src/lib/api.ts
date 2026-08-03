@@ -232,6 +232,28 @@ function authHeaders(): Record<string, string> {
   return token ? { Authorization: `Token ${token}` } : {}
 }
 
+export async function importSupplierCatalogue(file: File): Promise<{ created: number; updated: number; total: number }> {
+  const body = new FormData()
+  body.append('file', file)
+  const response = await fetchWithTimeout(`${apiRoot()}/supplier-item-prices/import/`, {
+    method: 'POST', headers: { Accept: 'application/json', ...authHeaders() }, body,
+  })
+  const result = await response.json().catch(() => ({})) as Record<string, any>
+  if (!response.ok) {
+    const rows = Array.isArray(result.errors) ? result.errors.slice(0, 5).map((entry: any) => `Row ${entry.row}: ${JSON.stringify(entry.error)}`).join(' · ') : ''
+    throw new Error(rows || String(result.detail || 'The supplier catalogue could not be imported.'))
+  }
+  return result as { created: number; updated: number; total: number }
+}
+
+export async function fetchSupplierPriceHistory(id: string): Promise<Record<string, any>[]> {
+  const response = await fetchWithTimeout(`${apiRoot()}/supplier-item-prices/${id}/history/`, {
+    headers: { Accept: 'application/json', ...authHeaders() },
+  })
+  if (!response.ok) throw new Error(`Price history could not be loaded (${response.status}).`)
+  return await response.json() as Record<string, any>[]
+}
+
 export async function login(username: string, password: string, remember = true): Promise<AuthUser> {
   const response = await fetch(`${apiRoot()}/auth/login/`, {
     method: 'POST',
@@ -703,6 +725,8 @@ function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey
       unit: unitId || null,
       supplier_sku: text(values.supplierSku),
       unit_price: num(values.price),
+      currency: text(values.currency, 'UGX').toUpperCase(),
+      effective_from: text(values.effectiveFrom) || new Date().toISOString().slice(0, 10),
       minimum_order_quantity: num(values.minimumOrder) || 1,
       lead_time_days: num(values.leadTime),
       last_quoted_at: text(values.lastQuoted) || null,
@@ -828,6 +852,9 @@ export type OperationalReportId =
   | 'aging'
   | 'procurement'
   | 'consumption'
+  | 'dailyActivities' | 'pendingActions' | 'exceptions' | 'userActivity'
+  | 'stockMovementControl' | 'approvalTrail' | 'directWorkspace'
+  | 'supplierPriceChanges' | 'managementSummary'
 
 export interface OperationalReportFilters {
   branch?: string
@@ -836,6 +863,13 @@ export interface OperationalReportFilters {
   item?: string
   dateFrom?: string
   dateTo?: string
+  department?: string
+  employee?: string
+  supplier?: string
+  documentType?: string
+  actionType?: string
+  status?: string
+  valueMin?: string
 }
 
 const operationalReportPaths: Record<OperationalReportId, string> = {
@@ -845,6 +879,15 @@ const operationalReportPaths: Record<OperationalReportId, string> = {
   aging: 'reports/expiry',
   procurement: 'reports/procurement-summary',
   consumption: 'reports/consumption',
+  dailyActivities: 'reports/daily-crucial-activities',
+  pendingActions: 'reports/pending-actions',
+  exceptions: 'reports/exceptions',
+  userActivity: 'reports/user-activity',
+  stockMovementControl: 'reports/stock-movement-control',
+  approvalTrail: 'reports/approval-trail',
+  directWorkspace: 'reports/direct-workspace',
+  supplierPriceChanges: 'reports/supplier-price-changes',
+  managementSummary: 'reports/management-summary',
 }
 
 export function isOperationalReport(id: string): id is OperationalReportId {
@@ -862,6 +905,13 @@ export async function fetchOperationalReport(
   if (filters.item) query.set('item', filters.item)
   if (filters.dateFrom) query.set('date_from', filters.dateFrom)
   if (filters.dateTo) query.set('date_to', filters.dateTo)
+  if (filters.department) query.set('department', filters.department)
+  if (filters.employee) query.set('employee', filters.employee)
+  if (filters.supplier) query.set('supplier', filters.supplier)
+  if (filters.documentType) query.set('document_type', filters.documentType)
+  if (filters.actionType) query.set('action_type', filters.actionType)
+  if (filters.status) query.set('status', filters.status)
+  if (filters.valueMin) query.set('value_min', filters.valueMin)
   const suffix = query.size ? `?${query.toString()}` : ''
   const path = `${operationalReportPaths[id]}${suffix}`
   const response = await fetch(endpointUrl(path), {
@@ -1018,13 +1068,22 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
       supplier: text(row.supplier_name) || supplierNames.get(text(row.supplier)) || shortId(row.supplier),
       article: text(row.item_name) || itemNames.get(text(row.item)) || shortId(row.item),
       articleSku: text(row.item_sku),
+      articleId: text(row.item),
+      category: text(row.category_name),
+      categoryId: text(row.category_id),
+      supplierId: text(row.supplier),
       supplierSku: text(row.supplier_sku),
       unit: text(row.unit_name) || unitNames.get(text(row.unit)) || '',
       price: num(row.unit_price),
+      basePrice: num(row.base_unit_price),
+      currency: text(row.currency, 'UGX'),
+      effectiveFrom: text(row.effective_from),
       minimumOrder: num(row.minimum_order_quantity),
       leadTime: num(row.lead_time_days),
       lastQuoted: text(row.last_quoted_at),
       preferred: bool(row.is_preferred) ? 'Preferred' : 'Alternative',
+      pricePosition: bool(row.is_lowest) ? 'Lowest' : 'Higher',
+      historyCount: num(row.history_count),
       status: activeStatus(row.is_active),
     })),
   }

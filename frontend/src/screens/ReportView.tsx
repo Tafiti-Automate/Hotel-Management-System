@@ -23,6 +23,13 @@ export default function ReportView() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [item, setItem] = useState('')
+  const [department, setDepartment] = useState('')
+  const [employee, setEmployee] = useState('')
+  const [supplier, setSupplier] = useState('')
+  const [documentType, setDocumentType] = useState('')
+  const [actionType, setActionType] = useState('')
+  const [reportStatus, setReportStatus] = useState('')
+  const [valueMin, setValueMin] = useState('')
   const [page, setPage] = useState(1)
   const [refreshKey, setRefreshKey] = useState(0)
   const [livePayload, setLivePayload] = useState<Record<string, unknown>>({})
@@ -67,6 +74,13 @@ export default function ReportView() {
       item,
       dateFrom,
       dateTo,
+      department,
+      employee,
+      supplier,
+      documentType,
+      actionType,
+      status: reportStatus,
+      valueMin,
     }).then((payload) => {
       if (active) setLivePayload(payload)
     }).catch((reason) => {
@@ -75,7 +89,7 @@ export default function ReportView() {
       if (active) setLiveLoading(false)
     })
     return () => { active = false }
-  }, [branchId, category, dateFrom, dateTo, item, live, operationalReportId, refreshKey, reportId, store])
+  }, [actionType, branchId, category, dateFrom, dateTo, department, documentType, employee, item, live, operationalReportId, refreshKey, reportId, reportStatus, store, supplier, valueMin])
 
   const report = operationalReportId
     ? buildOperationalReport(operationalReportId, livePayload)
@@ -84,9 +98,12 @@ export default function ReportView() {
   const pageCount = Math.max(1, Math.ceil(report.rows.length / pageSize))
   const visibleRows = report.rows.slice((page - 1) * pageSize, page * pageSize)
   const supportsStore = !live || reportId !== 'procurement'
-  const supportsCategory = !live || ['valuation', 'lowstock', 'aging', 'consumption'].includes(reportId)
-  const supportsDates = !live || ['movement', 'aging', 'procurement', 'consumption'].includes(reportId)
-  const supportsItem = ['movement', 'consumption'].includes(reportId)
+  const controlReport = ['dailyActivities', 'pendingActions', 'exceptions', 'userActivity', 'stockMovementControl', 'approvalTrail', 'directWorkspace', 'supplierPriceChanges', 'managementSummary'].includes(reportId)
+  const supportsCategory = !live || controlReport || ['valuation', 'lowstock', 'aging', 'consumption'].includes(reportId)
+  const supportsDates = !live || controlReport || ['movement', 'aging', 'procurement', 'consumption'].includes(reportId)
+  const supportsItem = controlReport || ['movement', 'consumption'].includes(reportId)
+  const controlRows = Array.isArray(livePayload.results) ? livePayload.results as Record<string, any>[] : []
+  const controlValues = (key: string) => Array.from(new Set(controlRows.map((row) => String(row[key] || '')).filter(Boolean))).sort()
   const needsItem = reportId === 'movement' && !item
   const emptyMessage = needsItem
     ? 'Choose an article to generate its stock card.'
@@ -121,6 +138,25 @@ export default function ReportView() {
     popup.document.write(`<html><head><title>${escapeHtml(report.title)}</title><style>@page{size:A4 landscape;margin:12mm}*{box-sizing:border-box}body{margin:0;color:#111827;font-family:Arial,sans-serif;font-size:9pt}header{display:flex;justify-content:space-between;gap:24px;padding-bottom:12px;border-bottom:2px solid #111827}h1{margin:0;font-size:18pt}p{margin:5px 0 0;color:#4b5563}.meta{text-align:right;color:#4b5563;font-size:8pt}.criteria{margin:12px 0;color:#374151;font-size:8.5pt}table{border-collapse:collapse;width:100%}tr{break-inside:avoid}th,td{border:1px solid #cbd5e1;padding:6px 7px;text-align:left;vertical-align:top}th{background:#f3f4f6;text-transform:uppercase;font-size:7.5pt}footer{margin-top:12px;padding-top:6px;border-top:1px solid #e5e7eb;color:#6b7280;font-size:7.5pt;text-align:center}</style></head><body><header><div><h1>${escapeHtml(report.title)}</h1><p>${escapeHtml(report.subtitle)}</p></div><div class="meta">Generated ${escapeHtml(new Date().toLocaleString())}<br>${report.rows.length} record${report.rows.length === 1 ? '' : 's'}</div></header><div class="criteria">${escapeHtml(criteria)}</div><table><thead><tr>${head}</tr></thead><tbody>${body || `<tr><td colspan="${report.columns.length}">No records match the selected criteria.</td></tr>`}</tbody></table><footer>Hotel Management System · ${escapeHtml(report.title)}</footer><script>window.onload=()=>window.print()</script></body></html>`)
     popup.document.close()
   }
+  const drillIntoSource = () => {
+    if (!selectedReportRow) return
+    const type = String(selectedReportRow.drilldown_type || '')
+    const sourceId = String(selectedReportRow.drilldown_id || '')
+    if (!sourceId) return
+    if (type === 'requisitions') app.openDetail('requisitions', sourceId, 'reports')
+    else if (type === 'orders') app.openDetail('orders', sourceId, 'reports')
+    else {
+      const routes: Record<string, string> = {
+        grns: 'grns', inspections: 'inspections', supplierItems: 'supplierItems',
+        'store-requisitions': 'storeRequisitions', stock_issue: 'stockIssues',
+        store_return: 'storeReturns', supplier_return: 'supplierReturns',
+        goods_receipt: 'grns', stock_count: 'balances', stock_transfer: 'balances', stock_adjustment: 'balances',
+      }
+      const route = routes[type] || type
+      app.navTo(route, 'Source document')
+      app.setSearchTerm(sourceId)
+    }
+  }
   if (!app.reportId) return null
 
   return (
@@ -148,6 +184,15 @@ export default function ReportView() {
         {supportsCategory && <select value={category} onChange={(event) => { setCategory(event.target.value); setPage(1) }} style={filterControl}><option value="">All categories</option>{app.data.categories.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select>}
         {supportsItem && <select value={item} onChange={(event) => { setItem(event.target.value); setPage(1) }} style={filterControl}><option value="">{reportId === 'movement' ? 'Choose article…' : 'All articles'}</option>{app.data.items.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select>}
         <span style={filterChip}>Branch: {app.currentBranch || 'All'}</span>
+        {controlReport && <>
+          <select value={department} onChange={(event) => setDepartment(event.target.value)} style={filterControl}><option value="">All departments</option>{app.data.departments.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select>
+          <select value={employee} onChange={(event) => setEmployee(event.target.value)} style={filterControl}><option value="">All employees</option>{app.data.employees.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select>
+          <select value={supplier} onChange={(event) => setSupplier(event.target.value)} style={filterControl}><option value="">All suppliers</option>{app.data.suppliers.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select>
+          <select value={documentType} onChange={(event) => setDocumentType(event.target.value)} style={filterControl}><option value="">All document types</option>{controlValues('document_type').map((value) => <option key={value}>{value}</option>)}</select>
+          <select value={actionType} onChange={(event) => setActionType(event.target.value)} style={filterControl}><option value="">All actions</option>{controlValues('action').map((value) => <option key={value}>{value}</option>)}</select>
+          <select value={reportStatus} onChange={(event) => setReportStatus(event.target.value)} style={filterControl}><option value="">All statuses</option>{controlValues('status').map((value) => <option key={value}>{value}</option>)}</select>
+          <input type="number" min="0" value={valueMin} onChange={(event) => setValueMin(event.target.value)} placeholder="Minimum value" style={{ ...filterControl, width: 130 }} />
+        </>}
         {live && <button onClick={() => setRefreshKey((value) => value + 1)} style={{ ...filterControl, display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}><Icon name="sync" size={15} />Refresh</button>}
       </div>
 
@@ -158,7 +203,7 @@ export default function ReportView() {
         {liveLoading && <div style={{ padding: 42, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12.5 }}>Loading live report from the backend…</div>}
         {!liveLoading && !visibleRows.length && <div style={{ padding: 42, textAlign: 'center', color: liveError ? 'var(--bad)' : 'var(--text-muted)', fontSize: 12.5 }}>{emptyMessage}</div>}
         {!liveLoading && visibleRows.map((row, ri) => (
-          <button type="button" onClick={() => setSelectedReportRow(Object.fromEntries(report.columns.map((column, index) => [column.label, row.cells[index]?.text || '—'])))} key={ri} className="report-record-row hover-surface2" style={{ width: '100%', display: 'grid', gridTemplateColumns: report.grid, border: 0, borderBottom: '1px solid var(--border)', padding: '0 8px', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
+          <button type="button" onClick={() => setSelectedReportRow(row.data || Object.fromEntries(report.columns.map((column, index) => [column.label, row.cells[index]?.text || '—'])))} key={ri} className="report-record-row hover-surface2" style={{ width: '100%', display: 'grid', gridTemplateColumns: report.grid, border: 0, borderBottom: '1px solid var(--border)', padding: '0 8px', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
             {row.cells.map((cell, ci) => <div key={ci} style={cell.style}>{cell.text}</div>)}
           </button>
         ))}
@@ -169,7 +214,7 @@ export default function ReportView() {
         )}
         <div style={{ minHeight: 46, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, padding: '0 14px' }}><button disabled={page === 1} onClick={() => setPage((value) => Math.max(1, value - 1))} style={pager}>Previous</button><span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{page} / {pageCount}</span><button disabled={page === pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))} style={pager}>Next</button></div>
       </div>
-      {selectedReportRow && <RecordDetailDrawer title={report.title} subtitle={String(Object.values(selectedReportRow)[0] || 'Report row')} record={selectedReportRow} onClose={() => setSelectedReportRow(null)} />}
+      {selectedReportRow && <RecordDetailDrawer title={report.title} subtitle={String(selectedReportRow.reference || Object.values(selectedReportRow)[0] || 'Report row')} record={selectedReportRow} onClose={() => setSelectedReportRow(null)} actions={selectedReportRow.drilldown_id ? <button type="button" onClick={drillIntoSource} style={exportBtn}><Icon name="open_in_new" size={17} />Open source transaction</button> : undefined} />}
     </div>
   )
 }
