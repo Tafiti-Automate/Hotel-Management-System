@@ -71,6 +71,20 @@ export default function ListView() {
   if (route === 'supplierItems' && supplierFilter) rows = rows.filter((row) => row.supplier === supplierFilter)
   if (route === 'supplierItems' && articleFilter) rows = rows.filter((row) => row.article === articleFilter)
   if (route === 'supplierItems' && categoryFilter) rows = rows.filter((row) => row.category === categoryFilter)
+  if (route === 'items' && app.itemCategoryFilter) {
+    const categoryIds = new Set([app.itemCategoryFilter.id])
+    let foundChild = true
+    while (foundChild) {
+      foundChild = false
+      for (const category of app.data.categories || []) {
+        if (categoryIds.has(String(category.parentId || '')) && !categoryIds.has(String(category.id))) {
+          categoryIds.add(String(category.id))
+          foundChild = true
+        }
+      }
+    }
+    rows = rows.filter((row) => categoryIds.has(String(row.categoryId || '')))
+  }
   const rowDate = (row: Row) => String(row.date || row.created_at || row.issue_date || row.return_date || row.receipt_date || row.count_date || '').slice(0, 10)
   if (dateFrom) rows = rows.filter((row) => rowDate(row) && rowDate(row) >= dateFrom)
   if (dateTo) rows = rows.filter((row) => rowDate(row) && rowDate(row) <= dateTo)
@@ -162,9 +176,10 @@ export default function ListView() {
           <select value={articleFilter} onChange={(event) => setArticleFilter(event.target.value)} style={filterSelect}><option value="">All articles</option>{catalogueValues('article').map((value) => <option key={value}>{value}</option>)}</select>
           <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} style={filterSelect}><option value="">All categories</option>{catalogueValues('category').map((value) => <option key={value}>{value}</option>)}</select>
         </>}
+        {route === 'items' && app.itemCategoryFilter && <span style={filterChip}><Icon name="category" size={15} />Category: {app.itemCategoryFilter.name}<button type="button" title="Clear category filter" aria-label="Clear category filter" onClick={app.clearItemCategoryFilter}><Icon name="close" size={14} /></button></span>}
         <label className="date-filter" title="From date"><span>From</span><input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label>
         <label className="date-filter" title="To date"><span>To</span><input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} /></label>
-        {(statusFilter || supplierFilter || articleFilter || categoryFilter || dateFrom || dateTo || app.searchTerm) && <button onClick={() => { setStatusFilter(''); setSupplierFilter(''); setArticleFilter(''); setCategoryFilter(''); setDateFrom(''); setDateTo(''); app.setSearchTerm('') }} className="hover-surface2" style={commandAction}><Icon name="filter_alt_off" size={17} />Clear</button>}
+        {(statusFilter || supplierFilter || articleFilter || categoryFilter || dateFrom || dateTo || app.searchTerm || app.itemCategoryFilter) && <button onClick={() => { setStatusFilter(''); setSupplierFilter(''); setArticleFilter(''); setCategoryFilter(''); setDateFrom(''); setDateTo(''); app.setSearchTerm(''); app.clearItemCategoryFilter() }} className="hover-surface2" style={commandAction}><Icon name="filter_alt_off" size={17} />Clear</button>}
         <span style={{ flex: 1 }} />
         <button title="Export selected records" disabled={!selected.size} onClick={() => exportRows(rows.filter((row) => selected.has(row.id)))} className="hover-surface2" style={{ ...iconCommand, opacity: selected.size ? 1 : .4 }}><Icon name="download_for_offline" size={19} /></button>
         <div style={{ position: 'relative' }}><button title="Choose columns" onClick={() => setColumnsOpen((open) => !open)} className="hover-surface2" style={iconCommand}><Icon name="view_column" size={18} /></button>{columnsOpen && <div style={{ position: 'absolute', right: 0, top: 36, zIndex: 10, width: 210, padding: 8, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 7, boxShadow: 'var(--shadow)' }}>{config.cols.map((column) => <label key={column.key} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 7, fontSize: 11.5, color: 'var(--text-muted)' }}><input type="checkbox" checked={!hiddenColumns.has(column.key)} onChange={() => setHiddenColumns((current) => { const next = new Set(current); next.has(column.key) ? next.delete(column.key) : next.add(column.key); return next })} />{column.label}</label>)}</div>}</div>
@@ -183,6 +198,9 @@ export default function ListView() {
             <div style={{ display: 'grid', placeItems: 'center' }}><input type="checkbox" checked={selected.has(row.id)} onClick={(event) => event.stopPropagation()} onChange={(event) => setSelected((current) => { const next = new Set(current); event.target.checked ? next.add(row.id) : next.delete(row.id); return next })} /></div>
             {visibleColumns.map((column, index) => {
               const value = valueFor(column, row)
+              if (route === 'categories' && column.key === 'itemsCount') {
+                return <div key={column.key} className="data-cell" data-label={column.label} style={cellStyle(column)}><button type="button" title={`View articles in ${row.name}`} onClick={(event) => { event.stopPropagation(); app.viewCategoryItems(row) }} style={countLink}>{value}</button></div>
+              }
               return <div key={column.key} className="data-cell" data-label={column.label} data-primary={index === 0 ? 'true' : undefined} style={cellStyle(column)}>{column.kind === 'status' ? <span style={chipStyleFor(value)}>{value}</span> : value}</div>
             })}
             <div className="data-actions" style={{ padding: '8px', display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
@@ -222,7 +240,8 @@ export default function ListView() {
         preferredKeys={config.cols.map((column) => column.key)}
         labels={{ ...Object.fromEntries(config.cols.map((column) => [column.key, column.label])), priceHistory: 'Previous prices' }}
         onClose={() => setDetailRecord(null)}
-        actions={config.editable && (canChange || canDelete) ? <>
+        actions={(route === 'categories' || route === 'suppliers' || (config.editable && (canChange || canDelete))) ? <>
+          {route === 'categories' && <button type="button" onClick={() => app.viewCategoryItems(detailRecord)} style={drawerPrimary}><Icon name="inventory_2" size={17} color="#fff" />View articles ({String(detailRecord.itemsCount || 0)})</button>}
           {route === 'suppliers' && <button type="button" onClick={() => { app.navTo('supplierItems', 'Supplier catalogue'); app.setSearchTerm(String(detailRecord.name || '')) }} style={drawerSecondary}><Icon name="contract" size={17} />View supplied goods</button>}
           {canChange && <button type="button" onClick={() => { const recordId = detailRecord.id; setDetailRecord(null); app.openEdit(recordId) }} style={drawerSecondary}><Icon name="edit" size={17} />Edit record</button>}
           {canDelete && <button type="button" onClick={() => { const recordId = detailRecord.id; setDetailRecord(null); app.requestDelete(recordId) }} style={drawerDanger}><Icon name="delete" size={17} />Deactivate or delete</button>}
@@ -240,4 +259,7 @@ const iconAction: CSSProperties = { width: 30, height: 30, display: 'grid', plac
 const pager: CSSProperties = { width: 30, height: 30, display: 'grid', placeItems: 'center', border: '1px solid var(--border)', borderRadius: 5, background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer' }
 const drawerSecondary: CSSProperties = { minHeight: 36, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 12px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer', font: 'inherit', fontSize: 11.5, fontWeight: 650 }
 const drawerDanger: CSSProperties = { ...drawerSecondary, borderColor: 'rgba(220,38,38,.25)', color: 'var(--bad)' }
+const drawerPrimary: CSSProperties = { ...drawerSecondary, borderColor: 'var(--accent)', background: 'var(--accent)', color: '#fff' }
 const filterSelect: CSSProperties = { height: 34, maxWidth: 170, border: '1px solid var(--border)', borderRadius: 5, padding: '0 8px', background: 'var(--surface)', color: 'var(--text-muted)', fontSize: 12 }
+const countLink: CSSProperties = { minWidth: 28, minHeight: 28, padding: '0 7px', border: 0, borderRadius: 5, background: 'var(--accent-soft)', color: 'var(--accent)', cursor: 'pointer', font: 'inherit', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 2 }
+const filterChip: CSSProperties = { minHeight: 30, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 5px 0 9px', border: '1px solid var(--accent)', borderRadius: 999, background: 'var(--accent-soft)', color: 'var(--accent)', fontSize: 12.5, fontWeight: 600 }

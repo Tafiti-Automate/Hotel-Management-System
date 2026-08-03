@@ -30,6 +30,7 @@ interface FormTarget { entity: EntityKey; id: string | null }
 interface ConfirmTarget { entity: EntityKey; id: string; name: string }
 interface DetailTarget { entity: EntityKey; id: string; from: string }
 interface WorkflowAlert { title: string; message: string }
+interface ItemCategoryFilter { id: string; name: string }
 
 interface AppState {
   screen: Screen
@@ -44,6 +45,7 @@ interface AppState {
   currentBranch: string
   crumb: string
   searchTerm: string
+  itemCategoryFilter: ItemCategoryFilter | null
   form: FormTarget | null
   formSaving: boolean
   confirm: ConfirmTarget | null
@@ -86,6 +88,8 @@ export interface AppContextValue extends AppState {
   closePop: () => void
   // list / search
   setSearchTerm: (term: string) => void
+  viewCategoryItems: (category: Row) => void
+  clearItemCategoryFilter: () => void
   // forms + crud
   openCreate: (entity?: EntityKey, label?: string) => void
   openEdit: (id: string) => void
@@ -229,6 +233,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     currentBranch: '',
     crumb: initialLanding.crumb,
     searchTerm: '',
+    itemCategoryFilter: null,
     form: null,
     formSaving: false,
     confirm: null,
@@ -622,7 +627,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         showWorkflowAlert('Access restricted', `${label || 'This area'} is not available to the ${user.role} role.`)
         return
       }
-      patch({ route, navActive: route, crumb: label || '', searchTerm: '', detail: null })
+      patch({ route, navActive: route, crumb: label || '', searchTerm: '', itemCategoryFilter: null, detail: null })
     },
     setTab: (tab) => patch({ tab }),
     toggleMode: () => setState((s) => ({ ...s, mode: s.mode === 'dark' ? 'light' : 'dark' })),
@@ -634,6 +639,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     toggleSettings: () => setState((s) => ({ ...s, settingsOpen: !s.settingsOpen, branchOpen: false })),
     closePop: () => patch({ branchOpen: false, settingsOpen: false }),
     setSearchTerm: (searchTerm) => patch({ searchTerm }),
+    viewCategoryItems: (category) => patch({
+      route: 'items',
+      navActive: 'items',
+      crumb: 'Article catalogue',
+      searchTerm: '',
+      itemCategoryFilter: { id: String(category.id), name: String(category.name || 'Category') },
+      detail: null,
+    }),
+    clearItemCategoryFilter: () => patch({ itemCategoryFilter: null }),
     consumeProcurementDraft: () => patch({ procurementDraftId: null }),
     consumeInventoryDraft: () => patch({ inventoryDraftId: null }),
     openCreate: (entity, label) => {
