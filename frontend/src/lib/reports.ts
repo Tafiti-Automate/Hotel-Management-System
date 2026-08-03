@@ -33,7 +33,7 @@ function rcell(text: string | number, align?: 'right', bold?: boolean): ReportCe
     padding: '11px 10px', fontSize: 12.5, display: 'flex', alignItems: 'center', whiteSpace: 'nowrap',
     overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0,
   }
-  if (align === 'right') { s.justifyContent = 'flex-end'; s.fontFamily = "'JetBrains Mono',monospace"; s.fontWeight = 700; s.color = 'var(--text)' }
+  if (align === 'right') { s.justifyContent = 'flex-end'; s.fontWeight = 650; s.color = 'var(--text)' }
   else if (bold) { s.color = 'var(--text)'; s.fontWeight = 700 }
   else s.color = 'var(--text-muted)'
   return { text: String(text), style: s }

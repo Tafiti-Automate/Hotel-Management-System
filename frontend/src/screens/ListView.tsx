@@ -23,7 +23,7 @@ function cellStyle(column: ColumnDef): CSSProperties {
     color: column.kind === 'bold' || numeric ? 'var(--text)' : 'var(--text-muted)',
     fontSize: column.kind === 'mono' ? 12 : 13,
     fontWeight: column.kind === 'bold' || numeric ? 600 : 450,
-    fontFamily: column.kind === 'mono' || numeric ? "'JetBrains Mono',monospace" : undefined,
+    fontFamily: column.kind === 'mono' ? "'JetBrains Mono',monospace" : undefined,
   }
 }
 

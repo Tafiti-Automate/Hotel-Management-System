@@ -25,7 +25,9 @@ body {
 }
 
 /* Operational typography: readable for long shifts while preserving hierarchy. */
-.app-shell { font-size: var(--text-body); line-height: var(--leading-body); }
+.app-shell { font-family: var(--font-sans); font-size: var(--text-body); line-height: var(--leading-body); }
+/* Enterprise UI type is sans-serif by default. Monospace must be explicitly opted into. */
+.app-shell *:not(.ic) { font-family: var(--font-sans) !important; }
 .app-content h1 { font-size: var(--text-page) !important; line-height: 1.2 !important; font-weight: 700 !important; letter-spacing: -.025em; }
 .app-content h2 { font-size: 22px !important; line-height: 1.28 !important; font-weight: 650 !important; }
 .app-content h3 { font-size: var(--text-section) !important; line-height: 1.35 !important; font-weight: 650 !important; }
@@ -69,6 +71,8 @@ body {
 .app-shell :not(.ic)[style*="letter-spacing: .12em"],
 .app-shell :not(.ic)[style*="letter-spacing: 0.12em"] { letter-spacing: .075em !important; }
 
+[data-mono="true"],
+.mono-data,
 [style*="JetBrains Mono"],
 [style*="font-family: monospace"] {
   font-family: var(--font-mono) !important;

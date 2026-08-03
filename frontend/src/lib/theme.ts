@@ -97,8 +97,8 @@ export function themeVars({ mode, accentName, density }: ThemeOptions): Record<s
     '--text-sm': '13px',
     '--text-body': '14px',
     '--text-lead': '15px',
-    '--text-section': '18px',
-    '--text-page': '27px',
+    '--text-section': '20px',
+    '--text-page': '32px',
     '--leading-body': '1.55',
   }
 }
