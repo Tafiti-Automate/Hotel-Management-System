@@ -20,15 +20,15 @@ interface WorkflowPathProps {
   badge?: string
 }
 
-export function WorkflowPath({ title, summary, steps, activeKey, onSelect, badge = 'FOLLOW IN ORDER' }: WorkflowPathProps) {
+export function WorkflowPath({ title, summary, steps, activeKey, onSelect, badge = 'Follow in order' }: WorkflowPathProps) {
   return (
     <section className="workflow-path" style={container} aria-label={title}>
       <div className="workflow-path-header">
         <div>
-          <div style={{ color: 'var(--text)', fontSize: 13, fontWeight: 800 }}>{title}</div>
-          <div style={{ marginTop: 3, color: 'var(--text-muted)', fontSize: 11.5, lineHeight: 1.45 }}>{summary}</div>
+          <div style={{ color: 'var(--text)', fontSize: 18, fontWeight: 650 }}>{title}</div>
+          <div style={{ marginTop: 5, color: 'var(--text-muted)', fontSize: 14, lineHeight: 1.5 }}>{summary}</div>
         </div>
-        <span style={{ flex: 'none', padding: '5px 9px', borderRadius: 20, color: 'var(--accent)', background: 'var(--accent-soft)', fontSize: 10, fontWeight: 800 }}>{badge}</span>
+        <span style={{ flex: 'none', padding: '6px 10px', borderRadius: 20, color: 'var(--accent)', background: 'var(--accent-soft)', fontSize: 12, fontWeight: 600 }}>{badge}</span>
       </div>
       <div className="workflow-path-steps" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(135px, 1fr))` }}>
         {steps.map((step, index) => {

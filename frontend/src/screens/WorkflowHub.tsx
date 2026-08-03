@@ -58,7 +58,7 @@ export default function WorkflowHub({ kind }: { kind: WorkflowKind }) {
 
   const definitions: Record<WorkflowKind, { eyebrow: string; title: string; summary: string; icon: string; steps: Step[] }> = {
     procure: {
-      eyebrow: 'PROCURE TO STOCK',
+      eyebrow: 'Procure to stock',
       title: 'Procurement control centre',
       summary: 'Take demand from an approved request through sourcing, LPO, inspection and accepted stock.',
       icon: 'shopping_cart_checkout',
@@ -100,7 +100,7 @@ export default function WorkflowHub({ kind }: { kind: WorkflowKind }) {
       ],
     },
     pay: {
-      eyebrow: 'PROCURE TO PAY',
+      eyebrow: 'Procure to pay',
       title: 'Finance matching centre',
       summary: 'Match supplier invoices to LPOs and accepted receipts before approval and payment.',
       icon: 'payments',

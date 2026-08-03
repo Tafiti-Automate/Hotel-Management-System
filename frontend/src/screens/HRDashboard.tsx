@@ -23,7 +23,7 @@ export default function HRDashboard() {
     <div style={{ maxWidth: 1380, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
         <div>
-          <div style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 850, letterSpacing: '.12em' }}>HUMAN RESOURCES</div>
+          <div style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600, letterSpacing: '.02em' }}>Human resources</div>
           <h1 style={{ fontSize: 25, margin: '5px 0', color: 'var(--text)', letterSpacing: '-.025em' }}>People overview</h1>
           <p style={{ fontSize: 12.5, color: 'var(--text-muted)', margin: 0 }}>Manage the hotel team, department assignments and employee records.</p>
         </div>

@@ -79,7 +79,7 @@ export default function FinanceWorkbench() {
   return <div style={{ maxWidth: 1440, margin: '0 auto' }}>
     <section className="workbench-hero" style={{ ...card, padding: 20, marginBottom: 15, display: 'flex', alignItems: 'center', gap: 13 }}>
       <span style={hero}><Icon name="account_balance" size={24} color="#fff" /></span>
-      <div><div style={eyebrow}>PROCURE TO PAY</div><h1 style={{ margin: '3px 0', fontSize: 23 }}>Finance control centre</h1><div style={subtle}>Register liabilities, match accepted goods, approve invoices and post supplier settlements.</div></div>
+      <div><div style={eyebrow}>Procure to pay</div><h1 style={{ margin: '3px 0', fontSize: 23 }}>Finance control centre</h1><div style={subtle}>Register liabilities, match accepted goods, approve invoices and post supplier settlements.</div></div>
       <button onClick={() => void load()} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button>
     </section>
     <WorkflowPath
@@ -95,7 +95,7 @@ export default function FinanceWorkbench() {
         { key: 'post', label: 'Post settlement', actor: 'Finance', description: 'Post the payment and reduce the invoice balance.', icon: 'task_alt' },
       ]}
     />
-    <div style={{ marginBottom: 7, color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>Finance work areas</div>
+    <div style={{ marginBottom: 10, color: 'var(--text-muted)', fontSize: 14, fontWeight: 600 }}>Finance work areas</div>
     <div style={{ display: 'flex', gap: 5, marginBottom: 15, flexWrap: 'wrap' }}>{tabs.map(([key, icon, label]) => <button key={key} onClick={() => { setPaymentPathHint(''); setTab(key) }} style={{ ...tabButton, background: tab === key ? 'var(--accent-soft)' : 'var(--surface)', color: tab === key ? 'var(--accent)' : 'var(--text-muted)', borderColor: tab === key ? 'var(--accent)' : 'var(--border)' }}><Icon name={icon} size={17} />{label}</button>)}</div>
     {error && <div style={{ ...card, padding: 12, color: 'var(--bad)', marginBottom: 14, fontSize: 12 }}>{error}</div>}
     {loading ? <div style={{ ...card, padding: 50, textAlign: 'center', color: 'var(--text-faint)' }}>Loading finance records…</div> :
@@ -208,8 +208,8 @@ function Rule() { return <div style={{ borderTop: '1px solid var(--border)', mar
 
 const card: CSSProperties = { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: 'var(--shadow-sm)' }
 const hero: CSSProperties = { width: 46, height: 46, borderRadius: 10, display: 'grid', placeItems: 'center', background: 'var(--accent)' }
-const eyebrow: CSSProperties = { color: 'var(--accent)', fontSize: 9.5, fontWeight: 800, letterSpacing: '.11em' }
-const subtle: CSSProperties = { color: 'var(--text-muted)', fontSize: 12 }
+const eyebrow: CSSProperties = { color: 'var(--accent)', fontSize: 12, fontWeight: 600, letterSpacing: '.02em' }
+const subtle: CSSProperties = { color: 'var(--text-muted)', fontSize: 14, lineHeight: 1.5 }
 const tabButton: CSSProperties = { height: 38, display: 'flex', alignItems: 'center', gap: 7, padding: '0 12px', border: '1px solid', borderRadius: 6, cursor: 'pointer', font: 'inherit', fontSize: 12, fontWeight: 650 }
 const labelStyle: CSSProperties = { display: 'block', color: 'var(--text-muted)', fontSize: 10.5, fontWeight: 700, marginBottom: 5 }
 const control: CSSProperties = { width: '100%', height: 38, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text)', padding: '0 10px', font: 'inherit', fontSize: 12 }

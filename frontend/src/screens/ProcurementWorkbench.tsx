@@ -221,7 +221,7 @@ export default function ProcurementWorkbench() {
         <div className="workbench-hero" style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
           <span style={heroIcon}><Icon name="shopping_cart_checkout" size={24} color="#fff" /></span>
           <div>
-            <div style={eyebrow}>PROCURE TO RECEIVE</div>
+            <div style={eyebrow}>Procure to receive</div>
             <h1 style={{ margin: '3px 0', fontSize: 23, color: 'var(--text)' }}>Procurement workbench</h1>
             <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>Build each document from its approved predecessor. All changes are saved directly to the backend.</div>
           </div>
@@ -911,7 +911,7 @@ function appRows(map: Map<string, string>) { return Array.from(map, ([id, name])
 
 const card: CSSProperties = { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: 'var(--shadow-sm)' }
 const heroIcon: CSSProperties = { width: 46, height: 46, borderRadius: 10, display: 'grid', placeItems: 'center', background: 'var(--accent)' }
-const eyebrow: CSSProperties = { fontSize: 9.5, fontWeight: 800, letterSpacing: '.11em', color: 'var(--accent)' }
+const eyebrow: CSSProperties = { fontSize: 12, fontWeight: 600, letterSpacing: '.02em', color: 'var(--accent)' }
 const labelStyle: CSSProperties = { display: 'block', fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 5 }
 const control: CSSProperties = { width: '100%', height: 38, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text)', padding: '0 10px', font: 'inherit', fontSize: 12 }
 const action: CSSProperties = { width: '100%', minHeight: 38, border: 0, borderRadius: 6, color: '#fff', font: 'inherit', fontSize: 12, fontWeight: 700, cursor: 'pointer', marginTop: 5 }

@@ -79,11 +79,11 @@ export default function Sidebar() {
   const width = collapsed ? 76 : 260
 
   const navStyle = (active: boolean): CSSProperties => ({
-    width: '100%', minHeight: 38, display: 'flex', alignItems: 'center', gap: 11,
+    width: '100%', minHeight: 44, display: 'flex', alignItems: 'center', gap: 11,
     padding: collapsed ? '0 12px' : '0 12px', border: 0, borderRadius: 6,
     background: active ? 'var(--accent-soft)' : 'transparent',
     color: active ? 'var(--accent)' : 'var(--text-muted)', cursor: 'pointer',
-    font: 'inherit', fontSize: 13, fontWeight: active ? 650 : 500, textAlign: 'left',
+    font: 'inherit', fontSize: 14.5, fontWeight: active ? 650 : 500, textAlign: 'left',
   })
 
   return (
@@ -105,7 +105,7 @@ export default function Sidebar() {
         <div className="sidebar-property" style={{ padding: '12px 12px 6px', position: 'relative' }}>
           <button onClick={branchLocked ? undefined : app.toggleBranch} className={branchLocked ? undefined : 'hover-border2'} style={{ width: '100%', minHeight: 48, display: 'flex', alignItems: 'center', gap: 10, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 7, padding: '7px 10px', cursor: branchLocked ? 'default' : 'pointer', font: 'inherit' }}>
             <Icon name="apartment" size={18} color="var(--text-muted)" />
-            <span style={{ minWidth: 0, flex: 1, textAlign: 'left' }}><span style={{ display: 'block', fontSize: 9.5, color: 'var(--text-faint)', fontWeight: 650, textTransform: 'uppercase', letterSpacing: '.06em' }}>Property</span><span style={{ display: 'block', marginTop: 2, fontSize: 12.5, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{app.currentBranch || 'No branch configured'}</span></span>
+            <span style={{ minWidth: 0, flex: 1, textAlign: 'left' }}><span style={{ display: 'block', fontSize: 12, color: 'var(--text-faint)', fontWeight: 600 }}>Property</span><span style={{ display: 'block', marginTop: 2, fontSize: 14, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{app.currentBranch || 'No branch configured'}</span></span>
             {!branchLocked && <Icon name="unfold_more" size={17} color="var(--text-faint)" />}
           </button>
           {app.branchOpen && <>
@@ -121,7 +121,7 @@ export default function Sidebar() {
       <nav className="sidebar-nav" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: collapsed ? '6px 10px 12px' : '4px 10px 16px' }}>
         {groups.map((group, groupIndex) => (
           <div key={group.heading} style={{ paddingTop: groupIndex ? 13 : 5, borderTop: groupIndex && !collapsed ? '1px solid var(--border)' : undefined, marginTop: groupIndex && !collapsed ? 5 : 0 }}>
-            {!collapsed && <div style={{ height: 27, display: 'flex', alignItems: 'center', gap: 7, padding: '0 10px', color: 'var(--text-faint)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.075em' }}>{group.icon && <Icon name={group.icon} size={14} />}{group.heading}</div>}
+            {!collapsed && <div style={{ minHeight: 32, display: 'flex', alignItems: 'center', gap: 7, padding: '0 10px', color: 'var(--text-faint)', fontSize: 13, fontWeight: 600 }}>{group.icon && <Icon name={group.icon} size={15} />}{group.heading}</div>}
             {group.items.map((item) => {
               const active = app.navActive === item.route
               return <button key={item.route} title={collapsed ? item.label : undefined} onClick={() => { app.navTo(item.route, item.label); setMobileOpen(false) }} className={active ? undefined : 'hover-surface2'} style={navStyle(active)}><Icon name={item.icon} size={19} color={active ? 'var(--accent)' : 'var(--text-faint)'} />{!collapsed && <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.label}</span>}</button>
