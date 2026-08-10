@@ -7,11 +7,11 @@ import { cfg, getOptions, type Row } from '../lib/data'
 function optionLabel(value: string): string {
   if (value === 'hotel_purchase') return 'Hotel purchase'
   if (value === 'department') return 'Department'
-  if (value === 'manual') return 'Manual operational purchase'
-  if (value === 'capital_asset') return 'Capital asset'
-  if (value === 'emergency') return 'Emergency purchase'
-  if (value === 'project') return 'Project purchase'
-  if (value === 'service') return 'Service / non-stock purchase'
+  if (value === 'manual') return 'Other special purchase'
+  if (value === 'capital_asset') return 'Equipment or furniture for long-term use'
+  if (value === 'emergency') return 'Urgent or emergency purchase'
+  if (value === 'project') return 'Purchase for a specific project'
+  if (value === 'service') return 'Service or item that is not kept in store'
   return value
 }
 
@@ -190,7 +190,7 @@ export default function FormDrawer() {
                 ) : isSelect ? (
                   <div style={{ position: 'relative' }}>
                     <select value={values[fd.key] ?? ''} onChange={(e) => setVal(fd.key, e.target.value, false)} style={{ width: '100%', height: 42, border: '1px solid var(--border)', background: 'var(--surface-2)', borderRadius: 10, padding: '0 34px 0 12px', fontSize: 13.5, color: 'var(--text)', outline: 'none', cursor: 'pointer' }}>
-                      <option value="" />
+                      <option value="">Select an option</option>
                       {options.map((opt) => <option key={opt} value={opt}>{optionLabel(opt)}</option>)}
                     </select>
                     <Icon name="expand_more" size={19} color="var(--text-faint)" style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
@@ -199,7 +199,7 @@ export default function FormDrawer() {
                   <textarea
                     value={values[fd.key] ?? ''}
                     onChange={(e) => setVal(fd.key, e.target.value, false)}
-                    placeholder={fd.label}
+                    placeholder={fd.placeholder || fd.label}
                     style={{ width: '100%', minHeight: 92, border: '1px solid var(--border)', background: 'var(--surface-2)', borderRadius: 10, padding: '11px 12px', fontSize: 13.5, color: 'var(--text)', outline: 'none', resize: 'vertical' }}
                   />
                 ) : (
@@ -207,10 +207,11 @@ export default function FormDrawer() {
                     value={values[fd.key] ?? ''}
                     onChange={(e) => setVal(fd.key, e.target.value, numeric)}
                     type={fd.type === 'number' ? 'number' : fd.type === 'date' ? 'date' : fd.type === 'password' ? 'password' : 'text'}
-                    placeholder={fd.label}
+                    placeholder={fd.placeholder || fd.label}
                     style={{ width: '100%', height: 42, border: '1px solid var(--border)', background: 'var(--surface-2)', borderRadius: 10, padding: '0 12px', fontSize: 13.5, color: 'var(--text)', outline: 'none' }}
                   />
                 )}
+                {fd.hint && <div style={{ marginTop: 6, color: 'var(--text-faint)', fontSize: 11.5, lineHeight: 1.45 }}>{fd.hint}</div>}
               </div>
             )
           })}

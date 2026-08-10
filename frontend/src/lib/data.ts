@@ -25,6 +25,8 @@ export interface FieldDef {
   label: string
   type: 'text' | 'password' | 'number' | 'select' | 'date' | 'textarea'
   opts?: string
+  hint?: string
+  placeholder?: string
 }
 
 export interface EntityConfig {
@@ -325,7 +327,7 @@ export const cfg: Record<string, EntityConfig> = {
     ],
   },
   requisitions: {
-    title: 'Procurement Inbox', sub: 'Store shortages and exceptional purchase requests', icon: 'request_quote', add: 'New requisition', singular: 'Requisition', prefix: 'PR-', editable: true, detail: true,
+    title: 'Procurement Inbox', sub: 'Store shortages and exceptional purchase requests', icon: 'request_quote', add: 'New purchase request', singular: 'Purchase Request', prefix: 'PR-', editable: true, detail: true,
     cols: [
       { key: 'id', label: 'Requisition', w: '1.1fr', kind: 'mono' },
       { key: 'date', label: 'Date', w: '1fr', kind: 'text' },
@@ -336,11 +338,40 @@ export const cfg: Record<string, EntityConfig> = {
       { key: 'status', label: 'Status', w: '120px', kind: 'status', align: 'right' },
     ],
     fields: [
-      { key: 'procurement_source', label: 'Purchase type', type: 'select', opts: 'procurementSources' },
-      { key: 'expected_date', label: 'Required by', type: 'date' },
-      { key: 'reason', label: 'Business justification', type: 'textarea' },
-      { key: 'control_notes', label: 'Internal notes', type: 'textarea' },
-      { key: 'currency', label: 'Currency', type: 'text' },
+      {
+        key: 'procurement_source',
+        label: 'Reason for purchase',
+        type: 'select',
+        opts: 'procurementSources',
+        hint: 'Choose the option that best describes why the hotel needs this purchase.',
+      },
+      {
+        key: 'expected_date',
+        label: 'Date needed',
+        type: 'date',
+        hint: 'The date by which the goods or service should be available.',
+      },
+      {
+        key: 'reason',
+        label: 'Why is this purchase needed?',
+        type: 'textarea',
+        placeholder: 'Example: Replace the damaged reception computer so staff can check in guests.',
+        hint: 'Briefly explain what is needed and how it will help the hotel.',
+      },
+      {
+        key: 'control_notes',
+        label: 'Additional notes (optional)',
+        type: 'textarea',
+        placeholder: 'Add any other information the purchasing team should know.',
+        hint: 'You can leave this blank if there is nothing else to add.',
+      },
+      {
+        key: 'currency',
+        label: 'Payment currency',
+        type: 'text',
+        placeholder: 'UGX',
+        hint: 'UGX is filled in automatically. Change it only if payment will use another currency.',
+      },
     ],
   },
   approvals: {
