@@ -1,6 +1,10 @@
 from django.contrib import admin, messages
 
-from apps.approvals.models import ApprovalMatrixRule, ApprovalWorkflow
+from apps.approvals.models import (
+    ApprovalMatrixRule,
+    ApprovalWorkflow,
+    PurchaseOrderApprovalWorkflow,
+)
 from core.mixins.admin import CreatedByAdminMixin
 
 
@@ -73,3 +77,26 @@ class ApprovalWorkflowAdmin(CreatedByAdminMixin, admin.ModelAdmin):
                 self.message_user(request, f"{approval}: {error}", level=messages.ERROR)
         if rejected:
             self.message_user(request, f"Rejected {rejected} approval stage(s).")
+
+
+@admin.register(PurchaseOrderApprovalWorkflow)
+class PurchaseOrderApprovalWorkflowAdmin(CreatedByAdminMixin, admin.ModelAdmin):
+    list_display = (
+        "purchase_order",
+        "stage",
+        "stage_name",
+        "approver",
+        "status",
+        "decided_by",
+        "decided_at",
+    )
+    list_filter = ("status", "stage")
+    list_select_related = ("purchase_order", "approver", "decided_by")
+    autocomplete_fields = ("purchase_order", "approver")
+    search_fields = (
+        "purchase_order__po_number",
+        "approver__user__employee_code",
+        "comments",
+    )
+    readonly_fields = ("status", "decided_by", "decided_at")
+    date_hierarchy = "created_at"

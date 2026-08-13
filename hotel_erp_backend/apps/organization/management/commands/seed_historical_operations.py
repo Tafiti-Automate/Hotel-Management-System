@@ -343,7 +343,7 @@ class Command(BaseCommand):
             )
             order = PurchaseOrder.objects.create(
                 requisition=requisition, supplier=supplier, ordered_by=operator, store=store,
-                po_number=f"{batch}-PO-{index + 1:02d}", status=POStatus.ISSUED,
+                po_number=f"{batch}-PO-{index + 1:02d}",
                 expected_date=event_date + timedelta(days=3), sent_at=timezone.now(),
                 sent_by=operator, sent_to_email=supplier.email,
                 supplier_acknowledged_at=timezone.now(), supplier_acknowledged_by=supplier.contact_person,
@@ -353,6 +353,8 @@ class Command(BaseCommand):
                 purchase_order=order, item=item, unit=unit, quantity=quantity,
                 unit_cost=cost, created_by=admin,
             )
+            order.status = POStatus.ISSUED
+            order.save(update_fields=("status", "updated_at"))
             grn = GoodsReceiptNote.objects.create(
                 grn_number=f"{batch}-GRN-{index + 1:02d}", purchase_order=order,
                 received_by=operator, received_date=event_date + timedelta(days=3),

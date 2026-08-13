@@ -8,6 +8,7 @@ from rest_framework.test import APIClient, APIRequestFactory
 
 from apps.departments.models import Branch, Department
 from apps.employees.models import Employee
+from apps.approvals.models import ApprovalMatrixRule
 from apps.inventory.models import (
     Category,
     InventoryBalance,
@@ -72,6 +73,12 @@ def create_procurement_context():
         reorder_level=Decimal("15.00"),
     )
     return employee, department, supplier, item
+
+
+def authorize_order_for_test(order):
+    order.status = POStatus.APPROVED
+    order.save(update_fields=("status", "updated_at"))
+    return order
 
 
 @pytest.mark.django_db
@@ -143,6 +150,14 @@ def test_goods_receipt_item_posts_received_stock_to_inventory():
         reason="Monthly kitchen restock",
         status=PRStatus.APPROVED,
     )
+    RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity=Decimal("36.00"),
+        approved_quantity=Decimal("36.00"),
+        estimated_unit_cost=Decimal("583.33"),
+        destination_store=store,
+    )
     order = PurchaseOrder.objects.create(
         requisition=requisition,
         supplier=supplier,
@@ -157,6 +172,7 @@ def test_goods_receipt_item_posts_received_stock_to_inventory():
         quantity=Decimal("3.00"),
         unit_cost=Decimal("7000.00"),
     )
+    authorize_order_for_test(order)
     order.issue(sent_by=employee)
     receipt = GoodsReceiptNote.objects.create(
         purchase_order=order,
@@ -236,6 +252,7 @@ def test_direct_workspace_route_flows_from_requisition_to_po_and_grn():
     order_line = order.items.get()
     assert order_line.destination_type == RequisitionItem.DESTINATION_WORKSPACE
     assert order_line.destination_department == department
+    authorize_order_for_test(order)
     order.issue(sent_by=employee)
     receipt = GoodsReceiptNote.objects.create(purchase_order=order, received_by=employee)
     receipt_line = GoodsReceiptItem.objects.create(
@@ -408,11 +425,17 @@ def test_grn_line_cannot_exceed_remaining_lpo_quantity():
         reason="Approved purchase",
         status=PRStatus.APPROVED,
     )
+    RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity=Decimal("5.00"),
+        approved_quantity=Decimal("5.00"),
+        estimated_unit_cost=Decimal("1000.00"),
+    )
     order = PurchaseOrder.objects.create(
         requisition=requisition,
         supplier=supplier,
         ordered_by=employee,
-        status=POStatus.ISSUED,
     )
     order_line = PurchaseOrderItem.objects.create(
         purchase_order=order,
@@ -420,6 +443,8 @@ def test_grn_line_cannot_exceed_remaining_lpo_quantity():
         quantity=Decimal("5.00"),
         unit_cost=Decimal("1000.00"),
     )
+    order.status = POStatus.ISSUED
+    order.save(update_fields=("status", "updated_at"))
     receipt = GoodsReceiptNote.objects.create(
         purchase_order=order,
         received_by=employee,
@@ -473,6 +498,13 @@ def test_purchase_order_issue_tracks_supplier_send_details():
         reason="Approved purchase",
         status=PRStatus.APPROVED,
     )
+    RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity=Decimal("2.00"),
+        approved_quantity=Decimal("2.00"),
+        estimated_unit_cost=Decimal("7000.00"),
+    )
     order = PurchaseOrder.objects.create(
         requisition=requisition,
         supplier=supplier,
@@ -486,6 +518,7 @@ def test_purchase_order_issue_tracks_supplier_send_details():
         unit_cost=Decimal("7000.00"),
     )
 
+    authorize_order_for_test(order)
     order.issue(sent_by=employee)
 
     order.refresh_from_db()
@@ -506,12 +539,19 @@ def test_inspected_receipt_posts_only_accepted_quantity_to_inventory():
         reason="Approved inspected purchase",
         status=PRStatus.APPROVED,
     )
+    RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity=Decimal("10.00"),
+        approved_quantity=Decimal("10.00"),
+        estimated_unit_cost=Decimal("5000.00"),
+        destination_store=store,
+    )
     order = PurchaseOrder.objects.create(
         requisition=requisition,
         supplier=supplier,
         ordered_by=employee,
         store=store,
-        status=POStatus.ISSUED,
         po_number="PO-INSPECT-001",
     )
     order_item = PurchaseOrderItem.objects.create(
@@ -520,6 +560,8 @@ def test_inspected_receipt_posts_only_accepted_quantity_to_inventory():
         quantity=Decimal("10.00"),
         unit_cost=Decimal("5000.00"),
     )
+    order.status = POStatus.ISSUED
+    order.save(update_fields=("status", "updated_at"))
     receipt = GoodsReceiptNote.objects.create(
         purchase_order=order,
         received_by=employee,
@@ -588,6 +630,7 @@ def test_requisition_tracks_ordering_and_receipt_fulfillment():
         store=store,
     )
 
+    authorize_order_for_test(order)
     order.issue(sent_by=employee)
     requisition.refresh_from_db()
     assert requisition.status == PRStatus.ORDERED
@@ -614,3 +657,221 @@ def test_requisition_tracks_ordering_and_receipt_fulfillment():
         action="fulfillment_status_updated",
         new_status=PRStatus.FULFILLED,
     ).exists()
+
+
+@pytest.mark.django_db
+def test_lpo_requires_independent_value_routed_approval_before_issue():
+    employee, department, supplier, item = create_procurement_context()
+    branch = Branch.objects.create(name="LPO Approval Branch")
+    employee.branch = branch
+    employee.save(update_fields=("branch", "updated_at"))
+    store = StoreLocation.objects.create(branch=branch, name="Main Receiving")
+    approver_user = get_user_model().objects.create_user(
+        username="lpo-approver",
+        employee_code="EMP-LPO-APR",
+        password="test-pass-123",
+    )
+    approver = Employee.objects.create(
+        user=approver_user,
+        department=department,
+        branch=branch,
+        designation="Finance Controller",
+    )
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        reason="Independently approved supplier order",
+        status=PRStatus.APPROVED,
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity=Decimal("5.00"),
+        approved_quantity=Decimal("5.00"),
+        estimated_unit_cost=Decimal("1000.00"),
+        destination_store=store,
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition,
+        supplier=supplier,
+        ordered_by=employee,
+        store=store,
+    )
+    PurchaseOrderItem.objects.create(
+        purchase_order=order,
+        item=item,
+        quantity=Decimal("5.00"),
+        unit_cost=Decimal("1000.00"),
+        destination_store=store,
+    )
+    ApprovalMatrixRule.objects.create(
+        name="Independent LPO release",
+        document_type=ApprovalMatrixRule.DOCUMENT_PURCHASE_ORDER,
+        minimum_amount=Decimal("0.00"),
+        stage=1,
+        stage_name="Finance LPO approval",
+        assignment_type=ApprovalMatrixRule.ASSIGNMENT_FIXED_EMPLOYEE,
+        approver=approver,
+    )
+
+    with pytest.raises(ValidationError, match="approved LPO"):
+        order.issue(sent_by=employee)
+
+    order.submit_for_approval()
+    order.refresh_from_db()
+    assert order.status == POStatus.PENDING_APPROVAL
+    step = order.approval_workflow.get()
+    assert step.approver == approver
+
+    step.approve(decided_by=approver_user)
+    order.refresh_from_db()
+    assert order.status == POStatus.APPROVED
+    assert order.approved_by == approver
+
+    order.issue(sent_by=employee)
+    assert order.status == POStatus.ISSUED
+
+
+@pytest.mark.django_db
+def test_rejected_delivery_quantity_is_available_for_replacement_receipt():
+    employee, department, supplier, item = create_procurement_context()
+    branch = Branch.objects.create(name="Replacement Receipt Branch")
+    store = StoreLocation.objects.create(branch=branch, name="Receiving Store")
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        reason="Replace rejected delivery",
+        status=PRStatus.APPROVED,
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity=Decimal("10.00"),
+        approved_quantity=Decimal("10.00"),
+        estimated_unit_cost=Decimal("1000.00"),
+        destination_store=store,
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition,
+        supplier=supplier,
+        ordered_by=employee,
+        store=store,
+    )
+    order_item = PurchaseOrderItem.objects.create(
+        purchase_order=order,
+        item=item,
+        quantity=Decimal("10.00"),
+        unit_cost=Decimal("1000.00"),
+        destination_store=store,
+    )
+    order.status = POStatus.ISSUED
+    order.save(update_fields=("status", "updated_at"))
+    first_receipt = GoodsReceiptNote.objects.create(
+        purchase_order=order,
+        received_by=employee,
+        delivery_note_no="DN-REJECTED",
+    )
+    first_line = GoodsReceiptItem.objects.create(
+        goods_receipt=first_receipt,
+        purchase_order_item=order_item,
+        quantity_received=Decimal("10.00"),
+        unit_cost=Decimal("1000.00"),
+    )
+    inspection = GoodsInspection.objects.create(
+        goods_receipt=first_receipt,
+        inspected_by=employee,
+    )
+    GoodsInspectionItem.objects.create(
+        inspection=inspection,
+        goods_receipt_item=first_line,
+        quantity_received=Decimal("10.00"),
+        quantity_accepted=Decimal("7.00"),
+        quantity_rejected=Decimal("3.00"),
+        rejection_reason="Three containers were leaking.",
+    )
+    replacement_receipt = GoodsReceiptNote.objects.create(
+        purchase_order=order,
+        received_by=employee,
+        delivery_note_no="DN-REPLACEMENT",
+    )
+
+    replacement = GoodsReceiptItem.objects.create(
+        goods_receipt=replacement_receipt,
+        purchase_order_item=order_item,
+        quantity_received=Decimal("3.00"),
+        unit_cost=Decimal("1000.00"),
+    )
+
+    assert first_line.committed_purchase_quantity == Decimal("7.00")
+    assert replacement.quantity_received == Decimal("3.00")
+
+
+@pytest.mark.django_db
+def test_incomplete_inspection_cannot_be_posted_and_posted_grn_is_immutable():
+    employee, department, supplier, item = create_procurement_context()
+    branch = Branch.objects.create(name="Controlled GRN Branch")
+    store = StoreLocation.objects.create(branch=branch, name="Controlled Receiving")
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        reason="Controlled receipt lifecycle",
+        status=PRStatus.APPROVED,
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity=Decimal("4.00"),
+        approved_quantity=Decimal("4.00"),
+        estimated_unit_cost=Decimal("1000.00"),
+        destination_store=store,
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition,
+        supplier=supplier,
+        ordered_by=employee,
+        store=store,
+    )
+    order_line = PurchaseOrderItem.objects.create(
+        purchase_order=order,
+        item=item,
+        quantity=Decimal("4.00"),
+        unit_cost=Decimal("1000.00"),
+        destination_store=store,
+    )
+    order.status = POStatus.ISSUED
+    order.save(update_fields=("status", "updated_at"))
+    receipt = GoodsReceiptNote.objects.create(
+        purchase_order=order,
+        received_by=employee,
+    )
+    receipt_line = GoodsReceiptItem.objects.create(
+        goods_receipt=receipt,
+        purchase_order_item=order_line,
+        quantity_received=Decimal("4.00"),
+        unit_cost=Decimal("1000.00"),
+    )
+    inspection = GoodsInspection.objects.create(
+        goods_receipt=receipt,
+        inspected_by=employee,
+    )
+    decision = GoodsInspectionItem.objects.create(
+        inspection=inspection,
+        goods_receipt_item=receipt_line,
+        quantity_received=Decimal("4.00"),
+        quantity_accepted=Decimal("3.00"),
+        quantity_rejected=Decimal("0.00"),
+    )
+    inspection.refresh_from_db()
+    assert inspection.status == "pending"
+    assert receipt.posting_readiness()["can_proceed"] is False
+
+    decision.quantity_accepted = Decimal("4.00")
+    decision.save()
+    receipt.refresh_from_db()
+    receipt.post_to_inventory(posted_by=employee)
+    receipt.refresh_from_db()
+    assert receipt.status == "posted"
+
+    receipt_line.quantity_received = Decimal("3.00")
+    with pytest.raises(ValidationError, match="Posted or cancelled GRN"):
+        receipt_line.save()

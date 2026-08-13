@@ -151,6 +151,65 @@ class ApprovalMatrixRule(BaseModel):
             )
         return candidates.first()
 
+    def resolve_purchase_order_approver(self, purchase_order):
+        """Resolve an independent LPO approver within the order's organizational scope."""
+        requisition = purchase_order.requisition
+        excluded_ids = {
+            employee_id
+            for employee_id in (
+                requisition.requester_id,
+                purchase_order.ordered_by_id,
+            )
+            if employee_id
+        }
+
+        if self.assignment_type == self.ASSIGNMENT_FIXED_EMPLOYEE:
+            if not self.approver_id or not self.approver.is_active:
+                raise ValidationError(
+                    f"{self.stage_name} does not have an active assigned employee."
+                )
+            if self.approver_id in excluded_ids:
+                raise ValidationError(
+                    f"{self.stage_name} cannot be assigned to the requester or buyer. "
+                    "Configure an independent LPO approver."
+                )
+            return self.approver
+
+        from apps.employees.models import Employee
+
+        candidates = Employee.objects.filter(is_active=True, user__is_active=True)
+        if requisition.branch_id:
+            candidates = candidates.filter(branch=requisition.branch)
+        if excluded_ids:
+            candidates = candidates.exclude(pk__in=excluded_ids)
+
+        if self.assignment_type == self.ASSIGNMENT_DEPARTMENT_HEAD:
+            if not requisition.department_id:
+                raise ValidationError(
+                    f"{self.stage_name} requires a requesting department."
+                )
+            candidates = candidates.filter(
+                department=requisition.department,
+                user__groups__name="Department Head",
+            )
+        elif self.assignment_type == self.ASSIGNMENT_ROLE:
+            candidates = candidates.filter(user__groups=self.approver_role)
+        else:
+            raise ValidationError(f"{self.stage_name} has an unsupported assignment type.")
+
+        candidates = candidates.distinct().order_by("created_at")
+        if candidates.count() != 1:
+            assignment = (
+                f"department head for {requisition.department}"
+                if self.assignment_type == self.ASSIGNMENT_DEPARTMENT_HEAD
+                else f"employee in the {self.approver_role} role"
+            )
+            raise ValidationError(
+                f"{self.stage_name} requires exactly one independent active {assignment} "
+                f"at {requisition.branch or 'the hotel'}; found {candidates.count()}."
+            )
+        return candidates.first()
+
     @classmethod
     def matching_requisition_rules(cls, requisition):
         amount = requisition.estimated_total
@@ -166,6 +225,35 @@ class ApprovalMatrixRule(BaseModel):
             models.Q(department__isnull=True) | models.Q(department=requisition.department)
         )
         rules = rules.filter(models.Q(branch__isnull=True) | models.Q(branch=branch))
+        candidates = list(
+            rules.select_related("approver", "approver_role", "branch", "department")
+            .order_by("stage", "created_at")
+        )
+        selected = {}
+        for rule in candidates:
+            specificity = int(bool(rule.branch_id)) + (2 * int(bool(rule.department_id)))
+            current = selected.get(rule.stage)
+            if current is None or specificity > current[0]:
+                selected[rule.stage] = (specificity, rule)
+        return [selected[stage][1] for stage in sorted(selected)]
+
+    @classmethod
+    def matching_purchase_order_rules(cls, purchase_order):
+        amount = purchase_order.total_amount
+        requisition = purchase_order.requisition
+        rules = cls.objects.filter(
+            document_type=cls.DOCUMENT_PURCHASE_ORDER,
+            is_active=True,
+            minimum_amount__lte=amount,
+        ).filter(
+            models.Q(maximum_amount__isnull=True) | models.Q(maximum_amount__gte=amount)
+        )
+        rules = rules.filter(
+            models.Q(department__isnull=True) | models.Q(department=requisition.department)
+        )
+        rules = rules.filter(
+            models.Q(branch__isnull=True) | models.Q(branch=requisition.branch)
+        )
         candidates = list(
             rules.select_related("approver", "approver_role", "branch", "department")
             .order_by("stage", "created_at")
@@ -321,4 +409,145 @@ class ApprovalWorkflow(BaseModel):
         self.requisition.sync_approval_status(
             actor=self.decided_by,
             comments=comments,
+        )
+
+
+class PurchaseOrderApprovalWorkflow(BaseModel):
+    """A value-routed maker-checker decision for a supplier-facing LPO."""
+
+    purchase_order = models.ForeignKey(
+        "procurement.PurchaseOrder",
+        on_delete=models.CASCADE,
+        related_name="approval_workflow",
+    )
+    approver = models.ForeignKey(
+        "employees.Employee",
+        on_delete=models.PROTECT,
+        related_name="purchase_order_approval_steps",
+    )
+    stage = models.PositiveIntegerField()
+    stage_name = models.CharField(max_length=100, blank=True)
+    matrix_rule = models.ForeignKey(
+        ApprovalMatrixRule,
+        on_delete=models.SET_NULL,
+        related_name="generated_purchase_order_steps",
+        null=True,
+        blank=True,
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=ApprovalStatus.choices,
+        default=ApprovalStatus.PENDING,
+    )
+    comments = models.TextField(blank=True)
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="purchase_order_approval_decisions",
+        null=True,
+        blank=True,
+    )
+
+    class Meta(BaseModel.Meta):
+        constraints = [
+            models.UniqueConstraint(
+                fields=("purchase_order", "stage"),
+                name="unique_purchase_order_approval_stage",
+            )
+        ]
+        ordering = ("purchase_order", "stage")
+
+    def __str__(self):
+        return f"{self.purchase_order} stage {self.stage}: {self.status}"
+
+    def _validate_current_stage(self):
+        from core.constants.choices import POStatus
+
+        if self.purchase_order.status != POStatus.PENDING_APPROVAL:
+            raise ValidationError("The LPO is not pending approval.")
+        if self.status != ApprovalStatus.PENDING:
+            raise ValidationError("This LPO approval stage has already been decided.")
+        incomplete_previous_stages = PurchaseOrderApprovalWorkflow.objects.filter(
+            purchase_order=self.purchase_order,
+            stage__lt=self.stage,
+        ).exclude(status__in=(ApprovalStatus.APPROVED, ApprovalStatus.SKIPPED))
+        if incomplete_previous_stages.exists():
+            raise ValidationError("Previous LPO approval stages must be completed first.")
+
+    def approve(self, comments="", decided_by=None):
+        from core.constants.choices import POStatus
+
+        self._validate_current_stage()
+        remaining_after_this = PurchaseOrderApprovalWorkflow.objects.filter(
+            purchase_order=self.purchase_order,
+        ).exclude(pk=self.pk).exclude(
+            status__in=(ApprovalStatus.APPROVED, ApprovalStatus.SKIPPED)
+        )
+        if not remaining_after_this.exists():
+            blockers = self.purchase_order.quantity_commitment_blockers()
+            if blockers:
+                raise ValidationError(blockers)
+        self.status = ApprovalStatus.APPROVED
+        self.comments = comments
+        self.decided_at = timezone.now()
+        self.decided_by = decided_by or self.approver.user
+        self.save(
+            update_fields=(
+                "status",
+                "comments",
+                "decided_at",
+                "decided_by",
+                "updated_at",
+            )
+        )
+        remaining = PurchaseOrderApprovalWorkflow.objects.filter(
+            purchase_order=self.purchase_order,
+        ).exclude(status__in=(ApprovalStatus.APPROVED, ApprovalStatus.SKIPPED))
+        if not remaining.exists():
+            self.purchase_order.status = POStatus.APPROVED
+            self.purchase_order.approved_at = timezone.now()
+            self.purchase_order.approved_by = self.approver
+            self.purchase_order.rejected_at = None
+            self.purchase_order.save(
+                update_fields=(
+                    "status",
+                    "approved_at",
+                    "approved_by",
+                    "rejected_at",
+                    "updated_at",
+                )
+            )
+
+    def reject(self, comments="", decided_by=None):
+        from core.constants.choices import POStatus
+
+        self._validate_current_stage()
+        if not comments.strip():
+            raise ValidationError("Record a reason before rejecting the LPO.")
+        self.status = ApprovalStatus.REJECTED
+        self.comments = comments
+        self.decided_at = timezone.now()
+        self.decided_by = decided_by or self.approver.user
+        self.save(
+            update_fields=(
+                "status",
+                "comments",
+                "decided_at",
+                "decided_by",
+                "updated_at",
+            )
+        )
+        self.purchase_order.status = POStatus.REJECTED
+        self.purchase_order.rejected_at = timezone.now()
+        self.purchase_order.approved_at = None
+        self.purchase_order.approved_by = None
+        self.purchase_order.save(
+            update_fields=(
+                "status",
+                "rejected_at",
+                "approved_at",
+                "approved_by",
+                "updated_at",
+            )
         )

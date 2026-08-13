@@ -9,6 +9,7 @@ from apps.finance.models import (
     ExpenseCategory,
     PaymentMethod,
     SupplierInvoice,
+    SupplierInvoiceItem,
     SupplierPayment,
 )
 from core.mixins.admin import CreatedByAdminMixin
@@ -75,6 +76,13 @@ class ExpenseAdmin(CreatedByAdminMixin, admin.ModelAdmin):
     date_hierarchy = "date"
 
 
+class SupplierInvoiceItemInline(admin.TabularInline):
+    model = SupplierInvoiceItem
+    extra = 0
+    autocomplete_fields = ("purchase_order_item", "unit")
+    readonly_fields = ("item", "base_quantity", "line_subtotal")
+
+
 @admin.register(SupplierInvoice)
 class SupplierInvoiceAdmin(CreatedByAdminMixin, admin.ModelAdmin):
     list_display = (
@@ -86,6 +94,7 @@ class SupplierInvoiceAdmin(CreatedByAdminMixin, admin.ModelAdmin):
     autocomplete_fields = ("supplier", "purchase_order")
     search_fields = ("invoice_number", "supplier__name", "purchase_order__po_number")
     readonly_fields = ("status", "quantity_variance", "amount_variance", "match_notes")
+    inlines = (SupplierInvoiceItemInline,)
     date_hierarchy = "invoice_date"
 
 

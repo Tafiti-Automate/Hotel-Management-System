@@ -192,7 +192,7 @@ export default function ProcurementWorkbench() {
   const stageGuidance: Record<Stage, { actor: string; description: string; icon: string }> = {
     request: { actor: 'Requester', description: 'Add every required article, then submit the requisition.', icon: 'playlist_add' },
     quote: { actor: 'Procurement', description: 'Record comparable supplier offers and select the winner.', icon: 'compare_arrows' },
-    lpo: { actor: 'Procurement manager', description: 'Build and issue the purchase order from an approved request.', icon: 'receipt_long' },
+    lpo: { actor: 'Buyer and LPO approvers', description: 'Prepare, independently approve, then issue the supplier order.', icon: 'receipt_long' },
     receipt: { actor: 'Receiving / stores', description: 'Record what the supplier delivered against the LPO.', icon: 'move_to_inbox' },
     inspect: { actor: 'Inspector', description: 'Accept or reject delivered quantities before stock posting.', icon: 'fact_check' },
     return: { actor: 'Stores / procurement', description: 'If needed, send rejected or damaged goods back to the supplier.', icon: 'assignment_return' },
@@ -250,10 +250,10 @@ export default function ProcurementWorkbench() {
             <StageTable stage={stage} data={scopedData} names={names} onSelect={(row) => void openRecord(row)} />
           </section>
           <aside style={{ ...card, padding: 18 }}>
-            {!canChangeStage && <ReadOnlyStage />}
+            {!canChangeStage && stage !== 'lpo' && <ReadOnlyStage />}
             {canChangeStage && stage === 'request' && <RequestPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel }} items={app.data.items} stores={app.data.locations} departments={app.data.departments} />}
             {canChangeStage && stage === 'quote' && <QuotePanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, names }} suppliers={app.data.suppliers} units={app.data.uoms} items={app.data.items} itemUnits={app.data.itemUnits} />}
-            {canChangeStage && stage === 'lpo' && <LpoPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, orderLabel, names }} suppliers={app.data.suppliers} employees={app.data.employees} stores={app.data.locations} units={app.data.uoms} items={app.data.items} itemUnits={app.data.itemUnits} />}
+            {stage === 'lpo' && <LpoPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, orderLabel, names }} canManage={canChangeStage} suppliers={app.data.suppliers} employees={app.data.employees} stores={app.data.locations} units={app.data.uoms} items={app.data.items} itemUnits={app.data.itemUnits} />}
             {canChangeStage && stage === 'receipt' && <ReceiptPanel {...{ data: scopedData, form, setForm, busy, run, orderLabel, receiptLabel, names }} employees={app.data.employees} stores={app.data.locations} />}
             {canChangeStage && stage === 'inspect' && <InspectionPanel {...{ data: scopedData, form, setForm, busy, run, receiptLabel, names }} employees={app.data.employees} />}
             {canChangeStage && stage === 'return' && <ReturnPanel {...{ data: scopedData, form, setForm, busy, run, receiptLabel, names }} employees={app.data.employees} stores={app.data.locations} />}
@@ -381,7 +381,7 @@ function QuotePanel({ data, form, setForm, busy, run, requisitionLabel, names, s
   </Panel>
 }
 
-function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel, names, suppliers, employees, stores, units, items, itemUnits }: any) {
+function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel, names, suppliers, employees, stores, units, items, itemUnits, canManage }: any) {
   const approved = data.requisitions.filter((row: Row) => ['approved', 'partially_ordered'].includes(id(row.status)))
   const order = data.orders.find((row: Row) => id(row.id) === id(form.order))
   const lines = data.orderItems.filter((row: Row) => id(row.purchase_order) === id(form.order))
@@ -389,27 +389,43 @@ function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel
   const selectedItem = items.find((item: Row) => id(item.id) === id(line?.item))
   const availableUnits = configuredUnitsForItem(selectedItem, units, itemUnits)
   const conversion = conversionFactorFor(selectedItem, form.unit || line?.unit, itemUnits)
-  return <Panel title="Local Purchase Order" note="Create and manage purchase orders.">
+  const editable = ['draft', 'rejected'].includes(id(order?.status))
+  const pendingApproval = id(order?.status) === 'pending_approval'
+  const approvedOrder = id(order?.status) === 'approved'
+  const approvalSteps = Array.isArray(order?.approval_steps) ? order.approval_steps : []
+  const currentApproval = approvalSteps.find((step: Row) => id(step.status) === 'pending')
+  return <Panel title="Local Purchase Order" note="The buyer prepares the LPO; independent approvers must release it before supplier issue.">
     <Field label="Approved requisition"><Select value={form.requisition} onChange={(v) => setForm({ requisition: v })} rows={approved} label={requisitionLabel} /></Field>
     <Field label="Supplier"><Select value={form.supplier} onChange={(v) => setForm({ ...form, supplier: v })} rows={suppliers} optional /></Field>
     <Field label="Ordered by"><Select value={form.employee} onChange={(v) => setForm({ ...form, employee: v })} rows={employees} /></Field>
     <Field label="Receiving store"><Select value={form.store} onChange={(v) => setForm({ ...form, store: v })} rows={stores} optional /></Field>
-    <Action disabled={busy || !form.requisition || !form.employee} onClick={() => run(() => runBackendAction('requisitions', id(form.requisition), 'create-purchase-order', { supplier: form.supplier || null, ordered_by: form.employee, store: form.store || null }), 'Draft LPO generated')}>Generate LPO</Action>
+    <Action disabled={busy || !canManage || !form.requisition || !form.employee} onClick={() => run(() => runBackendAction('requisitions', id(form.requisition), 'create-purchase-order', { supplier: form.supplier || null, ordered_by: form.employee, store: form.store || null }), 'Draft LPO generated')}>Generate LPO</Action>
     <Divider />
-    <Field label="Draft LPO"><Select value={form.order} onChange={(v) => setForm({ order: v })} rows={data.orders.filter((r: Row) => id(r.status) === 'draft')} label={orderLabel} /></Field>
+    <Field label="LPO approval workflow"><Select value={form.order} onChange={(v) => setForm({ order: v })} rows={data.orders.filter((r: Row) => !['issued', 'partially_received', 'received', 'cancelled'].includes(id(r.status)))} label={(row: Row) => `${orderLabel(row)} · ${id(row.status).replace(/_/g, ' ')}`} /></Field>
+    {order && <div style={{ marginBottom: 11, padding: 10, borderRadius: 6, color: pendingApproval ? 'var(--warn)' : approvedOrder ? 'var(--good)' : 'var(--text-muted)', background: pendingApproval ? 'var(--warn-soft)' : approvedOrder ? 'var(--good-soft)' : 'var(--surface-2)', fontSize: 10.8, lineHeight: 1.55 }}>
+      <strong>Revision {id(order.revision || 1)} · {id(order.status).replace(/_/g, ' ')}</strong>
+      {currentApproval && <div>Current decision: {id(currentApproval.stage_name)} · {id(currentApproval.approver_name)}</div>}
+      {approvalSteps.length > 0 && <div>{approvalSteps.map((step: Row) => `${id(step.stage_name)}: ${id(step.status)}`).join(' · ')}</div>}
+    </div>}
     <Field label="LPO line"><Select value={form.orderLine} onChange={(v) => { const found = lines.find((r: Row) => id(r.id) === v); setForm({ ...form, order: form.order, orderLine: v, quantity: found?.quantity, cost: found?.unit_cost, unit: found?.unit }) }} rows={lines} label={(row: Row) => names.items.get(id(row.item)) || id(row.item)} /></Field>
     <Field label="Purchase unit"><Select value={form.unit} onChange={(v) => { const factor = conversionFactorFor(selectedItem, v, itemUnits); setForm({ ...form, unit: v, quantity: factor > 0 ? Number((num(line?.base_quantity) / factor).toFixed(4)) : form.quantity }) }} rows={availableUnits} /></Field>
     <Two><Field label={`Order quantity (${names.units.get(id(form.unit || line?.unit)) || selectedItem?.uom || 'unit'})`}><Input type="number" value={form.quantity ?? line?.quantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><Field label="Cost per selected purchase unit"><Input type="number" value={form.cost ?? line?.unit_cost} onChange={(v) => setForm({ ...form, cost: v })} /></Field></Two>
     {line && <UnitConversionNote quantity={num(form.quantity ?? line.quantity)} factor={conversion} selectedUnit={names.units.get(id(form.unit || line.unit)) || 'selected unit'} baseUnit={selectedItem?.uom || 'base units'} unitPrice={num(form.cost ?? line.unit_cost)} />}
-    <Action disabled={busy || !form.orderLine} onClick={() => run(() => updateBackendRecord('purchase-order-items', id(form.orderLine), { quantity: num(form.quantity), unit_cost: num(form.cost), unit: form.unit || null }), 'LPO line updated')}>Save line changes</Action>
+    <Action disabled={busy || !canManage || !editable || !form.orderLine} onClick={() => run(() => updateBackendRecord('purchase-order-items', id(form.orderLine), { quantity: num(form.quantity), unit_cost: num(form.cost), unit: form.unit || null }), 'LPO line updated')}>Save line changes</Action>
+    <Action disabled={busy || !canManage || !editable || !form.order || !lines.length} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'submit-for-approval'), 'LPO submitted for independent approval')}>Submit LPO for approval</Action>
+    {pendingApproval && <>
+      <Field label="Approval comments"><Input value={form.approvalComments} onChange={(v) => setForm({ ...form, approvalComments: v })} placeholder="Required when rejecting" /></Field>
+      <Action tone="good" disabled={busy || !currentApproval} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'approve', { comments: form.approvalComments || '' }), 'LPO approval recorded')}>Approve current stage</Action>
+      <Action tone="danger" disabled={busy || !currentApproval || !form.approvalComments} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'reject', { comments: form.approvalComments }), 'LPO returned to Procurement as rejected')}>Reject for revision</Action>
+    </>}
     <Field label="Supplier email"><Input type="email" value={form.email} onChange={(v) => setForm({ ...form, email: v })} placeholder={order ? 'Defaults to supplier email' : ''} /></Field>
-    <Action tone="good" disabled={busy || !form.order} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'issue', { sent_to_email: form.email || '' }), 'LPO issued to supplier')}>Issue / send LPO</Action>
+    <Action tone="good" disabled={busy || !canManage || !approvedOrder || !form.order} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'issue', { sent_to_email: form.email || '' }), 'Approved LPO issued to supplier')}>Issue approved LPO</Action>
     <Divider />
-    <Field label="Issued LPO"><Select value={form.issuedOrder} onChange={(v) => setForm({ issuedOrder: v })} rows={data.orders.filter((r: Row) => id(r.status) !== 'draft')} label={orderLabel} /></Field>
+    <Field label="Issued LPO"><Select value={form.issuedOrder} onChange={(v) => setForm({ issuedOrder: v })} rows={data.orders.filter((r: Row) => ['issued', 'partially_received', 'received'].includes(id(r.status)))} label={orderLabel} /></Field>
     <Field label="Resend email to"><Input type="email" value={form.resendEmail} onChange={(v) => setForm({ ...form, resendEmail: v })} /></Field>
-    <Action disabled={busy || !form.issuedOrder} onClick={() => run(() => runBackendAction('purchase-orders', id(form.issuedOrder), 'resend', { sent_to_email: form.resendEmail || '' }), 'LPO email resent')}>Resend LPO email</Action>
+    <Action disabled={busy || !canManage || !form.issuedOrder} onClick={() => run(() => runBackendAction('purchase-orders', id(form.issuedOrder), 'resend', { sent_to_email: form.resendEmail || '' }), 'LPO email resent')}>Resend LPO email</Action>
     <Field label="Supplier representative"><Input value={form.supplierRepresentative} onChange={(v) => setForm({ ...form, supplierRepresentative: v })} /></Field>
-    <Action disabled={busy || !form.issuedOrder || !form.supplierRepresentative} onClick={() => run(() => runBackendAction('purchase-orders', id(form.issuedOrder), 'acknowledge', { acknowledged_by: form.supplierRepresentative }), 'Supplier acknowledgement recorded')}>Record LPO acknowledgement</Action>
+    <Action disabled={busy || !canManage || !form.issuedOrder || !form.supplierRepresentative} onClick={() => run(() => runBackendAction('purchase-orders', id(form.issuedOrder), 'acknowledge', { acknowledged_by: form.supplierRepresentative }), 'Supplier acknowledgement recorded')}>Record LPO acknowledgement</Action>
   </Panel>
 }
 
@@ -614,6 +630,10 @@ function ProcurementRecordDrawer({ stage, row, data, names, canAttach, onClose, 
     ['Supplier', names.suppliers.get(id(row.supplier)) || id(row.supplier)],
     ['Receiving store', names.stores.get(id(row.store)) || id(row.store) || '—'],
     ['Order total', money(row.total_amount)],
+    ['Revision', id(row.revision || 1)],
+    ['Approval status', id(row.status).replace(/_/g, ' ')],
+    ['Approved by', names.employees.get(id(row.approved_by)) || id(row.approved_by) || '—'],
+    ['Approved at', id(row.approved_at) || '—'],
     ['Expected date', id(row.expected_date) || '—'],
     ['Sent to', id(row.sent_to_email) || '—'],
     ['Email delivery', id(row.email_status).replace(/_/g, ' ') || 'Not sent'],
@@ -783,6 +803,11 @@ function ProcurementRecordDrawer({ stage, row, data, names, canAttach, onClose, 
           </div>
         </section>}
         {stage === 'lpo' && <section style={{ marginTop: 25 }}>
+          <h3 style={drawerHeading}>LPO approvals <span style={{ color: 'var(--text-faint)', fontWeight: 500 }}>({Array.isArray(row.approval_steps) ? row.approval_steps.length : 0})</span></h3>
+          <div style={{ borderLeft: '2px solid var(--border)', margin: '0 0 24px 7px' }}>
+            {(Array.isArray(row.approval_steps) ? row.approval_steps : []).map((step: Row) => <div key={id(step.id)} style={{ position: 'relative', padding: '0 0 14px 18px' }}><span style={{ position: 'absolute', left: -5, top: 3, width: 8, height: 8, borderRadius: '50%', background: id(step.status) === 'approved' ? 'var(--good)' : id(step.status) === 'rejected' ? 'var(--bad)' : 'var(--warn)' }} /><div style={{ color: 'var(--text)', fontSize: 11.5, fontWeight: 650 }}>{id(step.stage_name)}</div><div style={{ marginTop: 3, color: 'var(--text-faint)', fontSize: 10.5 }}>{id(step.approver_name)} · {id(step.status)}</div>{step.comments && <div style={{ marginTop: 3, color: 'var(--text-muted)', fontSize: 10.5 }}>{id(step.comments)}</div>}</div>)}
+            {(!Array.isArray(row.approval_steps) || !row.approval_steps.length) && <div style={{ padding: '0 0 12px 18px', color: 'var(--text-faint)', fontSize: 11.5 }}>Not submitted for LPO approval.</div>}
+          </div>
           <h3 style={drawerHeading}>Communication history <span style={{ color: 'var(--text-faint)', fontWeight: 500 }}>({communications.length})</span></h3>
           <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>{communications.map((communication) => <div key={id(communication.id)} style={{ display: 'flex', gap: 10, padding: '11px 13px', borderBottom: '1px solid var(--border)' }}><Icon name={communication.direction === 'inbound' ? 'call_received' : 'outgoing_mail'} size={17} color="var(--accent)" /><div style={{ flex: 1 }}><div style={{ color: 'var(--text)', fontSize: 11.5, fontWeight: 650 }}>{id(communication.subject)}</div><div style={{ marginTop: 3, color: 'var(--text-faint)', fontSize: 10.5 }}>{id(communication.direction)} · {id(communication.status)} · {id(communication.sent_at || communication.created_at)}</div>{communication.error_message && <div style={{ color: 'var(--bad)', fontSize: 10.5 }}>{id(communication.error_message)}</div>}</div></div>)}{!communications.length && <div style={{ padding: 20, color: 'var(--text-faint)', textAlign: 'center', fontSize: 11.5 }}>No supplier communication recorded.</div>}</div>
         </section>}

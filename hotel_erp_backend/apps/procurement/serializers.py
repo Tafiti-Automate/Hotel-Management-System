@@ -1,3 +1,4 @@
+from decimal import Decimal
 from pathlib import Path
 
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -359,6 +360,8 @@ class VendorQuotationSerializer(serializers.ModelSerializer):
 
 
 class PurchaseOrderSerializer(serializers.ModelSerializer):
+    approval_steps = serializers.SerializerMethodField()
+
     class Meta:
         model = PurchaseOrder
         fields = (
@@ -369,12 +372,18 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "store",
             "po_number",
             "status",
+            "revision",
+            "submitted_for_approval_at",
+            "approved_at",
+            "approved_by",
+            "rejected_at",
             "expected_date",
             "sent_at",
             "sent_by",
             "sent_to_email",
             "note",
             "total_amount",
+            "approval_steps",
             "created_at",
             "updated_at",
             "created_by",
@@ -382,14 +391,36 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
         read_only_fields = (
             "id",
             "status",
+            "revision",
+            "submitted_for_approval_at",
+            "approved_at",
+            "approved_by",
+            "rejected_at",
             "sent_at",
             "sent_by",
             "sent_to_email",
             "total_amount",
+            "approval_steps",
             "created_at",
             "updated_at",
             "created_by",
         )
+
+    def get_approval_steps(self, order):
+        return [
+            {
+                "id": str(step.id),
+                "stage": step.stage,
+                "stage_name": step.stage_name,
+                "approver": str(step.approver_id),
+                "approver_name": step.approver.user.get_full_name()
+                or step.approver.user.username,
+                "status": step.status,
+                "comments": step.comments,
+                "decided_at": step.decided_at,
+            }
+            for step in order.approval_workflow.select_related("approver__user").all()
+        ]
 
     def validate_requisition(self, requisition):
         if requisition.status not in (PRStatus.APPROVED, PRStatus.PARTIALLY_ORDERED):
@@ -397,6 +428,23 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
                 "Purchase order can only be created from an approved requisition."
             )
         return requisition
+
+    def validate(self, attrs):
+        if self.instance and not self.instance.editable:
+            protected = {
+                "requisition",
+                "supplier",
+                "ordered_by",
+                "store",
+                "po_number",
+                "expected_date",
+            }
+            if protected.intersection(attrs):
+                raise serializers.ValidationError(
+                    "Commercial LPO fields cannot change while approval, issue, or receipt is in progress. "
+                    "Reject the LPO back to Procurement before revising it."
+                )
+        return attrs
 
 
 class PurchaseOrderItemSerializer(serializers.ModelSerializer):
@@ -416,6 +464,7 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "created_by",
+            "requisition_item",
             "destination_type",
             "destination_store",
             "destination_department",
@@ -429,8 +478,10 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
             item,
             attrs.get("unit", getattr(self.instance, "unit", None)),
         )
-        if order and order.status != POStatus.DRAFT:
-            raise serializers.ValidationError("LPO lines can only be changed while the LPO is draft.")
+        if order and not order.editable:
+            raise serializers.ValidationError(
+                "LPO lines can only be changed while the LPO is draft or rejected."
+            )
         if order and item and not order.requisition.items.filter(item=item).exists():
             raise serializers.ValidationError(
                 {"item": "This Article is not on the source requisition."}
@@ -447,6 +498,7 @@ class GoodsReceiptNoteSerializer(serializers.ModelSerializer):
             "purchase_order",
             "received_by",
             "received_date",
+            "status",
             "delivery_note_no",
             "note",
             "posted_at",
@@ -455,7 +507,7 @@ class GoodsReceiptNoteSerializer(serializers.ModelSerializer):
             "updated_at",
             "created_by",
         )
-        read_only_fields = ("id", "grn_number", "posted_at", "posted_by", "created_at", "updated_at", "created_by")
+        read_only_fields = ("id", "grn_number", "status", "posted_at", "posted_by", "created_at", "updated_at", "created_by")
 
     def validate_purchase_order(self, purchase_order):
         if purchase_order.status not in (POStatus.ISSUED, POStatus.PARTIALLY_RECEIVED):
@@ -463,6 +515,13 @@ class GoodsReceiptNoteSerializer(serializers.ModelSerializer):
                 "Goods can only be received against a sent purchase order."
             )
         return purchase_order
+
+    def validate(self, attrs):
+        if self.instance and self.instance.status in ("posted", "cancelled") and attrs:
+            raise serializers.ValidationError(
+                "Posted or cancelled GRNs are immutable. Use a supplier return or controlled reversal."
+            )
+        return attrs
 
 
 class GoodsReceiptItemSerializer(serializers.ModelSerializer):
@@ -486,6 +545,8 @@ class GoodsReceiptItemSerializer(serializers.ModelSerializer):
         order_line = attrs.get("purchase_order_item") or getattr(self.instance, "purchase_order_item", None)
         if self.instance and self.instance.inventory_changes_applied:
             raise serializers.ValidationError("Posted GRN lines cannot be changed.")
+        if receipt and receipt.status in ("posted", "cancelled"):
+            raise serializers.ValidationError("Posted or cancelled GRN lines cannot be changed.")
         if receipt and order_line and order_line.purchase_order_id != receipt.purchase_order_id:
             raise serializers.ValidationError(
                 {"purchase_order_item": "This LPO line does not belong to the selected goods receipt."}
@@ -498,7 +559,10 @@ class GoodsReceiptItemSerializer(serializers.ModelSerializer):
             )
             if self.instance:
                 existing = existing.exclude(pk=self.instance.pk)
-            already_received = sum((line.quantity_received for line in existing), 0)
+            already_received = sum(
+                (line.committed_purchase_quantity for line in existing),
+                Decimal("0.00"),
+            )
             if already_received + quantity > order_line.quantity:
                 raise serializers.ValidationError(
                     {"quantity_received": "Delivered quantity exceeds the remaining quantity on the LPO line."}
@@ -568,6 +632,10 @@ class GoodsInspectionItemSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         inspection = attrs.get("inspection") or getattr(self.instance, "inspection", None)
         receipt_item = attrs.get("goods_receipt_item") or getattr(self.instance, "goods_receipt_item", None)
+        if inspection and inspection.goods_receipt.status in ("posted", "cancelled"):
+            raise serializers.ValidationError(
+                "Inspection decisions cannot change after GRN posting or cancellation."
+            )
         if inspection and receipt_item and receipt_item.goods_receipt_id != inspection.goods_receipt_id:
             raise serializers.ValidationError(
                 {"goods_receipt_item": "This line does not belong to the inspected goods receipt."}
@@ -580,6 +648,14 @@ class GoodsInspectionSerializer(serializers.ModelSerializer):
         model = GoodsInspection
         fields = "__all__"
         read_only_fields = ("id", "status", "created_at", "updated_at", "created_by")
+
+    def validate(self, attrs):
+        receipt = attrs.get("goods_receipt") or getattr(self.instance, "goods_receipt", None)
+        if receipt and receipt.status in ("posted", "cancelled"):
+            raise serializers.ValidationError(
+                "A posted or cancelled GRN cannot be inspected or changed."
+            )
+        return attrs
 
 
 class SupplierReturnItemSerializer(serializers.ModelSerializer):

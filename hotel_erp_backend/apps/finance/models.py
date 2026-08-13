@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils import timezone
@@ -281,6 +282,14 @@ class SupplierInvoice(BaseModel):
         max_digits=15, decimal_places=2, default=Decimal("0.00")
     )
     match_notes = models.TextField(blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="approved_supplier_invoices",
+        null=True,
+        blank=True,
+    )
     attachment = models.FileField(
         upload_to="supplier_invoices/", null=True, blank=True
     )
@@ -309,7 +318,84 @@ class SupplierInvoice(BaseModel):
     def balance_due(self):
         return max(self.total_amount - self.paid_amount, Decimal("0.00"))
 
+    def clean(self):
+        super().clean()
+        errors = {}
+        if (
+            self.purchase_order_id
+            and self.supplier_id
+            and self.purchase_order.supplier_id != self.supplier_id
+        ):
+            errors["supplier"] = "Invoice supplier must match the supplier on the LPO."
+        if self.invoice_date and self.due_date and self.due_date < self.invoice_date:
+            errors["due_date"] = "Invoice due date cannot be before the invoice date."
+        if errors:
+            raise ValidationError(errors)
+
     def perform_three_way_match(self, amount_tolerance=Decimal("0.01")):
+        invoice_lines = list(
+            self.items.select_related(
+                "purchase_order_item",
+                "purchase_order_item__item",
+                "unit",
+            )
+        )
+        if invoice_lines:
+            accepted_value = Decimal("0.00")
+            calculated_subtotal = Decimal("0.00")
+            quantity_variance = Decimal("0.00")
+            line_exceptions = []
+            for line in invoice_lines:
+                invoiceable = line.invoiceable_base_quantity
+                line_quantity_variance = max(
+                    line.base_quantity - invoiceable,
+                    Decimal("0.00"),
+                )
+                quantity_variance += line_quantity_variance
+                expected_value = line.base_quantity * line.purchase_order_item.base_unit_cost
+                accepted_value += expected_value
+                calculated_subtotal += line.line_subtotal
+                line_amount_variance = line.line_subtotal - expected_value
+                if line_quantity_variance > Decimal("0.00"):
+                    line_exceptions.append(
+                        f"{line.item}: invoiced quantity exceeds the remaining accepted quantity "
+                        f"by {line_quantity_variance}."
+                    )
+                if abs(line_amount_variance) > amount_tolerance:
+                    line_exceptions.append(
+                        f"{line.item}: invoiced value differs from the LPO value by "
+                        f"{line_amount_variance}."
+                    )
+
+            header_variance = self.subtotal - calculated_subtotal
+            self.quantity_variance = quantity_variance
+            self.amount_variance = self.subtotal - accepted_value
+            if abs(header_variance) > amount_tolerance:
+                line_exceptions.append(
+                    f"Invoice header subtotal differs from its line subtotal by {header_variance}."
+                )
+
+            if not line_exceptions and accepted_value > Decimal("0.00"):
+                self.status = self.STATUS_MATCHED
+                self.match_notes = (
+                    "All invoice lines are within the accepted GRN quantity and LPO price tolerance."
+                )
+            else:
+                self.status = self.STATUS_EXCEPTION
+                self.match_notes = " ".join(line_exceptions) or (
+                    "The invoice has no accepted quantity available for matching."
+                )
+            self.save(
+                update_fields=(
+                    "quantity_variance",
+                    "amount_variance",
+                    "status",
+                    "match_notes",
+                    "updated_at",
+                )
+            )
+            return
+
         accepted_value = Decimal("0.00")
         for receipt in self.purchase_order.goods_receipt_notes.all():
             for line in receipt.items.select_related("purchase_order_item"):
@@ -329,14 +415,158 @@ class SupplierInvoice(BaseModel):
             update_fields=("amount_variance", "status", "match_notes", "updated_at")
         )
 
-    def approve_for_payment(self):
+    def approve_for_payment(self, approved_by=None):
         if self.status != self.STATUS_MATCHED:
             raise ValidationError("Only a successfully matched invoice can be approved.")
+        if approved_by and self.created_by_id == approved_by.id:
+            raise ValidationError(
+                "The employee who registered the invoice cannot approve it for payment."
+            )
         self.status = self.STATUS_APPROVED
-        self.save(update_fields=("status", "updated_at"))
+        self.approved_at = timezone.now()
+        self.approved_by = approved_by or self.approved_by
+        self.save(
+            update_fields=("status", "approved_at", "approved_by", "updated_at")
+        )
 
     def __str__(self):
         return f"{self.supplier} invoice {self.invoice_number}"
+
+
+class SupplierInvoiceItem(BaseModel):
+    """Line-level allocation used for partial and cumulative three-way matching."""
+
+    invoice = models.ForeignKey(
+        SupplierInvoice,
+        on_delete=models.CASCADE,
+        related_name="items",
+    )
+    purchase_order_item = models.ForeignKey(
+        "procurement.PurchaseOrderItem",
+        on_delete=models.PROTECT,
+        related_name="supplier_invoice_items",
+    )
+    item = models.ForeignKey(
+        "inventory.Item",
+        on_delete=models.PROTECT,
+        related_name="supplier_invoice_items",
+    )
+    description = models.CharField(max_length=255, blank=True)
+    unit = models.ForeignKey(
+        "inventory.UnitOfMeasure",
+        on_delete=models.PROTECT,
+        related_name="supplier_invoice_items",
+        null=True,
+        blank=True,
+    )
+    quantity = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[validate_positive_decimal],
+    )
+    base_quantity = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[validate_non_negative_decimal],
+    )
+    unit_price = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        validators=[validate_positive_decimal],
+    )
+    tax_amount = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[validate_non_negative_decimal],
+    )
+
+    class Meta(BaseModel.Meta):
+        constraints = [
+            models.UniqueConstraint(
+                fields=("invoice", "purchase_order_item", "unit"),
+                name="unique_supplier_invoice_order_item_unit",
+            )
+        ]
+        ordering = ("item__name",)
+
+    @property
+    def line_subtotal(self):
+        return (self.quantity or Decimal("0.00")) * (
+            self.unit_price or Decimal("0.00")
+        )
+
+    @property
+    def accepted_base_quantity(self):
+        total = Decimal("0.00")
+        for receipt_line in self.purchase_order_item.receipt_items.filter(
+            inventory_changes_applied=True,
+        ).select_related("goods_receipt"):
+            total += receipt_line.inventory_post_quantity()
+        return total
+
+    @property
+    def previously_matched_base_quantity(self):
+        matched_statuses = (
+            SupplierInvoice.STATUS_MATCHED,
+            SupplierInvoice.STATUS_APPROVED,
+            SupplierInvoice.STATUS_PARTIALLY_PAID,
+            SupplierInvoice.STATUS_PAID,
+        )
+        result = SupplierInvoiceItem.objects.filter(
+            purchase_order_item=self.purchase_order_item,
+            invoice__status__in=matched_statuses,
+        ).exclude(invoice=self.invoice).aggregate(total=models.Sum("base_quantity"))
+        return result["total"] or Decimal("0.00")
+
+    @property
+    def invoiceable_base_quantity(self):
+        return max(
+            self.accepted_base_quantity - self.previously_matched_base_quantity,
+            Decimal("0.00"),
+        )
+
+    def clean(self):
+        super().clean()
+        errors = {}
+        if (
+            self.invoice_id
+            and self.purchase_order_item_id
+            and self.purchase_order_item.purchase_order_id
+            != self.invoice.purchase_order_id
+        ):
+            errors["purchase_order_item"] = (
+                "Invoice line must reference an Article on the invoice's LPO."
+            )
+        if self.purchase_order_item_id and self.item_id:
+            if self.purchase_order_item.item_id != self.item_id:
+                errors["item"] = "Invoice Article must match the selected LPO line."
+        if self.purchase_order_item_id and self.base_quantity:
+            if self.base_quantity > self.purchase_order_item.base_quantity:
+                errors["quantity"] = "Invoice quantity cannot exceed the LPO line quantity."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        if self.invoice.status not in (
+            SupplierInvoice.STATUS_DRAFT,
+            SupplierInvoice.STATUS_EXCEPTION,
+        ):
+            raise ValidationError("Matched or approved invoice lines cannot be changed.")
+        self.item = self.purchase_order_item.item
+        if not self.unit_id:
+            self.unit = self.purchase_order_item.unit
+        self.base_quantity = self.item.quantity_in_base_units(
+            self.quantity, self.unit
+        ).quantize(Decimal("0.01"))
+        if not self.description:
+            self.description = self.item.name
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.invoice} - {self.item} x {self.quantity}"
 
 
 class SupplierPayment(BaseModel):
@@ -375,16 +605,28 @@ class SupplierPayment(BaseModel):
         max_length=20, choices=STATUS_CHOICES, default=STATUS_DRAFT
     )
     note = models.TextField(blank=True)
+    posted_at = models.DateTimeField(null=True, blank=True)
+    posted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="posted_supplier_payments",
+        null=True,
+        blank=True,
+    )
 
     class Meta(BaseModel.Meta):
         ordering = ("-payment_date", "-created_at")
 
-    def post(self):
+    def post(self, posted_by=None):
         with transaction.atomic():
             payment = SupplierPayment.objects.select_for_update().select_related("invoice").get(pk=self.pk)
             invoice = SupplierInvoice.objects.select_for_update().get(pk=payment.invoice_id)
             if payment.status != self.STATUS_DRAFT:
                 raise ValidationError("Only draft supplier payments can be posted.")
+            if posted_by and payment.created_by_id == posted_by.id:
+                raise ValidationError(
+                    "The employee who prepared the supplier payment cannot post it."
+                )
             if invoice.status not in (
                 SupplierInvoice.STATUS_APPROVED,
                 SupplierInvoice.STATUS_PARTIALLY_PAID,
@@ -394,7 +636,11 @@ class SupplierPayment(BaseModel):
                 raise ValidationError("Payment cannot exceed the invoice balance.")
 
             payment.status = self.STATUS_POSTED
-            payment.save(update_fields=("status", "updated_at"))
+            payment.posted_at = timezone.now()
+            payment.posted_by = posted_by or payment.posted_by
+            payment.save(
+                update_fields=("status", "posted_at", "posted_by", "updated_at")
+            )
             invoice.refresh_from_db()
             invoice.status = (
                 SupplierInvoice.STATUS_PAID
@@ -403,6 +649,8 @@ class SupplierPayment(BaseModel):
             )
             invoice.save(update_fields=("status", "updated_at"))
             self.status = payment.status
+            self.posted_at = payment.posted_at
+            self.posted_by = payment.posted_by
             self.invoice.status = invoice.status
 
     def __str__(self):

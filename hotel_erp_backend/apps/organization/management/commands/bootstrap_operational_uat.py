@@ -130,6 +130,10 @@ class Command(BaseCommand):
             note=MARKER,
             created_by=employees["procurement"].user,
         )
+        order.submit_for_approval()
+        for approval in order.approval_workflow.order_by("stage"):
+            approval.approve(decided_by=approval.approver.user)
+        order.refresh_from_db()
         order.issue(sent_by=employees["procurement"], sent_to_email=supplier_price.supplier.email)
 
         receipt = GoodsReceiptNote.objects.create(
@@ -266,6 +270,26 @@ class Command(BaseCommand):
                     "name": f"UAT purchase approval stage {stage}",
                     "stage_name": stage_name,
                     "assignment_type": assignment_type,
+                    "approver": approver,
+                    "approver_role": None,
+                    "maximum_amount": None,
+                    "is_active": True,
+                },
+            )
+        for stage, stage_name, approver in (
+            (1, "Finance LPO review", employees["finance"]),
+            (2, "General Manager LPO approval", employees["manager"]),
+        ):
+            ApprovalMatrixRule.objects.update_or_create(
+                document_type=ApprovalMatrixRule.DOCUMENT_PURCHASE_ORDER,
+                branch=None,
+                department=None,
+                minimum_amount=Decimal("0.00"),
+                stage=stage,
+                defaults={
+                    "name": f"UAT LPO approval stage {stage}",
+                    "stage_name": stage_name,
+                    "assignment_type": ApprovalMatrixRule.ASSIGNMENT_FIXED_EMPLOYEE,
                     "approver": approver,
                     "approver_role": None,
                     "maximum_amount": None,

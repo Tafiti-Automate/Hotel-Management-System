@@ -9,6 +9,7 @@ ROLE_SPECS = {
         "view_all": True,
         "change": {
             "approvals": ["approvalworkflow"],
+            "finance": ["supplierinvoice", "supplierpayment"],
             "procurement": ["purchaserequisition", "purchaseorder"],
             "inventory": ["stockadjustment", "stockcount", "stocktransfer"],
         },
@@ -65,6 +66,7 @@ ROLE_SPECS = {
                 "expensecategory",
                 "paymentmethod",
                 "supplierinvoice",
+                "supplierinvoiceitem",
                 "supplierpayment",
             ],
         },

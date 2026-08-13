@@ -6,7 +6,7 @@ from django.db import models
 from django.db import transaction
 from django.utils import timezone
 
-from core.constants.choices import GoodsInspectionStatus, POStatus, PRStatus, ProcurementSource, RequisitionType, SupplierReturnStatus
+from core.constants.choices import GoodsInspectionStatus, GoodsReceiptStatus, POStatus, PRStatus, ProcurementSource, RequisitionType, SupplierReturnStatus
 from core.mixins.models import BaseModel
 from core.validators.quantities import validate_non_negative_decimal, validate_positive_decimal
 
@@ -503,6 +503,7 @@ class PurchaseRequisition(BaseModel):
                 quantity, unit, unit_cost = pricing
                 PurchaseOrderItem.objects.create(
                     purchase_order=order,
+                    requisition_item=requisition_item,
                     item=requisition_item.item,
                     unit=unit,
                     quantity=quantity,
@@ -769,8 +770,7 @@ class RequisitionItem(BaseModel):
         return sum(
             (
                 line.base_quantity
-                for line in self.item.purchase_order_items.filter(
-                    purchase_order__requisition=self.requisition,
+                for line in self.purchase_order_items.filter(
                     purchase_order__status__in=(
                         POStatus.ISSUED,
                         POStatus.PARTIALLY_RECEIVED,
@@ -787,8 +787,7 @@ class RequisitionItem(BaseModel):
             (
                 line.inventory_post_quantity()
                 for line in GoodsReceiptItem.objects.filter(
-                    purchase_order_item__purchase_order__requisition=self.requisition,
-                    item=self.item,
+                    purchase_order_item__requisition_item=self,
                     inventory_changes_applied=True,
                 )
             ),
@@ -920,6 +919,17 @@ class PurchaseOrder(BaseModel):
         choices=POStatus.choices,
         default=POStatus.DRAFT,
     )
+    revision = models.PositiveIntegerField(default=1)
+    submitted_for_approval_at = models.DateTimeField(null=True, blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(
+        "employees.Employee",
+        on_delete=models.SET_NULL,
+        related_name="approved_purchase_orders",
+        null=True,
+        blank=True,
+    )
+    rejected_at = models.DateTimeField(null=True, blank=True)
     expected_date = models.DateField(null=True, blank=True)
     sent_at = models.DateTimeField(null=True, blank=True)
     sent_by = models.ForeignKey(
@@ -972,6 +982,10 @@ class PurchaseOrder(BaseModel):
         ):
             raise ValidationError("Purchase order can only be created from an approved requisition.")
 
+    @property
+    def editable(self):
+        return self.status in (POStatus.DRAFT, POStatus.REJECTED)
+
     def update_total_amount(self):
         self.total_amount = sum(
             (item.line_total for item in self.items.all()),
@@ -1009,9 +1023,133 @@ class PurchaseOrder(BaseModel):
             self.save(update_fields=["status", "updated_at"])
         self.requisition.sync_fulfillment_status()
 
+    def quantity_commitment_blockers(self):
+        blockers = []
+        for order_line in self.items.select_related("item"):
+            requisition_line = self.requisition.items.filter(item=order_line.item).first()
+            if not requisition_line:
+                blockers.append(f"{order_line.item} is not on the source requisition.")
+                continue
+            ordered_elsewhere = sum(
+                (
+                    line.base_quantity
+                    for line in PurchaseOrderItem.objects.filter(
+                        purchase_order__requisition=self.requisition,
+                        item=order_line.item,
+                        purchase_order__status__in=(
+                            POStatus.APPROVED,
+                            POStatus.ISSUED,
+                            POStatus.PARTIALLY_RECEIVED,
+                            POStatus.RECEIVED,
+                        ),
+                    ).exclude(purchase_order=self)
+                ),
+                Decimal("0.00"),
+            )
+            if ordered_elsewhere + order_line.base_quantity > requisition_line.approved_base_quantity:
+                blockers.append(
+                    f"{order_line.item} exceeds the remaining approved requisition quantity."
+                )
+        return blockers
+
+    def approval_readiness(self):
+        from apps.approvals.models import ApprovalMatrixRule
+
+        blockers = []
+        warnings = []
+        if not self.editable:
+            blockers.append("Only a draft or rejected LPO can be submitted for approval.")
+        if self.requisition.status not in (
+            PRStatus.APPROVED,
+            PRStatus.PARTIALLY_ORDERED,
+        ):
+            blockers.append("The source requisition must be fully approved.")
+        if not self.supplier_id:
+            blockers.append("Assign a supplier.")
+        if not self.items.exists():
+            blockers.append("Add at least one Article to the LPO.")
+        if self.total_amount <= Decimal("0.00"):
+            blockers.append("The LPO total must be greater than zero.")
+
+        blockers.extend(self.quantity_commitment_blockers())
+
+        rules = ApprovalMatrixRule.matching_purchase_order_rules(self)
+        if not rules:
+            blockers.append(
+                f"No LPO approval matrix matches this order value ({self.total_amount})."
+            )
+        else:
+            for rule in rules:
+                try:
+                    rule.resolve_purchase_order_approver(self)
+                except ValidationError as error:
+                    blockers.extend(error.messages)
+        if not self.expected_date:
+            warnings.append("No expected delivery date has been entered.")
+        if not self.store_id and any(
+            line.destination_type == RequisitionItem.DESTINATION_STORE
+            and not line.destination_store_id
+            for line in self.items.all()
+        ):
+            blockers.append("Assign a receiving store for every store-routed LPO line.")
+        return {"can_proceed": not blockers, "blockers": blockers, "warnings": warnings}
+
+    def submit_for_approval(self):
+        from apps.approvals.models import (
+            ApprovalMatrixRule,
+            PurchaseOrderApprovalWorkflow,
+        )
+
+        readiness = self.approval_readiness()
+        if not readiness["can_proceed"]:
+            raise ValidationError(readiness["blockers"])
+
+        with transaction.atomic():
+            order = PurchaseOrder.objects.select_for_update().get(pk=self.pk)
+            if not order.editable:
+                raise ValidationError(
+                    "Only a draft or rejected LPO can be submitted for approval."
+                )
+            rules = ApprovalMatrixRule.matching_purchase_order_rules(order)
+            steps = []
+            for rule in rules:
+                steps.append(
+                    PurchaseOrderApprovalWorkflow(
+                        purchase_order=order,
+                        approver=rule.resolve_purchase_order_approver(order),
+                        stage=rule.stage,
+                        stage_name=rule.stage_name,
+                        matrix_rule=rule,
+                        created_by=order.created_by,
+                    )
+                )
+            PurchaseOrderApprovalWorkflow.objects.filter(purchase_order=order).delete()
+            PurchaseOrderApprovalWorkflow.objects.bulk_create(steps)
+            if order.status == POStatus.REJECTED:
+                order.revision += 1
+            order.status = POStatus.PENDING_APPROVAL
+            order.submitted_for_approval_at = timezone.now()
+            order.approved_at = None
+            order.approved_by = None
+            order.rejected_at = None
+            order.save(
+                update_fields=(
+                    "status",
+                    "revision",
+                    "submitted_for_approval_at",
+                    "approved_at",
+                    "approved_by",
+                    "rejected_at",
+                    "updated_at",
+                )
+            )
+            self.status = order.status
+            self.revision = order.revision
+            self.submitted_for_approval_at = order.submitted_for_approval_at
+
     def issue(self, *, sent_by=None, sent_to_email=""):
-        if self.status != POStatus.DRAFT:
-            raise ValidationError("Only draft purchase orders can be sent to suppliers.")
+        if self.status != POStatus.APPROVED:
+            raise ValidationError("Only an approved LPO can be sent to a supplier.")
         self.full_clean()
         if not self.items.exists():
             raise ValidationError("Purchase order must include at least one item before sending.")
@@ -1037,8 +1175,8 @@ class PurchaseOrder(BaseModel):
     def issue_readiness(self):
         blockers = []
         warnings = []
-        if self.status != POStatus.DRAFT:
-            blockers.append("Only a draft LPO can be sent to a supplier.")
+        if self.status != POStatus.APPROVED:
+            blockers.append("The LPO must complete its approval workflow before it can be sent.")
         if self.requisition.status not in (
             PRStatus.APPROVED,
             PRStatus.PARTIALLY_ORDERED,
@@ -1048,30 +1186,7 @@ class PurchaseOrder(BaseModel):
             blockers.append("Assign a supplier.")
         if not self.items.exists():
             blockers.append("Add at least one Article to the LPO.")
-        for order_line in self.items.select_related("item"):
-            requisition_line = self.requisition.items.filter(item=order_line.item).first()
-            if not requisition_line:
-                blockers.append(f"{order_line.item} is not on the source requisition.")
-                continue
-            ordered_elsewhere = sum(
-                (
-                    line.base_quantity
-                    for line in PurchaseOrderItem.objects.filter(
-                        purchase_order__requisition=self.requisition,
-                        item=order_line.item,
-                        purchase_order__status__in=(
-                            POStatus.ISSUED,
-                            POStatus.PARTIALLY_RECEIVED,
-                            POStatus.RECEIVED,
-                        ),
-                    ).exclude(purchase_order=self)
-                ),
-                Decimal("0.00"),
-            )
-            if ordered_elsewhere + order_line.base_quantity > requisition_line.approved_base_quantity:
-                blockers.append(
-                    f"{order_line.item} exceeds the remaining approved requisition quantity."
-                )
+        blockers.extend(self.quantity_commitment_blockers())
         if not self.store_id:
             warnings.append(
                 "No receiving store is assigned; receipt lines must use direct department issue."
@@ -1086,6 +1201,13 @@ class PurchaseOrderItem(BaseModel):
         PurchaseOrder,
         on_delete=models.CASCADE,
         related_name="items",
+    )
+    requisition_item = models.ForeignKey(
+        RequisitionItem,
+        on_delete=models.PROTECT,
+        related_name="purchase_order_items",
+        null=True,
+        blank=True,
     )
     item = models.ForeignKey(
         "inventory.Item",
@@ -1155,12 +1277,44 @@ class PurchaseOrderItem(BaseModel):
         return (self.unit_cost or Decimal("0.00")) / factor
 
     def save(self, *args, **kwargs):
-        self.base_quantity = self.item.quantity_in_base_units(self.quantity, self.unit)
+        if self.purchase_order_id and not self.purchase_order.editable:
+            raise ValidationError(
+                "LPO lines can only be changed while the LPO is draft or rejected."
+            )
+        if not self.requisition_item_id and self.purchase_order_id and self.item_id:
+            self.requisition_item = self.purchase_order.requisition.items.filter(
+                item=self.item
+            ).first()
+        self.base_quantity = self.item.quantity_in_base_units(
+            self.quantity, self.unit
+        ).quantize(Decimal("0.01"))
+        self.full_clean()
         super().save(*args, **kwargs)
         self.purchase_order.update_total_amount()
 
     def clean(self):
         super().clean()
+        if self.purchase_order_id and not self.purchase_order.editable:
+            raise ValidationError(
+                "LPO lines can only be changed while the LPO is draft or rejected."
+            )
+        if (
+            self.purchase_order_id
+            and self.item_id
+            and not self.purchase_order.requisition.items.filter(item=self.item).exists()
+        ):
+            raise ValidationError(
+                {"item": "This Article is not on the source requisition."}
+            )
+        if self.requisition_item_id:
+            if self.requisition_item.requisition_id != self.purchase_order.requisition_id:
+                raise ValidationError(
+                    {"requisition_item": "The source line must belong to the LPO requisition."}
+                )
+            if self.requisition_item.item_id != self.item_id:
+                raise ValidationError(
+                    {"requisition_item": "The source line Article must match the LPO Article."}
+                )
         if self.destination_type == RequisitionItem.DESTINATION_WORKSPACE:
             if not self.destination_department_id or self.destination_store_id:
                 raise ValidationError("A direct-delivery LPO line requires one workspace department and no store.")
@@ -1184,6 +1338,11 @@ class GoodsReceiptNote(BaseModel):
         related_name="goods_receipt_notes",
     )
     received_date = models.DateField(default=timezone.localdate)
+    status = models.CharField(
+        max_length=20,
+        choices=GoodsReceiptStatus.choices,
+        default=GoodsReceiptStatus.DRAFT,
+    )
     delivery_note_no = models.CharField(max_length=100, blank=True)
     note = models.TextField(blank=True)
     posted_at = models.DateTimeField(null=True, blank=True)
@@ -1253,11 +1412,28 @@ class GoodsReceiptNote(BaseModel):
             self.purchase_order.update_receipt_status()
             self.posted_at = timezone.now()
             self.posted_by = posted_by or self.posted_by
-            self.save(update_fields=["posted_at", "posted_by", "updated_at"])
+            self.status = GoodsReceiptStatus.POSTED
+            self.save(update_fields=["status", "posted_at", "posted_by", "updated_at"])
+
+    def cancel(self):
+        if self.status == GoodsReceiptStatus.POSTED or self.items.filter(
+            inventory_changes_applied=True
+        ).exists():
+            raise ValidationError(
+                "A posted GRN cannot be cancelled. Create a controlled reversal or supplier return."
+            )
+        if self.status == GoodsReceiptStatus.CANCELLED:
+            raise ValidationError("This GRN is already cancelled.")
+        self.status = GoodsReceiptStatus.CANCELLED
+        self.save(update_fields=("status", "updated_at"))
 
     def posting_readiness(self):
         blockers = []
         warnings = []
+        if self.status == GoodsReceiptStatus.POSTED:
+            blockers.append("This GRN has already been posted.")
+        if self.status == GoodsReceiptStatus.CANCELLED:
+            blockers.append("A cancelled GRN cannot be posted.")
         if self.purchase_order.status not in (POStatus.ISSUED, POStatus.PARTIALLY_RECEIVED):
             blockers.append("The LPO must be issued before goods can be posted.")
         lines = list(self.items.all())
@@ -1334,6 +1510,11 @@ class GoodsReceiptItem(BaseModel):
         ordering = ("item__name",)
 
     def save(self, *args, **kwargs):
+        if self.goods_receipt_id and self.goods_receipt.status in (
+            GoodsReceiptStatus.POSTED,
+            GoodsReceiptStatus.CANCELLED,
+        ):
+            raise ValidationError("Posted or cancelled GRN lines cannot be changed.")
         self.item = self.purchase_order_item.item
         self.base_quantity = (
             self.quantity_received * self.purchase_order_item.conversion_factor
@@ -1378,13 +1559,35 @@ class GoodsReceiptItem(BaseModel):
             )
             if self.pk:
                 previous = previous.exclude(pk=self.pk)
-            already_received = previous.aggregate(total=models.Sum("quantity_received"))["total"] or Decimal("0.00")
+            already_received = sum(
+                (line.committed_purchase_quantity for line in previous),
+                Decimal("0.00"),
+            )
             ordered = self.purchase_order_item.quantity or Decimal("0.00")
             if already_received + self.quantity_received > ordered:
                 remaining = max(ordered - already_received, Decimal("0.00"))
                 raise ValidationError({
                     "quantity_received": f"Receipt exceeds the outstanding LPO quantity. Remaining quantity: {remaining}."
                 })
+
+    @property
+    def committed_purchase_quantity(self):
+        """Quantity consuming the LPO after rejected units are released for replacement."""
+        try:
+            inspection = self.goods_receipt.inspection
+        except GoodsInspection.DoesNotExist:
+            return self.quantity_received
+        inspection_item = inspection.items.filter(goods_receipt_item=self).first()
+        if not inspection_item:
+            return self.quantity_received
+        factor = self.purchase_order_item.conversion_factor
+        if factor <= Decimal("0.00"):
+            return self.quantity_received
+        rejected_purchase_quantity = inspection_item.quantity_rejected / factor
+        return max(
+            self.quantity_received - rejected_purchase_quantity,
+            Decimal("0.00"),
+        )
 
     def post_to_inventory(self):
         from apps.inventory.models import (
@@ -1583,13 +1786,18 @@ class GoodsInspection(BaseModel):
         accepted = sum((item.quantity_accepted for item in items), Decimal("0.00"))
         rejected = sum((item.quantity_rejected for item in items), Decimal("0.00"))
         received = sum((item.quantity_received for item in items), Decimal("0.00"))
-        if accepted >= received and rejected == Decimal("0.00"):
+        if accepted + rejected < received:
+            self.status = GoodsInspectionStatus.PENDING
+        elif accepted >= received and rejected == Decimal("0.00"):
             self.status = GoodsInspectionStatus.ACCEPTED
         elif accepted > Decimal("0.00") and rejected > Decimal("0.00"):
             self.status = GoodsInspectionStatus.PARTIALLY_ACCEPTED
         elif rejected >= received:
             self.status = GoodsInspectionStatus.REJECTED
         self.save(update_fields=["status", "updated_at"])
+        if self.goods_receipt.status != GoodsReceiptStatus.POSTED:
+            self.goods_receipt.status = GoodsReceiptStatus.INSPECTED
+            self.goods_receipt.save(update_fields=("status", "updated_at"))
 
     def __str__(self):
         return f"Inspection for {self.goods_receipt}"
@@ -1629,8 +1837,17 @@ class GoodsInspectionItem(BaseModel):
         super().clean()
         if self.quantity_accepted + self.quantity_rejected > self.quantity_received:
             raise ValidationError("Accepted plus rejected quantity cannot exceed received quantity.")
+        if self.quantity_rejected > Decimal("0.00") and not self.rejection_reason.strip():
+            raise ValidationError(
+                {"rejection_reason": "Record the reason for every rejected quantity."}
+            )
 
     def save(self, *args, **kwargs):
+        if self.inspection.goods_receipt.status in (
+            GoodsReceiptStatus.POSTED,
+            GoodsReceiptStatus.CANCELLED,
+        ):
+            raise ValidationError("Inspection decisions cannot change after GRN posting or cancellation.")
         self.item = self.goods_receipt_item.item
         if not self.quantity_received:
             self.quantity_received = self.goods_receipt_item.base_quantity

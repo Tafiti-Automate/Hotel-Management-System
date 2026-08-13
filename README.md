@@ -3,6 +3,10 @@
 Django + DRF backend and React + Vite frontend for a hotel management ERP focused on
 procurement, inventory, approvals, vendors, finance, reports, notifications, and audit logs.
 
+The controlled operating model and implementation requirements for the connected procure-to-pay
+and stores process are documented in
+[CONNECTED_PROCUREMENT_STORES_IMPLEMENTATION_SPEC.md](CONNECTED_PROCUREMENT_STORES_IMPLEMENTATION_SPEC.md).
+
 For a screen-by-screen Uganda demo and operator walkthrough, see
 [PRESENTATION_GUIDE.md](PRESENTATION_GUIDE.md).
 
@@ -128,6 +132,12 @@ schema changes are applied before the matching backend starts serving production
   Receipts, Suppliers — with search, create/edit (slide-in drawer) and delete (confirm dialog).
 - **Detail view**: requisition / purchase-order documents with line items, approval decision panel
   (approve / reject) and an activity timeline.
+- **Controlled LPO release**: value-routed maker-checker approval, revision tracking, and supplier
+  issue only after final approval.
+- **Controlled receiving**: explicit draft / inspected / posted / cancelled GRN lifecycle, accepted
+  quantity posting, replacement receipt support for rejected goods, and immutable posted records.
+- **Line-level invoice matching**: partial supplier invoices consume accepted GRN quantities by LPO
+  line and cannot bill the same accepted quantity twice.
 - **Reports**: report gallery + report viewer with filters, totals and PDF/Excel export buttons.
 - Toast notifications for create / edit / delete / approval actions.
 

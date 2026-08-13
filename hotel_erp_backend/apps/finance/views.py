@@ -1,4 +1,5 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
@@ -13,8 +14,10 @@ from apps.finance.models import (
     ExpenseCategory,
     PaymentMethod,
     SupplierInvoice,
+    SupplierInvoiceItem,
     SupplierPayment,
 )
+from apps.procurement.models import PurchaseOrder
 from apps.finance.serializers import (
     BankAccountSerializer,
     BankTransactionSerializer,
@@ -24,6 +27,7 @@ from apps.finance.serializers import (
     ExpenseSerializer,
     PaymentMethodSerializer,
     SupplierInvoiceSerializer,
+    SupplierInvoiceItemSerializer,
     SupplierPaymentSerializer,
 )
 from core.mixins.viewsets import CreatedByModelMixin
@@ -99,19 +103,49 @@ class SupplierInvoiceViewSet(CreatedByModelMixin, ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="match")
     def match_invoice(self, request, pk=None):
-        invoice = self.get_object()
-        invoice.perform_three_way_match()
+        with transaction.atomic():
+            invoice = SupplierInvoice.objects.select_for_update().get(
+                pk=self.get_object().pk
+            )
+            PurchaseOrder.objects.select_for_update().get(pk=invoice.purchase_order_id)
+            invoice.perform_three_way_match()
         return Response(self.get_serializer(invoice).data)
 
     @action(detail=True, methods=["post"], url_path="approve-for-payment")
     def approve_for_payment(self, request, pk=None):
         invoice = self.get_object()
         try:
-            invoice.approve_for_payment()
+            invoice.approve_for_payment(approved_by=request.user)
         except DjangoValidationError as error:
             raise ValidationError(getattr(error, "messages", str(error)))
         return Response(self.get_serializer(invoice).data)
 
+
+class SupplierInvoiceItemViewSet(CreatedByModelMixin, ModelViewSet):
+    queryset = SupplierInvoiceItem.objects.select_related(
+        "invoice",
+        "invoice__purchase_order",
+        "purchase_order_item",
+        "item",
+        "unit",
+    )
+    serializer_class = SupplierInvoiceItemSerializer
+    filterset_fields = ("invoice", "purchase_order_item", "item", "unit")
+    search_fields = (
+        "invoice__invoice_number",
+        "invoice__purchase_order__po_number",
+        "item__name",
+        "item__sku",
+    )
+    ordering_fields = ("quantity", "unit_price", "created_at")
+
+    def perform_destroy(self, instance):
+        if instance.invoice.status not in (
+            SupplierInvoice.STATUS_DRAFT,
+            SupplierInvoice.STATUS_EXCEPTION,
+        ):
+            raise ValidationError("Matched or approved invoice lines cannot be removed.")
+        instance.delete()
 
 class SupplierPaymentViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = SupplierPayment.objects.select_related(
@@ -126,7 +160,7 @@ class SupplierPaymentViewSet(CreatedByModelMixin, ModelViewSet):
     def post(self, request, pk=None):
         payment = self.get_object()
         try:
-            payment.post()
+            payment.post(posted_by=request.user)
         except DjangoValidationError as error:
             raise ValidationError(getattr(error, "messages", str(error)))
         return Response(self.get_serializer(payment).data)

@@ -9,6 +9,7 @@ from django.utils import timezone
 from django.utils.http import content_disposition_header
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
@@ -92,6 +93,11 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
         "preferred_supplier__name",
     )
     ordering_fields = ("requisition_number", "status", "created_at", "expected_date")
+
+    def get_permissions(self):
+        if self.action == "workspace":
+            return [IsAuthenticated()]
+        return super().get_permissions()
 
     @action(detail=False, methods=["get"], url_path="workspace")
     def workspace(self, request):
@@ -388,15 +394,81 @@ class VendorQuotationViewSet(CreatedByModelMixin, ModelViewSet):
 
 
 class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
-    queryset = PurchaseOrder.objects.select_related("requisition", "supplier", "ordered_by", "store", "sent_by")
+    queryset = PurchaseOrder.objects.select_related(
+        "requisition", "supplier", "ordered_by", "store", "sent_by", "approved_by"
+    ).prefetch_related("approval_workflow__approver__user")
     serializer_class = PurchaseOrderSerializer
     filterset_fields = ("status", "requisition", "supplier", "ordered_by", "store")
     search_fields = ("po_number", "supplier__name", "ordered_by__user__employee_code", "store__name")
     ordering_fields = ("po_number", "status", "created_at")
 
+    def get_permissions(self):
+        if self.action in ("approve_order", "reject_order"):
+            return [IsAuthenticated()]
+        return super().get_permissions()
+
     @action(detail=True, methods=["get"])
     def readiness(self, request, pk=None):
         return Response(self.get_object().issue_readiness())
+
+    @action(detail=True, methods=["get"], url_path="approval-readiness")
+    def approval_readiness(self, request, pk=None):
+        return Response(self.get_object().approval_readiness())
+
+    @action(detail=True, methods=["post"], url_path="submit-for-approval")
+    def submit_for_approval(self, request, pk=None):
+        order = self.get_object()
+        enforce_readiness(order.approval_readiness())
+        try:
+            order.submit_for_approval()
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        return Response(self.get_serializer(order).data)
+
+    def _current_approval_step(self, order, request):
+        from core.constants.choices import ApprovalStatus
+
+        step = order.approval_workflow.filter(
+            status=ApprovalStatus.PENDING,
+        ).order_by("stage").first()
+        if not step:
+            raise ValidationError("This LPO has no pending approval stage.")
+        employee = getattr(request.user, "employee_profile", None)
+        if not request.user.is_superuser and step.approver_id != getattr(employee, "id", None):
+            raise PermissionDenied(
+                f"This stage is assigned to {step.approver}."
+            )
+        return step
+
+    @action(detail=True, methods=["post"], url_path="approve")
+    def approve_order(self, request, pk=None):
+        try:
+            with transaction.atomic():
+                order = PurchaseOrder.objects.select_for_update().get(pk=self.get_object().pk)
+                step = self._current_approval_step(order, request)
+                step.approve(
+                    comments=str(request.data.get("comments", "")).strip(),
+                    decided_by=request.user,
+                )
+                order.refresh_from_db()
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        return Response(self.get_serializer(order).data)
+
+    @action(detail=True, methods=["post"], url_path="reject")
+    def reject_order(self, request, pk=None):
+        try:
+            with transaction.atomic():
+                order = PurchaseOrder.objects.select_for_update().get(pk=self.get_object().pk)
+                step = self._current_approval_step(order, request)
+                step.reject(
+                    comments=str(request.data.get("comments", "")).strip(),
+                    decided_by=request.user,
+                )
+                order.refresh_from_db()
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        return Response(self.get_serializer(order).data)
 
     @action(detail=True, methods=["post"])
     def issue(self, request, pk=None):
@@ -505,9 +577,13 @@ class PurchaseOrderItemViewSet(CreatedByModelMixin, ModelViewSet):
     ordering_fields = ("quantity", "base_quantity", "unit_cost", "created_at")
 
     def perform_destroy(self, instance):
-        if instance.purchase_order.status != POStatus.DRAFT:
-            raise ValidationError("LPO lines can only be removed while the LPO is draft.")
+        if not instance.purchase_order.editable:
+            raise ValidationError(
+                "LPO lines can only be removed while the LPO is draft or rejected."
+            )
+        order = instance.purchase_order
         instance.delete()
+        order.update_total_amount()
 
 
 class GoodsReceiptNoteViewSet(CreatedByModelMixin, ModelViewSet):
@@ -533,6 +609,15 @@ class GoodsReceiptNoteViewSet(CreatedByModelMixin, ModelViewSet):
             raise_drf_validation_error(error)
         serializer = self.get_serializer(receipt)
         return Response(serializer.data)
+
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        receipt = self.get_object()
+        try:
+            receipt.cancel()
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        return Response(self.get_serializer(receipt).data)
 
 
 class GoodsReceiptItemViewSet(CreatedByModelMixin, ModelViewSet):
@@ -587,6 +672,11 @@ class GoodsInspectionViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("delivery_note_no", "remarks", "goods_receipt__purchase_order__po_number")
     ordering_fields = ("inspection_date", "status", "created_at")
 
+    def perform_destroy(self, instance):
+        if instance.goods_receipt.status in ("posted", "cancelled"):
+            raise ValidationError("Posted or cancelled GRN inspections cannot be removed.")
+        instance.delete()
+
 
 class GoodsInspectionItemViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = GoodsInspectionItem.objects.select_related("inspection", "goods_receipt_item", "item")
@@ -594,6 +684,11 @@ class GoodsInspectionItemViewSet(CreatedByModelMixin, ModelViewSet):
     filterset_fields = ("inspection", "goods_receipt_item", "item")
     search_fields = ("item__name", "item__sku", "rejection_reason")
     ordering_fields = ("quantity_received", "quantity_accepted", "quantity_rejected", "created_at")
+
+    def perform_destroy(self, instance):
+        if instance.inspection.goods_receipt.status in ("posted", "cancelled"):
+            raise ValidationError("Posted or cancelled GRN inspection decisions cannot be removed.")
+        instance.delete()
 
 
 class SupplierReturnViewSet(CreatedByModelMixin, ModelViewSet):

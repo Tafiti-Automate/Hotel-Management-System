@@ -60,6 +60,9 @@ class ApprovalStatus(models.TextChoices):
 
 class POStatus(models.TextChoices):
     DRAFT = "draft", "Draft"
+    PENDING_APPROVAL = "pending_approval", "Pending Approval"
+    APPROVED = "approved", "Approved"
+    REJECTED = "rejected", "Rejected"
     ISSUED = "issued", "Issued"
     PARTIALLY_RECEIVED = "partially_received", "Partially Received"
     RECEIVED = "received", "Received"
@@ -105,6 +108,13 @@ class GoodsInspectionStatus(models.TextChoices):
     PARTIALLY_ACCEPTED = "partially_accepted", "Partially Accepted"
     ACCEPTED = "accepted", "Accepted"
     REJECTED = "rejected", "Rejected"
+
+
+class GoodsReceiptStatus(models.TextChoices):
+    DRAFT = "draft", "Draft"
+    INSPECTED = "inspected", "Inspected"
+    POSTED = "posted", "Posted"
+    CANCELLED = "cancelled", "Cancelled"
 
 
 class SupplierReturnStatus(models.TextChoices):

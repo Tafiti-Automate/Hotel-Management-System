@@ -23,6 +23,7 @@ from apps.finance.models import (
     ExpenseCategory,
     PaymentMethod,
     SupplierInvoice,
+    SupplierInvoiceItem,
     SupplierPayment,
 )
 from apps.inventory.models import (
@@ -473,6 +474,27 @@ class Command(BaseCommand):
                     "created_by": created_by,
                 },
             )
+        for stage, stage_name, approver in (
+            (1, "Finance LPO review", employees["finance"]),
+            (2, "General Manager LPO approval", employees["manager"]),
+        ):
+            ApprovalMatrixRule.objects.update_or_create(
+                document_type=ApprovalMatrixRule.DOCUMENT_PURCHASE_ORDER,
+                branch=None,
+                department=None,
+                minimum_amount=Decimal("0.00"),
+                stage=stage,
+                defaults={
+                    "name": f"Hotel LPO approval stage {stage}",
+                    "stage_name": stage_name,
+                    "assignment_type": ApprovalMatrixRule.ASSIGNMENT_FIXED_EMPLOYEE,
+                    "approver": approver,
+                    "approver_role": None,
+                    "maximum_amount": None,
+                    "is_active": True,
+                    "created_by": created_by,
+                },
+            )
 
     def create_procure_to_pay(self, *, context, employees, suppliers, created_by):
         today = timezone.localdate()
@@ -589,6 +611,10 @@ class Command(BaseCommand):
             note="Deliver to the Kampala main receiving bay between 08:00 and 15:00.",
             created_by=employees["procurement"].user,
         )
+        order.submit_for_approval()
+        for approval in order.approval_workflow.order_by("stage"):
+            approval.approve(decided_by=approval.approver.user)
+        order.refresh_from_db()
         order.issue(
             sent_by=employees["procurement"],
             sent_to_email=selected_supplier.email,
@@ -653,8 +679,17 @@ class Command(BaseCommand):
             tax_amount=(order.total_amount * Decimal("0.18")).quantize(Decimal("0.01")),
             created_by=employees["finance"].user,
         )
+        for order_line in order.items.select_related("item", "unit"):
+            SupplierInvoiceItem.objects.create(
+                invoice=invoice,
+                purchase_order_item=order_line,
+                unit=order_line.unit,
+                quantity=order_line.quantity,
+                unit_price=order_line.unit_cost,
+                created_by=employees["finance"].user,
+            )
         invoice.perform_three_way_match()
-        invoice.approve_for_payment()
+        invoice.approve_for_payment(approved_by=employees["manager"].user)
         payment_method = PaymentMethod.objects.get(name="Bank Transfer (EFT)")
         bank = BankAccount.objects.get(name="Main Operating Account")
         payment = SupplierPayment.objects.create(
@@ -666,7 +701,7 @@ class Command(BaseCommand):
             note="Approved supplier settlement following successful three-way match.",
             created_by=employees["finance"].user,
         )
-        payment.post()
+        payment.post(posted_by=employees["manager"].user)
 
         CashFlow.objects.create(
             store=context["main_store"],

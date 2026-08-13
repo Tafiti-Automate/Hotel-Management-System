@@ -10,10 +10,10 @@ import { useApp } from '../state/AppContext'
 
 type FinanceTab = 'invoices' | 'payments' | 'expenses' | 'banking' | 'methods'
 const financePaths = {
-  invoices: 'supplier-invoices', payments: 'supplier-payments',
+  invoices: 'supplier-invoices', invoiceItems: 'supplier-invoice-items', payments: 'supplier-payments',
   expenses: 'expenses', expenseCategories: 'expense-categories',
   banks: 'bank-accounts', transactions: 'bank-transactions',
-  methods: 'payment-methods', orders: 'purchase-orders',
+  methods: 'payment-methods', orders: 'purchase-orders', orderItems: 'purchase-order-items',
 }
 const empty = Object.fromEntries(Object.keys(financePaths).map((key) => [key, []])) as Record<string, Row[]>
 const sid = (value: unknown) => String(value || '')
@@ -46,6 +46,8 @@ export default function FinanceWorkbench() {
     const orderIds = new Set(next.orders.map((row) => sid(row.id)))
     next.invoices = data.invoices.filter((row) => orderIds.has(sid(row.purchase_order)))
     const invoiceIds = new Set(next.invoices.map((row) => sid(row.id)))
+    next.invoiceItems = data.invoiceItems.filter((row) => invoiceIds.has(sid(row.invoice)))
+    next.orderItems = data.orderItems.filter((row) => orderIds.has(sid(row.purchase_order)))
     next.payments = data.payments.filter((row) => invoiceIds.has(sid(row.invoice)))
     next.expenses = data.expenses.filter((row) => !row.store || stores.has(sid(row.store)))
     next.transactions = data.transactions.filter((row) => !row.store || stores.has(sid(row.store)))
@@ -113,8 +115,15 @@ export default function FinanceWorkbench() {
 }
 
 function InvoicePanel({ data, form, setForm, busy, execute, orderLabel, invoiceLabel }: any) {
+  const app = useApp()
   const receivedOrders = data.orders.filter((row: Row) => ['received', 'partially_received'].includes(sid(row.status)))
   const order = data.orders.find((row: Row) => sid(row.id) === sid(form.order))
+  const invoice = data.invoices.find((row: Row) => sid(row.id) === sid(form.invoice))
+  const invoiceOrderLines = data.orderItems.filter((row: Row) => sid(row.purchase_order) === sid(invoice?.purchase_order))
+  const selectedOrderLine = invoiceOrderLines.find((row: Row) => sid(row.id) === sid(form.orderLine))
+  const invoiceLines = data.invoiceItems.filter((row: Row) => sid(row.invoice) === sid(form.invoice))
+  const itemNames = new Map(app.data.items.map((row) => [sid(row.id), sid(row.name)]))
+  const unitNames = new Map(app.data.uoms.map((row) => [sid(row.id), sid(row.name)]))
   return <Panel title="Supplier invoice and three-way match" note="Review supplier invoices and matching status.">
     <Field label="Received LPO"><Select value={form.order} change={(v) => setForm({ order: v })} rows={receivedOrders} label={orderLabel} /></Field>
     <Field label="Invoice number"><Input value={form.number} change={(v) => setForm({ ...form, number: v })} /></Field>
@@ -123,8 +132,17 @@ function InvoicePanel({ data, form, setForm, busy, execute, orderLabel, invoiceL
     <Action disabled={busy || !order || !form.number || !form.dueDate} click={() => execute(() => createBackendRecord('supplier-invoices', { supplier: order.supplier, purchase_order: order.id, invoice_number: form.number, invoice_date: form.invoiceDate || new Date().toISOString().slice(0, 10), due_date: form.dueDate, subtotal: number(form.subtotal), tax_amount: number(form.tax) }), 'Supplier invoice created')}>Register invoice</Action>
     <Rule />
     <Field label="Invoice"><Select value={form.invoice} change={(v) => setForm({ invoice: v })} rows={data.invoices} label={invoiceLabel} /></Field>
-    <Action disabled={busy || !form.invoice} click={() => execute(() => runBackendAction('supplier-invoices', sid(form.invoice), 'match'), 'Three-way match completed')}>Perform three-way match</Action>
-    <Action tone="good" disabled={busy || !form.invoice} click={() => execute(() => runBackendAction('supplier-invoices', sid(form.invoice), 'approve-for-payment'), 'Invoice approved for payment')}>Approve for payment</Action>
+    {invoice && <>
+      <Field label="LPO Article"><Select value={form.orderLine} change={(v) => { const found = invoiceOrderLines.find((row: Row) => sid(row.id) === v); setForm({ ...form, invoice: form.invoice, orderLine: v, invoiceQuantity: '', invoiceUnitPrice: found?.unit_cost || '' }) }} rows={invoiceOrderLines} label={(row: Row) => `${itemNames.get(sid(row.item)) || 'Article'} · accepted allocation`} /></Field>
+      <Two><Field label={`Invoice quantity (${unitNames.get(sid(selectedOrderLine?.unit)) || 'LPO unit'})`}><Input type="number" value={form.invoiceQuantity} change={(v) => setForm({ ...form, invoiceQuantity: v })} /></Field><Field label="Invoice unit price"><Input type="number" value={form.invoiceUnitPrice} change={(v) => setForm({ ...form, invoiceUnitPrice: v })} /></Field></Two>
+      <Action disabled={busy || !form.orderLine || number(form.invoiceQuantity) <= 0 || number(form.invoiceUnitPrice) <= 0 || !['draft', 'exception'].includes(sid(invoice.status))} click={() => execute(() => createBackendRecord('supplier-invoice-items', { invoice: form.invoice, purchase_order_item: form.orderLine, unit: selectedOrderLine?.unit || null, quantity: number(form.invoiceQuantity), unit_price: number(form.invoiceUnitPrice), tax_amount: 0 }), 'Invoice line allocated to the LPO and accepted receipts')}>Add invoice line</Action>
+      <div style={{ margin: '10px 0', border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
+        {invoiceLines.map((line: Row) => <div key={sid(line.id)} style={{ display: 'flex', justifyContent: 'space-between', gap: 9, padding: '9px 10px', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 10.8 }}><span>{itemNames.get(sid(line.item)) || 'Article'} · {sid(line.quantity)} × {money(line.unit_price)}</span><strong style={{ color: 'var(--text)' }}>{money(line.line_subtotal)}</strong></div>)}
+        {!invoiceLines.length && <div style={{ padding: 10, color: 'var(--warn)', background: 'var(--warn-soft)', fontSize: 10.8 }}>Add invoice lines before matching. Legacy header-only invoices remain supported.</div>}
+      </div>
+    </>}
+    <Action disabled={busy || !form.invoice || (number(invoice?.line_count) > 0 && !invoiceLines.length)} click={() => execute(() => runBackendAction('supplier-invoices', sid(form.invoice), 'match'), 'Line-level three-way match completed')}>Perform line-level three-way match</Action>
+    <Action tone="good" disabled={busy || !form.invoice || sid(invoice?.status) !== 'matched'} click={() => execute(() => runBackendAction('supplier-invoices', sid(form.invoice), 'approve-for-payment'), 'Invoice approved for payment')}>Approve matched invoice for payment</Action>
   </Panel>
 }
 
