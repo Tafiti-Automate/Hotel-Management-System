@@ -90,7 +90,7 @@ function buildDashboard(role: string, data: any): DashboardConfig {
   const departments = data.departments || []
   const low = items.filter((r: any) => ['Low', 'Critical'].includes(String(r.status)))
 
-  if (['staff', 'unassigned', 'department employee', 'employee'].includes(role)) {
+  if (['requester', 'staff', 'unassigned', 'department employee', 'employee'].includes(role)) {
     const mine = storeReqs
     const drafts = mine.filter((r: any) => normalStatus(r.status) === 'draft')
     const pending = mine.filter((r: any) => ['pending_department_approval','submitted','approved','partially_approved','awaiting_procurement','partially_issued'].includes(normalStatus(r.status)))
@@ -110,23 +110,61 @@ function buildDashboard(role: string, data: any): DashboardConfig {
     }
   }
 
-  if (role === 'store keeper') {
-    const ready = storeReqs.filter((r: any) => ['approved','partially_approved','partially_issued'].includes(normalStatus(r.status)))
-    const completedToday = issues.filter((r: any) => String(r.issue_date || r.date || '').slice(0,10) === today && Boolean(r.inventory_changes_applied))
+  if (role === 'cost controller') {
+    const suppliers = data.suppliers || []
+    const supplierItems = data.supplierItems || []
     return {
-      subtitle: 'Picking, issuing and handover workload',
+      subtitle: 'Supplier, article and quotation master data',
       kpis: [
-        { label: 'Ready to pick', value: ready.length, icon: 'inventory_2', tone: ready.length ? 'warning' : 'neutral' },
-        { label: 'Issues today', value: completedToday.length, icon: 'outbox', tone: completedToday.length ? 'success' : 'neutral' },
-        { label: 'Partially issued', value: countStatus(storeReqs, /partially_issued/i), icon: 'pending_actions' },
-        { label: 'Open issue vouchers', value: issues.filter((r: any) => !r.inventory_changes_applied).length, icon: 'receipt_long' },
+        { label: 'Registered suppliers', value: suppliers.length, icon: 'local_shipping' },
+        { label: 'Registered articles', value: items.length, icon: 'inventory_2' },
+        { label: 'Supplier prices', value: supplierItems.length, icon: 'request_quote' },
+        { label: 'Units configured', value: (data.uoms || []).length, icon: 'straighten' },
       ],
-      trend: { title: 'Issues completed', subtitle: 'Posted stock issues during the last six months', series: [{ name: 'Issues', points: monthly(issues.filter((r:any)=>r.inventory_changes_applied), 'issue_date') }] },
-      status: { title: 'Issue queue by status', subtitle: 'Requests available to the stores team', data: byStatus(storeReqs) },
-      bars: { title: 'Issues by store', subtitle: 'Visible issue vouchers by store', data: groupCount(issues, 'store') },
-      queue: { title: 'Pick and issue queue', subtitle: 'Approved requests ready for fulfilment', action: 'Open pick list', route: 'workflow-stores', rows: ready.map((r:any)=>queueStoreReq(r)) },
+      trend: { title: 'Supplier registrations', subtitle: 'Supplier master records added during the last six months', series: [{ name: 'Suppliers', points: monthly(suppliers, 'created_at') }] },
+      status: { title: 'Supplier status', subtitle: 'Active and inactive supplier records', data: byStatus(suppliers) },
+      bars: { title: 'Article catalogue', subtitle: 'Registered article master data', data: [] },
+      queue: { title: 'Supplier catalogue', subtitle: 'Maintain supplier quotations and item prices', action: 'Open supplier catalogue', route: 'supplierItems', rows: supplierItems.map((r: any) => ({ id: r.id, primary: r.item || r.name || 'Article', secondary: r.supplier || 'Supplier', value: r.unitPrice ? money(r.unitPrice) : '', status: r.status || 'Active' })) },
     }
   }
+
+  if (role === 'receiving clerk') {
+    const readyOrders = orders.filter((r: any) => /issued|partially_received/i.test(String(r.status)))
+    const grns = data.grns || []
+    return {
+      subtitle: 'Issued LPOs ready for receiving and GRN entry',
+      kpis: [
+        { label: 'Ready LPOs', value: readyOrders.length, icon: 'move_to_inbox', tone: readyOrders.length ? 'warning' : 'neutral' },
+        { label: 'GRNs recorded', value: grns.length, icon: 'receipt_long' },
+        { label: 'Partial deliveries', value: readyOrders.filter((r: any) => /partially_received/i.test(String(r.status))).length, icon: 'pending_actions' },
+        { label: 'Completed receipts', value: orders.filter((r: any) => /received/i.test(String(r.status))).length, icon: 'task_alt', tone: 'success' },
+      ],
+      trend: { title: 'Goods receipts', subtitle: 'GRNs recorded during the last six months', series: [{ name: 'GRNs', points: monthly(grns, 'receivedDate') }] },
+      status: { title: 'Receiving status', subtitle: 'Issued and partially received LPOs', data: byStatus(readyOrders) },
+      bars: { title: 'Receiving queue', subtitle: 'LPOs awaiting physical delivery confirmation', data: [] },
+      queue: { title: 'Ready for receiving', subtitle: 'Open issued LPOs', action: 'Open receiving', route: 'workflow-procure', rows: readyOrders.map((r: any) => ({ id: r.id, primary: r.id, secondary: r.supplier || 'Supplier', value: '', status: r.status })) },
+    }
+  }
+
+  if (role === 'store keeper') {
+    const submitted = storeReqs.filter((r: any) => ['submitted','pending_department_approval'].includes(normalStatus(r.status)))
+    const procurement = storeReqs.filter((r: any) => ['awaiting_procurement','procurement_in_progress'].includes(normalStatus(r.status)))
+    const completed = storeReqs.filter((r: any) => ['issued','completed','fulfilled'].includes(normalStatus(r.status)))
+    return {
+      subtitle: 'Department requests, destination stores and procurement hand-off',
+      kpis: [
+        { label: 'Department requests', value: submitted.length, icon: 'assignment', tone: submitted.length ? 'warning' : 'neutral' },
+        { label: 'Sent to Procurement', value: procurement.length, icon: 'shopping_cart_checkout' },
+        { label: 'Completed requests', value: completed.length, icon: 'task_alt', tone: completed.length ? 'success' : 'neutral' },
+        { label: 'My visible stores', value: (data.locations || []).length, icon: 'warehouse' },
+      ],
+      trend: { title: 'Store requisitions', subtitle: 'Requests handled during the last six months', series: [{ name: 'Requests', points: monthly(storeReqs, 'created_at') }] },
+      status: { title: 'Requests by status', subtitle: 'Current store-to-procurement progress', data: byStatus(storeReqs) },
+      bars: { title: 'Requests by store', subtitle: 'Demand routed to each assigned store', data: groupCount(storeReqs, 'store') },
+      queue: { title: 'Department request queue', subtitle: 'Requests requiring Store Keeper action', action: 'Open store requests', route: 'workflow-stores', rows: submitted.map((r:any)=>queueStoreReq(r)) },
+    }
+  }
+
 
   if (role === 'procurement manager') {
     const pending = reqs.filter((r: any) => !/completed|rejected/i.test(String(r.status)))
@@ -163,20 +201,24 @@ function buildDashboard(role: string, data: any): DashboardConfig {
   }
 
   if (role === 'general manager') {
+    const finalReview = orders.filter((r: any) => /finance_approved|pending_management|pending_general|pending_director|awaiting_management/i.test(String(r.status)))
+    const approved = orders.filter((r: any) => /director_approved|management_approved|approved|issued|partially_received|received|closed/i.test(String(r.status)))
+    const rejected = orders.filter((r: any) => /rejected/i.test(String(r.status)))
     return {
-      subtitle: 'Hotel-wide operational summary within executive permissions',
+      subtitle: 'Final LPO approval only',
       kpis: [
-        { label: 'Purchasing this month', value: money(sum(reqs.filter((r: any) => monthKey(r.date) === monthKey(today)), 'total')), icon: 'shopping_cart' },
-        { label: 'Approval pipeline', value: reqs.filter((r: any) => !/completed|rejected/i.test(String(r.status))).length, icon: 'approval', tone: 'warning' },
-        { label: 'Inventory value', value: money(sum(balances, 'value')), icon: 'inventory' },
-        { label: 'Low-stock exceptions', value: low.length, icon: 'warning', tone: low.length ? 'danger' : 'neutral' },
+        { label: 'Awaiting final approval', value: finalReview.length, icon: 'approval', tone: finalReview.length ? 'warning' : 'neutral' },
+        { label: 'Approved LPOs', value: approved.length, icon: 'verified', tone: approved.length ? 'success' : 'neutral' },
+        { label: 'Rejected LPOs', value: rejected.length, icon: 'cancel', tone: rejected.length ? 'danger' : 'neutral' },
+        { label: 'Pending LPO value', value: money(sum(finalReview, 'total')), icon: 'receipt_long' },
       ],
-      trend: { title: 'Monthly purchasing trend', subtitle: 'Hotel-wide visible requisition value', series: [{ name: 'UGX value', points: monthly(reqs, 'date', 'total') }] },
-      status: { title: 'Approval pipeline', subtitle: 'Requests by current state', data: byStatus(reqs) },
-      bars: { title: 'Expenditure by department', subtitle: 'Estimated procurement value', data: groupSum(reqs, 'dept', 'total'), money: true },
-      queue: { title: 'Executive exceptions', subtitle: 'High-value and delayed open requests', action: 'Approvals', route: 'approvals', rows: reqs.filter((r: any) => !/completed|rejected/i.test(String(r.status))).sort((a: any,b: any) => Number(b.total)-Number(a.total)).map((r: any) => queueReq(r)) },
+      trend: { title: 'Final approval activity', subtitle: 'LPOs presented for management decision', series: [{ name: 'LPOs', points: monthly(orders, 'created_at') }] },
+      status: { title: 'LPO approval status', subtitle: 'Only purchase orders available to Management', data: byStatus(orders) },
+      bars: { title: 'Pending LPO value by supplier', subtitle: 'Commercial commitments awaiting final decision', data: groupSum(finalReview, 'supplier', 'total'), money: true },
+      queue: { title: 'Final LPO approval queue', subtitle: 'Finance-approved LPOs requiring General Manager decision', action: 'Open final approvals', route: 'workflow-procure', rows: finalReview.map((r: any) => ({ id: r.id, primary: r.id, secondary: r.supplier || 'Supplier', value: money(r.total || 0), status: r.status })) },
     }
   }
+
 
   if (role === 'hr administrator') {
     const active = employees.filter((r: any) => /active/i.test(String(r.status)))
@@ -267,7 +309,6 @@ function tone(value:string){ if(value==='danger')return{fg:'var(--bad)',bg:'var(
 function clean(v:unknown){return String(v||'Unknown').replace(/_/g,' ')}
 function compact(v:number){return Intl.NumberFormat('en',{notation:'compact',maximumFractionDigits:1}).format(v)}
 function sum(rows:any[], key:string){return rows.reduce((s,r)=>s+Number(r[key]||0),0)}
-function countStatus(rows:any[], pattern:RegExp){return rows.filter(r=>pattern.test(String(r.status))).length}
 function byStatus(rows:any[]):Point[]{return groupCount(rows,'status')}
 function groupCount(rows:any[], key:string):Point[]{const m=new Map<string,number>();rows.forEach(r=>{const k=clean(r[key]);m.set(k,(m.get(k)||0)+1)});return [...m].map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value)}
 function groupSum(rows:any[], key:string, valueKey:string):Point[]{const m=new Map<string,number>();rows.forEach(r=>{const k=clean(r[key]);m.set(k,(m.get(k)||0)+Number(r[valueKey]||0))});return [...m].map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value)}

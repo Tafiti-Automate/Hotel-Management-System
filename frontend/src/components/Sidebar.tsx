@@ -42,6 +42,21 @@ const operationsGroups: NavGroup[] = [
   ] },
 ]
 
+
+const strictRoleRoutes: Record<string, Set<string>> = {
+  'cost controller': new Set(['dashboard', 'suppliers', 'supplierItems', 'items', 'uoms', 'itemUnits']),
+  'store keeper': new Set(['dashboard', 'workflow-stores']),
+  'procurement manager': new Set(['dashboard', 'workflow-procure', 'requisitions', 'orders']),
+  'financial manager': new Set(['dashboard', 'workflow-procure']),
+  'general manager': new Set(['dashboard', 'workflow-procure']),
+  'receiving clerk': new Set(['dashboard', 'workflow-procure', 'grns']),
+  'staff': new Set(['dashboard', 'workflow-stores']),
+  'employee': new Set(['dashboard', 'workflow-stores']),
+  'department employee': new Set(['dashboard', 'workflow-stores']),
+  'unassigned': new Set(['dashboard', 'workflow-stores']),
+  'requester': new Set(['dashboard', 'workflow-stores']),
+}
+
 const hrGroups: NavGroup[] = [
   { heading: 'Human resources', items: [{ route: 'hr-dashboard', label: 'People dashboard', icon: 'space_dashboard' }] },
   { heading: 'Workforce', icon: 'groups', items: [
@@ -60,10 +75,12 @@ export default function Sidebar() {
   const storesManager = isStoresManager(app.user)
   const baseGroups = app.activeModule === 'hr' ? hrGroups : operationsGroups
   const role = String(app.user.role || '').toLowerCase()
-  const isRequester = ['staff', 'unassigned', 'department employee', 'employee'].includes(role)
+  const isRequester = ['requester', 'staff', 'unassigned', 'department employee', 'employee'].includes(role)
   const groups = baseGroups
     .map((group) => ({ ...group, items: group.items.filter((item) => {
       if (!canAccessRoute(app.user, item.route)) return false
+      const allowedRoutes = strictRoleRoutes[role]
+      if (allowedRoutes && !allowedRoutes.has(item.route)) return false
       if (isRequester && ['uoms', 'storeRequisitions'].includes(item.route)) return false
       return true
     }) }))

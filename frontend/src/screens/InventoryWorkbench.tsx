@@ -99,7 +99,13 @@ export default function InventoryWorkbench() {
     if (app.data.locations.length === 0) return data
     const stores = new Set(app.data.locations.map((row) => id(row.id)))
     const next = { ...data }
-    next.requests = data.requests.filter((row) => stores.has(id(row.store)) || stores.has(id(row.storeId)))
+    const currentRole = String(app.user.role || '').trim().toLowerCase()
+    next.requests = data.requests.filter((row) => {
+      // Submitted Department requests are an inbox for Store Keepers. They must
+      // remain visible before the destination store has been confirmed.
+      if (currentRole === 'store keeper' && id(row.status).toLowerCase() === 'submitted') return true
+      return stores.has(id(row.store)) || stores.has(id(row.storeId))
+    })
     next.issues = data.issues.filter((row) => stores.has(id(row.store)))
     next.transfers = data.transfers.filter((row) => stores.has(id(row.from_store)) || stores.has(id(row.to_store)))
     next.adjustments = data.adjustments.filter((row) => stores.has(id(row.store)))
@@ -121,7 +127,7 @@ export default function InventoryWorkbench() {
     next.countItems = data.countItems.filter((row) => countIds.has(id(row.stock_count)))
     next.returnItems = data.returnItems.filter((row) => returnIds.has(id(row.store_return)))
     return next
-  }, [app.currentBranch, app.data.locations, data])
+  }, [app.currentBranch, app.data.locations, app.user.role, data])
   const execute = async (operation: () => Promise<unknown>, success: string, nextForm: Row = {}) => {
     if (operationRunning.current) return
     operationRunning.current = true
@@ -142,11 +148,11 @@ export default function InventoryWorkbench() {
   }, [tab, tabs])
   const changePermission = tabPermissions[tab].change
   const canChangeTab = Boolean(changePermission && can(changePermission))
-  const otherTabs = tabs.filter(([key]) => !['requests', 'issues'].includes(key))
   const role = String(app.user.role || '').toLowerCase()
   const isAdministrator = app.user.isSuperuser || role === 'system administrator'
   const isStoresApprover = isAdministrator || role === 'store keeper'
-  const isStoresIssuer = isStoresApprover
+  const isStoresIssuer = isAdministrator
+  const otherTabs = role === 'store keeper' ? [] : tabs.filter(([key]) => !['requests', 'issues'].includes(key))
   const requestRoleStage: SupplyTask = isStoresApprover ? 'stores' : 'prepare'
   const supplyPathActive = supplyPathHint || (tab === 'issues' ? 'issue' : tab === 'requests' ? requestRoleStage : '')
   const selectSupplyStep = (key: string) => {
@@ -157,10 +163,10 @@ export default function InventoryWorkbench() {
   }
   const common = { app, data: scopedData, form, setForm, busy, execute }
   return <div style={{ maxWidth: 1460, margin: '0 auto' }}>
-    <section className="workbench-hero" style={{ ...card, padding: 20, display: 'flex', alignItems: 'center', gap: 13, marginBottom: 15 }}><span style={hero}><Icon name="warehouse" size={24} color="#fff" /></span><div><div style={eyebrow}>Inventory</div><h1 style={{ margin: '3px 0', fontSize: 23 }}>{isStoresApprover ? 'Store Keeper Queue' : 'My Store Requests'}</h1><div style={muted}>{isStoresApprover ? 'Review availability, shortages, reservations and fulfilment.' : 'Create and track your material requests.'}</div></div><button onClick={() => void load()} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button></section>
+    <section className="workbench-hero" style={{ ...card, padding: 20, display: 'flex', alignItems: 'center', gap: 13, marginBottom: 15 }}><span style={hero}><Icon name="warehouse" size={24} color="#fff" /></span><div><div style={eyebrow}>Inventory</div><h1 style={{ margin: '3px 0', fontSize: 23 }}>{isStoresApprover ? 'Store Keeper Queue' : 'My Store Requests'}</h1><div style={muted}>{role === 'store keeper' ? 'Receive department requests and forward the required quantities to Procurement.' : isStoresApprover ? 'Review inventory requests.' : 'Create and track your material requests.'}</div></div><button onClick={() => void load()} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button></section>
     {(can(tabPermissions.requests.view) || can(tabPermissions.issues.view)) && <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 15 }}>
       {!isStoresApprover && <button onClick={() => selectSupplyStep('prepare')} style={{ ...tabButton, background: supplyPathActive === 'prepare' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'prepare' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'prepare' ? 'var(--accent)' : 'var(--border)' }}><Icon name="assignment" size={17} />My requests</button>}
-      {isStoresApprover && <><button onClick={() => selectSupplyStep('stores')} style={{ ...tabButton, background: supplyPathActive === 'stores' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'stores' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'stores' ? 'var(--accent)' : 'var(--border)' }}><Icon name="inventory" size={17} />Stock review ({scopedData.requests.filter((row: Row) => id(row.status) === 'submitted').length})</button><button onClick={() => selectSupplyStep('shortage')} style={{ ...tabButton, background: supplyPathActive === 'shortage' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'shortage' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'shortage' ? 'var(--accent)' : 'var(--border)' }}><Icon name="shopping_cart_checkout" size={17} />Shortages ({scopedData.requests.filter((row: Row) => id(row.status) === 'awaiting_procurement').length})</button></>}
+      {isStoresApprover && <><button onClick={() => selectSupplyStep('stores')} style={{ ...tabButton, background: supplyPathActive === 'stores' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'stores' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'stores' ? 'var(--accent)' : 'var(--border)' }}><Icon name="assignment" size={17} />Department requests ({scopedData.requests.filter((row: Row) => id(row.status) === 'submitted').length})</button><button onClick={() => selectSupplyStep('shortage')} style={{ ...tabButton, background: supplyPathActive === 'shortage' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'shortage' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'shortage' ? 'var(--accent)' : 'var(--border)' }}><Icon name="shopping_cart_checkout" size={17} />Forward to Procurement ({scopedData.requests.filter((row: Row) => id(row.status) === 'awaiting_procurement').length})</button></>}
       {isStoresIssuer && <button onClick={() => selectSupplyStep('issue')} style={{ ...tabButton, background: supplyPathActive === 'issue' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'issue' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'issue' ? 'var(--accent)' : 'var(--border)' }}><Icon name="outbox" size={17} />Ready to issue ({scopedData.requests.filter((row: Row) => ['approved', 'partially_approved', 'partially_issued'].includes(id(row.status))).length})</button>}
     </div>}
     {otherTabs.length > 0 && <><div style={{ marginBottom: 10, color: 'var(--text-muted)', fontSize: 14, fontWeight: 600 }}>Inventory operations</div><div style={{ display: 'flex', gap: 5, marginBottom: 15, flexWrap: 'wrap' }}>{otherTabs.map(([key, icon, label]) => <button key={key} onClick={() => { setSupplyPathHint(''); setTab(key) }} style={{ ...tabButton, background: tab === key ? 'var(--accent-soft)' : 'var(--surface)', color: tab === key ? 'var(--accent)' : 'var(--text-muted)', borderColor: tab === key ? 'var(--accent)' : 'var(--border)' }}><Icon name={icon} size={17} />{label}</button>)}</div></>}
@@ -200,13 +206,12 @@ function RequestPanel({ app, data, form, setForm, busy, execute, stage }: any) {
   const decisionLine = submittedLines.find((row: Row) => id(row.id) === id(form.decisionLine))
   const shortageRequest = data.requests.find((row: Row) => id(row.id) === id(form.shortageRequest))
   const shortageLines = data.requestItems.filter((row: Row) => id(row.requisition) === id(form.shortageRequest))
-  const procurementPending = data.requests.find((row: Row) => id(row.id) === id(form.procurementPending))
   const decisionsComplete = submittedLines.length > 0 && submittedLines.every((line: Row) => num(line.quantity_approved) > 0 || Boolean(id(line.remarks).trim()))
   const hasApprovedQuantity = submittedLines.some((line: Row) => num(line.quantity_approved) > 0)
   const stageMeta: Record<SupplyTask, { title: string; note: string }> = {
     prepare: { title: 'New request', note: 'Create or update a requisition.' },
-    stores: { title: 'Stock review', note: 'Review and allocate stock.' },
-    shortage: { title: 'Shortages', note: 'Items awaiting procurement.' },
+    stores: { title: 'Department request hand-off', note: 'Select the department request, confirm the quantity and send the linked requisition to Procurement.' },
+    shortage: { title: 'Forward to Procurement', note: 'Forward a reviewed Department request to Procurement without creating or re-entering a new request.' },
     issue: { title: 'Pick and issue', note: 'Approved requests ready for issue.' },
   }
   const meta = stageMeta[stage as SupplyTask] || stageMeta.prepare
@@ -252,34 +257,31 @@ function RequestPanel({ app, data, form, setForm, busy, execute, stage }: any) {
     </>}
 
     {stage === 'stores' && <>
-      <Field label="Request awaiting Stores review"><Select value={form.submitted} change={(v) => setForm({ submitted: v })} rows={data.requests.filter((r: Row) => id(r.status) === 'submitted')} label={(r) => `${id(r.requisition_no)} · ${departmentName(app, r.department)}`} /></Field>
-      {!data.requests.some((r: Row) => id(r.status) === 'submitted') && <Hint>No requests are waiting for a Stock review.</Hint>}
-      {submittedRequest && <RequestSummary request={submittedRequest} lines={submittedLines} data={data} app={app} showAvailability />}
-      <Field label="Item to review"><Select value={form.decisionLine} change={(v) => { const line = submittedLines.find((r: Row) => id(r.id) === v); setForm({ ...form, decisionLine: v, approved: num(line?.quantity_approved) > 0 ? line?.quantity_approved : line?.base_quantity_requested || '', decisionComment: line?.remarks || '' }) }} rows={submittedLines} label={(r) => `${itemName(app, r.item)} · requested ${r.base_quantity_requested}`} /></Field>
-      <Field label="Quantity Stores can approve"><Input type="number" value={form.approved} change={(v) => setForm({ ...form, approved: v })} /></Field>
-      <Field label="Decision comment"><Input value={form.decisionComment} change={(v) => setForm({ ...form, decisionComment: v })} /></Field>
-      <Action disabled={busy || !decisionLine || num(form.approved) < 0 || num(form.approved) > num(decisionLine?.base_quantity_requested) || (num(form.approved) === 0 && !id(form.decisionComment).trim())} click={() => execute(() => updateBackendRecord('store-requisition-items', id(decisionLine?.id), { quantity_approved: num(form.approved), remarks: form.decisionComment || '' }), 'Stores line decision saved', { submitted: form.submitted })}>Save this item decision</Action>
+      <Field label="Department request"><Select value={form.submitted} change={(v) => { const request = data.requests.find((r: Row) => id(r.id) === v); setForm({ submitted: v, destinationStore: request?.store || '' }) }} rows={data.requests.filter((r: Row) => id(r.status) === 'submitted')} label={(r) => `${id(r.requisition_no)} · ${departmentName(app, r.department)}`} /></Field>
+      {!data.requests.some((r: Row) => id(r.status) === 'submitted') && <Hint>No submitted Department requisitions are waiting for Store Keeper action.</Hint>}
+      {submittedRequest && <><RequestSummary request={submittedRequest} lines={submittedLines} data={data} app={app} /><Hint>Article and requested quantity came from the Department requisition. Supplier and price information is intentionally not available to Store Keeper.</Hint></>}
+      <Field label="Destination store"><Select value={form.destinationStore || submittedRequest?.store || ''} change={(v) => setForm({ ...form, destinationStore: v })} rows={app.data.locations} emptyLabel="Select destination store" /></Field>
+      <Action disabled={busy || !submittedRequest || !form.destinationStore} click={() => execute(() => runBackendAction('store-requisitions', id(form.submitted), 'assign-store', { store: form.destinationStore }), 'Destination store confirmed', { submitted: form.submitted, destinationStore: form.destinationStore })}>Confirm destination store</Action>
       <Rule />
-      {!decisionsComplete && submittedRequest && <Hint>Review every item before approving. An unavailable item needs quantity 0 and a decision comment.</Hint>}
-      {decisionsComplete && !hasApprovedQuantity && <Hint>No quantity can be reserved. Use the Shortages card instead of approving this request.</Hint>}
+      <Field label="Item to review"><Select value={form.decisionLine} change={(v) => { const line = submittedLines.find((r: Row) => id(r.id) === v); setForm({ ...form, decisionLine: v, approved: num(line?.quantity_approved) > 0 ? line?.quantity_approved : line?.base_quantity_requested || '', decisionComment: line?.remarks || '' }) }} rows={submittedLines} label={(r) => `${itemName(app, r.item)} · requested ${r.base_quantity_requested}`} /></Field>
+      <Field label="Quantity to carry forward"><Input type="number" value={form.approved} change={(v) => setForm({ ...form, approved: v })} /></Field>
+      <Field label="Decision comment"><Input value={form.decisionComment} change={(v) => setForm({ ...form, decisionComment: v })} /></Field>
+      <Action disabled={busy || !decisionLine || num(form.approved) < 0 || num(form.approved) > num(decisionLine?.base_quantity_requested) || (num(form.approved) === 0 && !id(form.decisionComment).trim())} click={() => execute(() => updateBackendRecord('store-requisition-items', id(decisionLine?.id), { quantity_approved: num(form.approved), remarks: form.decisionComment || '' }), 'Store Keeper quantity saved', { submitted: form.submitted })}>Save this item decision</Action>
+      <Rule />
+      {!decisionsComplete && submittedRequest && <Hint>Confirm every requested line before forwarding the request to Procurement.</Hint>}
+      {decisionsComplete && !hasApprovedQuantity && <Hint>At least one line must carry a quantity before this request can move forward.</Hint>}
       <Field label="Overall approval comment"><Input value={form.approvalComments} change={(v) => setForm({ ...form, approvalComments: v })} /></Field>
-      <Action tone="good" disabled={busy || !submittedRequest || !decisionsComplete || !hasApprovedQuantity} click={() => execute(() => runBackendAction('store-requisitions', id(form.submitted), 'approve', { comments: form.approvalComments || '' }), 'Store requisition approved and stock reserved')}>Approve and reserve reviewed quantities</Action>
-      <Field label="Overall rejection reason"><Input value={form.reason} change={(v) => setForm({ ...form, reason: v })} /></Field>
-      <Action tone="danger" disabled={busy || !form.submitted || !id(form.reason).trim()} click={() => execute(() => runBackendAction('store-requisitions', id(form.submitted), 'reject', { reason: form.reason || '' }), 'Store requisition rejected')}>Reject entire request</Action>
+      <Hint>After confirming the required quantities, use the Procurement hand-off tab to send this predecessor document forward. The Department request itself remains unchanged.</Hint>
+      
     </>}
 
     {stage === 'shortage' && <>
-      <div style={{ marginBottom: 12, color: 'var(--text)', fontSize: 13, fontWeight: 800 }}>Send shortage to Procurement</div>
-      <Field label="Submitted request with unavailable stock"><Select value={form.shortageRequest} change={(v) => setForm({ shortageRequest: v })} rows={data.requests.filter((r: Row) => id(r.status) === 'submitted')} label={(r) => `${id(r.requisition_no)} · ${departmentName(app, r.department)}`} /></Field>
-      {shortageRequest && <RequestSummary request={shortageRequest} lines={shortageLines} data={data} app={app} showAvailability />}
-      <Field label="Shortage explanation for Procurement"><Input value={form.shortageReason} change={(v) => setForm({ ...form, shortageReason: v })} /></Field>
-      <Action disabled={busy || !form.shortageRequest || !id(form.shortageReason).trim()} click={() => execute(() => runBackendAction('store-requisitions', id(form.shortageRequest), 'send-to-procurement', { reason: form.shortageReason || '' }), 'Shortage sent to Procurement without duplicating the department request')}>Create linked Procurement request</Action>
-      <Rule />
-      <div style={{ marginBottom: 10, color: 'var(--text)', fontSize: 12.5, fontWeight: 800 }}>Resume after stock is received</div>
-      <Field label="Request awaiting purchased stock"><Select value={form.procurementPending} change={(v) => setForm({ procurementPending: v })} rows={data.requests.filter((r: Row) => id(r.status) === 'awaiting_procurement')} label={(r) => `${id(r.requisition_no)} · ${departmentName(app, r.department)}`} /></Field>
-      {!data.requests.some((r: Row) => id(r.status) === 'awaiting_procurement') && <Hint>No department requests are currently waiting for Procurement.</Hint>}
-      {procurementPending && <RequestSummary request={procurementPending} lines={data.requestItems.filter((row: Row) => id(row.requisition) === id(procurementPending.id))} data={data} app={app} showAvailability />}
-      <Action tone="good" disabled={busy || !procurementPending} click={() => execute(() => runBackendAction('store-requisitions', id(form.procurementPending), 'resume-after-procurement'), 'Department request returned to Stores review')}>Stock has been posted — return to Stores review</Action>
+      <div style={{ marginBottom: 12, color: 'var(--text)', fontSize: 13, fontWeight: 800 }}>Forward Department request to Procurement</div>
+      <Field label="Reviewed Department request"><Select value={form.shortageRequest} change={(v) => setForm({ shortageRequest: v })} rows={data.requests.filter((r: Row) => id(r.status) === 'submitted')} label={(r) => `${id(r.requisition_no)} · ${departmentName(app, r.department)}`} /></Field>
+      {shortageRequest && <><RequestSummary request={shortageRequest} lines={shortageLines} data={data} app={app} /><Hint>This forwards the existing Department request. The Store Keeper does not create a new requisition, retype articles, select a supplier, or enter prices.</Hint></>}
+      <Field label="Store Keeper note to Procurement"><Input value={form.shortageReason} change={(v) => setForm({ ...form, shortageReason: v })} /></Field>
+      <Action disabled={busy || !form.shortageRequest || !id(form.shortageReason).trim()} click={() => execute(() => runBackendAction('store-requisitions', id(form.shortageRequest), 'send-to-procurement', { reason: form.shortageReason || '' }), 'Department request forwarded to Procurement')}>Forward to Procurement</Action>
+      <Hint>Once forwarded, Procurement takes over supplier selection, current price and the LPO process. The original Department request remains the predecessor document.</Hint>
     </>}
   </Panel>
 }
@@ -513,7 +515,7 @@ function Records({ tab, data, app, stage, onSelect }: { tab: Tab; data: Record<s
       <RequestProgress status={id(row.status)} />
       <StatusBadge value={id(row.status)} />
     </button> : <button type="button" onClick={() => onSelect(row)} className="procurement-record-row" key={id(row.id)} style={{ ...recordRow, width: '100%', alignItems: 'center', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>{cells(row).map((cell, index) => <span key={index} style={{ color: index ? 'var(--text-muted)' : 'var(--text)', fontWeight: index ? 500 : 700 }}>{cell || '—'}</span>)}</button>)}
-    {!rows.length && <div style={{ padding: 45, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}><Icon name="inbox" size={28} color="var(--text-faint)" /><div style={{ marginTop: 8, color: 'var(--text)', fontWeight: 700 }}>No records found</div><div style={{ marginTop: 4 }}>Change the filters or create a new request.</div></div>}
+    {!rows.length && <div style={{ padding: 45, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}><Icon name="inbox" size={28} color="var(--text-faint)" /><div style={{ marginTop: 8, color: 'var(--text)', fontWeight: 700 }}>No records found</div><div style={{ marginTop: 4 }}>No records match the current filters.</div></div>}
   </section>
 }
 

@@ -5,6 +5,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
+from django.db.models import Q
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -107,13 +108,26 @@ def assigned_store_ids(user):
 
 
 def scope_store_requisitions(queryset, user):
-    if user.is_superuser or has_role(user, "System Administrator", "General Manager"):
+    if user.is_superuser or has_role(user, "System Administrator"):
         return queryset
     employee = getattr(user, "employee_profile", None)
     if not employee:
         return queryset.none()
     if has_role(user, "Store Keeper"):
-        return queryset.filter(store_id__in=assigned_store_ids(user))
+        # A Department request reaches Stores before the Store Keeper confirms
+        # the destination store. Therefore submitted requests must be visible to
+        # Store Keepers assigned anywhere in the same branch; filtering only by
+        # the request's provisional/default store makes valid requests disappear.
+        store_ids = assigned_store_ids(user)
+        branch_ids = StoreLocation.objects.filter(pk__in=store_ids).values_list("branch_id", flat=True)
+        return queryset.filter(
+            Q(store_id__in=store_ids)
+            | Q(status=StoreRequisitionStatus.SUBMITTED, store__branch_id__in=branch_ids)
+        ).distinct()
+    # Management/Finance/Procurement do not read Department store requests through
+    # this endpoint. Their work starts from the linked procurement/LPO documents.
+    if has_role(user, "General Manager", "Financial Manager", "Procurement Manager", "Receiving Clerk", "Cost Controller"):
+        return queryset.none()
     return queryset.filter(requested_by=employee)
 
 
@@ -407,6 +421,27 @@ class StockTransferViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("from_store__name", "to_store__name", "note")
     ordering_fields = ("status", "required_date", "created_at")
 
+    @action(detail=True, methods=["post"], url_path="assign-store")
+    def assign_store(self, request, pk=None):
+        requisition = self.get_object()
+        if not has_role(request.user, "System Administrator", "Store Keeper"):
+            raise PermissionDenied("Only the Store Keeper can choose the destination store.")
+        if requisition.status != StoreRequisitionStatus.SUBMITTED:
+            raise ValidationError("The destination store can only be selected for a submitted Department request.")
+        store_id = request.data.get("store")
+        if not store_id:
+            raise ValidationError({"store": "Select the destination store."})
+        store = StoreLocation.objects.filter(pk=store_id, is_active=True).first()
+        if not store:
+            raise ValidationError({"store": "The selected destination store is not available."})
+        if not has_role(request.user, "System Administrator") and not StoreKeeperAssignment.objects.filter(
+            store=store, employee=getattr(request.user, "employee_profile", None), is_active=True
+        ).exists():
+            raise PermissionDenied("You can only route requests to a store assigned to you.")
+        requisition.store = store
+        requisition.save(update_fields=["store", "updated_at"])
+        return Response(self.get_serializer(requisition).data)
+
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
         transfer = self.get_object()
@@ -565,6 +600,27 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             requisition.submit(actor=request.user)
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
+        return Response(self.get_serializer(requisition).data)
+
+    @action(detail=True, methods=["post"], url_path="assign-store")
+    def assign_store(self, request, pk=None):
+        requisition = self.get_object()
+        if not has_role(request.user, "System Administrator", "Store Keeper"):
+            raise PermissionDenied("Only the Store Keeper can choose the destination store.")
+        if requisition.status != StoreRequisitionStatus.SUBMITTED:
+            raise ValidationError("The destination store can only be selected for a submitted Department request.")
+        store_id = request.data.get("store")
+        if not store_id:
+            raise ValidationError({"store": "Select the destination store."})
+        store = StoreLocation.objects.filter(pk=store_id, is_active=True).first()
+        if not store:
+            raise ValidationError({"store": "The selected destination store is not available."})
+        if not has_role(request.user, "System Administrator") and not StoreKeeperAssignment.objects.filter(
+            store=store, employee=getattr(request.user, "employee_profile", None), is_active=True
+        ).exists():
+            raise PermissionDenied("You can only route requests to a store assigned to you.")
+        requisition.store = store
+        requisition.save(update_fields=["store", "updated_at"])
         return Response(self.get_serializer(requisition).data)
 
     @action(detail=True, methods=["post"])
@@ -809,6 +865,27 @@ class StockCountViewSet(CreatedByModelMixin, ModelViewSet):
             raise_drf_validation_error(error)
         return Response(self.get_serializer(stock_count).data)
 
+    @action(detail=True, methods=["post"], url_path="assign-store")
+    def assign_store(self, request, pk=None):
+        requisition = self.get_object()
+        if not has_role(request.user, "System Administrator", "Store Keeper"):
+            raise PermissionDenied("Only the Store Keeper can choose the destination store.")
+        if requisition.status != StoreRequisitionStatus.SUBMITTED:
+            raise ValidationError("The destination store can only be selected for a submitted Department request.")
+        store_id = request.data.get("store")
+        if not store_id:
+            raise ValidationError({"store": "Select the destination store."})
+        store = StoreLocation.objects.filter(pk=store_id, is_active=True).first()
+        if not store:
+            raise ValidationError({"store": "The selected destination store is not available."})
+        if not has_role(request.user, "System Administrator") and not StoreKeeperAssignment.objects.filter(
+            store=store, employee=getattr(request.user, "employee_profile", None), is_active=True
+        ).exists():
+            raise PermissionDenied("You can only route requests to a store assigned to you.")
+        requisition.store = store
+        requisition.save(update_fields=["store", "updated_at"])
+        return Response(self.get_serializer(requisition).data)
+
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
         stock_count = self.get_object()
@@ -851,6 +928,27 @@ class StockCountItemViewSet(CreatedByModelMixin, ModelViewSet):
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
         return Response(self.get_serializer(adjustment).data)
+
+    @action(detail=True, methods=["post"], url_path="assign-store")
+    def assign_store(self, request, pk=None):
+        requisition = self.get_object()
+        if not has_role(request.user, "System Administrator", "Store Keeper"):
+            raise PermissionDenied("Only the Store Keeper can choose the destination store.")
+        if requisition.status != StoreRequisitionStatus.SUBMITTED:
+            raise ValidationError("The destination store can only be selected for a submitted Department request.")
+        store_id = request.data.get("store")
+        if not store_id:
+            raise ValidationError({"store": "Select the destination store."})
+        store = StoreLocation.objects.filter(pk=store_id, is_active=True).first()
+        if not store:
+            raise ValidationError({"store": "The selected destination store is not available."})
+        if not has_role(request.user, "System Administrator") and not StoreKeeperAssignment.objects.filter(
+            store=store, employee=getattr(request.user, "employee_profile", None), is_active=True
+        ).exists():
+            raise PermissionDenied("You can only route requests to a store assigned to you.")
+        requisition.store = store
+        requisition.save(update_fields=["store", "updated_at"])
+        return Response(self.get_serializer(requisition).data)
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):

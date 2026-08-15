@@ -9,7 +9,6 @@ ROLE_SPECS = {
         "crud": {
             "vendors": ["supplier"],
             "inventory": [
-                "category",
                 "item",
                 "itemunitprice",
                 "supplieritemprice",
@@ -18,27 +17,17 @@ ROLE_SPECS = {
             "procurement": ["procurementattachment"],
         },
         "view": {
-            "departments": ["branch", "department"],
-            "inventory": ["storelocation"],
+            "inventory": ["category", "storelocation"],
         },
     },
-    "General Manager": {
-        "view_all": True,
-        "change": {
-            "approvals": ["approvalworkflow"],
-            "finance": ["supplierinvoice", "supplierpayment"],
-            "procurement": ["purchaserequisition", "purchaseorder"],
-            "inventory": ["stockadjustment", "stockcount", "stocktransfer"],
+    "Store Keeper": {
+        "crud": {
+            "inventory": ["storerequisition", "storerequisitionitem"],
         },
         "view": {
-            "procurement": [
-                "purchaseorderitem",
-                "purchaseorderactivity",
-                "purchaseorderprintrecord",
-                "requisitionitem",
-                "vendorquotation",
-            ],
-            "vendors": ["supplier"],
+            "departments": ["branch", "department"],
+            "employees": ["employee"],
+            "inventory": ["item", "storelocation", "unitofmeasure"],
         },
     },
     "Procurement Manager": {
@@ -50,130 +39,60 @@ ROLE_SPECS = {
                 "procurementcommunication",
                 "purchaserequisition",
                 "requisitionitem",
-                "supplierreturn",
-                "supplierreturnitem",
                 "vendorquotation",
                 "vendorquotationitem",
             ],
-            "inventory": ["reorderrule"],
         },
         "change": {
-            "approvals": ["approvalworkflow"],
             "inventory": ["supplieritemprice"],
         },
         "view": {
             "departments": ["department", "branch"],
             "employees": ["employee"],
-            "inventory": [
-                "inventorybalance",
-                "inventorybatch",
-                "item",
-                "itemunitprice",
-                "stockledger",
-                "storelocation",
-                "unitofmeasure",
-                "supplieritemprice",
-            ],
-            "procurement": [
-                "goodsinspection",
-                "goodsinspectionitem",
-                "goodsreceiptitem",
-                "goodsreceiptnote",
-                "requisitionhistory",
-            ],
+            "inventory": ["item", "storelocation", "unitofmeasure", "supplieritemprice", "itemunitprice"],
+            "procurement": ["purchaseorderactivity", "purchaseorderprintrecord", "requisitionhistory"],
             "vendors": ["supplier"],
         },
     },
     "Financial Manager": {
-        "crud": {
-            "finance": [
-                "bankaccount",
-                "banktransaction",
-                "cashflow",
-                "dailycashsummary",
-                "expense",
-                "expensecategory",
-                "paymentmethod",
-                "supplierinvoice",
-                "supplierinvoiceitem",
-                "supplierpayment",
-            ],
-        },
         "change": {
-            "approvals": ["approvalworkflow"],
+            "approvals": ["purchaseorderapprovalworkflow"],
             "procurement": ["purchaseorder"],
         },
         "view": {
-            "customers": ["customer", "customerledger", "payment", "paymentallocation"],
             "departments": ["branch", "department"],
-            "inventory": ["inventorybalance", "item", "stockledger", "storelocation", "unitofmeasure"],
+            "inventory": ["item", "storelocation", "unitofmeasure"],
             "procurement": [
                 "purchaseorderitem",
                 "purchaseorderactivity",
                 "purchaseorderprintrecord",
                 "purchaserequisition",
                 "requisitionitem",
-                "requisitionhistory",
-                "vendorquotation",
-                "vendorquotationitem",
-                "goodsreceiptitem",
-                "goodsreceiptnote",
-                "supplierreturn",
             ],
-            "sales": ["sale", "saleitem"],
             "vendors": ["supplier"],
         },
     },
-    "Store Keeper": {
-        "crud": {
-            "inventory": [
-                "inventorybatch",
-                "reorderrule",
-                "stockadjustment",
-                "stockadjustmentitem",
-                "stockcount",
-                "stockcountitem",
-                "stockissue",
-                "stockissueitem",
-                "stocktransfer",
-                "stocktransferitem",
-                "storerequisition",
-                "storerequisitionitem",
-                "storereturn",
-                "storereturnitem",
-            ],
-        },
+    "General Manager": {
         "change": {
-            "inventory": ["inventorybalance"],
+            "approvals": ["purchaseorderapprovalworkflow"],
+            "procurement": ["purchaseorder"],
         },
         "view": {
             "departments": ["branch", "department"],
-            "employees": ["employee"],
-            "inventory": [
-                "inventorybalance",
-                "inventorybatch",
-                "category",
-                "departmentconsumption",
-                "item",
-                "itemunitprice",
-                "stockledger",
-                "storelocation",
-                "unitofmeasure",
+            "inventory": ["item", "storelocation", "unitofmeasure"],
+            "procurement": [
+                "purchaseorderitem",
+                "purchaseorderactivity",
+                "purchaseorderprintrecord",
+                "purchaserequisition",
+                "requisitionitem",
             ],
-            "procurement": ["purchaseorder", "purchaseorderitem"],
+            "vendors": ["supplier"],
         },
     },
     "Receiving Clerk": {
         "crud": {
-            "procurement": [
-                "goodsinspection",
-                "goodsinspectionitem",
-                "goodsreceiptitem",
-                "goodsreceiptnote",
-                "procurementattachment",
-                "supplierreturn",
-                "supplierreturnitem",
-            ],
+            "procurement": ["goodsreceiptitem", "goodsreceiptnote", "procurementattachment"],
         },
         "view": {
             "departments": ["branch", "department"],
@@ -184,6 +103,7 @@ ROLE_SPECS = {
         },
     },
 }
+
 
 
 ROLE_REPLACEMENTS = {

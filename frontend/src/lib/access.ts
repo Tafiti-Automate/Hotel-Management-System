@@ -51,6 +51,16 @@ export function isStoresManager(user: Pick<AccessUser, 'role'>): boolean {
 
 export function canAccessRoute(user: AccessUser, route: string): boolean {
   if (user.isSuperuser || roleKey(user) === 'system administrator') return true
+  // Store Keepers work only from the predecessor-driven Stores workflow.
+  // The generic Store Requisitions CRUD page belongs to department requesters
+  // and must never expose a create action to Stores.
+  if (roleKey(user) === 'store keeper' && route === 'storeRequisitions') return false
+  // Workflow routes are role boundaries, not only permission checks. This prevents
+  // Finance/Management users who happen to inherit inventory permissions from
+  // landing in Department/Stores queues.
+  const role = roleKey(user)
+  if (route === 'workflow-stores' && !['store keeper', 'requester', 'staff', 'employee', 'department employee', 'unassigned'].includes(role)) return false
+  if (route === 'storeRequisitions' && !['requester', 'staff', 'employee', 'department employee', 'unassigned'].includes(role)) return false
   if (route === 'dashboard' || route === 'detail') return true
   const required = routePermissions[route]
   return required ? required.some((permission) => user.permissions.includes(permission)) : false
@@ -64,11 +74,23 @@ export function canAccessModule(user: AccessUser, module: 'operations' | 'hr'): 
 }
 
 export function operationsLandingFor(user: AccessUser): { route: string; crumb: string } {
-  if (roleKey(user) === 'store keeper') {
-    return { route: 'dashboard', crumb: 'Store Keeper overview' }
+  const role = roleKey(user)
+  const roleLanding: Record<string, { route: string; crumb: string }> = {
+    requester: { route: 'workflow-stores', crumb: 'My department requisitions' },
+    staff: { route: 'workflow-stores', crumb: 'My department requisitions' },
+    employee: { route: 'workflow-stores', crumb: 'My department requisitions' },
+    'department employee': { route: 'workflow-stores', crumb: 'My department requisitions' },
+    unassigned: { route: 'workflow-stores', crumb: 'My department requisitions' },
+    'store keeper': { route: 'workflow-stores', crumb: 'Store Keeper queue' },
+    'cost controller': { route: 'dashboard', crumb: 'Cost Controller dashboard' },
+    'procurement manager': { route: 'workflow-procure', crumb: 'Procurement workbench' },
+    'financial manager': { route: 'workflow-procure', crumb: 'Finance LPO approvals' },
+    'general manager': { route: 'workflow-procure', crumb: 'Final LPO approvals' },
+    'receiving clerk': { route: 'workflow-procure', crumb: 'Receiving & GRN' },
   }
+  const preferred = roleLanding[role]
+  if (preferred && canAccessRoute(user, preferred.route)) return preferred
   const candidates = [
-    ['workflow-stores', 'Store Requests'],
     ['workflow-procure', 'Procurement to receiving'],
     ['workflow-pay', 'Supplier invoices & payment'],
     ['requisitions', 'Purchase requisitions'],
