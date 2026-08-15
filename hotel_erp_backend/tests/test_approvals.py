@@ -395,7 +395,7 @@ def test_department_head_route_uses_requesting_department_and_property():
     requisition.refresh_from_db()
     assert requisition.branch == branch
     assert requisition.hotel == hotel
-    assert requisition.requisition_number.startswith("PR-KLA-")
+    assert requisition.requisition_number.isdigit()
     assert requisition.approval_workflow.get().approver == food_head
 
 

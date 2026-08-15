@@ -328,6 +328,47 @@ class StoreLocation(BaseModel):
         return self.name
 
 
+class StoreKeeperAssignment(BaseModel):
+    """Explicit operational ownership for a store.
+
+    Store access is intentionally assigned per employee rather than inferred
+    from the Store Keeper role.  A hotel can therefore operate several stores
+    without exposing one store's requests or balances to another keeper.
+    """
+
+    store = models.ForeignKey(
+        StoreLocation,
+        on_delete=models.CASCADE,
+        related_name="keeper_assignments",
+    )
+    employee = models.ForeignKey(
+        "employees.Employee",
+        on_delete=models.CASCADE,
+        related_name="store_keeper_assignments",
+    )
+    is_active = models.BooleanField(default=True)
+
+    class Meta(BaseModel.Meta):
+        constraints = [
+            models.UniqueConstraint(
+                fields=("store", "employee"),
+                name="unique_store_keeper_assignment",
+            )
+        ]
+        ordering = ("store__name", "employee__user__username")
+
+    def clean(self):
+        super().clean()
+        if self.store_id and self.employee_id:
+            if self.store.branch_id and self.employee.branch_id and self.store.branch_id != self.employee.branch_id:
+                raise ValidationError(
+                    {"employee": "The Store Keeper must belong to the same branch as the store."}
+                )
+
+    def __str__(self):
+        return f"{self.employee} → {self.store}"
+
+
 class InventoryBalance(BaseModel):
     item = models.ForeignKey(
         Item,
@@ -417,6 +458,16 @@ class SupplierItemPrice(BaseModel):
     lead_time_days = models.PositiveIntegerField(default=0)
     is_preferred = models.BooleanField(default=False)
     last_quoted_at = models.DateField(null=True, blank=True)
+    quotation_reference = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Supplier quotation number or reference for this quoted price.",
+    )
+    quotation_valid_until = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Expiry date stated on the supplier quotation.",
+    )
     effective_from = models.DateField(default=timezone.localdate)
     currency = models.CharField(max_length=10, default="UGX")
     is_active = models.BooleanField(default=True)
@@ -453,6 +504,14 @@ class SupplierItemPrice(BaseModel):
                 raise ValidationError(
                     {"unit": "Choose the article base unit or an active configured purchase unit."}
                 )
+        if (
+            self.quotation_valid_until
+            and self.effective_from
+            and self.quotation_valid_until < self.effective_from
+        ):
+            raise ValidationError(
+                {"quotation_valid_until": "The quotation expiry cannot be before its effective date."}
+            )
 
     @property
     def base_unit_price(self):
@@ -1121,20 +1180,11 @@ class StoreRequisition(BaseModel):
 
     def save(self, *args, **kwargs):
         if not self.requisition_no:
-            from django.utils import timezone
-            prefix = f"SR-{timezone.localdate().year}"
-            last_request = (
-                StoreRequisition.objects.filter(requisition_no__startswith=prefix)
-                .order_by("requisition_no")
-                .last()
+            from apps.procurement.models import ProcurementDocumentSequence
+
+            self.requisition_no = ProcurementDocumentSequence.next_number(
+                "store_requisition"
             )
-            next_number = 1
-            if last_request and last_request.requisition_no:
-                try:
-                    next_number = int(last_request.requisition_no.split("-")[-1]) + 1
-                except (IndexError, ValueError):
-                    next_number = 1
-            self.requisition_no = f"{prefix}-{next_number:05d}"
         super().save(*args, **kwargs)
 
     def submit(self, actor=None):
@@ -1276,6 +1326,22 @@ class StoreRequisition(BaseModel):
         if not shortage_lines:
             purchase.delete()
             raise ValidationError("No stock shortage remains for this request.")
+        # This document is the Store Keeper's hand-off to Procurement, not a
+        # second financial approval route. Commercial approval starts only once
+        # Procurement has prepared the LPO for Finance and Management.
+        purchase.items.filter(approved_quantity__isnull=True).update(
+            approved_quantity=models.F("quantity")
+        )
+        purchase.status = "approved"
+        purchase.approved_at = timezone.now()
+        purchase.save(update_fields=["status", "approved_at", "updated_at"])
+        purchase.record_history(
+            action="store_keeper_sent_to_procurement",
+            previous_status="draft",
+            actor=created_by,
+            comments="Store shortage confirmed and sent to Procurement for supplier selection and LPO preparation.",
+            metadata={"store_requisition": self.requisition_no},
+        )
         self.procurement_requisition = purchase
         self.status = StoreRequisitionStatus.AWAITING_PROCUREMENT
         self.save(update_fields=["procurement_requisition", "status", "updated_at"])
@@ -1423,10 +1489,33 @@ class StoreRequisition(BaseModel):
             self.save(update_fields=["status", "updated_at"])
 
     def _notify_stores(self, *, title, message, created_by=None):
-        from apps.notifications.services import notify_roles
+        from apps.notifications.services import notify_employee, notify_roles
 
+        keepers = self.store.keeper_assignments.select_related("employee", "employee__user").filter(
+            is_active=True,
+            employee__is_active=True,
+            employee__user__is_active=True,
+        )
+        notifications = [
+            notification
+            for notification in (
+                notify_employee(
+                    assignment.employee,
+                    title=title,
+                    message=message,
+                    created_by=created_by,
+                )
+                for assignment in keepers
+            )
+            if notification
+        ]
+        if notifications:
+            return notifications
+        # Existing deployments may not yet have assignments.  Keep a temporary
+        # branch-scoped fallback during the migration, while all new operational
+        # access is enforced through StoreKeeperAssignment in the API.
         return notify_roles(
-            ("Stores Manager",),
+            ("Store Keeper", "Stores Manager"),
             title=title,
             message=message,
             branch=self.store.branch,

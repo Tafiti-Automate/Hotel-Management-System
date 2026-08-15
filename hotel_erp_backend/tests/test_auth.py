@@ -4,6 +4,23 @@ from django.contrib.auth.models import Group, Permission
 from django.core.management import call_command
 from django.test import override_settings
 
+from apps.departments.models import Branch, Department
+from apps.employees.models import Employee
+
+
+def link_employee(user, suffix):
+    branch = Branch.objects.create(
+        name=f"Auth Branch {suffix}",
+        branch_code=f"AUTH-{suffix}",
+    )
+    department = Department.objects.create(name=f"Auth Department {suffix}")
+    return Employee.objects.create(
+        user=user,
+        branch=branch,
+        department=department,
+        designation="Test Employee",
+    )
+
 
 @pytest.mark.django_db
 def test_custom_user_uses_employee_code():
@@ -12,6 +29,7 @@ def test_custom_user_uses_employee_code():
         employee_code="EMP-001",
         password="test-pass-123",
     )
+    link_employee(user, "CODE")
 
     assert user.employee_code == "EMP-001"
     assert user.check_password("test-pass-123")
@@ -44,6 +62,7 @@ def test_api_login_accepts_employee_code(client):
         employee_code="EMP-001",
         password="test-pass-123",
     )
+    link_employee(user, "LOGIN")
 
     response = client.post(
         "/api/v1/auth/login/",
@@ -63,6 +82,7 @@ def test_role_permission_changes_are_returned_on_next_login(client):
     user = get_user_model().objects.create_user(
         username="store-user", employee_code="EMP-STORE", password="test-pass-123"
     )
+    link_employee(user, "ROLE")
     role = Group.objects.create(name="Custom Store Role")
     user.groups.set([role])
     permission = Permission.objects.get(
@@ -154,7 +174,7 @@ def test_current_user_payload_has_stable_user_and_employee_identifiers(client):
 
     branch = Branch.objects.create(name="Main Branch", branch_code="MAIN")
     department = Department.objects.create(name="Housekeeping")
-    user = User.objects.create_user(
+    user = get_user_model().objects.create_user(
         username="payload-user",
         employee_code="EMP-PAYLOAD",
         password="test-pass-123",

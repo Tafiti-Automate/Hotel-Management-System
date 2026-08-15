@@ -479,6 +479,7 @@ class PurchaseOrderApprovalWorkflow(BaseModel):
         from core.constants.choices import POStatus
 
         self._validate_current_stage()
+        previous_order_status = self.purchase_order.status
         remaining_after_this = PurchaseOrderApprovalWorkflow.objects.filter(
             purchase_order=self.purchase_order,
         ).exclude(pk=self.pk).exclude(
@@ -518,11 +519,24 @@ class PurchaseOrderApprovalWorkflow(BaseModel):
                     "updated_at",
                 )
             )
+        self.purchase_order.record_activity(
+            action="approval_stage_approved",
+            actor=self.decided_by,
+            comments=comments,
+            previous_status=previous_order_status,
+            new_status=self.purchase_order.status,
+            metadata={
+                "stage": self.stage,
+                "stage_name": self.stage_name,
+                "approver": str(self.approver),
+            },
+        )
 
     def reject(self, comments="", decided_by=None):
         from core.constants.choices import POStatus
 
         self._validate_current_stage()
+        previous_order_status = self.purchase_order.status
         if not comments.strip():
             raise ValidationError("Record a reason before rejecting the LPO.")
         self.status = ApprovalStatus.REJECTED
@@ -550,4 +564,26 @@ class PurchaseOrderApprovalWorkflow(BaseModel):
                 "approved_by",
                 "updated_at",
             )
+        )
+        # A rejection returns the commercial decision to Procurement. Keep the
+        # immutable activity history, but do not silently carry a Finance
+        # quantity override into the next revision of the LPO.
+        self.purchase_order.items.update(
+            finance_approved_quantity=None,
+            finance_approved_base_quantity=None,
+            finance_reduction_reason="",
+            updated_at=timezone.now(),
+        )
+        self.purchase_order.update_total_amount()
+        self.purchase_order.record_activity(
+            action="rejected",
+            actor=self.decided_by,
+            comments=comments,
+            previous_status=previous_order_status,
+            new_status=POStatus.REJECTED,
+            metadata={
+                "stage": self.stage,
+                "stage_name": self.stage_name,
+                "approver": str(self.approver),
+            },
         )

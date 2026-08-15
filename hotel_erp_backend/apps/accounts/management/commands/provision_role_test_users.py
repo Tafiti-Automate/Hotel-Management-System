@@ -9,6 +9,7 @@ from django.db import transaction
 
 from apps.departments.models import Branch, Department
 from apps.employees.models import Employee
+from apps.inventory.models import StoreKeeperAssignment, StoreLocation
 from rest_framework.authtoken.models import Token
 
 
@@ -18,11 +19,12 @@ ROLE_ACCOUNTS = (
     ("role-system-admin", "ROLE-ADMIN", "System", "Administrator", "System Administrator", None),
     ("role-general-manager", "ROLE-GM", "General", "Manager", "General Manager", None),
     ("role-procurement", "ROLE-PROC", "Procurement", "Manager", "Procurement Manager", "Procurement"),
-    ("role-finance", "ROLE-FIN", "Finance", "Controller", "Finance Controller", "Finance"),
-    ("role-stores-manager", "ROLE-STORES", "Stores", "Manager", "Stores Manager", "Procurement"),
+    ("role-cost-controller", "ROLE-COST", "Cost", "Controller", "Cost Controller", "Finance"),
+    ("role-finance", "ROLE-FIN", "Finance", "Manager", "Finance Manager", "Finance"),
+    ("role-director", "ROLE-DIR", "Hotel", "Director", "Director", None),
     ("role-store-keeper", "ROLE-KEEPER", "Store", "Keeper", "Store Keeper", "Procurement"),
     ("role-department-head", "ROLE-HOD", "Department", "Head", "Department Head", "Front Office"),
-    ("role-receiving", "ROLE-RECV", "Receiving", "Officer", "Receiving Officer", "Procurement"),
+    ("role-receiving", "ROLE-RECV", "Receiving", "Clerk", "Receiving Clerk", "Procurement"),
     ("role-auditor", "ROLE-AUDIT", "Operations", "Auditor", "Auditor", None),
 )
 
@@ -78,7 +80,7 @@ class Command(BaseCommand):
             user.user_permissions.clear()
             Token.objects.filter(user=user).delete()
 
-            Employee.objects.update_or_create(
+            employee, _ = Employee.objects.update_or_create(
                 user=user,
                 defaults={
                     "branch": branch,
@@ -87,6 +89,13 @@ class Command(BaseCommand):
                     "is_active": True,
                 },
             )
+            if role == "Store Keeper":
+                for store in StoreLocation.objects.filter(branch=branch, is_active=True):
+                    StoreKeeperAssignment.objects.update_or_create(
+                        store=store,
+                        employee=employee,
+                        defaults={"is_active": True, "created_by": user},
+                    )
             action = "Created" if created else "Refreshed"
             self.stdout.write(f"{action}: {username} ({role})")
 

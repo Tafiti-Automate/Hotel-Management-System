@@ -5,6 +5,23 @@ from django.db import transaction
 
 ROLE_SPECS = {
     "System Administrator": {"all": True},
+    "Cost Controller": {
+        "crud": {
+            "vendors": ["supplier"],
+            "inventory": [
+                "category",
+                "item",
+                "itemunitprice",
+                "supplieritemprice",
+                "unitofmeasure",
+            ],
+            "procurement": ["procurementattachment"],
+        },
+        "view": {
+            "departments": ["branch", "department"],
+            "inventory": ["storelocation"],
+        },
+    },
     "General Manager": {
         "view_all": True,
         "change": {
@@ -13,13 +30,38 @@ ROLE_SPECS = {
             "procurement": ["purchaserequisition", "purchaseorder"],
             "inventory": ["stockadjustment", "stockcount", "stocktransfer"],
         },
+        "view": {
+            "procurement": [
+                "purchaseorderitem",
+                "purchaseorderactivity",
+                "purchaseorderprintrecord",
+                "requisitionitem",
+                "vendorquotation",
+            ],
+            "vendors": ["supplier"],
+        },
+    },
+    "Director": {
+        "change": {
+            "procurement": ["purchaseorder"],
+        },
+        "view": {
+            "departments": ["branch", "department"],
+            "inventory": ["item", "storelocation", "unitofmeasure"],
+            "procurement": [
+                "purchaseorderitem",
+                "purchaseorderactivity",
+                "purchaseorderprintrecord",
+                "purchaserequisition",
+                "requisitionitem",
+                "vendorquotation",
+            ],
+            "vendors": ["supplier"],
+        },
     },
     "Procurement Manager": {
         "crud": {
-            "vendors": ["supplier"],
             "procurement": [
-                "goodsinspection",
-                "goodsinspectionitem",
                 "purchaseorder",
                 "purchaseorderitem",
                 "procurementattachment",
@@ -31,10 +73,11 @@ ROLE_SPECS = {
                 "vendorquotation",
                 "vendorquotationitem",
             ],
-            "inventory": ["supplieritemprice", "reorderrule"],
+            "inventory": ["reorderrule"],
         },
         "change": {
             "approvals": ["approvalworkflow"],
+            "inventory": ["supplieritemprice"],
         },
         "view": {
             "departments": ["department", "branch"],
@@ -47,12 +90,35 @@ ROLE_SPECS = {
                 "stockledger",
                 "storelocation",
                 "unitofmeasure",
+                "supplieritemprice",
             ],
             "procurement": [
+                "goodsinspection",
+                "goodsinspectionitem",
                 "goodsreceiptitem",
                 "goodsreceiptnote",
                 "requisitionhistory",
             ],
+            "vendors": ["supplier"],
+        },
+    },
+    "Finance Manager": {
+        "change": {
+            "procurement": ["purchaseorder"],
+        },
+        "view": {
+            "departments": ["branch", "department"],
+            "inventory": ["item", "storelocation", "unitofmeasure"],
+            "procurement": [
+                "purchaseorderitem",
+                "purchaseorderactivity",
+                "purchaseorderprintrecord",
+                "purchaserequisition",
+                "requisitionitem",
+                "vendorquotation",
+                "vendorquotationitem",
+            ],
+            "vendors": ["supplier"],
         },
     },
     "Finance Controller": {
@@ -167,6 +233,24 @@ ROLE_SPECS = {
                 "storelocation",
                 "unitofmeasure",
             ],
+        },
+    },
+    "Receiving Clerk": {
+        "crud": {
+            "procurement": [
+                "goodsinspection",
+                "goodsinspectionitem",
+                "goodsreceiptitem",
+                "goodsreceiptnote",
+                "procurementattachment",
+            ],
+        },
+        "view": {
+            "departments": ["branch", "department"],
+            "employees": ["employee"],
+            "inventory": ["item", "storelocation", "unitofmeasure"],
+            "procurement": ["purchaseorder", "purchaseorderitem"],
+            "vendors": ["supplier"],
         },
     },
     "Department Requester": {

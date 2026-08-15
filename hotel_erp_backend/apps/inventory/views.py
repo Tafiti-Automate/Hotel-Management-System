@@ -30,6 +30,7 @@ from apps.inventory.models import (
     StockTransfer,
     StockTransferItem,
     StoreLocation,
+    StoreKeeperAssignment,
     StoreRequisition,
     StoreRequisitionItem,
     StoreReturn,
@@ -55,6 +56,7 @@ from apps.inventory.serializers import (
     StockTransferItemSerializer,
     StockTransferSerializer,
     StoreLocationSerializer,
+    StoreKeeperAssignmentSerializer,
     StoreRequisitionItemSerializer,
     StoreRequisitionSerializer,
     StoreReturnItemSerializer,
@@ -81,7 +83,49 @@ def enforce_readiness(readiness):
         )
 
 
-class CategoryViewSet(CreatedByModelMixin, ModelViewSet):
+MASTER_DATA_ROLES = ("System Administrator", "Cost Controller")
+
+
+def has_role(user, *roles):
+    return bool(
+        user
+        and user.is_authenticated
+        and (user.is_superuser or user.groups.filter(name__in=roles).exists())
+    )
+
+
+def assigned_store_ids(user):
+    employee = getattr(user, "employee_profile", None)
+    if not employee:
+        return StoreLocation.objects.none().values_list("pk", flat=True)
+    return StoreKeeperAssignment.objects.filter(
+        employee=employee,
+        is_active=True,
+        store__is_active=True,
+    ).values_list("store_id", flat=True)
+
+
+class CostControllerAuthorityMixin:
+    """Cost Controller owns item, UOM, conversion and supplier quote master data."""
+
+    def _require_master_data_authority(self):
+        if not has_role(self.request.user, *MASTER_DATA_ROLES):
+            raise PermissionDenied("Only the Cost Controller can maintain procurement master data.")
+
+    def perform_create(self, serializer):
+        self._require_master_data_authority()
+        super().perform_create(serializer)
+
+    def perform_update(self, serializer):
+        self._require_master_data_authority()
+        super().perform_update(serializer)
+
+    def perform_destroy(self, instance):
+        self._require_master_data_authority()
+        super().perform_destroy(instance)
+
+
+class CategoryViewSet(CostControllerAuthorityMixin, CreatedByModelMixin, ModelViewSet):
     queryset = Category.objects.select_related("parent")
     serializer_class = CategorySerializer
     filterset_fields = ("parent", "is_active")
@@ -89,7 +133,7 @@ class CategoryViewSet(CreatedByModelMixin, ModelViewSet):
     ordering_fields = ("name", "code", "parent__name", "created_at")
 
 
-class UnitOfMeasureViewSet(CreatedByModelMixin, ModelViewSet):
+class UnitOfMeasureViewSet(CostControllerAuthorityMixin, CreatedByModelMixin, ModelViewSet):
     queryset = UnitOfMeasure.objects.all()
     serializer_class = UnitOfMeasureSerializer
     filterset_fields = ("is_active",)
@@ -97,7 +141,7 @@ class UnitOfMeasureViewSet(CreatedByModelMixin, ModelViewSet):
     ordering_fields = ("name", "created_at")
 
 
-class ItemViewSet(CreatedByModelMixin, ModelViewSet):
+class ItemViewSet(CostControllerAuthorityMixin, CreatedByModelMixin, ModelViewSet):
     queryset = Item.objects.select_related("category", "base_unit")
     serializer_class = ItemSerializer
     filterset_fields = ("category", "unit", "base_unit", "is_active")
@@ -105,7 +149,7 @@ class ItemViewSet(CreatedByModelMixin, ModelViewSet):
     ordering_fields = ("name", "sku", "reorder_level", "created_at")
 
 
-class ItemUnitPriceViewSet(CreatedByModelMixin, ModelViewSet):
+class ItemUnitPriceViewSet(CostControllerAuthorityMixin, CreatedByModelMixin, ModelViewSet):
     queryset = ItemUnitPrice.objects.select_related("item", "unit")
     serializer_class = ItemUnitPriceSerializer
     filterset_fields = ("item", "unit", "role", "is_active")
@@ -113,6 +157,7 @@ class ItemUnitPriceViewSet(CreatedByModelMixin, ModelViewSet):
     ordering_fields = ("conversion_factor", "selling_price", "created_at")
 
     def perform_destroy(self, instance):
+        self._require_master_data_authority()
         if instance.is_used_in_transactions():
             raise ValidationError(
                 "This conversion is already used by a transaction and cannot be deleted."
@@ -127,6 +172,38 @@ class StoreLocationViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("name", "address", "branch__name")
     ordering_fields = ("name", "created_at")
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if has_role(self.request.user, "Store Keeper") and not has_role(
+            self.request.user, "System Administrator", "General Manager", "Auditor"
+        ):
+            return queryset.filter(pk__in=assigned_store_ids(self.request.user))
+        return queryset
+
+
+class StoreKeeperAssignmentViewSet(CreatedByModelMixin, ModelViewSet):
+    queryset = StoreKeeperAssignment.objects.select_related("store", "employee", "employee__user")
+    serializer_class = StoreKeeperAssignmentSerializer
+    filterset_fields = ("store", "employee", "is_active")
+    search_fields = ("store__name", "employee__user__username", "employee__user__employee_code")
+    ordering_fields = ("store__name", "employee__user__username", "created_at")
+
+    def _require_administrator(self):
+        if not has_role(self.request.user, "System Administrator"):
+            raise PermissionDenied("Only the System Administrator can assign Store Keepers to stores.")
+
+    def perform_create(self, serializer):
+        self._require_administrator()
+        super().perform_create(serializer)
+
+    def perform_update(self, serializer):
+        self._require_administrator()
+        super().perform_update(serializer)
+
+    def perform_destroy(self, instance):
+        self._require_administrator()
+        super().perform_destroy(instance)
+
 
 class InventoryBalanceViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = InventoryBalance.objects.select_related("item", "store")
@@ -134,6 +211,14 @@ class InventoryBalanceViewSet(CreatedByModelMixin, ModelViewSet):
     filterset_fields = ("item", "store")
     search_fields = ("item__name", "item__sku", "store__name")
     ordering_fields = ("quantity_in_stock", "reorder_level", "last_updated")
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if has_role(self.request.user, "Store Keeper") and not has_role(
+            self.request.user, "System Administrator", "General Manager", "Auditor"
+        ):
+            return queryset.filter(store_id__in=assigned_store_ids(self.request.user))
+        return queryset
 
     @action(detail=True, methods=["post"], url_path="reconcile-reservation")
     def reconcile_reservation(self, request, pk=None):
@@ -162,12 +247,18 @@ class InventoryBalanceViewSet(CreatedByModelMixin, ModelViewSet):
         return Response(self.get_serializer(balance).data)
 
 
-class SupplierItemPriceViewSet(CreatedByModelMixin, ModelViewSet):
+class SupplierItemPriceViewSet(CostControllerAuthorityMixin, CreatedByModelMixin, ModelViewSet):
     queryset = SupplierItemPrice.objects.select_related("supplier", "item", "item__category", "unit")
     serializer_class = SupplierItemPriceSerializer
     filterset_fields = ("supplier", "item", "item__category", "unit", "is_preferred", "is_active")
     search_fields = ("supplier__name", "item__name", "item__sku", "supplier_sku")
     ordering_fields = ("unit_price", "lead_time_days", "minimum_order_quantity", "last_quoted_at", "created_at")
+
+    def perform_update(self, serializer):
+        if has_role(self.request.user, "Procurement Manager"):
+            serializer.save()
+            return
+        super().perform_update(serializer)
 
     @action(detail=True, methods=["get"])
     def history(self, request, pk=None):
@@ -178,6 +269,7 @@ class SupplierItemPriceViewSet(CreatedByModelMixin, ModelViewSet):
 
     @action(detail=False, methods=["post"], url_path="import")
     def import_catalogue(self, request):
+        self._require_master_data_authority()
         upload = request.FILES.get("file")
         if not upload:
             raise ValidationError({"file": "Choose a CSV or Excel (.xlsx) supplier catalogue."})
@@ -260,6 +352,8 @@ class SupplierItemPriceViewSet(CreatedByModelMixin, ModelViewSet):
             "effective_from": effective,
             "minimum_order_quantity": normalized.get("minimum_order_quantity") or 1,
             "lead_time_days": normalized.get("lead_time_days") or 0,
+            "quotation_reference": str(normalized.get("quotation_reference") or "").strip(),
+            "quotation_valid_until": normalized.get("quotation_valid_until") or None,
             "is_preferred": str(normalized.get("is_preferred") or "").strip().lower() in {"yes", "true", "1"},
             "is_active": str(normalized.get("is_active") or "yes").strip().lower() not in {"no", "false", "0", "inactive"},
         }
@@ -417,20 +511,39 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
         user = self.request.user
         if user.is_superuser or user.groups.filter(
             name__in=(
-                "System Administrator", "General Manager", "Stores Manager",
-                "Store Keeper", "Auditor",
+                "System Administrator", "General Manager", "Auditor",
             )
         ).exists():
             return queryset
         employee = getattr(user, "employee_profile", None)
         if not employee:
             return queryset.none()
+        if user.groups.filter(name="Store Keeper").exists():
+            return queryset.filter(store_id__in=assigned_store_ids(user))
+        # Kept solely to avoid abruptly locking historic assignments while the
+        # Store Keeper migration is rolled out. New access is assignment based.
+        if user.groups.filter(name="Stores Manager").exists():
+            return queryset
         if user.groups.filter(name="Department Head").exists():
             return queryset.filter(
                 department=employee.department,
                 store__branch=employee.branch,
             )
         return queryset.filter(requested_by=employee)
+
+    def _enforce_store_assignment(self, requisition):
+        user = self.request.user
+        if has_role(user, "System Administrator"):
+            return
+        if user.groups.filter(name="Store Keeper").exists() and StoreKeeperAssignment.objects.filter(
+            store=requisition.store,
+            employee=getattr(user, "employee_profile", None),
+            is_active=True,
+        ).exists():
+            return
+        if user.groups.filter(name="Stores Manager").exists():
+            return
+        raise PermissionDenied("Only the Store Keeper assigned to this store can process this request.")
 
     @action(detail=True, methods=["post"])
     def submit(self, request, pk=None):
@@ -462,11 +575,7 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
         requisition = self.get_object()
-        if not (
-            request.user.is_superuser
-            or request.user.groups.filter(name__in=("System Administrator", "Stores Manager")).exists()
-        ):
-            raise PermissionDenied("Only the Stores Manager can approve and reserve stock.")
+        self._enforce_store_assignment(requisition)
         try:
             requisition.approve(
                 approved_by=getattr(request.user, "employee_profile", None),
@@ -479,11 +588,7 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"], url_path="send-to-procurement")
     def send_to_procurement(self, request, pk=None):
         requisition = self.get_object()
-        if not (
-            request.user.is_superuser
-            or request.user.groups.filter(name__in=("System Administrator", "Stores Manager")).exists()
-        ):
-            raise PermissionDenied("Only the Stores Manager can confirm a shortage.")
+        self._enforce_store_assignment(requisition)
         try:
             purchase = requisition.create_shortage_purchase_requisition(
                 created_by=request.user,
@@ -497,11 +602,7 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"], url_path="resume-after-procurement")
     def resume_after_procurement(self, request, pk=None):
         requisition = self.get_object()
-        if not (
-            request.user.is_superuser
-            or request.user.groups.filter(name__in=("System Administrator", "Stores Manager")).exists()
-        ):
-            raise PermissionDenied("Only the Stores Manager can resume this request.")
+        self._enforce_store_assignment(requisition)
         try:
             requisition.resume_after_procurement(actor=request.user)
         except DjangoValidationError as error:
@@ -516,9 +617,11 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
                 name__in=("System Administrator", "Department Head")
             ).exists()
         else:
-            allowed = request.user.is_superuser or request.user.groups.filter(
-                name__in=("System Administrator", "Stores Manager")
-            ).exists()
+            try:
+                self._enforce_store_assignment(requisition)
+                allowed = True
+            except PermissionDenied:
+                allowed = False
         if not allowed:
             raise PermissionDenied("Your role cannot reject this request at its current stage.")
         try:
@@ -534,9 +637,11 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     def cancel(self, request, pk=None):
         requisition = self.get_object()
         employee = getattr(request.user, "employee_profile", None)
-        stores_control = request.user.is_superuser or request.user.groups.filter(
-            name__in=("System Administrator", "Stores Manager")
-        ).exists()
+        try:
+            self._enforce_store_assignment(requisition)
+            stores_control = True
+        except PermissionDenied:
+            stores_control = False
         requester_can_cancel = (
             employee
             and requisition.requested_by_id == employee.id
@@ -563,6 +668,14 @@ class StoreRequisitionItemViewSet(CreatedByModelMixin, ModelViewSet):
     filterset_fields = ("requisition", "item", "unit")
     search_fields = ("requisition__requisition_no", "item__name", "item__sku")
     ordering_fields = ("quantity_requested", "quantity_approved", "quantity_issued", "created_at")
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if has_role(self.request.user, "Store Keeper") and not has_role(
+            self.request.user, "System Administrator", "General Manager", "Auditor"
+        ):
+            return queryset.filter(requisition__store_id__in=assigned_store_ids(self.request.user))
+        return queryset
 
     def perform_destroy(self, instance):
         if instance.requisition.status not in (

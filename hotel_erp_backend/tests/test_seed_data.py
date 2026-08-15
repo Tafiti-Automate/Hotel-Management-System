@@ -79,7 +79,7 @@ def test_seed_presentation_data_builds_connected_uganda_workflows(monkeypatch):
 
     assert Hotel.objects.get().name == "Pearl Presentation Hotel"
     assert Branch.objects.count() == 2
-    assert Employee.objects.count() == 13
+    assert Employee.objects.count() == 14
     assert Supplier.objects.count() == 6
     assert PurchaseRequisition.objects.count() == 2
     assert VendorQuotation.objects.count() == 3

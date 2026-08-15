@@ -1,9 +1,12 @@
 from decimal import Decimal
+from datetime import timedelta
 
 import pytest
+from django.core import mail
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, Permission
 from django.core.exceptions import ValidationError
+from django.test import override_settings
 from rest_framework.test import APIClient, APIRequestFactory
 
 from apps.departments.models import Branch, Department
@@ -17,6 +20,7 @@ from apps.inventory.models import (
     ItemUnitPrice,
     StockLedger,
     StoreLocation,
+    StoreKeeperAssignment,
     UnitOfMeasure,
     SupplierItemPrice,
 )
@@ -32,6 +36,7 @@ from apps.procurement.models import (
     VendorQuotation,
     VendorQuotationItem,
 )
+from apps.procurement.documents import build_purchase_order_pdf
 from apps.procurement.serializers import (
     GoodsReceiptItemSerializer,
     PurchaseOrderItemSerializer,
@@ -265,12 +270,14 @@ def test_direct_workspace_route_flows_from_requisition_to_po_and_grn():
 
 
 @pytest.mark.django_db
-def test_store_keeper_can_read_lpo_workspace_for_receiving_without_lpo_permission():
+def test_store_keeper_can_read_only_assigned_store_lpo_without_commercial_data():
     employee, department, supplier, item = create_procurement_context()
     branch = Branch.objects.create(name="Receiving Branch")
     employee.branch = branch
     employee.save(update_fields=["branch", "updated_at"])
     employee.user.groups.add(Group.objects.create(name="Store Keeper"))
+    store = StoreLocation.objects.create(branch=branch, name="Assigned Main Store")
+    StoreKeeperAssignment.objects.create(store=store, employee=employee)
     requisition = PurchaseRequisition.objects.create(
         requester=employee,
         department=department,
@@ -285,11 +292,19 @@ def test_store_keeper_can_read_lpo_workspace_for_receiving_without_lpo_permissio
         approved_quantity=Decimal("2.00"),
         estimated_unit_cost=Decimal("5000.00"),
     )
-    PurchaseOrder.objects.create(
+    order = PurchaseOrder.objects.create(
         requisition=requisition,
         supplier=supplier,
         ordered_by=employee,
+        store=store,
         po_number="PO-STORE-VIEW",
+    )
+    PurchaseOrderItem.objects.create(
+        purchase_order=order,
+        item=item,
+        quantity=Decimal("2.00"),
+        unit_cost=Decimal("5000.00"),
+        destination_store=store,
     )
 
     client = APIClient()
@@ -298,6 +313,9 @@ def test_store_keeper_can_read_lpo_workspace_for_receiving_without_lpo_permissio
 
     assert response.status_code == 200
     assert [row["po_number"] for row in response.data["orders"]] == ["PO-STORE-VIEW"]
+    assert "supplier" not in response.data["orders"][0]
+    assert "total_amount" not in response.data["orders"][0]
+    assert "unit_cost" not in response.data["orderItems"][0]
 
 
 @pytest.mark.django_db
@@ -368,7 +386,7 @@ def test_requisition_creates_purchase_order_from_selected_supplier_quote():
 
     order_item = order.items.get()
     assert order.supplier == supplier
-    assert order.po_number.startswith("PO-")
+    assert order.po_number.isdigit()
     assert order.status == POStatus.DRAFT
     assert order.total_amount == Decimal("32000.00")
     assert order_item.item == item
@@ -677,6 +695,17 @@ def test_lpo_requires_independent_value_routed_approval_before_issue():
         branch=branch,
         designation="Finance Controller",
     )
+    manager_user = get_user_model().objects.create_user(
+        username="lpo-general-manager",
+        employee_code="EMP-LPO-GM",
+        password="test-pass-123",
+    )
+    manager = Employee.objects.create(
+        user=manager_user,
+        department=department,
+        branch=branch,
+        designation="General Manager",
+    )
     requisition = PurchaseRequisition.objects.create(
         requester=employee,
         department=department,
@@ -713,6 +742,15 @@ def test_lpo_requires_independent_value_routed_approval_before_issue():
         assignment_type=ApprovalMatrixRule.ASSIGNMENT_FIXED_EMPLOYEE,
         approver=approver,
     )
+    ApprovalMatrixRule.objects.create(
+        name="Final LPO release",
+        document_type=ApprovalMatrixRule.DOCUMENT_PURCHASE_ORDER,
+        minimum_amount=Decimal("0.00"),
+        stage=2,
+        stage_name="General Manager LPO approval",
+        assignment_type=ApprovalMatrixRule.ASSIGNMENT_FIXED_EMPLOYEE,
+        approver=manager,
+    )
 
     with pytest.raises(ValidationError, match="approved LPO"):
         order.issue(sent_by=employee)
@@ -720,16 +758,234 @@ def test_lpo_requires_independent_value_routed_approval_before_issue():
     order.submit_for_approval()
     order.refresh_from_db()
     assert order.status == POStatus.PENDING_APPROVAL
-    step = order.approval_workflow.get()
-    assert step.approver == approver
+    steps = list(order.approval_workflow.all())
+    assert [step.approver for step in steps] == [approver, manager]
 
-    step.approve(decided_by=approver_user)
+    steps[0].approve(decided_by=approver_user)
+    order.refresh_from_db()
+    assert order.status == POStatus.PENDING_APPROVAL
+
+    steps[1].approve(decided_by=manager_user)
     order.refresh_from_db()
     assert order.status == POStatus.APPROVED
-    assert order.approved_by == approver
+    assert order.approved_by == manager
 
     order.issue(sent_by=employee)
     assert order.status == POStatus.ISSUED
+
+
+@pytest.mark.django_db
+def test_finance_reduction_preserves_procurement_quantity_and_audit_history():
+    employee, department, supplier, item = create_procurement_context()
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        reason="Finance quantity control",
+        status=PRStatus.APPROVED,
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity=Decimal("10.00"),
+        approved_quantity=Decimal("10.00"),
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition,
+        supplier=supplier,
+        ordered_by=employee,
+    )
+    line = PurchaseOrderItem.objects.create(
+        purchase_order=order,
+        item=item,
+        quantity=Decimal("10.00"),
+        unit_cost=Decimal("2000.00"),
+    )
+    order.status = POStatus.PENDING_APPROVAL
+    order.save(update_fields=("status", "updated_at"))
+
+    order.apply_finance_quantity_reductions(
+        reductions=[{
+            "id": str(line.pk),
+            "approved_quantity": "6.00",
+            "reason": "Budget ceiling",
+        }],
+        actor=employee.user,
+    )
+
+    line.refresh_from_db()
+    order.refresh_from_db()
+    assert line.quantity == Decimal("10.00")
+    assert line.procurement_quantity == Decimal("10.00")
+    assert line.finance_approved_quantity == Decimal("6.00")
+    assert line.approved_quantity == Decimal("6.00")
+    assert order.total_amount == Decimal("12000.00")
+    assert order.activities.filter(action="finance_quantity_reduced").exists()
+
+
+@pytest.mark.django_db
+def test_controlled_lpo_pdf_marks_first_print_original_and_later_prints_copy():
+    employee, department, supplier, item = create_procurement_context()
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        reason="Controlled printing",
+        status=PRStatus.APPROVED,
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity=Decimal("2.00"),
+        approved_quantity=Decimal("2.00"),
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition,
+        supplier=supplier,
+        ordered_by=employee,
+    )
+    PurchaseOrderItem.objects.create(
+        purchase_order=order,
+        item=item,
+        quantity=Decimal("2.00"),
+        unit_cost=Decimal("7000.00"),
+    )
+    order.status = POStatus.APPROVED
+    order.save(update_fields=("status", "updated_at"))
+
+    original = order.record_print(printed_by=employee.user)
+    copy = order.record_print(printed_by=employee.user)
+    original_pdf = build_purchase_order_pdf(
+        order,
+        classification="***** Original Order *****",
+        printed_by=employee.user,
+    )
+    copy_pdf = build_purchase_order_pdf(
+        order,
+        classification="***** Copy of Original Order *****",
+        printed_by=employee.user,
+    )
+
+    assert original.classification == "original"
+    assert copy.classification == "copy"
+    assert original.print_number == 1
+    assert copy.print_number == 2
+    assert original_pdf.startswith(b"%PDF")
+    assert copy_pdf.startswith(b"%PDF")
+    assert order.activities.filter(action="printed").count() == 2
+
+
+@pytest.mark.django_db
+@override_settings(
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    DEFAULT_FROM_EMAIL="purchasing@example.com",
+)
+def test_supplier_email_contains_lpo_pdf_and_starts_lead_clock_after_success():
+    employee, department, supplier, item = create_procurement_context()
+    procurement_group = Group.objects.create(name="Procurement Manager")
+    procurement_group.permissions.add(
+        Permission.objects.get(codename="change_purchaseorder")
+    )
+    employee.user.groups.add(procurement_group)
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        reason="Supplier email control",
+        status=PRStatus.APPROVED,
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity=Decimal("3.00"),
+        approved_quantity=Decimal("3.00"),
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition,
+        supplier=supplier,
+        ordered_by=employee,
+        lead_time_days=4,
+    )
+    PurchaseOrderItem.objects.create(
+        purchase_order=order,
+        item=item,
+        quantity=Decimal("3.00"),
+        unit_cost=Decimal("5000.00"),
+    )
+    order.status = POStatus.APPROVED
+    order.save(update_fields=("status", "updated_at"))
+    client = APIClient()
+    client.force_authenticate(employee.user)
+
+    response = client.post(
+        f"/api/v1/purchase-orders/{order.pk}/issue/",
+        {"sent_to_email": supplier.email},
+        format="json",
+    )
+
+    assert response.status_code == 200, response.data
+    order.refresh_from_db()
+    assert order.status == POStatus.ISSUED
+    assert order.sent_at is not None
+    assert order.delivery_due_date == order.sent_at.date() + timedelta(days=4)
+    assert order.email_status == "sent"
+    assert len(mail.outbox) == 1
+    assert mail.outbox[0].attachments[0].filename == f"LPO-{order.po_number}.pdf"
+    assert mail.outbox[0].attachments[0].mimetype == "application/pdf"
+
+
+@pytest.mark.django_db
+def test_receiving_clerk_workspace_shows_only_ready_branch_lpos_without_prices():
+    employee, department, supplier, item = create_procurement_context()
+    branch = Branch.objects.create(name="Receiving Scope Branch")
+    other_branch = Branch.objects.create(name="Other Receiving Branch")
+    employee.branch = branch
+    employee.save(update_fields=("branch", "updated_at"))
+    receiving = Group.objects.create(name="Receiving Clerk")
+    receiving.permissions.add(
+        Permission.objects.get(codename="view_goodsreceiptnote")
+    )
+    employee.user.groups.add(receiving)
+
+    def make_order(target_branch, status, suffix):
+        requisition = PurchaseRequisition.objects.create(
+            requester=employee,
+            department=department,
+            branch=target_branch,
+            reason=f"Receiving scope {suffix}",
+            status=PRStatus.APPROVED,
+        )
+        RequisitionItem.objects.create(
+            requisition=requisition,
+            item=item,
+            quantity=Decimal("2.00"),
+            approved_quantity=Decimal("2.00"),
+        )
+        order = PurchaseOrder.objects.create(
+            requisition=requisition,
+            supplier=supplier,
+            ordered_by=employee,
+            po_number=f"900{suffix}",
+        )
+        PurchaseOrderItem.objects.create(
+            purchase_order=order,
+            item=item,
+            quantity=Decimal("2.00"),
+            unit_cost=Decimal("4000.00"),
+        )
+        order.status = status
+        order.save(update_fields=("status", "updated_at"))
+        return order
+
+    ready = make_order(branch, POStatus.ISSUED, "1")
+    make_order(branch, POStatus.APPROVED, "2")
+    make_order(other_branch, POStatus.ISSUED, "3")
+    client = APIClient()
+    client.force_authenticate(employee.user)
+
+    response = client.get("/api/v1/requisitions/workspace/?stage=receipt")
+
+    assert response.status_code == 200, response.data
+    assert [row["id"] for row in response.data["orders"]] == [str(ready.pk)]
+    assert "total_amount" not in response.data["orders"][0]
+    assert "unit_cost" not in response.data["orderItems"][0]
 
 
 @pytest.mark.django_db

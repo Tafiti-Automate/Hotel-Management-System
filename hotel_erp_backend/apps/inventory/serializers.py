@@ -30,6 +30,7 @@ from apps.inventory.models import (
     StoreReturnItem,
     SupplierItemPrice,
     SupplierItemPriceHistory,
+    StoreKeeperAssignment,
     UnitOfMeasure,
 )
 from core.constants.choices import StoreRequisitionStatus
@@ -307,6 +308,33 @@ class StoreLocationSerializer(serializers.ModelSerializer):
         ).exclude(pk=instance.pk).update(is_default=False)
 
 
+class StoreKeeperAssignmentSerializer(serializers.ModelSerializer):
+    store_name = serializers.CharField(source="store.name", read_only=True)
+    employee_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StoreKeeperAssignment
+        fields = (
+            "id", "store", "store_name", "employee", "employee_name", "is_active",
+            "created_at", "updated_at", "created_by",
+        )
+        read_only_fields = ("id", "store_name", "employee_name", "created_at", "updated_at", "created_by")
+
+    def get_employee_name(self, assignment):
+        return assignment.employee.user.get_full_name() or assignment.employee.user.username
+
+    def validate(self, attrs):
+        instance = self.instance or StoreKeeperAssignment(**attrs)
+        for field, value in attrs.items():
+            setattr(instance, field, value)
+        try:
+            instance.clean()
+        except DjangoValidationError as error:
+            detail = getattr(error, "message_dict", None) or getattr(error, "messages", None) or str(error)
+            raise serializers.ValidationError(detail)
+        return attrs
+
+
 class InventoryBalanceSerializer(serializers.ModelSerializer):
     is_below_reorder = serializers.BooleanField(read_only=True)
     available_quantity = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
@@ -395,6 +423,8 @@ class SupplierItemPriceSerializer(serializers.ModelSerializer):
             "is_lowest",
             "history_count",
             "last_quoted_at",
+            "quotation_reference",
+            "quotation_valid_until",
             "is_active",
             "created_at",
             "updated_at",
@@ -687,6 +717,13 @@ class StoreRequisitionSerializer(serializers.ModelSerializer):
     class Meta:
         model = StoreRequisition
         fields = "__all__"
+        extra_kwargs = {
+            # Department requesters are always resolved from the authenticated
+            # employee profile in validate(); clients must not have to submit
+            # (or be able to impersonate) either relationship.
+            "department": {"required": False},
+            "requested_by": {"required": False},
+        }
         read_only_fields = (
             "id",
             "requisition_no",

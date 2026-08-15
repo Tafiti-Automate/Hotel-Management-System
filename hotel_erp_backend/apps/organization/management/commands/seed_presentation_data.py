@@ -38,6 +38,7 @@ from apps.inventory.models import (
     StockTransfer,
     StockTransferItem,
     StoreLocation,
+    StoreKeeperAssignment,
     StoreRequisition,
     StoreRequisitionItem,
     StoreReturn,
@@ -129,6 +130,12 @@ class Command(BaseCommand):
             sample_password=sample_password,
             created_by=admin,
         )
+        for store in StoreLocation.objects.filter(branch=context["kampala_branch"], is_active=True):
+            StoreKeeperAssignment.objects.create(
+                store=store,
+                employee=employees["stores"],
+                created_by=admin,
+            )
         suppliers = self.create_suppliers(admin)
         self.create_supplier_prices(context, suppliers, admin)
         self.create_approval_matrix(employees, admin)
@@ -226,8 +233,8 @@ class Command(BaseCommand):
                 "Namusoke",
                 "UG-HQ-103",
                 "Finance & Accounts",
-                "Finance Controller",
-                "Finance Controller",
+                "Finance Manager",
+                "Finance Manager",
                 "+256 772 410 103",
             ),
             "stores": (
@@ -236,8 +243,8 @@ class Command(BaseCommand):
                 "Kato",
                 "UG-HQ-104",
                 "Procurement & Stores",
-                "Stores Manager",
-                "Stores Manager",
+                "Store Keeper",
+                "Store Keeper",
                 "+256 701 410 104",
             ),
             "receiving": (
@@ -246,9 +253,19 @@ class Command(BaseCommand):
                 "Akello",
                 "UG-HQ-105",
                 "Procurement & Stores",
-                "Receiving Officer",
-                "Receiving Officer",
+                "Receiving Clerk",
+                "Receiving Clerk",
                 "+256 772 410 105",
+            ),
+            "cost_controller": (
+                "alice.nakato",
+                "Alice",
+                "Nakato",
+                "UG-HQ-110",
+                "Finance & Accounts",
+                "Cost Controller",
+                "Cost Controller",
+                "+256 701 410 110",
             ),
             "housekeeping": (
                 "esther.nambasa",

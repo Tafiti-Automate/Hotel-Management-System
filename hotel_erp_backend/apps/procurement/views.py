@@ -1,10 +1,11 @@
 from decimal import Decimal
+from datetime import timedelta
 
 from django.http import Http404, HttpResponse
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import transaction
+from django.db import models, transaction
 from django.conf import settings
-from django.core.mail import send_mail
+from django.core.mail import EmailMessage
 from django.utils import timezone
 from django.utils.http import content_disposition_header
 from rest_framework.decorators import action
@@ -17,6 +18,7 @@ from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
 from apps.employees.models import Employee
 from apps.approvals.models import ApprovalWorkflow
 from apps.approvals.serializers import ApprovalWorkflowSerializer
+from apps.procurement.documents import build_purchase_order_pdf
 from apps.procurement.models import (
     GoodsInspection,
     GoodsInspectionItem,
@@ -71,6 +73,56 @@ def enforce_readiness(readiness):
         )
 
 
+def user_has_role(user, *roles):
+    return bool(
+        user
+        and user.is_authenticated
+        and (user.is_superuser or user.groups.filter(name__in=roles).exists())
+    )
+
+
+COMMERCIAL_CONTROL_ROLES = (
+    "System Administrator",
+    "Procurement Manager",
+    "Finance Manager",
+    "Finance Controller",
+    "General Manager",
+    "Director",
+    "Auditor",
+)
+RECEIVING_ROLES = ("Receiving Clerk", "Receiving Officer")
+
+
+def scope_purchase_orders_for_user(queryset, user):
+    """Apply the same LPO visibility rules to lists and the combined workspace."""
+    employee = getattr(user, "employee_profile", None)
+    if user_has_role(user, *COMMERCIAL_CONTROL_ROLES):
+        return queryset
+    if user_has_role(user, *RECEIVING_ROLES):
+        queryset = queryset.filter(
+            status__in=(POStatus.ISSUED, POStatus.PARTIALLY_RECEIVED)
+        )
+        if employee and employee.branch_id:
+            queryset = queryset.filter(requisition__branch=employee.branch)
+        return queryset
+    if user_has_role(user, "Store Keeper"):
+        if not employee:
+            return queryset.none()
+        return queryset.filter(
+            models.Q(
+                store__keeper_assignments__employee=employee,
+                store__keeper_assignments__is_active=True,
+            )
+            | models.Q(
+                items__destination_store__keeper_assignments__employee=employee,
+                items__destination_store__keeper_assignments__is_active=True,
+            )
+        ).distinct()
+    if not employee:
+        return queryset.none()
+    return queryset.filter(requisition__requester=employee)
+
+
 class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = PurchaseRequisition.objects.select_related(
         "hotel",
@@ -123,7 +175,21 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
         ):
             raise PermissionDenied("You do not have permission to view this procurement stage.")
 
-        requisitions = self.get_queryset()
+        orders = None
+        if stage in {"lpo", "receipt", "inspect", "return"}:
+            orders = scope_purchase_orders_for_user(
+                PurchaseOrder.objects.select_related(
+                    "requisition", "supplier", "ordered_by", "store", "sent_by", "approved_by"
+                ).prefetch_related("approval_workflow__approver__user"),
+                request.user,
+            )
+            order_ids = orders.values_list("id", flat=True)
+            requisitions = self.queryset.filter(
+                id__in=orders.values_list("requisition_id", flat=True)
+            )
+        else:
+            requisitions = self.get_queryset()
+            order_ids = PurchaseOrder.objects.none().values_list("id", flat=True)
         requisition_ids = requisitions.values_list("id", flat=True)
         payload = {
             "requisitions": PurchaseRequisitionSerializer(requisitions, many=True, context={"request": request}).data,
@@ -145,31 +211,35 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
                 many=True, context={"request": request},
             ).data
         if stage in {"lpo", "receipt", "inspect", "return"}:
-            orders = PurchaseOrder.objects.filter(requisition_id__in=requisition_ids)
             payload["orders"] = PurchaseOrderSerializer(orders, many=True, context={"request": request}).data
             payload["orderItems"] = PurchaseOrderItemSerializer(
-                PurchaseOrderItem.objects.filter(purchase_order__requisition_id__in=requisition_ids),
+                PurchaseOrderItem.objects.filter(purchase_order_id__in=order_ids),
                 many=True, context={"request": request},
             ).data
         if stage in {"receipt", "inspect", "return"}:
-            receipts = GoodsReceiptNote.objects.filter(purchase_order__requisition_id__in=requisition_ids)
+            receipts = GoodsReceiptNote.objects.filter(purchase_order_id__in=order_ids)
+            if user_has_role(request.user, *RECEIVING_ROLES) and not user_has_role(
+                request.user, *COMMERCIAL_CONTROL_ROLES
+            ):
+                receipts = receipts.filter(received_by=getattr(request.user, "employee_profile", None))
+            receipt_ids = receipts.values_list("id", flat=True)
             payload["receipts"] = GoodsReceiptNoteSerializer(receipts, many=True, context={"request": request}).data
             payload["receiptItems"] = GoodsReceiptItemSerializer(
-                GoodsReceiptItem.objects.filter(goods_receipt__purchase_order__requisition_id__in=requisition_ids),
+                GoodsReceiptItem.objects.filter(goods_receipt_id__in=receipt_ids),
                 many=True, context={"request": request},
             ).data
         if stage == "inspect":
-            inspections = GoodsInspection.objects.filter(goods_receipt__purchase_order__requisition_id__in=requisition_ids)
+            inspections = GoodsInspection.objects.filter(goods_receipt_id__in=receipt_ids)
             payload["inspections"] = GoodsInspectionSerializer(inspections, many=True, context={"request": request}).data
             payload["inspectionItems"] = GoodsInspectionItemSerializer(
-                GoodsInspectionItem.objects.filter(inspection__goods_receipt__purchase_order__requisition_id__in=requisition_ids),
+                GoodsInspectionItem.objects.filter(inspection__goods_receipt_id__in=receipt_ids),
                 many=True, context={"request": request},
             ).data
         if stage == "return":
-            returns = SupplierReturn.objects.filter(goods_receipt__purchase_order__requisition_id__in=requisition_ids)
+            returns = SupplierReturn.objects.filter(goods_receipt_id__in=receipt_ids)
             payload["returns"] = SupplierReturnSerializer(returns, many=True, context={"request": request}).data
             payload["returnItems"] = SupplierReturnItemSerializer(
-                SupplierReturnItem.objects.filter(supplier_return__goods_receipt__purchase_order__requisition_id__in=requisition_ids),
+                SupplierReturnItem.objects.filter(supplier_return__goods_receipt_id__in=receipt_ids),
                 many=True, context={"request": request},
             ).data
         return Response(payload)
@@ -182,7 +252,9 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
                 "System Administrator",
                 "General Manager",
                 "Procurement Manager",
+                "Finance Manager",
                 "Finance Controller",
+                "Director",
                 "Auditor",
             )
         ).exists():
@@ -242,6 +314,8 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"], url_path="create-purchase-order")
     def create_purchase_order(self, request, pk=None):
         requisition = self.get_object()
+        if not user_has_role(request.user, "System Administrator", "Procurement Manager"):
+            raise PermissionDenied("Only the Procurement Manager can prepare an LPO.")
         try:
             supplier = self._optional_object(Supplier, request.data.get("supplier"))
             ordered_by = self._optional_object(Employee, request.data.get("ordered_by"))
@@ -259,6 +333,7 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
                 store=store,
                 po_number=request.data.get("po_number", ""),
                 expected_date=request.data.get("expected_date") or None,
+                valid_until=request.data.get("valid_until") or None,
                 note=request.data.get("note", ""),
                 created_by=request.user if request.user.is_authenticated else None,
             )
@@ -407,6 +482,13 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
             return [IsAuthenticated()]
         return super().get_permissions()
 
+    def get_queryset(self):
+        return scope_purchase_orders_for_user(super().get_queryset(), self.request.user)
+
+    def _require_procurement_manager(self, request):
+        if not user_has_role(request.user, "System Administrator", "Procurement Manager"):
+            raise PermissionDenied("Only the Procurement Manager can perform this LPO action.")
+
     @action(detail=True, methods=["get"])
     def readiness(self, request, pk=None):
         return Response(self.get_object().issue_readiness())
@@ -418,6 +500,7 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"], url_path="submit-for-approval")
     def submit_for_approval(self, request, pk=None):
         order = self.get_object()
+        self._require_procurement_manager(request)
         enforce_readiness(order.approval_readiness())
         try:
             order.submit_for_approval()
@@ -455,6 +538,25 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
             raise_drf_validation_error(error)
         return Response(self.get_serializer(order).data)
 
+    @action(detail=True, methods=["post"], url_path="finance-reduce-quantities")
+    def finance_reduce_quantities(self, request, pk=None):
+        order = self.get_object()
+        if not user_has_role(request.user, "System Administrator", "Finance Manager", "Finance Controller"):
+            raise PermissionDenied("Only the Finance Manager can reduce LPO quantities.")
+        try:
+            with transaction.atomic():
+                locked_order = PurchaseOrder.objects.select_for_update().get(pk=order.pk)
+                self._current_approval_step(locked_order, request)
+                locked_order.apply_finance_quantity_reductions(
+                    reductions=request.data.get("lines", []),
+                    actor=request.user,
+                    comments=str(request.data.get("comments", "")).strip(),
+                )
+                locked_order.refresh_from_db()
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        return Response(self.get_serializer(locked_order).data)
+
     @action(detail=True, methods=["post"], url_path="reject")
     def reject_order(self, request, pk=None):
         try:
@@ -473,6 +575,7 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"])
     def issue(self, request, pk=None):
         order = self.get_object()
+        self._require_procurement_manager(request)
         enforce_readiness(order.issue_readiness())
         sent_by = None
         if request.data.get("sent_by"):
@@ -482,35 +585,63 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                 raise ValidationError({"sent_by": "Selected employee was not found."})
         else:
             sent_by = getattr(request.user, "employee_profile", None)
+        recipient = str(
+            request.data.get("sent_to_email") or order.sent_to_email or order.supplier.email
+        ).strip()
+        if not recipient:
+            raise ValidationError("The supplier has no email address.")
+        subject = f"Local Purchase Order {order.po_number}"
+        communication = ProcurementCommunication.objects.create(
+            purchase_order=order,
+            supplier=order.supplier,
+            recipient=recipient,
+            subject=subject,
+            status="pending",
+            created_by=request.user if request.user.is_authenticated else None,
+        )
+        try:
+            pdf = build_purchase_order_pdf(
+                order,
+                classification="SUPPLIER COPY",
+                printed_by=request.user,
+                delivery_date=(timezone.now() + timedelta(days=order.lead_time_days or 0)).date(),
+            )
+            email = EmailMessage(
+                subject=subject,
+                body=(
+                    f"Please find attached Local Purchase Order {order.po_number}. "
+                    f"Quote this number on your delivery note and invoice."
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[recipient],
+            )
+            email.attach(f"LPO-{order.po_number}.pdf", pdf, "application/pdf")
+            email.send(fail_silently=False)
+        except Exception as error:
+            communication.status = "failed"
+            communication.error_message = str(error)
+            communication.save(update_fields=["status", "error_message", "updated_at"])
+            order.email_status = "failed"
+            order.last_email_error = str(error)
+            order.save(update_fields=["email_status", "last_email_error", "updated_at"])
+            raise ValidationError(f"Email delivery failed; the lead-time clock was not started: {error}")
         try:
             with transaction.atomic():
-                order.issue(
-                    sent_by=sent_by,
-                    sent_to_email=request.data.get("sent_to_email", ""),
-                )
-                send_mail(
-                    subject=f"Local Purchase Order {order.po_number}",
-                    message=(
-                        f"Please find purchase order {order.po_number} for "
-                        f"{order.total_amount}. Expected delivery: {order.expected_date or 'not specified'}."
-                    ),
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[order.sent_to_email],
-                    fail_silently=False,
-                )
+                order = PurchaseOrder.objects.select_for_update().get(pk=order.pk)
+                order.issue(sent_by=sent_by, sent_to_email=recipient)
                 order.email_status = "sent"
                 order.last_email_error = ""
                 order.save(update_fields=["email_status", "last_email_error", "updated_at"])
-                ProcurementCommunication.objects.create(
-                    purchase_order=order,
-                    supplier=order.supplier,
-                    recipient=order.sent_to_email,
-                    subject=f"Local Purchase Order {order.po_number}",
-                    status="sent",
-                    sent_at=timezone.now(),
-                    created_by=request.user if request.user.is_authenticated else None,
+                communication.status = "sent"
+                communication.sent_at = order.sent_at
+                communication.error_message = ""
+                communication.save(
+                    update_fields=["status", "sent_at", "error_message", "updated_at"]
                 )
         except DjangoValidationError as error:
+            communication.status = "failed"
+            communication.error_message = "Email sent, but the LPO issue state could not be committed."
+            communication.save(update_fields=["status", "error_message", "updated_at"])
             raise_drf_validation_error(error)
         serializer = self.get_serializer(order)
         return Response(serializer.data)
@@ -518,6 +649,7 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"])
     def resend(self, request, pk=None):
         order = self.get_object()
+        self._require_procurement_manager(request)
         if order.status == POStatus.DRAFT:
             raise ValidationError("Issue the LPO before resending it.")
         recipient = str(request.data.get("sent_to_email") or order.sent_to_email or order.supplier.email).strip()
@@ -529,13 +661,22 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
             created_by=request.user if request.user.is_authenticated else None,
         )
         try:
-            send_mail(
-                subject=communication.subject,
-                message=f"Resent purchase order {order.po_number} for {order.total_amount}.",
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[recipient],
-                fail_silently=False,
+            pdf = build_purchase_order_pdf(
+                order,
+                classification="SUPPLIER COPY",
+                printed_by=request.user,
             )
+            email = EmailMessage(
+                subject=communication.subject,
+                body=(
+                    f"Please find attached the resent Local Purchase Order {order.po_number}. "
+                    "Quote this number on your delivery note and invoice."
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[recipient],
+            )
+            email.attach(f"LPO-{order.po_number}.pdf", pdf, "application/pdf")
+            email.send(fail_silently=False)
             communication.status = "sent"
             communication.sent_at = timezone.now()
             order.email_status = "sent"
@@ -554,6 +695,7 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"])
     def acknowledge(self, request, pk=None):
         order = self.get_object()
+        self._require_procurement_manager(request)
         try:
             order.acknowledge(str(request.data.get("acknowledged_by", "")).strip())
         except DjangoValidationError as error:
@@ -568,6 +710,53 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
         )
         return Response(self.get_serializer(order).data)
 
+    @action(detail=True, methods=["post"], url_path="print-document")
+    def print_document(self, request, pk=None):
+        """Reserve ORIGINAL/COPY status before the browser print dialog opens."""
+        order = self.get_object()
+        self._require_procurement_manager(request)
+        try:
+            print_record = order.record_print(printed_by=request.user)
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        return Response(
+            {
+                "print_number": print_record.print_number,
+                "print_classification": print_record.get_classification_display().upper(),
+                "printed_at": print_record.created_at,
+                "printed_by": request.user.get_full_name() or request.user.username,
+            }
+        )
+
+    @action(detail=True, methods=["post"], url_path="controlled-document")
+    def controlled_document(self, request, pk=None):
+        """Reserve the print number and return the matching ORIGINAL/COPY PDF."""
+        order = self.get_object()
+        self._require_procurement_manager(request)
+        try:
+            print_record = order.record_print(printed_by=request.user)
+            classification = (
+                "***** Original Order *****"
+                if print_record.classification == "original"
+                else "***** Copy of Original Order *****"
+            )
+            pdf = build_purchase_order_pdf(
+                order,
+                classification=classification,
+                printed_by=request.user,
+            )
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        response = HttpResponse(pdf, content_type="application/pdf")
+        response["Content-Disposition"] = content_disposition_header(
+            False,
+            f"LPO-{order.po_number}-{print_record.classification}-{print_record.print_number}.pdf",
+        )
+        response["Cache-Control"] = "private, no-store"
+        response["X-LPO-Print-Classification"] = print_record.classification.upper()
+        response["X-LPO-Print-Number"] = str(print_record.print_number)
+        return response
+
 
 class PurchaseOrderItemViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = PurchaseOrderItem.objects.select_related("purchase_order", "item", "unit")
@@ -575,6 +764,25 @@ class PurchaseOrderItemViewSet(CreatedByModelMixin, ModelViewSet):
     filterset_fields = ("purchase_order", "item", "unit")
     search_fields = ("purchase_order__po_number", "item__name", "item__sku", "unit__name")
     ordering_fields = ("quantity", "base_quantity", "unit_cost", "created_at")
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        employee = getattr(user, "employee_profile", None)
+        if user_has_role(user, *RECEIVING_ROLES) and not user_has_role(
+            user, *COMMERCIAL_CONTROL_ROLES,
+        ):
+            return queryset.filter(
+                purchase_order__status__in=(POStatus.ISSUED, POStatus.PARTIALLY_RECEIVED)
+            )
+        if user_has_role(user, "Store Keeper") and not user_has_role(
+            user, *COMMERCIAL_CONTROL_ROLES,
+        ):
+            return queryset.filter(
+                purchase_order__store__keeper_assignments__employee=employee,
+                purchase_order__store__keeper_assignments__is_active=True,
+            ).distinct()
+        return queryset
 
     def perform_destroy(self, instance):
         if not instance.purchase_order.editable:
@@ -593,6 +801,32 @@ class GoodsReceiptNoteViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("purchase_order__po_number", "received_by__user__employee_code")
     ordering_fields = ("received_date", "created_at")
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        employee = getattr(user, "employee_profile", None)
+        if user_has_role(user, *RECEIVING_ROLES) and not user_has_role(
+            user, *COMMERCIAL_CONTROL_ROLES
+        ):
+            return queryset.filter(received_by=employee)
+        return queryset
+
+    def _require_receiving_clerk(self, request, receipt=None):
+        if user_has_role(request.user, "System Administrator"):
+            return
+        employee = getattr(request.user, "employee_profile", None)
+        if not user_has_role(request.user, *RECEIVING_ROLES):
+            raise PermissionDenied("Only the Receiving Clerk can create or post a GRN.")
+        if receipt and receipt.received_by_id != getattr(employee, "id", None):
+            raise PermissionDenied("Only the Receiving Clerk who opened this GRN can change it.")
+
+    def perform_create(self, serializer):
+        self._require_receiving_clerk(self.request)
+        employee = getattr(self.request.user, "employee_profile", None)
+        if not employee:
+            raise ValidationError("Your account is not connected to an employee profile.")
+        serializer.save(received_by=employee, created_by=self.request.user)
+
     @action(detail=True, methods=["get"])
     def readiness(self, request, pk=None):
         return Response(self.get_object().posting_readiness())
@@ -600,6 +834,7 @@ class GoodsReceiptNoteViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"], url_path="post-to-inventory")
     def post_to_inventory(self, request, pk=None):
         receipt = self.get_object()
+        self._require_receiving_clerk(request, receipt)
         enforce_readiness(receipt.posting_readiness())
         try:
             receipt.post_to_inventory(
@@ -613,6 +848,7 @@ class GoodsReceiptNoteViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
         receipt = self.get_object()
+        self._require_receiving_clerk(request, receipt)
         try:
             receipt.cancel()
         except DjangoValidationError as error:
@@ -633,7 +869,35 @@ class GoodsReceiptItemViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("goods_receipt__purchase_order__po_number", "item__name", "item__sku", "store__name")
     ordering_fields = ("quantity_received", "base_quantity", "unit_cost", "created_at")
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        employee = getattr(user, "employee_profile", None)
+        if user_has_role(user, *RECEIVING_ROLES) and not user_has_role(
+            user, *COMMERCIAL_CONTROL_ROLES
+        ):
+            return queryset.filter(goods_receipt__received_by=employee)
+        return queryset
+
+    def _require_receiving_clerk(self, receipt):
+        user = self.request.user
+        if user_has_role(user, "System Administrator"):
+            return
+        employee = getattr(user, "employee_profile", None)
+        if not user_has_role(user, *RECEIVING_ROLES) or receipt.received_by_id != getattr(employee, "id", None):
+            raise PermissionDenied("Only the Receiving Clerk who opened this GRN can enter delivered quantities.")
+
+    def perform_create(self, serializer):
+        receipt = serializer.validated_data.get("goods_receipt")
+        self._require_receiving_clerk(receipt)
+        super().perform_create(serializer)
+
+    def perform_update(self, serializer):
+        self._require_receiving_clerk(serializer.instance.goods_receipt)
+        super().perform_update(serializer)
+
     def perform_destroy(self, instance):
+        self._require_receiving_clerk(instance.goods_receipt)
         if instance.inventory_changes_applied:
             raise ValidationError("Posted GRN lines cannot be removed.")
         if GoodsInspectionItem.objects.filter(goods_receipt_item=instance).exists():
@@ -672,7 +936,41 @@ class GoodsInspectionViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("delivery_note_no", "remarks", "goods_receipt__purchase_order__po_number")
     ordering_fields = ("inspection_date", "status", "created_at")
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        if user_has_role(user, *RECEIVING_ROLES) and not user_has_role(
+            user, *COMMERCIAL_CONTROL_ROLES
+        ):
+            return queryset.filter(
+                goods_receipt__received_by=getattr(user, "employee_profile", None)
+            )
+        return queryset
+
+    def _require_receiving_clerk(self, receipt):
+        user = self.request.user
+        if user_has_role(user, "System Administrator"):
+            return
+        employee = getattr(user, "employee_profile", None)
+        if not user_has_role(user, *RECEIVING_ROLES) or receipt.received_by_id != getattr(employee, "id", None):
+            raise PermissionDenied(
+                "Only the Receiving Clerk who opened the GRN can record its inspection."
+            )
+
+    def perform_create(self, serializer):
+        receipt = serializer.validated_data.get("goods_receipt")
+        self._require_receiving_clerk(receipt)
+        serializer.save(
+            inspected_by=getattr(self.request.user, "employee_profile", None),
+            created_by=self.request.user,
+        )
+
+    def perform_update(self, serializer):
+        self._require_receiving_clerk(serializer.instance.goods_receipt)
+        super().perform_update(serializer)
+
     def perform_destroy(self, instance):
+        self._require_receiving_clerk(instance.goods_receipt)
         if instance.goods_receipt.status in ("posted", "cancelled"):
             raise ValidationError("Posted or cancelled GRN inspections cannot be removed.")
         instance.delete()
@@ -685,7 +983,37 @@ class GoodsInspectionItemViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("item__name", "item__sku", "rejection_reason")
     ordering_fields = ("quantity_received", "quantity_accepted", "quantity_rejected", "created_at")
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        if user_has_role(user, *RECEIVING_ROLES) and not user_has_role(
+            user, *COMMERCIAL_CONTROL_ROLES
+        ):
+            return queryset.filter(
+                inspection__goods_receipt__received_by=getattr(user, "employee_profile", None)
+            )
+        return queryset
+
+    def _require_receiving_clerk(self, inspection):
+        user = self.request.user
+        if user_has_role(user, "System Administrator"):
+            return
+        employee = getattr(user, "employee_profile", None)
+        if not user_has_role(user, *RECEIVING_ROLES) or inspection.goods_receipt.received_by_id != getattr(employee, "id", None):
+            raise PermissionDenied(
+                "Only the Receiving Clerk who opened the GRN can record its inspection lines."
+            )
+
+    def perform_create(self, serializer):
+        self._require_receiving_clerk(serializer.validated_data.get("inspection"))
+        super().perform_create(serializer)
+
+    def perform_update(self, serializer):
+        self._require_receiving_clerk(serializer.instance.inspection)
+        super().perform_update(serializer)
+
     def perform_destroy(self, instance):
+        self._require_receiving_clerk(instance.inspection)
         if instance.inspection.goods_receipt.status in ("posted", "cancelled"):
             raise ValidationError("Posted or cancelled GRN inspection decisions cannot be removed.")
         instance.delete()
@@ -737,6 +1065,73 @@ class ProcurementAttachmentViewSet(CreatedByModelMixin, ModelViewSet):
     filterset_fields = ("document_type", "document_id", "category")
     search_fields = ("original_name", "note")
     ordering_fields = ("created_at", "original_name")
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        if user_has_role(user, "Cost Controller") and not user_has_role(
+            user, "System Administrator", "Procurement Manager", "Auditor"
+        ):
+            return queryset.filter(
+                document_type=ProcurementAttachment.DOCUMENT_SUPPLIER_CATALOGUE
+            )
+        if user_has_role(user, *RECEIVING_ROLES) and not user_has_role(
+            user, *COMMERCIAL_CONTROL_ROLES
+        ):
+            employee = getattr(user, "employee_profile", None)
+            receipt_ids = GoodsReceiptNote.objects.filter(
+                received_by=employee
+            ).values_list("id", flat=True)
+            inspection_ids = GoodsInspection.objects.filter(
+                goods_receipt__received_by=employee
+            ).values_list("id", flat=True)
+            return queryset.filter(
+                models.Q(
+                    document_type=ProcurementAttachment.DOCUMENT_GRN,
+                    document_id__in=receipt_ids,
+                )
+                | models.Q(
+                    document_type=ProcurementAttachment.DOCUMENT_INSPECTION,
+                    document_id__in=inspection_ids,
+                )
+            )
+        return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        document_type = serializer.validated_data.get("document_type")
+        document_id = serializer.validated_data.get("document_id")
+        if user_has_role(user, "Cost Controller") and not user_has_role(
+            user, "System Administrator", "Procurement Manager"
+        ):
+            from apps.inventory.models import SupplierItemPrice
+
+            if (
+                document_type != ProcurementAttachment.DOCUMENT_SUPPLIER_CATALOGUE
+                or not SupplierItemPrice.objects.filter(pk=document_id).exists()
+            ):
+                raise PermissionDenied(
+                    "The Cost Controller may attach quotations only to supplier price records."
+                )
+        elif user_has_role(user, *RECEIVING_ROLES) and not user_has_role(
+            user, *COMMERCIAL_CONTROL_ROLES
+        ):
+            employee = getattr(user, "employee_profile", None)
+            owns_document = (
+                document_type == ProcurementAttachment.DOCUMENT_GRN
+                and GoodsReceiptNote.objects.filter(pk=document_id, received_by=employee).exists()
+            ) or (
+                document_type == ProcurementAttachment.DOCUMENT_INSPECTION
+                and GoodsInspection.objects.filter(
+                    pk=document_id,
+                    goods_receipt__received_by=employee,
+                ).exists()
+            )
+            if not owns_document:
+                raise PermissionDenied(
+                    "Receiving Clerks may attach evidence only to their own GRNs and inspections."
+                )
+        super().perform_create(serializer)
 
     @action(detail=True, methods=["get"])
     def download(self, request, pk=None):

@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 
 from django.conf import settings
@@ -44,6 +45,38 @@ class RequisitionSequence(BaseModel):
             sequence.current_value += 1
             sequence.save(update_fields=["current_value", "updated_at"])
         return f"PR-{scope}-{year}-{sequence.current_value:05d}"
+
+
+class ProcurementDocumentSequence(BaseModel):
+    """Concurrency-safe, non-reusable business document numbers.
+
+    Client-facing purchase documents use a numeric reference only.  Prefixes are
+    useful internally, but make it unnecessarily difficult for a supplier or
+    receiving clerk to quote a document number over the phone.
+    """
+
+    DOCUMENT_REQUISITION = "requisition"
+    DOCUMENT_LPO = "lpo"
+    DOCUMENT_GRN = "grn"
+
+    document_type = models.CharField(max_length=30, unique=True)
+    current_value = models.PositiveIntegerField(default=0)
+
+    class Meta(BaseModel.Meta):
+        ordering = ("document_type",)
+
+    def __str__(self):
+        return f"{self.document_type}: {self.current_value}"
+
+    @classmethod
+    def next_number(cls, document_type):
+        with transaction.atomic():
+            sequence, _ = cls.objects.select_for_update().get_or_create(
+                document_type=document_type,
+            )
+            sequence.current_value += 1
+            sequence.save(update_fields=["current_value", "updated_at"])
+        return f"{sequence.current_value:06d}"
 
 
 class PurchaseRequisition(BaseModel):
@@ -137,7 +170,9 @@ class PurchaseRequisition(BaseModel):
         if self.hotel_id and (not self.currency or self.currency == "UGX"):
             self.currency = self.hotel.currency or "UGX"
         if not self.requisition_number:
-            self.requisition_number = RequisitionSequence.next_reference(self.branch)
+            self.requisition_number = ProcurementDocumentSequence.next_number(
+                ProcurementDocumentSequence.DOCUMENT_REQUISITION
+            )
         super().save(*args, **kwargs)
 
     def clean(self):
@@ -466,6 +501,7 @@ class PurchaseRequisition(BaseModel):
         store=None,
         po_number="",
         expected_date=None,
+        valid_until=None,
         note="",
         created_by=None,
     ):
@@ -490,6 +526,7 @@ class PurchaseRequisition(BaseModel):
                 store=store,
                 po_number=po_number,
                 expected_date=expected_date or self.expected_date,
+                valid_until=valid_until,
                 note=note,
                 created_by=created_by,
             )
@@ -517,6 +554,23 @@ class PurchaseRequisition(BaseModel):
             if not order.items.exists():
                 order.delete()
                 raise ValidationError("All approved requisition quantities have already been ordered.")
+            # Retain the supplier's stated lead time on the LPO.  The clock is
+            # deliberately not started here; it begins in ``issue`` only after
+            # the supplier email succeeds.
+            from apps.inventory.models import SupplierItemPrice
+
+            catalogue_lead_time = SupplierItemPrice.objects.filter(
+                supplier=supplier,
+                item__in=[line.item for line in order.items.all()],
+                is_active=True,
+            ).aggregate(maximum=models.Max("lead_time_days"))["maximum"]
+            quote_lead_time = VendorQuotationItem.objects.filter(
+                quotation__requisition=self,
+                quotation__supplier=supplier,
+                selected=True,
+            ).aggregate(maximum=models.Max("delivery_days"))["maximum"]
+            order.lead_time_days = max(catalogue_lead_time or 0, quote_lead_time or 0)
+            order.save(update_fields=["lead_time_days", "updated_at"])
             order.refresh_from_db()
             return order
 
@@ -769,7 +823,7 @@ class RequisitionItem(BaseModel):
     def ordered_quantity(self):
         return sum(
             (
-                line.base_quantity
+                line.approved_base_quantity
                 for line in self.purchase_order_items.filter(
                     purchase_order__status__in=(
                         POStatus.ISSUED,
@@ -931,6 +985,15 @@ class PurchaseOrder(BaseModel):
     )
     rejected_at = models.DateTimeField(null=True, blank=True)
     expected_date = models.DateField(null=True, blank=True)
+    valid_until = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Last date on which the supplier may accept this LPO.",
+    )
+    lead_time_days = models.PositiveIntegerField(
+        default=0,
+        help_text="Supplier lead time captured from the selected quotation/catalogue.",
+    )
     sent_at = models.DateTimeField(null=True, blank=True)
     sent_by = models.ForeignKey(
         "employees.Employee",
@@ -964,15 +1027,9 @@ class PurchaseOrder(BaseModel):
 
     @classmethod
     def next_po_number(cls):
-        prefix = f"PO-{timezone.localdate().year}"
-        last_order = cls.objects.filter(po_number__startswith=prefix).order_by("po_number").last()
-        next_number = 1
-        if last_order and last_order.po_number:
-            try:
-                next_number = int(last_order.po_number.split("-")[-1]) + 1
-            except (IndexError, ValueError):
-                next_number = 1
-        return f"{prefix}-{next_number:05d}"
+        return ProcurementDocumentSequence.next_number(
+            ProcurementDocumentSequence.DOCUMENT_LPO
+        )
 
     def clean(self):
         super().clean()
@@ -981,6 +1038,17 @@ class PurchaseOrder(BaseModel):
             PRStatus.PARTIALLY_ORDERED,
         ):
             raise ValidationError("Purchase order can only be created from an approved requisition.")
+        validity_start = (
+            self.submitted_for_approval_at.date()
+            if self.submitted_for_approval_at
+            else self.created_at.date()
+            if self.created_at
+            else timezone.localdate()
+        )
+        if self.valid_until and self.valid_until < validity_start:
+            raise ValidationError(
+                {"valid_until": "LPO validity cannot end before the order date."}
+            )
 
     @property
     def editable(self):
@@ -995,7 +1063,7 @@ class PurchaseOrder(BaseModel):
 
     def update_receipt_status(self):
         ordered_total = sum(
-            (item.base_quantity for item in self.items.all()),
+            (item.approved_base_quantity for item in self.items.all()),
             Decimal("0.00"),
         )
         if ordered_total <= Decimal("0.00"):
@@ -1025,6 +1093,8 @@ class PurchaseOrder(BaseModel):
 
     def quantity_commitment_blockers(self):
         blockers = []
+        if self.total_amount <= Decimal("0.00"):
+            blockers.append("The approved LPO total must remain greater than zero.")
         for order_line in self.items.select_related("item"):
             requisition_line = self.requisition.items.filter(item=order_line.item).first()
             if not requisition_line:
@@ -1032,7 +1102,7 @@ class PurchaseOrder(BaseModel):
                 continue
             ordered_elsewhere = sum(
                 (
-                    line.base_quantity
+                    line.approved_base_quantity
                     for line in PurchaseOrderItem.objects.filter(
                         purchase_order__requisition=self.requisition,
                         item=order_line.item,
@@ -1046,11 +1116,138 @@ class PurchaseOrder(BaseModel):
                 ),
                 Decimal("0.00"),
             )
-            if ordered_elsewhere + order_line.base_quantity > requisition_line.approved_base_quantity:
+            if ordered_elsewhere + order_line.approved_base_quantity > requisition_line.approved_base_quantity:
                 blockers.append(
                     f"{order_line.item} exceeds the remaining approved requisition quantity."
                 )
         return blockers
+
+    @property
+    def delivery_due_date(self):
+        """The supplier clock starts only once the LPO email has actually sent."""
+        if not self.sent_at:
+            return None
+        return (self.sent_at + timedelta(days=self.lead_time_days or 0)).date()
+
+    @property
+    def next_print_classification(self):
+        return "COPY" if self.print_records.exists() else "ORIGINAL"
+
+    def record_activity(self, *, action, actor=None, comments="", metadata=None,
+                        previous_status="", new_status=""):
+        """Persist a human-readable, immutable commercial control event."""
+        return PurchaseOrderActivity.objects.create(
+            purchase_order=self,
+            action=action,
+            previous_status=previous_status,
+            new_status=new_status,
+            comments=comments,
+            metadata=metadata or {},
+            performed_by=actor,
+            created_by=actor,
+        )
+
+    def record_print(self, *, printed_by):
+        if self.status not in (
+            POStatus.APPROVED,
+            POStatus.ISSUED,
+            POStatus.PARTIALLY_RECEIVED,
+            POStatus.RECEIVED,
+        ):
+            raise ValidationError("Only an approved LPO can be printed.")
+        with transaction.atomic():
+            order = PurchaseOrder.objects.select_for_update().get(pk=self.pk)
+            print_number = order.print_records.count() + 1
+            print_record = PurchaseOrderPrintRecord.objects.create(
+                purchase_order=order,
+                print_number=print_number,
+                classification=(
+                    PurchaseOrderPrintRecord.CLASSIFICATION_ORIGINAL
+                    if print_number == 1
+                    else PurchaseOrderPrintRecord.CLASSIFICATION_COPY
+                ),
+                printed_by=printed_by,
+                created_by=printed_by,
+            )
+            order.record_activity(
+                action="printed",
+                actor=printed_by,
+                metadata={
+                    "print_number": print_number,
+                    "classification": print_record.classification,
+                },
+                previous_status=order.status,
+                new_status=order.status,
+            )
+        return print_record
+
+    def apply_finance_quantity_reductions(self, *, reductions, actor, comments=""):
+        """Keep Procurement's quantity intact while Finance records its limit.
+
+        A normal model save intentionally blocks any alteration while an LPO is
+        awaiting approval.  This narrowly-scoped method is the only route for a
+        Finance decision to reduce a line without silently changing the buyer's
+        original request.
+        """
+        if self.status != POStatus.PENDING_APPROVAL:
+            raise ValidationError("Finance can only reduce quantities while the LPO is pending approval.")
+        if not reductions:
+            raise ValidationError("Choose at least one LPO line to review.")
+
+        with transaction.atomic():
+            order = PurchaseOrder.objects.select_for_update().get(pk=self.pk)
+            lines = {
+                str(line.pk): line
+                for line in order.items.select_for_update().select_related("item", "unit")
+            }
+            activity_lines = []
+            for reduction in reductions:
+                line_id = str(reduction.get("id") or reduction.get("purchase_order_item") or "")
+                line = lines.get(line_id)
+                if not line:
+                    raise ValidationError("One selected LPO line does not belong to this LPO.")
+                try:
+                    approved_quantity = Decimal(str(reduction.get("approved_quantity")))
+                except Exception as error:
+                    raise ValidationError("Enter a valid finance-approved quantity for every reviewed line.") from error
+                if approved_quantity < Decimal("0.00"):
+                    raise ValidationError("Finance-approved quantities cannot be negative.")
+                procurement_quantity = line.procurement_quantity or line.quantity
+                if approved_quantity > procurement_quantity:
+                    raise ValidationError(
+                        f"Finance cannot increase {line.item} above Procurement's quantity of {procurement_quantity}."
+                    )
+                reason = str(reduction.get("reason") or "").strip()
+                if approved_quantity < procurement_quantity and not reason:
+                    raise ValidationError(
+                        f"Record a reason for reducing {line.item} from {procurement_quantity}."
+                    )
+                approved_base = line.item.quantity_in_base_units(
+                    approved_quantity, line.unit
+                ).quantize(Decimal("0.01"))
+                PurchaseOrderItem.objects.filter(pk=line.pk).update(
+                    finance_approved_quantity=approved_quantity,
+                    finance_approved_base_quantity=approved_base,
+                    finance_reduction_reason=reason,
+                    updated_at=timezone.now(),
+                )
+                activity_lines.append({
+                    "line_id": str(line.pk),
+                    "item": str(line.item),
+                    "procurement_quantity": str(procurement_quantity),
+                    "finance_approved_quantity": str(approved_quantity),
+                    "reason": reason,
+                })
+            order.update_total_amount()
+            order.record_activity(
+                action="finance_quantity_reduced",
+                actor=actor,
+                comments=comments,
+                metadata={"lines": activity_lines},
+                previous_status=order.status,
+                new_status=order.status,
+            )
+        return order
 
     def approval_readiness(self):
         from apps.approvals.models import ApprovalMatrixRule
@@ -1079,11 +1276,26 @@ class PurchaseOrder(BaseModel):
                 f"No LPO approval matrix matches this order value ({self.total_amount})."
             )
         else:
+            if len(rules) < 2:
+                blockers.append(
+                    "The LPO approval route must include Finance review followed by final Management approval."
+                )
+            elif "finance" not in rules[0].stage_name.lower():
+                blockers.append("The first LPO approval stage must be the Finance Manager review.")
+            final_stage = rules[-1].stage_name.lower()
+            if not any(label in final_stage for label in ("general manager", "director", "management")):
+                blockers.append(
+                    "The final LPO approval stage must be assigned to the General Manager or Director."
+                )
+            resolved_approvers = []
             for rule in rules:
                 try:
-                    rule.resolve_purchase_order_approver(self)
+                    resolved_approvers.append(rule.resolve_purchase_order_approver(self))
                 except ValidationError as error:
                     blockers.extend(error.messages)
+            resolved_ids = [approver.pk for approver in resolved_approvers]
+            if len(resolved_ids) != len(set(resolved_ids)):
+                blockers.append("Finance and final Management approval must be assigned to different employees.")
         if not self.expected_date:
             warnings.append("No expected delivery date has been entered.")
         if not self.store_id and any(
@@ -1129,6 +1341,8 @@ class PurchaseOrder(BaseModel):
                 order.revision += 1
             order.status = POStatus.PENDING_APPROVAL
             order.submitted_for_approval_at = timezone.now()
+            if not order.valid_until or order.valid_until < timezone.localdate():
+                order.valid_until = timezone.localdate() + timedelta(days=7)
             order.approved_at = None
             order.approved_by = None
             order.rejected_at = None
@@ -1137,6 +1351,7 @@ class PurchaseOrder(BaseModel):
                     "status",
                     "revision",
                     "submitted_for_approval_at",
+                    "valid_until",
                     "approved_at",
                     "approved_by",
                     "rejected_at",
@@ -1146,6 +1361,13 @@ class PurchaseOrder(BaseModel):
             self.status = order.status
             self.revision = order.revision
             self.submitted_for_approval_at = order.submitted_for_approval_at
+            order.record_activity(
+                action="submitted_for_finance",
+                actor=order.ordered_by.user if order.ordered_by_id else None,
+                previous_status=POStatus.REJECTED if order.revision > 1 else POStatus.DRAFT,
+                new_status=POStatus.PENDING_APPROVAL,
+                metadata={"revision": order.revision},
+            )
 
     def issue(self, *, sent_by=None, sent_to_email=""):
         if self.status != POStatus.APPROVED:
@@ -1158,7 +1380,20 @@ class PurchaseOrder(BaseModel):
         self.sent_at = timezone.now()
         self.sent_by = sent_by or self.sent_by
         self.sent_to_email = sent_to_email or self.sent_to_email or self.supplier.email
-        self.save(update_fields=["status", "sent_at", "sent_by", "sent_to_email", "updated_at"])
+        if not self.expected_date and self.lead_time_days:
+            self.expected_date = self.delivery_due_date
+        self.save(update_fields=["status", "sent_at", "sent_by", "sent_to_email", "expected_date", "updated_at"])
+        self.record_activity(
+            action="sent_to_supplier",
+            actor=self.sent_by.user if self.sent_by_id else None,
+            previous_status=POStatus.APPROVED,
+            new_status=POStatus.ISSUED,
+            metadata={
+                "recipient": self.sent_to_email,
+                "lead_time_days": self.lead_time_days,
+                "delivery_due_date": self.delivery_due_date.isoformat() if self.delivery_due_date else None,
+            },
+        )
         self.requisition.sync_fulfillment_status(
             actor=self.sent_by.user if self.sent_by_id else None
         )
@@ -1193,6 +1428,8 @@ class PurchaseOrder(BaseModel):
             )
         if not self.sent_to_email and not self.supplier.email:
             blockers.append("The supplier must have an email address before the LPO is sent.")
+        if self.valid_until and self.valid_until < timezone.localdate():
+            blockers.append("The LPO validity date has expired. Extend it before emailing the supplier.")
         return {"can_proceed": not blockers, "blockers": blockers, "warnings": warnings}
 
 
@@ -1231,6 +1468,37 @@ class PurchaseOrderItem(BaseModel):
         decimal_places=2,
         default=Decimal("0.00"),
     )
+    procurement_quantity = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[validate_non_negative_decimal],
+        help_text="Quantity requested by Procurement before Finance review.",
+    )
+    procurement_base_quantity = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[validate_non_negative_decimal],
+    )
+    finance_approved_quantity = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[validate_non_negative_decimal],
+        help_text="Finance-approved quantity; blank means Finance retained the Procurement quantity.",
+    )
+    finance_approved_base_quantity = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[validate_non_negative_decimal],
+    )
+    finance_reduction_reason = models.TextField(blank=True)
     unit_cost = models.DecimalField(
         max_digits=15,
         decimal_places=2,
@@ -1261,7 +1529,17 @@ class PurchaseOrderItem(BaseModel):
     def line_total(self):
         # Supplier prices are per selected purchase unit (carton, pallet, each),
         # while stock quantity is always held in the article's base unit.
-        return (self.quantity or Decimal("0.00")) * (self.unit_cost or Decimal("0.00"))
+        return (self.approved_quantity or Decimal("0.00")) * (
+            self.unit_cost or Decimal("0.00")
+        )
+
+    @property
+    def approved_quantity(self):
+        return self.finance_approved_quantity if self.finance_approved_quantity is not None else self.quantity
+
+    @property
+    def approved_base_quantity(self):
+        return self.finance_approved_base_quantity if self.finance_approved_base_quantity is not None else self.base_quantity
 
     @property
     def conversion_factor(self):
@@ -1288,6 +1566,11 @@ class PurchaseOrderItem(BaseModel):
         self.base_quantity = self.item.quantity_in_base_units(
             self.quantity, self.unit
         ).quantize(Decimal("0.01"))
+        # Before the LPO is submitted, Procurement is still editing its own
+        # request.  Capture that latest draft as the immutable Finance baseline.
+        if self.purchase_order_id and self.purchase_order.editable:
+            self.procurement_quantity = self.quantity
+            self.procurement_base_quantity = self.base_quantity
         self.full_clean()
         super().save(*args, **kwargs)
         self.purchase_order.update_total_amount()
@@ -1325,6 +1608,77 @@ class PurchaseOrderItem(BaseModel):
         return f"{self.purchase_order} - {self.item} x {self.base_quantity}"
 
 
+class PurchaseOrderActivity(BaseModel):
+    """Immutable operational history for supplier-facing LPO controls."""
+
+    purchase_order = models.ForeignKey(
+        PurchaseOrder,
+        on_delete=models.CASCADE,
+        related_name="activities",
+    )
+    action = models.CharField(max_length=80)
+    previous_status = models.CharField(max_length=30, blank=True)
+    new_status = models.CharField(max_length=30, blank=True)
+    performed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="purchase_order_activities",
+    )
+    comments = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta(BaseModel.Meta):
+        ordering = ("created_at",)
+
+    def __str__(self):
+        return f"{self.purchase_order}: {self.action}"
+
+
+class PurchaseOrderPrintRecord(BaseModel):
+    """Server-side record ensuring exactly one first-print ORIGINAL."""
+
+    CLASSIFICATION_ORIGINAL = "original"
+    CLASSIFICATION_COPY = "copy"
+    CLASSIFICATION_CHOICES = (
+        (CLASSIFICATION_ORIGINAL, "Original"),
+        (CLASSIFICATION_COPY, "Copy"),
+    )
+
+    purchase_order = models.ForeignKey(
+        PurchaseOrder,
+        on_delete=models.CASCADE,
+        related_name="print_records",
+    )
+    print_number = models.PositiveIntegerField()
+    classification = models.CharField(max_length=12, choices=CLASSIFICATION_CHOICES)
+    printed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="printed_purchase_orders",
+    )
+
+    class Meta(BaseModel.Meta):
+        constraints = [
+            models.UniqueConstraint(
+                fields=("purchase_order", "print_number"),
+                name="unique_purchase_order_print_number",
+            ),
+            models.UniqueConstraint(
+                fields=("purchase_order", "classification"),
+                condition=models.Q(classification="original"),
+                name="one_original_purchase_order_print",
+            ),
+        ]
+        ordering = ("print_number",)
+
+    def __str__(self):
+        return f"{self.purchase_order} print {self.print_number} ({self.classification})"
+
+
 class GoodsReceiptNote(BaseModel):
     grn_number = models.CharField(max_length=50, unique=True, blank=True)
     purchase_order = models.ForeignKey(
@@ -1344,6 +1698,11 @@ class GoodsReceiptNote(BaseModel):
         default=GoodsReceiptStatus.DRAFT,
     )
     delivery_note_no = models.CharField(max_length=100, blank=True)
+    supplier_invoice_no = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Invoice reference physically presented by the supplier.",
+    )
     note = models.TextField(blank=True)
     posted_at = models.DateTimeField(null=True, blank=True)
     posted_by = models.ForeignKey(
@@ -1362,17 +1721,9 @@ class GoodsReceiptNote(BaseModel):
 
     def save(self, *args, **kwargs):
         if not self.grn_number:
-            prefix = f"GRN-{timezone.localdate().year}"
-            last_receipt = GoodsReceiptNote.objects.filter(
-                grn_number__startswith=prefix
-            ).order_by("grn_number").last()
-            next_number = 1
-            if last_receipt and last_receipt.grn_number:
-                try:
-                    next_number = int(last_receipt.grn_number.split("-")[-1]) + 1
-                except (IndexError, ValueError):
-                    next_number = 1
-            self.grn_number = f"{prefix}-{next_number:05d}"
+            self.grn_number = ProcurementDocumentSequence.next_number(
+                ProcurementDocumentSequence.DOCUMENT_GRN
+            )
         super().save(*args, **kwargs)
 
     def clean(self):
@@ -1392,6 +1743,17 @@ class GoodsReceiptNote(BaseModel):
             if duplicate.exists():
                 raise ValidationError(
                     {"delivery_note_no": "This supplier delivery note has already been received."}
+                )
+        if self.supplier_invoice_no:
+            duplicate = GoodsReceiptNote.objects.filter(
+                purchase_order__supplier=self.purchase_order.supplier,
+                supplier_invoice_no__iexact=self.supplier_invoice_no.strip(),
+            )
+            if self.pk:
+                duplicate = duplicate.exclude(pk=self.pk)
+            if duplicate.exists():
+                raise ValidationError(
+                    {"supplier_invoice_no": "This supplier invoice has already been recorded on a GRN."}
                 )
 
     def post_to_inventory(self, posted_by=None):
@@ -1526,8 +1888,9 @@ class GoodsReceiptItem(BaseModel):
         else:
             self.direct_issue_department = None
             self.store = planned_line.destination_store or self.goods_receipt.purchase_order.store
-        if not self.unit_cost:
-            self.unit_cost = self.purchase_order_item.unit_cost
+        # The Receiving Clerk confirms the delivery, not the commercial deal.
+        # A GRN always inherits the approved LPO rate.
+        self.unit_cost = self.purchase_order_item.unit_cost
         if not self.expiry_date:
             self.expiry_date = self.purchase_order_item.expiry_date
         self.full_clean()
@@ -1563,7 +1926,7 @@ class GoodsReceiptItem(BaseModel):
                 (line.committed_purchase_quantity for line in previous),
                 Decimal("0.00"),
             )
-            ordered = self.purchase_order_item.quantity or Decimal("0.00")
+            ordered = self.purchase_order_item.approved_quantity or Decimal("0.00")
             if already_received + self.quantity_received > ordered:
                 remaining = max(ordered - already_received, Decimal("0.00"))
                 raise ValidationError({
@@ -1989,12 +2352,16 @@ class SupplierReturnItem(BaseModel):
 
 
 class ProcurementAttachment(BaseModel):
+    DOCUMENT_SUPPLIER_CATALOGUE = "supplier_catalogue"
+    DOCUMENT_PURCHASE_REQUISITION = "purchase_requisition"
     DOCUMENT_QUOTATION = "quotation"
     DOCUMENT_PURCHASE_ORDER = "purchase_order"
     DOCUMENT_GRN = "grn"
     DOCUMENT_INSPECTION = "inspection"
     DOCUMENT_SUPPLIER_RETURN = "supplier_return"
     DOCUMENT_CHOICES = (
+        (DOCUMENT_SUPPLIER_CATALOGUE, "Supplier catalogue quotation"),
+        (DOCUMENT_PURCHASE_REQUISITION, "Purchase requisition"),
         (DOCUMENT_QUOTATION, "Supplier quotation"),
         (DOCUMENT_PURCHASE_ORDER, "Purchase order"),
         (DOCUMENT_GRN, "Goods receipt"),

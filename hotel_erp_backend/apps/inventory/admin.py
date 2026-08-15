@@ -18,6 +18,7 @@ from apps.inventory.models import (
     StockTransfer,
     StockTransferItem,
     StoreLocation,
+    StoreKeeperAssignment,
     StoreRequisition,
     StoreRequisitionItem,
     StoreReturn,
@@ -77,6 +78,15 @@ class StoreLocationAdmin(CreatedByAdminMixin, admin.ModelAdmin):
     date_hierarchy = "created_at"
 
 
+@admin.register(StoreKeeperAssignment)
+class StoreKeeperAssignmentAdmin(CreatedByAdminMixin, admin.ModelAdmin):
+    list_display = ("store", "employee", "is_active", "created_at")
+    list_filter = ("store", "is_active")
+    list_select_related = ("store", "employee", "employee__user")
+    autocomplete_fields = ("store", "employee")
+    search_fields = ("store__name", "employee__user__username", "employee__user__employee_code")
+
+
 @admin.register(InventoryBalance)
 class InventoryBalanceAdmin(CreatedByAdminMixin, admin.ModelAdmin):
     list_display = ("item", "store", "quantity_in_stock", "reorder_level", "is_below_reorder")
@@ -89,7 +99,7 @@ class InventoryBalanceAdmin(CreatedByAdminMixin, admin.ModelAdmin):
 
 @admin.register(SupplierItemPrice)
 class SupplierItemPriceAdmin(CreatedByAdminMixin, admin.ModelAdmin):
-    list_display = ("supplier", "item", "supplier_sku", "unit", "unit_price", "minimum_order_quantity", "lead_time_days", "is_preferred", "is_active")
+    list_display = ("supplier", "item", "quotation_reference", "unit", "unit_price", "quotation_valid_until", "lead_time_days", "is_preferred", "is_active")
     list_filter = ("supplier", "item", "unit", "is_preferred", "is_active")
     list_select_related = ("supplier", "item", "unit")
     autocomplete_fields = ("supplier", "item", "unit")

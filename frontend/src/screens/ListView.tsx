@@ -5,7 +5,7 @@ import RecordDetailDrawer from '../components/RecordDetailDrawer'
 import { cfg, type ColumnDef, type EntityKey, type Row } from '../lib/data'
 import { chipStyleFor, money } from '../lib/theme'
 import { helpText } from '../lib/help'
-import { errorMessage, fetchSupplierPriceHistory, importSupplierCatalogue, runBackendAction } from '../lib/api'
+import { downloadProcurementAttachment, errorMessage, fetchSupplierPriceHistory, importSupplierCatalogue, readBackendRecords, runBackendAction, uploadProcurementAttachment } from '../lib/api'
 
 function valueFor(column: ColumnDef, row: Row) {
   const value = row[column.key]
@@ -60,7 +60,10 @@ export default function ListView() {
   const [articleFilter, setArticleFilter] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [importing, setImporting] = useState(false)
+  const [quotationAttachments, setQuotationAttachments] = useState<Row[]>([])
+  const [uploadingQuotation, setUploadingQuotation] = useState(false)
   const importInput = useRef<HTMLInputElement>(null)
+  const quotationInput = useRef<HTMLInputElement>(null)
   let rows = [...(app.data[source] || [])]
   if (route === 'approvals') {
     rows = rows.filter((row) => row.status === 'Pending' && Boolean(row.approvalActionable))
@@ -131,12 +134,19 @@ export default function ListView() {
     else if (route === 'orders') app.openDetail('orders', row.id, 'orders')
     else {
       setDetailRecord(row)
-      if (route === 'supplierItems') void fetchSupplierPriceHistory(row.id).then((history) => {
-        const summary = history.length
-          ? history.map((entry) => `${entry.effective_from}–${entry.effective_to}: ${entry.currency} ${entry.unit_price}${entry.changed_by_name ? ` by ${entry.changed_by_name}` : ''}`).join('\n')
-          : 'No previous prices — this is the first recorded price.'
-        setDetailRecord((current) => current?.id === row.id ? { ...current, priceHistory: summary } : current)
-      }).catch(() => undefined)
+      if (route === 'supplierItems') {
+        setQuotationAttachments([])
+        void Promise.all([
+          fetchSupplierPriceHistory(row.id),
+          readBackendRecords(`procurement-attachments?document_type=supplier_catalogue&document_id=${row.id}`),
+        ]).then(([history, attachments]) => {
+          const summary = history.length
+            ? history.map((entry) => `${entry.effective_from}–${entry.effective_to}: ${entry.currency} ${entry.unit_price}${entry.changed_by_name ? ` by ${entry.changed_by_name}` : ''}`).join('\n')
+            : 'No previous prices — this is the first recorded price.'
+          setDetailRecord((current) => current?.id === row.id ? { ...current, priceHistory: summary, quotationFiles: attachments.map((file) => file.original_name).join(', ') || 'No quotation file attached' } : current)
+          setQuotationAttachments(attachments)
+        }).catch(() => undefined)
+      }
     }
   }
   const catalogueValues = (key: string) => Array.from(new Set((app.data.supplierItems || []).map((row) => String(row[key] || '')).filter(Boolean))).sort()
@@ -149,6 +159,22 @@ export default function ListView() {
       app.refreshData()
     } catch (error) { app.showWorkflowAlert('Catalogue import failed', errorMessage(error)) }
     finally { setImporting(false); if (importInput.current) importInput.current.value = '' }
+  }
+  const uploadQuotation = async (file?: File) => {
+    if (!file || !detailRecord) return
+    setUploadingQuotation(true)
+    try {
+      await uploadProcurementAttachment('supplier_catalogue', String(detailRecord.id), 'quotation', file)
+      const attachments = await readBackendRecords(`procurement-attachments?document_type=supplier_catalogue&document_id=${detailRecord.id}`)
+      setQuotationAttachments(attachments)
+      setDetailRecord((current) => current ? { ...current, quotationFiles: attachments.map((entry) => entry.original_name).join(', ') } : current)
+      app.showToast('Supplier quotation attached to this price quote')
+    } catch (error) {
+      app.showWorkflowAlert('Quotation upload failed', errorMessage(error))
+    } finally {
+      setUploadingQuotation(false)
+      if (quotationInput.current) quotationInput.current.value = ''
+    }
   }
 
   return (
@@ -238,11 +264,13 @@ export default function ListView() {
         subtitle={String(detailRecord.name || detailRecord.id || 'Record details')}
         record={detailRecord}
         preferredKeys={config.cols.map((column) => column.key)}
-        labels={{ ...Object.fromEntries(config.cols.map((column) => [column.key, column.label])), priceHistory: 'Previous prices' }}
+        labels={{ ...Object.fromEntries(config.cols.map((column) => [column.key, column.label])), priceHistory: 'Previous prices', quotationFiles: 'Supplier quotation files' }}
         onClose={() => setDetailRecord(null)}
         actions={(route === 'categories' || route === 'suppliers' || route === 'balances' || (config.editable && (canChange || canDelete))) ? <>
           {route === 'categories' && <button type="button" onClick={() => app.viewCategoryItems(detailRecord)} style={drawerPrimary}><Icon name="inventory_2" size={17} color="#fff" />View articles ({String(detailRecord.itemsCount || 0)})</button>}
           {route === 'suppliers' && <button type="button" onClick={() => { app.navTo('supplierItems', 'Supplier catalogue'); app.setSearchTerm(String(detailRecord.name || '')) }} style={drawerSecondary}><Icon name="contract" size={17} />View supplied goods</button>}
+          {route === 'supplierItems' && canChange && <><input ref={quotationInput} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx" hidden onChange={(event) => void uploadQuotation(event.target.files?.[0])} /><button type="button" disabled={uploadingQuotation} onClick={() => quotationInput.current?.click()} style={drawerSecondary}><Icon name="attach_file" size={17} />{uploadingQuotation ? 'Uploading…' : 'Attach supplier quotation'}</button></>}
+          {route === 'supplierItems' && quotationAttachments[0] && <button type="button" onClick={() => void downloadProcurementAttachment(String(quotationAttachments[0].id), String(quotationAttachments[0].original_name))} style={drawerSecondary}><Icon name="download" size={17} />Download latest quotation</button>}
           {route === 'balances' && Number(detailRecord.reservationVariance || 0) !== 0 && (app.user.isSuperuser || ['administrator', 'system administrator', 'stores manager', 'store manager'].includes(app.user.role.toLowerCase())) && <button type="button" onClick={() => { const recordId = String(detailRecord.id); void runBackendAction('inventory-balances', recordId, 'reconcile-reservation').then(() => { setDetailRecord(null); app.refreshData(); app.showToast('Reserved stock reconciled to open approved requests') }).catch((error) => app.showWorkflowAlert('Reservation reconciliation blocked', errorMessage(error))) }} style={drawerPrimary}><Icon name="sync" size={17} color="#fff" />Reconcile reservation</button>}
           {canChange && <button type="button" onClick={() => { const recordId = detailRecord.id; setDetailRecord(null); app.openEdit(recordId) }} style={drawerSecondary}><Icon name="edit" size={17} />Edit record</button>}
           {canDelete && <button type="button" onClick={() => { const recordId = detailRecord.id; setDetailRecord(null); app.requestDelete(recordId) }} style={drawerDanger}><Icon name="delete" size={17} />Deactivate or delete</button>}

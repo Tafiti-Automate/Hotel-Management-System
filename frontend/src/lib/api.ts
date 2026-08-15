@@ -254,6 +254,32 @@ export async function fetchSupplierPriceHistory(id: string): Promise<Record<stri
   return await response.json() as Record<string, any>[]
 }
 
+export async function downloadControlledPurchaseOrder(id: string): Promise<{ classification: string; printNumber: string }> {
+  const response = await fetchWithTimeout(`${apiRoot()}/purchase-orders/${id}/controlled-document/`, {
+    method: 'POST',
+    headers: { Accept: 'application/pdf', ...authHeaders() },
+  })
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({})) as Record<string, unknown>
+    throw new Error(String(body.detail || `The controlled LPO could not be generated (${response.status}).`))
+  }
+  const blob = await response.blob()
+  const disposition = response.headers.get('Content-Disposition') || ''
+  const filenameMatch = disposition.match(/filename\*?=(?:UTF-8''|\")?([^";]+)/i)
+  const filename = filenameMatch ? decodeURIComponent(filenameMatch[1].replace(/"/g, '')) : `LPO-${id}.pdf`
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(blob)
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(link.href)
+  return {
+    classification: response.headers.get('X-LPO-Print-Classification') || 'COPY',
+    printNumber: response.headers.get('X-LPO-Print-Number') || '',
+  }
+}
+
 export async function login(username: string, password: string, remember = true): Promise<AuthUser> {
   const response = await fetch(`${apiRoot()}/auth/login/`, {
     method: 'POST',
@@ -730,6 +756,8 @@ function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey
       minimum_order_quantity: num(values.minimumOrder) || 1,
       lead_time_days: num(values.leadTime),
       last_quoted_at: text(values.lastQuoted) || null,
+      quotation_reference: text(values.quotationReference),
+      quotation_valid_until: text(values.quotationValidUntil) || null,
       is_preferred: text(values.preferred, 'No') === 'Yes',
       is_active: text(values.status, 'Active') !== 'Inactive',
     }
@@ -1082,6 +1110,8 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
       minimumOrder: num(row.minimum_order_quantity),
       leadTime: num(row.lead_time_days),
       lastQuoted: text(row.last_quoted_at),
+      quotationReference: text(row.quotation_reference),
+      quotationValidUntil: text(row.quotation_valid_until),
       preferred: bool(row.is_preferred) ? 'Preferred' : 'Alternative',
       pricePosition: bool(row.is_lowest) ? 'Lowest' : 'Higher',
       historyCount: num(row.history_count),

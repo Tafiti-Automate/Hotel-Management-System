@@ -7,11 +7,14 @@ from apps.procurement.models import (
     GoodsReceiptItem,
     GoodsReceiptNote,
     PurchaseOrder,
+    PurchaseOrderActivity,
     PurchaseOrderItem,
+    PurchaseOrderPrintRecord,
     PurchaseRequisition,
     RequisitionHistory,
     RequisitionItem,
     RequisitionSequence,
+    ProcurementDocumentSequence,
     SupplierReturn,
     SupplierReturnItem,
     VendorQuotation,
@@ -225,6 +228,55 @@ class RequisitionSequenceAdmin(CreatedByAdminMixin, admin.ModelAdmin):
         return False
 
 
+@admin.register(ProcurementDocumentSequence)
+class ProcurementDocumentSequenceAdmin(CreatedByAdminMixin, admin.ModelAdmin):
+    list_display = ("document_type", "current_value", "updated_at")
+    readonly_fields = tuple(field.name for field in ProcurementDocumentSequence._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(PurchaseOrderActivity)
+class PurchaseOrderActivityAdmin(CreatedByAdminMixin, admin.ModelAdmin):
+    list_display = ("purchase_order", "action", "performed_by", "previous_status", "new_status", "created_at")
+    list_filter = ("action", "previous_status", "new_status")
+    search_fields = ("purchase_order__po_number", "performed_by__username", "comments")
+    readonly_fields = tuple(field.name for field in PurchaseOrderActivity._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(PurchaseOrderPrintRecord)
+class PurchaseOrderPrintRecordAdmin(CreatedByAdminMixin, admin.ModelAdmin):
+    list_display = ("purchase_order", "print_number", "classification", "printed_by", "created_at")
+    list_filter = ("classification",)
+    search_fields = ("purchase_order__po_number", "printed_by__username")
+    readonly_fields = tuple(field.name for field in PurchaseOrderPrintRecord._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(VendorQuotation)
 class VendorQuotationAdmin(CreatedByAdminMixin, admin.ModelAdmin):
     list_display = ("requisition", "supplier", "total_amount", "created_at")
@@ -261,20 +313,6 @@ class PurchaseOrderAdmin(CreatedByAdminMixin, admin.ModelAdmin):
     readonly_fields = ("sent_at",)
     date_hierarchy = "created_at"
     inlines = [PurchaseOrderItemInline]
-    actions = ("issue_selected_orders",)
-
-    @admin.action(description="Send selected draft purchase orders to suppliers")
-    def issue_selected_orders(self, request, queryset):
-        issued = 0
-        employee = getattr(request.user, "employee_profile", None)
-        for order in queryset:
-            try:
-                order.issue(sent_by=employee)
-                issued += 1
-            except Exception as error:
-                self.message_user(request, f"{order}: {error}", level=messages.ERROR)
-        if issued:
-            self.message_user(request, f"Sent {issued} purchase order(s) to suppliers.")
 
 
 @admin.register(PurchaseOrderItem)
@@ -290,11 +328,11 @@ class PurchaseOrderItemAdmin(CreatedByAdminMixin, admin.ModelAdmin):
 
 @admin.register(GoodsReceiptNote)
 class GoodsReceiptNoteAdmin(CreatedByAdminMixin, admin.ModelAdmin):
-    list_display = ("id", "purchase_order", "received_by", "received_date")
-    list_filter = ("received_date",)
+    list_display = ("grn_number", "purchase_order", "supplier_invoice_no", "received_by", "received_date", "status")
+    list_filter = ("status", "received_date")
     list_select_related = ("purchase_order", "received_by")
     autocomplete_fields = ("purchase_order", "received_by")
-    search_fields = ("purchase_order__po_number", "received_by__user__employee_code")
+    search_fields = ("grn_number", "purchase_order__po_number", "supplier_invoice_no", "delivery_note_no", "received_by__user__employee_code")
     date_hierarchy = "received_date"
     inlines = [GoodsReceiptItemInline]
     actions = ("post_selected_receipts_to_inventory",)

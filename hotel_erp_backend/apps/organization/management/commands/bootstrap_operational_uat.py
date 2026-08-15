@@ -21,6 +21,7 @@ from apps.inventory.models import (
     StockTransfer,
     StockTransferItem,
     StoreLocation,
+    StoreKeeperAssignment,
     StoreRequisition,
     StoreRequisitionItem,
     StoreReturn,
@@ -57,10 +58,11 @@ class Command(BaseCommand):
         employees = {
             "head": self.employee("uat-department-head", "UAT", "Department Head", branch, department, "Department Head"),
             "procurement": self.employee("uat-procurement", "UAT", "Procurement Manager", branch, department, "Procurement Manager"),
-            "finance": self.employee("uat-finance", "UAT", "Finance Controller", branch, department, "Finance Controller"),
+            "finance": self.employee("uat-finance", "UAT", "Finance Manager", branch, department, "Finance Manager"),
             "manager": self.employee("uat-general-manager", "UAT", "General Manager", branch, department, "General Manager"),
-            "stores": self.employee("uat-stores-manager", "UAT", "Stores Manager", branch, department, "Stores Manager"),
-            "receiving": self.employee("uat-receiving", "UAT", "Receiving Officer", branch, department, "Receiving Officer"),
+            "cost_controller": self.employee("uat-cost-controller", "UAT", "Cost Controller", branch, department, "Cost Controller"),
+            "stores": self.employee("uat-store-keeper", "UAT", "Store Keeper", branch, department, "Store Keeper"),
+            "receiving": self.employee("uat-receiving", "UAT", "Receiving Clerk", branch, department, "Receiving Clerk"),
             "auditor": self.employee("uat-auditor", "UAT", "Auditor", branch, department, "Auditor"),
         }
         self.approval_matrix(employees)
@@ -74,6 +76,11 @@ class Command(BaseCommand):
         destination_store = StoreLocation.objects.filter(branch=destination_branch).first()
         if not source_store or not destination_store:
             raise CommandError("Both UAT branches require at least one store.")
+        StoreKeeperAssignment.objects.update_or_create(
+            store=source_store,
+            employee=employees["stores"],
+            defaults={"is_active": True, "created_by": employees["stores"].user},
+        )
         balance = (
             InventoryBalance.objects.filter(store=source_store, quantity_in_stock__gte=Decimal("10.00"))
             .select_related("item")

@@ -5,6 +5,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.core.exceptions import ValidationError
+from rest_framework.test import APIClient
 
 from apps.departments.models import Branch, Department
 from apps.employees.models import Employee
@@ -594,7 +595,7 @@ def test_reorder_rule_does_not_create_purchase_requisition_when_stock_is_enough(
         rule.create_purchase_requisition(requester=employee, department=department)
 
 @pytest.mark.django_db
-def test_employee_store_request_resolves_default_store_from_authenticated_branch(api_client):
+def test_employee_store_request_resolves_default_store_from_authenticated_branch():
     from apps.accounts.models import User
     from apps.departments.models import Branch, Department
     from apps.employees.models import Employee
@@ -613,12 +614,19 @@ def test_employee_store_request_resolves_default_store_from_authenticated_branch
         branch=branch,
         designation="Attendant",
     )
+    user.user_permissions.add(
+        Permission.objects.get(
+            content_type__app_label="inventory",
+            codename="add_storerequisition",
+        )
+    )
     store = StoreLocation.objects.create(
         name="Main Store",
         branch=branch,
         is_default=True,
         is_active=True,
     )
+    api_client = APIClient()
     api_client.force_authenticate(user=user)
     response = api_client.post(
         "/api/v1/store-requisitions/",

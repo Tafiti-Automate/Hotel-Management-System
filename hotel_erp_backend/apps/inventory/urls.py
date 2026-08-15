@@ -18,6 +18,7 @@ from apps.inventory.views import (
     StockTransferItemViewSet,
     StockTransferViewSet,
     StoreLocationViewSet,
+    StoreKeeperAssignmentViewSet,
     StoreRequisitionItemViewSet,
     StoreRequisitionViewSet,
     StoreReturnItemViewSet,
@@ -33,6 +34,7 @@ router.register("units", UnitOfMeasureViewSet, basename="unit")
 router.register("items", ItemViewSet, basename="item")
 router.register("item-unit-prices", ItemUnitPriceViewSet, basename="item-unit-price")
 router.register("stores", StoreLocationViewSet, basename="store")
+router.register("store-keeper-assignments", StoreKeeperAssignmentViewSet, basename="store-keeper-assignment")
 router.register("inventory-balances", InventoryBalanceViewSet, basename="inventory-balance")
 router.register("supplier-item-prices", SupplierItemPriceViewSet, basename="supplier-item-price")
 router.register("reorder-rules", ReorderRuleViewSet, basename="reorder-rule")

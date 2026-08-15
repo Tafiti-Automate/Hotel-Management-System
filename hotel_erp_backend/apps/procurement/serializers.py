@@ -3,6 +3,7 @@ from pathlib import Path
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import serializers
 
 from core.constants.choices import POStatus, PRStatus
@@ -23,6 +24,36 @@ from apps.procurement.models import (
     VendorQuotation,
     VendorQuotationItem,
 )
+
+
+COMMERCIAL_VISIBILITY_ROLES = {
+    "Cost Controller",
+    "Procurement Manager",
+    "Finance Manager",
+    "Finance Controller",
+    "General Manager",
+    "Director",
+    "Auditor",
+    "System Administrator",
+}
+
+
+def can_view_commercial_data(request):
+    """Commercial values must not leak through an otherwise permitted API list."""
+    if not request or not request.user or not request.user.is_authenticated:
+        return False
+    return request.user.is_superuser or request.user.groups.filter(
+        name__in=COMMERCIAL_VISIBILITY_ROLES
+    ).exists()
+
+
+def has_role(request, *roles):
+    return bool(
+        request
+        and request.user
+        and request.user.is_authenticated
+        and (request.user.is_superuser or request.user.groups.filter(name__in=roles).exists())
+    )
 
 
 def validate_configured_item_unit(item, unit):
@@ -102,6 +133,15 @@ class PurchaseRequisitionSerializer(serializers.ModelSerializer):
             }
             for step in steps
         ]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if not can_view_commercial_data(self.context.get("request")):
+            # Department and Store users can follow their request, without ever
+            # receiving supplier or costing data in the response payload.
+            for field in ("preferred_supplier", "currency", "estimated_total"):
+                data.pop(field, None)
+        return data
 
 
     def validate(self, attrs):
@@ -296,6 +336,13 @@ class RequisitionItemSerializer(serializers.ModelSerializer):
             )
         return attrs
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if not can_view_commercial_data(self.context.get("request")):
+            data.pop("estimated_unit_cost", None)
+            data.pop("estimated_total", None)
+        return data
+
 
 class RequisitionHistorySerializer(serializers.ModelSerializer):
     performed_by_name = serializers.SerializerMethodField()
@@ -358,9 +405,24 @@ class VendorQuotationSerializer(serializers.ModelSerializer):
         instance.update_total_amount()
         return instance
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if not can_view_commercial_data(self.context.get("request")):
+            for field in (
+                "supplier", "subtotal", "total_amount", "tax_amount",
+                "transport_cost", "discount_amount", "payment_terms",
+                "evaluation_score", "evaluation_notes",
+            ):
+                data.pop(field, None)
+        return data
+
 
 class PurchaseOrderSerializer(serializers.ModelSerializer):
     approval_steps = serializers.SerializerMethodField()
+    delivery_due_date = serializers.DateField(read_only=True)
+    next_print_classification = serializers.CharField(read_only=True)
+    print_count = serializers.SerializerMethodField()
+    original_printed_at = serializers.SerializerMethodField()
 
     class Meta:
         model = PurchaseOrder
@@ -378,12 +440,22 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "approved_by",
             "rejected_at",
             "expected_date",
+            "valid_until",
+            "lead_time_days",
+            "delivery_due_date",
             "sent_at",
             "sent_by",
             "sent_to_email",
+            "email_status",
+            "last_email_error",
+            "supplier_acknowledged_at",
+            "supplier_acknowledged_by",
             "note",
             "total_amount",
             "approval_steps",
+            "next_print_classification",
+            "print_count",
+            "original_printed_at",
             "created_at",
             "updated_at",
             "created_by",
@@ -399,6 +471,10 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "sent_at",
             "sent_by",
             "sent_to_email",
+            "email_status",
+            "last_email_error",
+            "supplier_acknowledged_at",
+            "supplier_acknowledged_by",
             "total_amount",
             "approval_steps",
             "created_at",
@@ -422,6 +498,13 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             for step in order.approval_workflow.select_related("approver__user").all()
         ]
 
+    def get_print_count(self, order):
+        return order.print_records.count()
+
+    def get_original_printed_at(self, order):
+        original = order.print_records.filter(classification="original").first()
+        return original.created_at if original else None
+
     def validate_requisition(self, requisition):
         if requisition.status not in (PRStatus.APPROVED, PRStatus.PARTIALLY_ORDERED):
             raise serializers.ValidationError(
@@ -430,6 +513,14 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
         return requisition
 
     def validate(self, attrs):
+        valid_until = attrs.get(
+            "valid_until",
+            getattr(self.instance, "valid_until", None),
+        )
+        if valid_until and valid_until < timezone.localdate():
+            raise serializers.ValidationError(
+                {"valid_until": "The LPO validity date cannot be in the past."}
+            )
         if self.instance and not self.instance.editable:
             protected = {
                 "requisition",
@@ -438,6 +529,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
                 "store",
                 "po_number",
                 "expected_date",
+                "valid_until",
             }
             if protected.intersection(attrs):
                 raise serializers.ValidationError(
@@ -446,6 +538,20 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
                 )
         return attrs
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        if not can_view_commercial_data(request):
+            # Receiving may verify supplier and quantities, but never rates or
+            # financial totals. Store Keepers additionally have no supplier
+            # selection visibility.
+            for field in ("total_amount",):
+                data.pop(field, None)
+            if has_role(request, "Store Keeper"):
+                for field in ("supplier", "sent_to_email", "lead_time_days", "delivery_due_date"):
+                    data.pop(field, None)
+        return data
+
 
 class PurchaseOrderItemSerializer(serializers.ModelSerializer):
     line_total = serializers.DecimalField(
@@ -453,6 +559,8 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
         decimal_places=2,
         read_only=True,
     )
+    approved_quantity = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    approved_base_quantity = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
 
     class Meta:
         model = PurchaseOrderItem
@@ -469,6 +577,13 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
             "destination_store",
             "destination_department",
             "destination_justification",
+            "procurement_quantity",
+            "procurement_base_quantity",
+            "finance_approved_quantity",
+            "finance_approved_base_quantity",
+            "finance_reduction_reason",
+            "approved_quantity",
+            "approved_base_quantity",
         )
 
     def validate(self, attrs):
@@ -488,6 +603,17 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
             )
         return attrs
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if not can_view_commercial_data(self.context.get("request")):
+            for field in (
+                "unit_cost", "line_total", "procurement_quantity",
+                "procurement_base_quantity", "finance_approved_quantity",
+                "finance_approved_base_quantity", "finance_reduction_reason",
+            ):
+                data.pop(field, None)
+        return data
+
 
 class GoodsReceiptNoteSerializer(serializers.ModelSerializer):
     class Meta:
@@ -500,6 +626,7 @@ class GoodsReceiptNoteSerializer(serializers.ModelSerializer):
             "received_date",
             "status",
             "delivery_note_no",
+            "supplier_invoice_no",
             "note",
             "posted_at",
             "posted_by",
@@ -507,7 +634,10 @@ class GoodsReceiptNoteSerializer(serializers.ModelSerializer):
             "updated_at",
             "created_by",
         )
-        read_only_fields = ("id", "grn_number", "status", "posted_at", "posted_by", "created_at", "updated_at", "created_by")
+        read_only_fields = (
+            "id", "grn_number", "received_by", "status", "posted_at", "posted_by",
+            "created_at", "updated_at", "created_by",
+        )
 
     def validate_purchase_order(self, purchase_order):
         if purchase_order.status not in (POStatus.ISSUED, POStatus.PARTIALLY_RECEIVED):
@@ -521,6 +651,32 @@ class GoodsReceiptNoteSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "Posted or cancelled GRNs are immutable. Use a supplier return or controlled reversal."
             )
+        purchase_order = attrs.get(
+            "purchase_order",
+            getattr(self.instance, "purchase_order", None),
+        )
+        if purchase_order:
+            candidate = GoodsReceiptNote(
+                purchase_order=purchase_order,
+                status=attrs.get("status", getattr(self.instance, "status", "draft")),
+                delivery_note_no=attrs.get(
+                    "delivery_note_no",
+                    getattr(self.instance, "delivery_note_no", ""),
+                ),
+                supplier_invoice_no=attrs.get(
+                    "supplier_invoice_no",
+                    getattr(self.instance, "supplier_invoice_no", ""),
+                ),
+            )
+            if self.instance:
+                candidate.pk = self.instance.pk
+            try:
+                candidate.clean()
+            except DjangoValidationError as error:
+                detail = getattr(error, "message_dict", None) or {
+                    "non_field_errors": getattr(error, "messages", [str(error)])
+                }
+                raise serializers.ValidationError(detail) from error
         return attrs
 
 
@@ -538,6 +694,7 @@ class GoodsReceiptItemSerializer(serializers.ModelSerializer):
             "created_by",
             "store",
             "direct_issue_department",
+            "unit_cost",
         )
 
     def validate(self, attrs):
@@ -563,7 +720,7 @@ class GoodsReceiptItemSerializer(serializers.ModelSerializer):
                 (line.committed_purchase_quantity for line in existing),
                 Decimal("0.00"),
             )
-            if already_received + quantity > order_line.quantity:
+            if already_received + quantity > order_line.approved_quantity:
                 raise serializers.ValidationError(
                     {"quantity_received": "Delivered quantity exceeds the remaining quantity on the LPO line."}
                 )
@@ -647,7 +804,9 @@ class GoodsInspectionSerializer(serializers.ModelSerializer):
     class Meta:
         model = GoodsInspection
         fields = "__all__"
-        read_only_fields = ("id", "status", "created_at", "updated_at", "created_by")
+        read_only_fields = (
+            "id", "inspected_by", "status", "created_at", "updated_at", "created_by",
+        )
 
     def validate(self, attrs):
         receipt = attrs.get("goods_receipt") or getattr(self.instance, "goods_receipt", None)
