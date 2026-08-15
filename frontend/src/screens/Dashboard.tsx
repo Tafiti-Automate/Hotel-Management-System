@@ -61,7 +61,7 @@ export default function Dashboard() {
     </div>
 
     <div style={{ marginTop: 12, color: 'var(--text-faint)', fontSize: 10.5 }}>
-      Dashboard scope: {isHR ? 'employee and department records permitted to this HR account' : role === 'department head' ? 'this department only' : 'records returned by the signed-in role and branch permissions'}.
+      Dashboard scope: {isHR ? 'employee and department records permitted to this account' : 'records returned by the signed-in role and branch permissions'}.
     </div>
   </div>
 }
@@ -84,15 +84,13 @@ function buildDashboard(role: string, data: any): DashboardConfig {
   const orders = data.orders || []
   const balances = data.balances || []
   const items = data.items || []
-  const ledgers = data.ledgers || []
   const storeReqs = data.storeRequisitions || []
   const issues = data.stockIssues || []
-  const returns = data.storeReturns || []
   const employees = data.employees || []
   const departments = data.departments || []
   const low = items.filter((r: any) => ['Low', 'Critical'].includes(String(r.status)))
 
-  if (role === 'department requester' || role === 'department employee' || role === 'employee') {
+  if (['staff', 'unassigned', 'department employee', 'employee'].includes(role)) {
     const mine = storeReqs
     const drafts = mine.filter((r: any) => normalStatus(r.status) === 'draft')
     const pending = mine.filter((r: any) => ['pending_department_approval','submitted','approved','partially_approved','awaiting_procurement','partially_issued'].includes(normalStatus(r.status)))
@@ -130,41 +128,6 @@ function buildDashboard(role: string, data: any): DashboardConfig {
     }
   }
 
-  if (role === 'department head') {
-    const actionable = storeReqs.filter((r: any) => normalStatus(r.status) === 'pending_department_approval')
-    const fulfilled = storeReqs.filter((r: any) => /approved|issued|completed/i.test(String(r.status)))
-    return {
-      subtitle: 'Department request workload and approvals',
-      kpis: [
-        { label: 'Awaiting your approval', value: actionable.length, icon: 'approval', tone: actionable.length ? 'warning' : 'neutral' },
-        { label: 'Waiting for Stores', value: countStatus(storeReqs, /submitted|approved|pending/i), icon: 'warehouse' },
-        { label: 'Waiting for Procurement', value: countStatus(storeReqs, /awaiting_procurement/i), icon: 'shopping_cart' },
-        { label: 'Fulfilled this month', value: fulfilled.filter((r: any) => monthKey(r.date) === monthKey(today)).length, icon: 'task_alt', tone: 'success' },
-      ],
-      trend: { title: 'Monthly department requests', subtitle: 'Requests visible to this department', series: [{ name: 'Requests', points: monthly(storeReqs, 'created_at') }] },
-      status: { title: 'Requests by status', subtitle: 'Department-only pipeline', data: byStatus(storeReqs) },
-      bars: { title: 'Request value by status', subtitle: 'Estimated UGX value of visible requests', data: groupCount(storeReqs, 'status') },
-      queue: { title: 'Approval queue', subtitle: 'Requests requiring this department head', action: 'Open approvals', route: 'workflow-stores', rows: actionable.map((r: any) => queueStoreReq(r)) },
-    }
-  }
-
-  if (role === 'stores manager' || role === 'store manager') {
-    return {
-      subtitle: 'Inventory movement, requests and exceptions',
-      kpis: [
-        { label: 'Inventory value', value: money(sum(balances, 'value')), icon: 'savings' },
-        { label: 'Low-stock articles', value: low.length, icon: 'warning', tone: low.length ? 'danger' : 'neutral' },
-        { label: 'Pending store requests', value: countStatus(storeReqs, /submitted|approved|pending/i), icon: 'pending_actions', tone: 'warning' },
-        { label: 'Issues today', value: issues.filter((r: any) => r.date === today).length, icon: 'outbox' },
-        { label: 'Returns this month', value: returns.filter((r: any) => monthKey(r.date) === monthKey(today)).length, icon: 'assignment_return' },
-      ],
-      trend: { title: 'Stock movement trend', subtitle: 'Receipts and issues from the authorised stock ledger', series: ledgerSeries(ledgers) },
-      status: { title: 'Department request pipeline', subtitle: 'Store requisitions by current status', data: byStatus(storeReqs) },
-      bars: { title: 'Inventory value by store', subtitle: 'UGX valuation from visible balances', data: groupSum(balances, 'store', 'value'), money: true },
-      queue: { title: 'Low-stock action queue', subtitle: 'Articles at or below reorder level', action: 'Articles', route: 'items', rows: low.map((r: any) => ({ id: r.id, primary: r.name, secondary: `${r.sku || 'No SKU'} · ${r.store || 'Store'}`, value: `${r.onHand || 0} on hand`, status: r.status })) },
-    }
-  }
-
   if (role === 'procurement manager') {
     const pending = reqs.filter((r: any) => !/completed|rejected/i.test(String(r.status)))
     return {
@@ -182,7 +145,7 @@ function buildDashboard(role: string, data: any): DashboardConfig {
     }
   }
 
-  if (role === 'finance controller') {
+  if (role === 'financial manager') {
     const approved = reqs.filter((r: any) => /approved|completed|ordered/i.test(String(r.status)))
     return {
       subtitle: 'Approved procurement commitments and expense exposure',
@@ -299,7 +262,7 @@ function PanelHeader({ title, subtitle, action, onAction }: { title: string; sub
 function Status({ value }: { value: string }) { const bad=/critical|rejected|inactive/i.test(value), good=/approved|completed|active|applied|received/i.test(value); return <span style={{justifySelf:'end',color:bad?'var(--bad)':good?'var(--good)':'var(--warn)',background:bad?'var(--bad-soft)':good?'var(--good-soft)':'var(--warn-soft)',borderRadius:12,padding:'3px 8px',fontSize:10,fontWeight:600,textTransform:'capitalize'}}>{clean(value)}</span> }
 function Empty({ text }: { text: string }) { return <div style={{padding:30,color:'var(--text-faint)',textAlign:'center',fontSize:12.5}}>{text}</div> }
 function Legend({ labels }: { labels: string[] }) { return <div style={{display:'flex',gap:14,marginTop:12,flexWrap:'wrap'}}>{labels.map((l,i)=><span key={l} style={{fontSize:10.5,color:'var(--text-muted)'}}><i style={{display:'inline-block',width:8,height:8,borderRadius:2,background:`var(--chart-${i+1}, var(--accent))`,marginRight:5}}/>{l}</span>)}</div> }
-function dashboardTitle(role:string){ const names:Record<string,string>={'department head':'Department Head dashboard','stores manager':'Stores Manager dashboard','store manager':'Stores Manager dashboard','procurement manager':'Procurement Manager dashboard','finance controller':'Finance Controller dashboard','general manager':'General Manager dashboard','hr administrator':'HR Administrator dashboard'}; return names[role] || `${role ? role.replace(/\b\w/g,c=>c.toUpperCase()) : 'Operations'} dashboard` }
+function dashboardTitle(role:string){ const names:Record<string,string>={'cost controller':'Cost Controller dashboard','store keeper':'Store Keeper dashboard','receiving clerk':'Receiving Clerk dashboard','financial manager':'Financial Manager dashboard','procurement manager':'Procurement Manager dashboard','general manager':'General Manager dashboard'}; return names[role] || `${role ? role.replace(/\b\w/g,c=>c.toUpperCase()) : 'Operations'} dashboard` }
 function tone(value:string){ if(value==='danger')return{fg:'var(--bad)',bg:'var(--bad-soft)'};if(value==='warning')return{fg:'var(--warn)',bg:'var(--warn-soft)'};if(value==='success')return{fg:'var(--good)',bg:'var(--good-soft)'};return{fg:'var(--accent)',bg:'var(--accent-soft)'} }
 function clean(v:unknown){return String(v||'Unknown').replace(/_/g,' ')}
 function compact(v:number){return Intl.NumberFormat('en',{notation:'compact',maximumFractionDigits:1}).format(v)}
@@ -309,7 +272,6 @@ function byStatus(rows:any[]):Point[]{return groupCount(rows,'status')}
 function groupCount(rows:any[], key:string):Point[]{const m=new Map<string,number>();rows.forEach(r=>{const k=clean(r[key]);m.set(k,(m.get(k)||0)+1)});return [...m].map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value)}
 function groupSum(rows:any[], key:string, valueKey:string):Point[]{const m=new Map<string,number>();rows.forEach(r=>{const k=clean(r[key]);m.set(k,(m.get(k)||0)+Number(r[valueKey]||0))});return [...m].map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value)}
 function monthly(rows:any[], dateKey:string, valueKey?:string):Point[]{const months:string[]=[];const now=new Date();for(let i=5;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);months.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`)}return months.map(label=>({label,value:rows.filter(r=>monthKey(r[dateKey])===label).reduce((s,r)=>s+(valueKey?Number(r[valueKey]||0):1),0)}))}
-function ledgerSeries(rows:any[]):Series[]{return [{name:'Received',points:monthly(rows.filter(r=>/in/i.test(String(r.type))),'date','qty')},{name:'Issued',points:monthly(rows.filter(r=>/out/i.test(String(r.type))),'date','qty')}]}
 function normalStatus(value:unknown){return String(value||'').trim().toLowerCase().replace(/\s+/g,'_')}
 function queueReq(r:any){return{id:r.id,primary:r.id,secondary:`${r.dept||r.department||'Department'} · ${r.requester||'Requester'}`,value:money(r.total||0),status:r.status}}
 function queueStoreReq(r:any){return{id:r.id,primary:r.requisition_no||r.reference||r.id,secondary:r.purpose||'Store request',value:'',status:r.status}}

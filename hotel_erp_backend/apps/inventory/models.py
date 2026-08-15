@@ -1192,86 +1192,26 @@ class StoreRequisition(BaseModel):
             raise ValidationError("Only draft or rejected store requisitions can be submitted.")
         if not self.items.exists():
             raise ValidationError("Store requisition must include at least one item.")
-        employee = getattr(actor, "employee_profile", None) if actor else None
-        is_department_head = bool(
-            actor
-            and (
-                actor.is_superuser
-                or actor.groups.filter(name="Department Head").exists()
-            )
-            and employee
-            and employee.department_id == self.department_id
-        )
-        if is_department_head:
-            from django.utils import timezone
-            self.status = StoreRequisitionStatus.SUBMITTED
-            self.department_approved_by = employee
-            self.department_approved_at = timezone.now()
-            self.department_approval_comments = "Submitted by Department Head"
-            self.save(update_fields=[
-                "status", "department_approved_by", "department_approved_at",
-                "department_approval_comments", "updated_at",
-            ])
-            self._notify_stores(
-                title=f"{self.requisition_no} needs a stock decision",
-                message=(
-                    f"{self.department} submitted a department store request. "
-                    "Check availability and decide the quantities to reserve."
-                ),
-                created_by=actor,
-            )
-            return
-        self.status = (
-            StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL
-            if actor else StoreRequisitionStatus.SUBMITTED
-        )
-        self.save(update_fields=["status", "updated_at"])
-        if self.status == StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL:
-            from apps.notifications.services import notify_roles
-
-            notify_roles(
-                ("Department Head",),
-                title=f"{self.requisition_no} needs department approval",
-                message=(
-                    f"{self.requested_by} submitted a store request for {self.department}. "
-                    "Review the articles and approve or reject the request."
-                ),
-                branch=self.store.branch,
-                department=self.department,
-                created_by=actor,
-                exclude_employee=self.requested_by,
-            )
-        else:
-            self._notify_stores(
-                title=f"{self.requisition_no} needs a stock decision",
-                message=(
-                    f"{self.department} submitted a department store request. "
-                    "Check availability and decide the quantities to reserve."
-                ),
-                created_by=actor,
-            )
-
-    def approve_department(self, approved_by, comments=""):
-        if self.status != StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL:
-            raise ValidationError("Only requests awaiting department approval can be approved here.")
-        if not approved_by or approved_by.department_id != self.department_id:
-            raise ValidationError("The approver must be a Department Head in the requesting department.")
-        from django.utils import timezone
         self.status = StoreRequisitionStatus.SUBMITTED
-        self.department_approved_by = approved_by
-        self.department_approved_at = timezone.now()
-        self.department_approval_comments = comments
+        self.department_approved_by = None
+        self.department_approved_at = None
+        self.department_approval_comments = ""
+        self.rejection_reason = ""
         self.save(update_fields=[
-            "status", "department_approved_by", "department_approved_at",
-            "department_approval_comments", "updated_at",
+            "status",
+            "department_approved_by",
+            "department_approved_at",
+            "department_approval_comments",
+            "rejection_reason",
+            "updated_at",
         ])
         self._notify_stores(
             title=f"{self.requisition_no} needs a stock decision",
             message=(
-                f"{self.department} approved its store request. "
+                f"{self.department} submitted a department store request. "
                 "Check availability and decide the quantities to reserve."
             ),
-            created_by=approved_by.user,
+            created_by=actor,
         )
 
     def create_shortage_purchase_requisition(self, created_by=None, reason=""):
@@ -1511,11 +1451,8 @@ class StoreRequisition(BaseModel):
         ]
         if notifications:
             return notifications
-        # Existing deployments may not yet have assignments.  Keep a temporary
-        # branch-scoped fallback during the migration, while all new operational
-        # access is enforced through StoreKeeperAssignment in the API.
         return notify_roles(
-            ("Store Keeper", "Stores Manager"),
+            ("Store Keeper",),
             title=title,
             message=message,
             branch=self.store.branch,

@@ -41,24 +41,6 @@ ROLE_SPECS = {
             "vendors": ["supplier"],
         },
     },
-    "Director": {
-        "change": {
-            "procurement": ["purchaseorder"],
-        },
-        "view": {
-            "departments": ["branch", "department"],
-            "inventory": ["item", "storelocation", "unitofmeasure"],
-            "procurement": [
-                "purchaseorderitem",
-                "purchaseorderactivity",
-                "purchaseorderprintrecord",
-                "purchaserequisition",
-                "requisitionitem",
-                "vendorquotation",
-            ],
-            "vendors": ["supplier"],
-        },
-    },
     "Procurement Manager": {
         "crud": {
             "procurement": [
@@ -102,26 +84,7 @@ ROLE_SPECS = {
             "vendors": ["supplier"],
         },
     },
-    "Finance Manager": {
-        "change": {
-            "procurement": ["purchaseorder"],
-        },
-        "view": {
-            "departments": ["branch", "department"],
-            "inventory": ["item", "storelocation", "unitofmeasure"],
-            "procurement": [
-                "purchaseorderitem",
-                "purchaseorderactivity",
-                "purchaseorderprintrecord",
-                "purchaserequisition",
-                "requisitionitem",
-                "vendorquotation",
-                "vendorquotationitem",
-            ],
-            "vendors": ["supplier"],
-        },
-    },
-    "Finance Controller": {
+    "Financial Manager": {
         "crud": {
             "finance": [
                 "bankaccount",
@@ -138,33 +101,33 @@ ROLE_SPECS = {
         },
         "change": {
             "approvals": ["approvalworkflow"],
-            "procurement": ["purchaserequisition"],
+            "procurement": ["purchaseorder"],
         },
         "view": {
             "customers": ["customer", "customerledger", "payment", "paymentallocation"],
-            "inventory": ["inventorybalance", "stockledger", "storelocation"],
+            "departments": ["branch", "department"],
+            "inventory": ["inventorybalance", "item", "stockledger", "storelocation", "unitofmeasure"],
             "procurement": [
-                "purchaseorder",
                 "purchaseorderitem",
+                "purchaseorderactivity",
+                "purchaseorderprintrecord",
                 "purchaserequisition",
                 "requisitionitem",
                 "requisitionhistory",
+                "vendorquotation",
+                "vendorquotationitem",
                 "goodsreceiptitem",
                 "goodsreceiptnote",
                 "supplierreturn",
-                "vendorquotation",
             ],
             "sales": ["sale", "saleitem"],
             "vendors": ["supplier"],
         },
     },
-    "Stores Manager": {
+    "Store Keeper": {
         "crud": {
             "inventory": [
-                "inventorybalance",
                 "inventorybatch",
-                "item",
-                "itemunitprice",
                 "reorderrule",
                 "stockadjustment",
                 "stockadjustmentitem",
@@ -178,61 +141,26 @@ ROLE_SPECS = {
                 "storerequisitionitem",
                 "storereturn",
                 "storereturnitem",
-                "supplieritemprice",
-                "unitofmeasure",
             ],
         },
         "change": {
-            "procurement": ["goodsreceiptitem", "goodsreceiptnote", "supplierreturn"],
+            "inventory": ["inventorybalance"],
         },
         "view": {
-            "departments": ["department", "branch"],
-            "employees": ["employee"],
-            "inventory": [
-                "category",
-                "departmentconsumption",
-                "stockledger",
-                "storelocation",
-            ],
-            "procurement": [
-                "goodsinspection",
-                "goodsinspectionitem",
-                "goodsreceiptitem",
-                "goodsreceiptnote",
-                "procurementattachment",
-                "purchaseorder",
-                "purchaseorderitem",
-                "supplierreturn",
-                "supplierreturnitem",
-            ],
-            "vendors": ["supplier"],
-        },
-    },
-    "Store Keeper": {
-        "crud": {
-            "inventory": [
-                "stockcount",
-                "stockcountitem",
-                "stockissue",
-                "stockissueitem",
-                "storerequisition",
-                "storerequisitionitem",
-                "storereturn",
-                "storereturnitem",
-            ],
-        },
-        "view": {
-            "departments": ["department"],
+            "departments": ["branch", "department"],
             "employees": ["employee"],
             "inventory": [
                 "inventorybalance",
                 "inventorybatch",
+                "category",
+                "departmentconsumption",
                 "item",
                 "itemunitprice",
                 "stockledger",
                 "storelocation",
                 "unitofmeasure",
             ],
+            "procurement": ["purchaseorder", "purchaseorderitem"],
         },
     },
     "Receiving Clerk": {
@@ -243,6 +171,8 @@ ROLE_SPECS = {
                 "goodsreceiptitem",
                 "goodsreceiptnote",
                 "procurementattachment",
+                "supplierreturn",
+                "supplierreturnitem",
             ],
         },
         "view": {
@@ -253,48 +183,23 @@ ROLE_SPECS = {
             "vendors": ["supplier"],
         },
     },
-    "Department Requester": {
-        "crud": {
-            "inventory": ["storerequisition", "storerequisitionitem"],
-        },
-        "view": {
-            "departments": ["department"],
-            "employees": ["employee"],
-            "inventory": ["item", "unitofmeasure"],
-        },
-    },
-    "Department Head": {
-        "crud": {
-            "inventory": ["storerequisition", "storerequisitionitem"],
-        },
-        "change": {
-            "approvals": ["approvalworkflow"],
-        },
-        "view": {
-            "departments": ["department"],
-            "employees": ["employee"],
-            "inventory": ["item", "unitofmeasure"],
-        },
-    },
-    "Receiving Officer": {
-        "crud": {
-            "procurement": [
-                "goodsinspection",
-                "goodsinspectionitem",
-                "goodsreceiptitem",
-                "goodsreceiptnote",
-                "procurementattachment",
-                "supplierreturn",
-                "supplierreturnitem",
-            ],
-        },
-        "view": {
-            "inventory": ["inventorybalance", "inventorybatch", "item", "stockledger", "storelocation"],
-            "procurement": ["purchaseorder", "purchaseorderitem"],
-            "vendors": ["supplier"],
-        },
-    },
-    "Auditor": {"view_all": True},
+}
+
+
+ROLE_REPLACEMENTS = {
+    "Finance Manager": "Financial Manager",
+    "Finance Controller": "Financial Manager",
+    "Director": "General Manager",
+    "Stores Manager": "Store Keeper",
+    "Store Manager": "Store Keeper",
+    "Receiving Officer": "Receiving Clerk",
+}
+
+OBSOLETE_ROLES = {
+    *ROLE_REPLACEMENTS,
+    "Department Requester",
+    "Department Head",
+    "Auditor",
 }
 
 
@@ -338,3 +243,46 @@ class Command(BaseCommand):
             self.stdout.write(
                 self.style.SUCCESS(f"{group.name}: {permissions.count()} permissions")
             )
+
+        # Consolidate existing accounts and role-based approval matrices before
+        # deleting the legacy groups. Historical approval decisions remain
+        # attached to their employees and are not altered.
+        from apps.approvals.models import ApprovalMatrixRule
+
+        for old_name, new_name in ROLE_REPLACEMENTS.items():
+            old_group = Group.objects.filter(name=old_name).first()
+            if not old_group:
+                continue
+            new_group = Group.objects.get(name=new_name)
+            for user in old_group.user_set.all():
+                user.groups.add(new_group)
+            ApprovalMatrixRule.objects.filter(approver_role=old_group).update(
+                approver_role=new_group
+            )
+
+        removable = Group.objects.filter(name__in=OBSOLETE_ROLES)
+        unassigned_rules = ApprovalMatrixRule.objects.filter(
+            approver_role__in=removable
+        ) | ApprovalMatrixRule.objects.filter(
+            assignment_type=ApprovalMatrixRule.ASSIGNMENT_DEPARTMENT_HEAD
+        )
+        removed_rules = unassigned_rules.count()
+        unassigned_rules.delete()
+        removed_roles = removable.count()
+        removable.delete()
+        from apps.accounts.role_policy import grant_employee_self_service
+        from apps.employees.models import Employee
+        from apps.inventory.models import StoreRequisition
+        from core.constants.choices import StoreRequisitionStatus
+
+        StoreRequisition.objects.filter(
+            status=StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL
+        ).update(status=StoreRequisitionStatus.SUBMITTED)
+
+        for employee in Employee.objects.select_related("user"):
+            grant_employee_self_service(employee.user)
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Removed {removed_roles} obsolete roles and {removed_rules} obsolete approval rules."
+            )
+        )

@@ -29,7 +29,7 @@ class ApprovalWorkflowViewSet(CreatedByModelMixin, ModelViewSet):
         queryset = super().get_queryset()
         user = self.request.user
         if user.is_superuser or user.groups.filter(
-            name__in=("System Administrator", "Auditor")
+            name="System Administrator"
         ).exists():
             return queryset
         if self.action == "list":

@@ -361,7 +361,7 @@ class Command(BaseCommand):
                 "address": "Ntinda, Kampala",
                 "dept": "Finance & Accounts",
                 "designation_title": "Finance Manager",
-                "role_group": "Finance Controller"
+                "role_group": "Financial Manager"
             },
             {
                 "username": "pnamara",
@@ -374,7 +374,7 @@ class Command(BaseCommand):
                 "address": "Najjera, Kampala",
                 "dept": "Front Office",
                 "designation_title": "Receptionist",
-                "role_group": "Department Head"
+                "role_group": None
             },
             {
                 "username": "anankya",

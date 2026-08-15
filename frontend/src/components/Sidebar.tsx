@@ -60,7 +60,7 @@ export default function Sidebar() {
   const storesManager = isStoresManager(app.user)
   const baseGroups = app.activeModule === 'hr' ? hrGroups : operationsGroups
   const role = String(app.user.role || '').toLowerCase()
-  const isRequester = ['department requester', 'department employee', 'employee'].includes(role)
+  const isRequester = ['staff', 'unassigned', 'department employee', 'employee'].includes(role)
   const groups = baseGroups
     .map((group) => ({ ...group, items: group.items.filter((item) => {
       if (!canAccessRoute(app.user, item.route)) return false

@@ -41,7 +41,7 @@ export default function StoresDashboard() {
     <div className="dashboard-screen">
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 18 }}>
         <div>
-          <div style={{ color: 'var(--accent)', fontSize: 10, fontWeight: 750, letterSpacing: '.1em', textTransform: 'uppercase' }}>Stores Manager</div>
+          <div style={{ color: 'var(--accent)', fontSize: 10, fontWeight: 750, letterSpacing: '.1em', textTransform: 'uppercase' }}>Store Keeper</div>
           <h1 style={{ margin: '3px 0 0', color: 'var(--text)', fontSize: 25, fontWeight: 650, letterSpacing: '-.03em' }}>Stores overview</h1>
           <p style={{ margin: '5px 0 0', color: 'var(--text-muted)', fontSize: 13.5 }}>Stock responsibilities and decisions for {app.currentBranch || 'your assigned property'}.</p>
         </div>
@@ -83,7 +83,7 @@ export default function StoresDashboard() {
 
         <section style={{ ...panel, padding: 16 }}>
           <div style={{ color: 'var(--text)', fontSize: 14, fontWeight: 650 }}>Your store tools</div>
-          <div style={{ color: 'var(--text-muted)', fontSize: 11.5, marginTop: 3, marginBottom: 8 }}>Only tools assigned to the Stores Manager role are shown.</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 11.5, marginTop: 3, marginBottom: 8 }}>Only tools assigned to the Store Keeper role are shown.</div>
           <QuickAction icon="warehouse" title="Stores workbench" subtitle="Approve, issue, transfer and count stock" onClick={() => app.navTo('workflow-stores', 'Stores workbench')} />
           <QuickAction icon="equalizer" title="Stock balances" subtitle="Review on-hand, reserved and available stock" onClick={() => app.navTo('balances', 'Stock balances')} />
           <QuickAction icon="move_to_inbox" title="Goods received" subtitle="Review receipts delivered to the store" onClick={() => app.navTo('grns', 'Goods received')} />
@@ -147,4 +147,3 @@ const secondaryText: CSSProperties = { display: 'block', color: 'var(--text-fain
 const pendingChip: CSSProperties = { justifySelf: 'end', color: 'var(--warn)', background: 'var(--warn-soft)', borderRadius: 12, padding: '3px 8px', fontSize: 10, fontWeight: 600 }
 const dangerChip: CSSProperties = { justifySelf: 'end', color: 'var(--bad)', background: 'var(--bad-soft)', borderRadius: 12, padding: '3px 8px', fontSize: 10, fontWeight: 600 }
 const iconButton: CSSProperties = { width: 32, height: 32, display: 'grid', placeItems: 'center', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer' }
-

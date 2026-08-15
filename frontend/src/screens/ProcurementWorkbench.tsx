@@ -68,7 +68,7 @@ export default function ProcurementWorkbench() {
   const app = useApp()
   const [stage, setStage] = useState<Stage>(() => {
     const role = app.user.role.toLowerCase()
-    if (['receiving clerk', 'receiving officer'].includes(role)) return 'receipt'
+    if (role === 'receiving clerk') return 'receipt'
     if (app.user.isSuperuser) return 'request'
     return (Object.keys(stagePermissions) as Stage[]).find((candidate) =>
       app.user.permissions.includes(stagePermissions[candidate].view)

@@ -84,13 +84,10 @@ def user_has_role(user, *roles):
 COMMERCIAL_CONTROL_ROLES = (
     "System Administrator",
     "Procurement Manager",
-    "Finance Manager",
-    "Finance Controller",
+    "Financial Manager",
     "General Manager",
-    "Director",
-    "Auditor",
 )
-RECEIVING_ROLES = ("Receiving Clerk", "Receiving Officer")
+RECEIVING_ROLES = ("Receiving Clerk",)
 
 
 def scope_purchase_orders_for_user(queryset, user):
@@ -167,7 +164,7 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             "return": "procurement.view_supplierreturn",
         }[stage]
         stores_receiver = request.user.groups.filter(
-            name__in=("Stores Manager", "Store Manager", "Store Keeper")
+            name="Store Keeper"
         ).exists()
         stores_readable_stages = {"lpo", "receipt", "inspect", "return"}
         if not request.user.is_superuser and not request.user.has_perm(stage_permission) and not (
@@ -252,23 +249,15 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
                 "System Administrator",
                 "General Manager",
                 "Procurement Manager",
-                "Finance Manager",
-                "Finance Controller",
-                "Director",
-                "Auditor",
+                "Financial Manager",
             )
         ).exists():
             return queryset
         employee = getattr(user, "employee_profile", None)
         if not employee:
             return queryset.none()
-        if user.groups.filter(name__in=("Stores Manager", "Store Manager", "Store Keeper")).exists():
+        if user.groups.filter(name="Store Keeper").exists():
             return queryset.filter(branch=employee.branch)
-        if user.groups.filter(name="Department Head").exists():
-            return queryset.filter(
-                department=employee.department,
-                branch=employee.branch,
-            )
         return queryset.filter(requester=employee)
 
     @action(detail=True, methods=["get"])
@@ -392,21 +381,14 @@ class RequisitionHistoryViewSet(ReadOnlyModelViewSet):
                 "System Administrator",
                 "General Manager",
                 "Procurement Manager",
-                "Finance Controller",
-                "Auditor",
+                "Financial Manager",
             )
         ).exists():
             return queryset
         employee = getattr(user, "employee_profile", None)
         if not employee:
             return queryset.none()
-        if user.groups.filter(name="Department Head").exists():
-            visible_requisitions = visible_requisitions.filter(
-                department=employee.department,
-                branch=employee.branch,
-            )
-        else:
-            visible_requisitions = visible_requisitions.filter(requester=employee)
+        visible_requisitions = visible_requisitions.filter(requester=employee)
         return queryset.filter(requisition__in=visible_requisitions)
 
 
@@ -541,8 +523,8 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"], url_path="finance-reduce-quantities")
     def finance_reduce_quantities(self, request, pk=None):
         order = self.get_object()
-        if not user_has_role(request.user, "System Administrator", "Finance Manager", "Finance Controller"):
-            raise PermissionDenied("Only the Finance Manager can reduce LPO quantities.")
+        if not user_has_role(request.user, "System Administrator", "Financial Manager"):
+            raise PermissionDenied("Only the Financial Manager can reduce LPO quantities.")
         try:
             with transaction.atomic():
                 locked_order = PurchaseOrder.objects.select_for_update().get(pk=order.pk)
@@ -1070,7 +1052,7 @@ class ProcurementAttachmentViewSet(CreatedByModelMixin, ModelViewSet):
         queryset = super().get_queryset()
         user = self.request.user
         if user_has_role(user, "Cost Controller") and not user_has_role(
-            user, "System Administrator", "Procurement Manager", "Auditor"
+            user, "System Administrator", "Procurement Manager"
         ):
             return queryset.filter(
                 document_type=ProcurementAttachment.DOCUMENT_SUPPLIER_CATALOGUE

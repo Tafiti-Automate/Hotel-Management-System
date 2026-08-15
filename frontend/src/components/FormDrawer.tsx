@@ -38,7 +38,7 @@ export default function FormDrawer() {
   const [values, setValues] = useState<Row>({})
   const [step, setStep] = useState(0)
   const roleKey = app.user.role.trim().toLowerCase()
-  const canRequestOnBehalf = app.user.isSuperuser || ['system administrator', 'stores manager'].includes(roleKey)
+  const canRequestOnBehalf = app.user.isSuperuser || roleKey === 'system administrator'
   const canPurchaseOnBehalf = app.user.isSuperuser || ['system administrator', 'general manager'].includes(roleKey)
   const signedInEmployee = app.data.employees.find((employee) =>
     String(employee.id) === app.user.employeeId

@@ -123,14 +123,26 @@ def test_api_login_allows_configured_frontend_origin(client):
 def test_setup_hotel_roles_creates_operational_groups():
     call_command("setup_hotel_roles")
 
-    stores_manager = Group.objects.get(name="Stores Manager")
+    assert set(Group.objects.values_list("name", flat=True)) == {
+        "System Administrator",
+        "Cost Controller",
+        "Store Keeper",
+        "Receiving Clerk",
+        "Financial Manager",
+        "Procurement Manager",
+        "General Manager",
+    }
+    store_keeper = Group.objects.get(name="Store Keeper")
+    financial_manager = Group.objects.get(name="Financial Manager")
+    receiving_clerk = Group.objects.get(name="Receiving Clerk")
     procurement_manager = Group.objects.get(name="Procurement Manager")
-    auditor = Group.objects.get(name="Auditor")
-    department_head = Group.objects.get(name="Department Head")
-    department_requester = Group.objects.get(name="Department Requester")
 
-    assert stores_manager.permissions.filter(codename="change_stockissue").exists()
-    assert stores_manager.permissions.filter(codename="change_stockcount").exists()
+    assert store_keeper.permissions.filter(codename="change_stockissue").exists()
+    assert store_keeper.permissions.filter(codename="change_stockcount").exists()
+    assert store_keeper.permissions.filter(codename="change_stocktransfer").exists()
+    assert financial_manager.permissions.filter(codename="change_purchaseorder").exists()
+    assert financial_manager.permissions.filter(codename="change_supplierinvoice").exists()
+    assert receiving_clerk.permissions.filter(codename="change_goodsreceiptnote").exists()
     assert procurement_manager.permissions.filter(codename="change_purchaseorder").exists()
     assert procurement_manager.permissions.filter(codename="change_supplierreturn").exists()
     assert procurement_manager.permissions.filter(codename="view_goodsreceiptnote").exists()
@@ -138,11 +150,34 @@ def test_setup_hotel_roles_creates_operational_groups():
     assert procurement_manager.permissions.filter(codename="change_approvalworkflow").exists()
     assert not procurement_manager.permissions.filter(codename="change_goodsreceiptnote").exists()
     assert not procurement_manager.permissions.filter(codename="view_supplierinvoice").exists()
-    assert auditor.permissions.filter(codename="view_stockledger").exists()
-    assert department_requester.permissions.filter(codename="add_storerequisition").exists()
-    assert not department_requester.permissions.filter(codename="view_inventorybalance").exists()
-    assert not department_head.permissions.filter(codename="add_purchaserequisition").exists()
-    assert not department_head.permissions.filter(codename="view_inventorybalance").exists()
+
+
+@pytest.mark.django_db
+def test_setup_hotel_roles_migrates_legacy_assignments_before_removal():
+    finance_user = get_user_model().objects.create_user(
+        username="legacy-finance",
+        employee_code="LEGACY-FIN",
+    )
+    stores_user = get_user_model().objects.create_user(
+        username="legacy-stores",
+        employee_code="LEGACY-STORES",
+    )
+    director_user = get_user_model().objects.create_user(
+        username="legacy-director",
+        employee_code="LEGACY-DIRECTOR",
+    )
+    finance_user.groups.add(Group.objects.create(name="Finance Controller"))
+    stores_user.groups.add(Group.objects.create(name="Stores Manager"))
+    director_user.groups.add(Group.objects.create(name="Director"))
+
+    call_command("setup_hotel_roles", verbosity=0)
+
+    assert list(finance_user.groups.values_list("name", flat=True)) == ["Financial Manager"]
+    assert list(stores_user.groups.values_list("name", flat=True)) == ["Store Keeper"]
+    assert list(director_user.groups.values_list("name", flat=True)) == ["General Manager"]
+    assert not Group.objects.filter(
+        name__in=("Finance Controller", "Stores Manager", "Director")
+    ).exists()
 
 
 @pytest.mark.django_db

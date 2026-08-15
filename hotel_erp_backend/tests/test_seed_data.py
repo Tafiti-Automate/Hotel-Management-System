@@ -112,7 +112,7 @@ def test_seed_presentation_data_builds_connected_uganda_workflows(monkeypatch):
         ("anankya", "Store Keeper", "DEMO_STORE_KEEPER_PASSWORD", "Store-Test-Password-01!"),
         (
             "esther.nambasa",
-            "Department Head",
+            None,
             "DEMO_DEPARTMENT_HEAD_PASSWORD",
             "Department-Test-Password-02!",
         ),
@@ -137,10 +137,10 @@ def test_seed_presentation_data_builds_connected_uganda_workflows(monkeypatch):
     for username, role, _, password in account_specs:
         user = get_user_model().objects.get(username=username)
         assert user.check_password(password)
-        assert list(user.groups.values_list("name", flat=True)) == [role]
+        assert list(user.groups.values_list("name", flat=True)) == ([role] if role else [])
         assert not user.is_staff
         assert not user.is_superuser
-        assert not user.user_permissions.exists()
+        assert user.user_permissions.filter(codename="add_storerequisition").exists()
 
 
 @pytest.mark.django_db

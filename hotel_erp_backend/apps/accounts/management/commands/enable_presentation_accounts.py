@@ -7,10 +7,12 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from rest_framework.authtoken.models import Token
 
+from apps.accounts.role_policy import grant_employee_self_service
+
 
 ACCOUNT_SPECS = (
     ("anankya", "Store Keeper", "DEMO_STORE_KEEPER_PASSWORD"),
-    ("esther.nambasa", "Department Head", "DEMO_DEPARTMENT_HEAD_PASSWORD"),
+    ("esther.nambasa", None, "DEMO_DEPARTMENT_HEAD_PASSWORD"),
     ("grace.nakato", "General Manager", "DEMO_GENERAL_MANAGER_PASSWORD"),
     ("daniel.okello", "Procurement Manager", "DEMO_PROCUREMENT_MANAGER_PASSWORD"),
 )
@@ -47,10 +49,9 @@ class Command(BaseCommand):
                     "Run seed_presentation_data first."
                 ) from error
 
-            try:
-                group = Group.objects.get(name=role_name)
-            except Group.DoesNotExist as error:
-                raise CommandError(f"Required role group {role_name!r} does not exist.") from error
+            group = Group.objects.filter(name=role_name).first() if role_name else None
+            if role_name and not group:
+                raise CommandError(f"Required role group {role_name!r} does not exist.")
 
             if not verify_only:
                 user.is_active = True
@@ -65,15 +66,17 @@ class Command(BaseCommand):
                         "password",
                     )
                 )
-                user.groups.set([group])
+                user.groups.set([group] if group else [])
                 user.user_permissions.clear()
+                grant_employee_self_service(user)
                 Token.objects.filter(user=user).delete()
 
             user.refresh_from_db()
             actual_groups = list(user.groups.values_list("name", flat=True))
-            if actual_groups != [role_name]:
+            expected_groups = [role_name] if role_name else []
+            if actual_groups != expected_groups:
                 raise CommandError(
-                    f"{username!r} has groups {actual_groups!r}; expected only {role_name!r}."
+                    f"{username!r} has groups {actual_groups!r}; expected {expected_groups!r}."
                 )
             if user.is_superuser or user.is_staff or not user.is_active:
                 raise CommandError(
@@ -86,8 +89,8 @@ class Command(BaseCommand):
 
             self.stdout.write(
                 self.style.SUCCESS(
-                    f"{username}: {role_name} "
-                    f"({group.permissions.count()} model permissions)"
+                    f"{username}: {role_name or 'Employee self-service'} "
+                    f"({group.permissions.count() if group else user.user_permissions.count()} model permissions)"
                 )
             )
 

@@ -56,14 +56,13 @@ class Command(BaseCommand):
             raise CommandError("Create at least one branch and department before bootstrapping UAT.")
 
         employees = {
-            "head": self.employee("uat-department-head", "UAT", "Department Head", branch, department, "Department Head"),
+            "head": self.employee("uat-department-requester", "UAT", "Department Employee", branch, department, None),
             "procurement": self.employee("uat-procurement", "UAT", "Procurement Manager", branch, department, "Procurement Manager"),
-            "finance": self.employee("uat-finance", "UAT", "Finance Manager", branch, department, "Finance Manager"),
+            "finance": self.employee("uat-finance", "UAT", "Financial Manager", branch, department, "Financial Manager"),
             "manager": self.employee("uat-general-manager", "UAT", "General Manager", branch, department, "General Manager"),
             "cost_controller": self.employee("uat-cost-controller", "UAT", "Cost Controller", branch, department, "Cost Controller"),
             "stores": self.employee("uat-store-keeper", "UAT", "Store Keeper", branch, department, "Store Keeper"),
             "receiving": self.employee("uat-receiving", "UAT", "Receiving Clerk", branch, department, "Receiving Clerk"),
-            "auditor": self.employee("uat-auditor", "UAT", "Auditor", branch, department, "Auditor"),
         }
         self.approval_matrix(employees)
 
@@ -226,14 +225,13 @@ class Command(BaseCommand):
             user.set_password(UAT_PASSWORD)
         user.is_active = True
         user.save()
-        group = Group.objects.get(name=role)
-        user.groups.set([group])
+        user.groups.set([Group.objects.get(name=role)] if role else [])
         employee, _ = Employee.objects.update_or_create(
             user=user,
             defaults={
                 "branch": branch,
                 "department": department,
-                "designation": role,
+                "designation": role or "Department Employee",
                 "is_active": True,
             },
         )
@@ -243,24 +241,18 @@ class Command(BaseCommand):
         stages = (
             (
                 1,
-                "Department approval",
-                ApprovalMatrixRule.ASSIGNMENT_DEPARTMENT_HEAD,
-                None,
-            ),
-            (
-                2,
                 "Procurement approval",
                 ApprovalMatrixRule.ASSIGNMENT_FIXED_EMPLOYEE,
                 employees["procurement"],
             ),
             (
-                3,
-                "Finance approval",
+                2,
+                "Financial Manager approval",
                 ApprovalMatrixRule.ASSIGNMENT_FIXED_EMPLOYEE,
                 employees["finance"],
             ),
             (
-                4,
+                3,
                 "General Manager approval",
                 ApprovalMatrixRule.ASSIGNMENT_FIXED_EMPLOYEE,
                 employees["manager"],

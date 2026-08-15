@@ -233,8 +233,8 @@ class Command(BaseCommand):
                 "Namusoke",
                 "UG-HQ-103",
                 "Finance & Accounts",
-                "Finance Manager",
-                "Finance Manager",
+                "Financial Manager",
+                "Financial Manager",
                 "+256 772 410 103",
             ),
             "stores": (
@@ -274,7 +274,7 @@ class Command(BaseCommand):
                 "UG-HQ-106",
                 "Housekeeping",
                 "Executive Housekeeper",
-                "Department Head",
+                None,
                 "+256 701 410 106",
             ),
             "food_beverage": (
@@ -284,7 +284,7 @@ class Command(BaseCommand):
                 "UG-HQ-107",
                 "Food & Beverage",
                 "Food and Beverage Manager",
-                "Department Head",
+                None,
                 "+256 772 410 107",
             ),
             "front_office": (
@@ -294,7 +294,7 @@ class Command(BaseCommand):
                 "UG-HQ-108",
                 "Front Office",
                 "Front Office Supervisor",
-                "Department Head",
+                None,
                 "+256 701 410 108",
             ),
             "auditor": (
@@ -304,7 +304,7 @@ class Command(BaseCommand):
                 "UG-HQ-109",
                 "Finance & Accounts",
                 "Internal Auditor",
-                "Auditor",
+                None,
                 "+256 772 410 109",
             ),
         }
@@ -336,7 +336,7 @@ class Command(BaseCommand):
             else:
                 user.set_unusable_password()
             user.save(update_fields=["password"])
-            user.groups.set([Group.objects.get(name=role)])
+            user.groups.set([Group.objects.get(name=role)] if role else [])
 
             employees[key] = Employee.objects.create(
                 user=user,
@@ -450,24 +450,18 @@ class Command(BaseCommand):
         stages = (
             (
                 1,
-                "Department review",
-                ApprovalMatrixRule.ASSIGNMENT_DEPARTMENT_HEAD,
-                None,
-            ),
-            (
-                2,
                 "Procurement review",
                 ApprovalMatrixRule.ASSIGNMENT_FIXED_EMPLOYEE,
                 employees["procurement"],
             ),
             (
-                3,
-                "Finance review",
+                2,
+                "Financial Manager review",
                 ApprovalMatrixRule.ASSIGNMENT_FIXED_EMPLOYEE,
                 employees["finance"],
             ),
             (
-                4,
+                3,
                 "General Manager approval",
                 ApprovalMatrixRule.ASSIGNMENT_FIXED_EMPLOYEE,
                 employees["manager"],
@@ -896,7 +890,7 @@ class Command(BaseCommand):
             store=context["jinja_store"],
             reference="ADJ-JJA-2026-004",
             reason="Two bottles found in a sealed overflow carton during shelf reconciliation.",
-            note="Positive adjustment verified by the stores manager.",
+            note="Positive adjustment verified by the Store Keeper.",
             created_by=employees["stores"].user,
         )
         StockAdjustmentItem.objects.create(

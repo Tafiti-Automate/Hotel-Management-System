@@ -6,7 +6,7 @@ import type { Row } from '../lib/data'
 import { useApp } from '../state/AppContext'
 
 type Tab = 'requests' | 'issues' | 'transfers' | 'adjustments' | 'counts' | 'returns' | 'reorder' | 'batches' | 'consumption'
-type SupplyTask = 'prepare' | 'department' | 'department_approved' | 'department_rejected' | 'department_all' | 'stores' | 'shortage' | 'issue'
+type SupplyTask = 'prepare' | 'stores' | 'shortage' | 'issue'
 const inventoryPaths = {
   requests: 'store-requisitions', requestItems: 'store-requisition-items',
   issues: 'stock-issues', issueItems: 'stock-issue-items',
@@ -57,7 +57,7 @@ const num = (value: unknown) => Number(value || 0)
 
 export default function InventoryWorkbench() {
   const app = useApp()
-  const [tab, setTab] = useState<Tab>(() => String(app.user.role || '').toLowerCase() === 'store keeper' ? 'issues' : 'requests')
+  const [tab, setTab] = useState<Tab>('requests')
   const [data, setData] = useState(blank)
   const [form, setForm] = useState<Row>({})
   const [loading, setLoading] = useState(true)
@@ -92,7 +92,7 @@ export default function InventoryWorkbench() {
   }, [app.inventoryDraftId, app.consumeInventoryDraft])
   const scopedData = useMemo(() => {
     if (!app.currentBranch) return data
-    // The backend already scopes Department Requesters to their own branch and records.
+    // The backend already scopes department employees to their own branch and records.
     // Requesters are not allowed to read the Stores endpoint, so app.data.locations is
     // legitimately empty for them. Never erase valid requisitions just because the
     // browser cannot load store master data.
@@ -145,12 +145,9 @@ export default function InventoryWorkbench() {
   const otherTabs = tabs.filter(([key]) => !['requests', 'issues'].includes(key))
   const role = String(app.user.role || '').toLowerCase()
   const isAdministrator = app.user.isSuperuser || role === 'system administrator'
-  const isDepartmentActor = isAdministrator || role === 'department head'
-  const isStoresApprover = isAdministrator || ['stores manager', 'store manager'].includes(role)
-  const isStoresIssuer = isStoresApprover || role === 'store keeper'
-  const requestRoleStage: SupplyTask = isStoresApprover
-    ? 'stores'
-    : role === 'department head' ? 'department' : 'prepare'
+  const isStoresApprover = isAdministrator || role === 'store keeper'
+  const isStoresIssuer = isStoresApprover
+  const requestRoleStage: SupplyTask = isStoresApprover ? 'stores' : 'prepare'
   const supplyPathActive = supplyPathHint || (tab === 'issues' ? 'issue' : tab === 'requests' ? requestRoleStage : '')
   const selectSupplyStep = (key: string) => {
     setSupplyPathHint(key)
@@ -160,15 +157,9 @@ export default function InventoryWorkbench() {
   }
   const common = { app, data: scopedData, form, setForm, busy, execute }
   return <div style={{ maxWidth: 1460, margin: '0 auto' }}>
-    <section className="workbench-hero" style={{ ...card, padding: 20, display: 'flex', alignItems: 'center', gap: 13, marginBottom: 15 }}><span style={hero}><Icon name="warehouse" size={24} color="#fff" /></span><div><div style={eyebrow}>Inventory</div><h1 style={{ margin: '3px 0', fontSize: 23 }}>{role === 'department head' ? 'Store Request Approvals' : isStoresApprover ? 'Stores Queue' : role === 'store keeper' ? 'Pick and Issue' : 'My Store Requests'}</h1><div style={muted}>{role === 'department head' ? 'Review requests from your department.' : isStoresApprover ? 'Review availability, shortages and fulfilment.' : role === 'store keeper' ? 'Process approved stock issues.' : 'Create and track your material requests.'}</div></div><button onClick={() => void load()} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button></section>
+    <section className="workbench-hero" style={{ ...card, padding: 20, display: 'flex', alignItems: 'center', gap: 13, marginBottom: 15 }}><span style={hero}><Icon name="warehouse" size={24} color="#fff" /></span><div><div style={eyebrow}>Inventory</div><h1 style={{ margin: '3px 0', fontSize: 23 }}>{isStoresApprover ? 'Store Keeper Queue' : 'My Store Requests'}</h1><div style={muted}>{isStoresApprover ? 'Review availability, shortages, reservations and fulfilment.' : 'Create and track your material requests.'}</div></div><button onClick={() => void load()} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button></section>
     {(can(tabPermissions.requests.view) || can(tabPermissions.issues.view)) && <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 15 }}>
-      {!isDepartmentActor && !isStoresApprover && role !== 'store keeper' && <button onClick={() => selectSupplyStep('prepare')} style={{ ...tabButton, background: supplyPathActive === 'prepare' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'prepare' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'prepare' ? 'var(--accent)' : 'var(--border)' }}><Icon name="assignment" size={17} />My requests</button>}
-      {role === 'department head' && <>
-        <button onClick={() => selectSupplyStep('department')} style={{ ...tabButton, background: supplyPathActive === 'department' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'department' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'department' ? 'var(--accent)' : 'var(--border)' }}><Icon name="approval" size={17} />Pending ({scopedData.requests.filter((row: Row) => id(row.status) === 'pending_department_approval').length})</button>
-        <button onClick={() => selectSupplyStep('department_approved')} style={{ ...tabButton, background: supplyPathActive === 'department_approved' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'department_approved' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'department_approved' ? 'var(--accent)' : 'var(--border)' }}><Icon name="check_circle" size={17} />Approved</button>
-        <button onClick={() => selectSupplyStep('department_rejected')} style={{ ...tabButton, background: supplyPathActive === 'department_rejected' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'department_rejected' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'department_rejected' ? 'var(--accent)' : 'var(--border)' }}><Icon name="cancel" size={17} />Rejected</button>
-        <button onClick={() => selectSupplyStep('department_all')} style={{ ...tabButton, background: supplyPathActive === 'department_all' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'department_all' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'department_all' ? 'var(--accent)' : 'var(--border)' }}><Icon name="history" size={17} />All requests</button>
-      </>}
+      {!isStoresApprover && <button onClick={() => selectSupplyStep('prepare')} style={{ ...tabButton, background: supplyPathActive === 'prepare' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'prepare' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'prepare' ? 'var(--accent)' : 'var(--border)' }}><Icon name="assignment" size={17} />My requests</button>}
       {isStoresApprover && <><button onClick={() => selectSupplyStep('stores')} style={{ ...tabButton, background: supplyPathActive === 'stores' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'stores' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'stores' ? 'var(--accent)' : 'var(--border)' }}><Icon name="inventory" size={17} />Stock review ({scopedData.requests.filter((row: Row) => id(row.status) === 'submitted').length})</button><button onClick={() => selectSupplyStep('shortage')} style={{ ...tabButton, background: supplyPathActive === 'shortage' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'shortage' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'shortage' ? 'var(--accent)' : 'var(--border)' }}><Icon name="shopping_cart_checkout" size={17} />Shortages ({scopedData.requests.filter((row: Row) => id(row.status) === 'awaiting_procurement').length})</button></>}
       {isStoresIssuer && <button onClick={() => selectSupplyStep('issue')} style={{ ...tabButton, background: supplyPathActive === 'issue' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'issue' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'issue' ? 'var(--accent)' : 'var(--border)' }}><Icon name="outbox" size={17} />Ready to issue ({scopedData.requests.filter((row: Row) => ['approved', 'partially_approved', 'partially_issued'].includes(id(row.status))).length})</button>}
     </div>}
@@ -178,9 +169,7 @@ export default function InventoryWorkbench() {
       <Records tab={tab} data={scopedData} app={app} stage={supplyPathActive} onSelect={setSelectedRecord} />
       <aside style={{ ...card, padding: 18 }}>
         {!canChangeTab && !['batches', 'consumption'].includes(tab) && <ReadOnlyPanel title="Read-only access" note="View only." />}
-        {canChangeTab && tab === 'requests' && ['department_approved', 'department_rejected', 'department_all'].includes(supplyPathActive)
-          ? <ReadOnlyPanel title="Approval history" note="Select a request to review its items, approval details and current workflow stage." />
-          : canChangeTab && tab === 'requests' && <RequestPanel {...common} stage={(supplyPathActive || requestRoleStage) as SupplyTask} />}
+        {canChangeTab && tab === 'requests' && <RequestPanel {...common} stage={(supplyPathActive || requestRoleStage) as SupplyTask} />}
         {canChangeTab && tab === 'issues' && <IssuePanel {...common} />}
         {canChangeTab && tab === 'transfers' && <TransferPanel {...common} />}
         {canChangeTab && tab === 'adjustments' && <AdjustmentPanel {...common} />}
@@ -209,8 +198,6 @@ function RequestPanel({ app, data, form, setForm, busy, execute, stage }: any) {
   const submittedRequest = data.requests.find((row: Row) => id(row.id) === id(form.submitted))
   const submittedLines = data.requestItems.filter((row: Row) => id(row.requisition) === id(form.submitted))
   const decisionLine = submittedLines.find((row: Row) => id(row.id) === id(form.decisionLine))
-  const departmentPending = data.requests.find((row: Row) => id(row.id) === id(form.departmentPending))
-  const departmentLines = data.requestItems.filter((row: Row) => id(row.requisition) === id(form.departmentPending))
   const shortageRequest = data.requests.find((row: Row) => id(row.id) === id(form.shortageRequest))
   const shortageLines = data.requestItems.filter((row: Row) => id(row.requisition) === id(form.shortageRequest))
   const procurementPending = data.requests.find((row: Row) => id(row.id) === id(form.procurementPending))
@@ -218,13 +205,9 @@ function RequestPanel({ app, data, form, setForm, busy, execute, stage }: any) {
   const hasApprovedQuantity = submittedLines.some((line: Row) => num(line.quantity_approved) > 0)
   const stageMeta: Record<SupplyTask, { title: string; note: string }> = {
     prepare: { title: 'New request', note: 'Create or update a requisition.' },
-    department: { title: 'Department approval', note: '' },
     stores: { title: 'Stock review', note: 'Review and allocate stock.' },
     shortage: { title: 'Shortages', note: 'Items awaiting procurement.' },
     issue: { title: 'Pick and issue', note: 'Approved requests ready for issue.' },
-    department_approved: { title: 'Approved requests', note: '' },
-    department_rejected: { title: 'Rejected requests', note: '' },
-    department_all: { title: 'Department request history', note: '' },
   }
   const meta = stageMeta[stage as SupplyTask] || stageMeta.prepare
 
@@ -266,17 +249,6 @@ function RequestPanel({ app, data, form, setForm, busy, execute, stage }: any) {
           void execute(() => deleteBackendPath('store-requisitions', requestBackendId(draftRequest)), 'Draft deleted')
         }}>Delete draft</Action>
       </>}
-    </>}
-
-    {stage === 'department' && <>
-      <Field label="Request awaiting department approval"><Select value={form.departmentPending} change={(v) => setForm({ departmentPending: v })} rows={data.requests.filter((r: Row) => id(r.status) === 'pending_department_approval')} label={(r) => `${id(r.requisition_no)} · ${departmentName(app, r.department)}`} /></Field>
-      {!data.requests.some((r: Row) => id(r.status) === 'pending_department_approval') && <Hint>No requests are waiting for Department Head approval.</Hint>}
-      {departmentPending && <RequestSummary request={departmentPending} lines={departmentLines} data={data} app={app} />}
-      <Field label="Approval comment"><Input value={form.departmentComment} change={(v) => setForm({ ...form, departmentComment: v })} /></Field>
-      <Action tone="good" disabled={busy || !departmentPending} click={() => execute(() => runBackendAction('store-requisitions', id(form.departmentPending), 'department-approve', { comments: form.departmentComment || '' }), 'Department request approved and sent to Stores')}>Approve</Action>
-      <Rule />
-      <Field label="Rejection reason"><Input value={form.departmentReason} change={(v) => setForm({ ...form, departmentReason: v })} /></Field>
-      <Action tone="danger" disabled={busy || !departmentPending || !id(form.departmentReason).trim()} click={() => execute(() => runBackendAction('store-requisitions', id(form.departmentPending), 'reject', { reason: form.departmentReason || '' }), 'Department request rejected')}>Reject</Action>
     </>}
 
     {stage === 'stores' && <>
@@ -327,7 +299,6 @@ function RequestSummary({ request, lines, data, app, showAvailability = false, s
     if (issued > 0) return { label: 'Partially issued', tone: 'var(--warn)', bg: 'var(--warn-soft)' }
     if (approved > 0 && available < Math.max(0, approved - issued)) return { label: 'Shortage', tone: 'var(--bad)', bg: 'var(--bad-soft)' }
     if (approved > 0) return { label: approved < requested ? 'Partially approved' : 'Approved', tone: 'var(--accent)', bg: 'var(--accent-soft)' }
-    if (id(request.status) === 'pending_department_approval') return { label: 'HOD review', tone: 'var(--warn)', bg: 'var(--warn-soft)' }
     return { label: 'Draft', tone: 'var(--text-muted)', bg: 'var(--surface-3)' }
   }
   const categoryCount = new Set(lines.map(categoryOf)).size
@@ -389,7 +360,7 @@ function IssuePanel({ app, data, form, setForm, busy, execute }: any) {
     <Field label="Approved department request"><Select value={form.request} change={(v) => setForm({ request: v })} rows={approved} label={(r) => `${id(r.requisition_no)} · ${departmentName(app, r.department)}`} /></Field>
     {!approved.length && <Hint>No approved department requests are ready for picking.</Hint>}
     {request && <RequestSummary request={request} lines={requestLines} data={data} app={app} showAvailability showOperationalContext />}
-    {request && (app.user.isSuperuser || ['administrator', 'system administrator', 'stores manager', 'store manager'].includes(id(app.user.role).toLowerCase())) && <button type="button" disabled={busy} onClick={() => execute(() => runBackendAction('store-requisitions', id(request.id), 'cancel'), 'Request cancelled and outstanding stock reservations released')} style={{ ...secondary, width: '100%', justifyContent: 'center', marginBottom: 12, color: 'var(--bad)', borderColor: 'rgba(220,38,38,.3)' }}><Icon name="cancel" size={17} color="var(--bad)" />Cancel request and release reservation</button>}
+    {request && (app.user.isSuperuser || ['administrator', 'system administrator', 'store keeper'].includes(id(app.user.role).toLowerCase())) && <button type="button" disabled={busy} onClick={() => execute(() => runBackendAction('store-requisitions', id(request.id), 'cancel'), 'Request cancelled and outstanding stock reservations released')} style={{ ...secondary, width: '100%', justifyContent: 'center', marginBottom: 12, color: 'var(--bad)', borderColor: 'rgba(220,38,38,.3)' }}><Icon name="cancel" size={17} color="var(--bad)" />Cancel request and release reservation</button>}
     <Field label="Issued by"><Select value={form.employee} change={(v) => setForm({ ...form, employee: v })} rows={app.data.employees} /></Field>
     <Action disabled={busy || !request || !form.employee} click={() => execute(() => createBackendRecord('stock-issues', { requisition: request.id, store: request.store, issued_by: form.employee, note: '' }), 'Issue voucher created')}>Create issue voucher</Action>
     {!requestLines.length && form.request && <Hint>No approved lines exist on this requisition.</Hint>}
@@ -503,14 +474,10 @@ function Records({ tab, data, app, stage, onSelect }: { tab: Tab; data: Record<s
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const stageRows = tab !== 'requests' ? data[tab]
-    : stage === 'department' ? data.requests.filter((row) => id(row.status) === 'pending_department_approval')
-      : stage === 'department_approved' ? data.requests.filter((row) => Boolean(row.department_approved_at) && id(row.status) !== 'pending_department_approval' && id(row.status) !== 'rejected')
-        : stage === 'department_rejected' ? data.requests.filter((row) => id(row.status) === 'rejected')
-          : stage === 'department_all' ? data.requests.filter((row) => id(row.status) !== 'draft')
-      : stage === 'stores' ? data.requests.filter((row) => id(row.status) === 'submitted')
-        : stage === 'shortage' ? data.requests.filter((row) => id(row.status) === 'awaiting_procurement')
-          : stage === 'issue' ? data.requests.filter((row) => ['approved', 'partially_approved', 'partially_issued'].includes(id(row.status)))
-            : data.requests
+    : stage === 'stores' ? data.requests.filter((row) => id(row.status) === 'submitted')
+      : stage === 'shortage' ? data.requests.filter((row) => id(row.status) === 'awaiting_procurement')
+        : stage === 'issue' ? data.requests.filter((row) => ['approved', 'partially_approved', 'partially_issued'].includes(id(row.status)))
+          : data.requests
   const rowDate = (row: Row) => id(row.created_at || row.request_date || row.issue_date || row.count_date || row.return_date || row.consumed_on)
   const rows = stageRows.filter((row) => {
     const searchable = Object.values(row).join(' ').toLowerCase()
@@ -529,7 +496,7 @@ function Records({ tab, data, app, stage, onSelect }: { tab: Tab; data: Record<s
       : tab === 'reorder' ? [itemName(app, row.item), storeName(app, row.store) || 'All stores', `Min ${row.minimum_level}`, `Reorder ${row.reorder_quantity}`]
         : tab === 'batches' ? [itemName(app, row.item), storeName(app, row.store), `Remaining ${row.remaining_quantity}`, id(row.expiry_date) || 'No expiry']
           : [departmentName(app, row.department), itemName(app, row.item), `${row.quantity} × ${row.unit_cost}`, id(row.consumed_on)]
-  const titles: Record<Tab, string> = { requests: stage === 'department' ? 'Pending approvals' : stage === 'department_approved' ? 'Approved requests' : stage === 'department_rejected' ? 'Rejected requests' : stage === 'department_all' ? 'All department requests' : stage === 'stores' ? 'Requests awaiting stock review' : stage === 'shortage' ? 'Procurement shortages' : stage === 'issue' ? 'Requests ready to issue' : 'My requests', issues: 'Issue vouchers', transfers: 'Inter-store transfers', adjustments: 'Stock adjustments', counts: 'Stock counts', returns: 'Department returns', reorder: 'Low-stock reorder queue', batches: 'Inventory batches and expiry', consumption: 'Department consumption' }
+  const titles: Record<Tab, string> = { requests: stage === 'stores' ? 'Requests awaiting stock review' : stage === 'shortage' ? 'Procurement shortages' : stage === 'issue' ? 'Requests ready to issue' : 'My requests', issues: 'Issue vouchers', transfers: 'Inter-store transfers', adjustments: 'Stock adjustments', counts: 'Stock counts', returns: 'Department returns', reorder: 'Low-stock reorder queue', batches: 'Inventory batches and expiry', consumption: 'Department consumption' }
   const statuses = Array.from(new Set(stageRows.map((row) => id(row.status)).filter(Boolean)))
   return <section style={{ ...card, overflow: 'hidden' }}>
     <div style={{ padding: '15px 17px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}><div style={{ fontSize: 13, fontWeight: 800 }}>{titles[tab]}</div><span style={{ marginLeft: 'auto', color: 'var(--text-faint)', fontSize: 11 }}>{rows.length} record{rows.length === 1 ? '' : 's'}</span></div>
@@ -568,7 +535,6 @@ function InventoryRecordDrawer({ tab, row, data, app, close }: { tab: Tab; row: 
   const details: Array<[string, string]> = tab === 'requests' ? [
     ['Department', departmentName(app, row.department)], ['Issuing store', storeName(app, row.store)],
     ['Required date', id(row.required_date) || '—'], ['Purpose', id(row.purpose) || '—'],
-    ['Department approval', id(row.department_approved_at) ? `Approved · ${id(row.department_approval_comments) || 'No comment'}` : 'Pending or not required'],
     ['Approval comments', id(row.approval_comments) || '—'], ['Rejection reason', id(row.rejection_reason) || '—'],
   ] : tab === 'issues' ? [
     ['Store', storeName(app, row.store)], ['Issue date', id(row.issue_date)],
@@ -667,8 +633,8 @@ function StatusBadge({ value }: { value: string }) {
 }
 function RequestProgress({ status }: { status: string }) {
   const normalized = id(status).trim().toLowerCase().replace(/\s+/g, '_')
-  const stages = ['Created', 'HOD Approval', 'Stores Review', 'Issue', 'Completed']
-  const indexMap: Record<string, number> = { draft: 0, pending_department_approval: 1, submitted: 2, awaiting_procurement: 2, approved: 3, partially_approved: 3, partially_issued: 3, issued: 4, completed: 4, rejected: 1, cancelled: 0 }
+  const stages = ['Created', 'Store Review', 'Issue', 'Completed']
+  const indexMap: Record<string, number> = { draft: 0, submitted: 1, awaiting_procurement: 1, approved: 2, partially_approved: 2, partially_issued: 2, issued: 3, completed: 3, rejected: 1, cancelled: 0 }
   const current = indexMap[normalized] ?? 0
   return <div aria-label={`Request progress: ${stages[current]}`} style={{ minWidth: 150 }}>
     <div style={{ display: 'flex', gap: 3, marginBottom: 4 }}>{stages.map((stage, index) => <span key={stage} title={stage} style={{ height: 5, flex: 1, borderRadius: 5, background: index <= current ? (normalized === 'rejected' ? 'var(--bad)' : normalized === 'cancelled' ? 'var(--text-faint)' : index === current ? 'var(--accent)' : 'var(--good)') : 'var(--border)' }} />)}</div>
@@ -678,7 +644,6 @@ function RequestProgress({ status }: { status: string }) {
 function RequestTimeline({ row, app }: { row: Row; app: any }) {
   const events = [
     { label: 'Created', detail: employeeName(app, row.requested_by), at: id(row.created_at) },
-    row.department_approved_at && { label: 'Department approved', detail: employeeName(app, row.department_approved_by), at: id(row.department_approved_at) },
     row.approved_at && { label: 'Stock approved', detail: employeeName(app, row.approved_by), at: id(row.approved_at) },
     row.issued_at && { label: 'Issued', detail: '', at: id(row.issued_at) },
   ].filter(Boolean) as Array<{ label: string; detail: string; at: string }>

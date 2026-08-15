@@ -7,7 +7,14 @@ from rest_framework.test import APIClient
 
 from apps.departments.models import Branch, Department
 from apps.employees.models import Employee
-from apps.inventory.models import Category, Item, StoreLocation, StoreRequisition, StoreRequisitionItem
+from apps.inventory.models import (
+    Category,
+    Item,
+    StoreKeeperAssignment,
+    StoreLocation,
+    StoreRequisition,
+    StoreRequisitionItem,
+)
 from apps.notifications.models import Notification
 
 
@@ -124,9 +131,6 @@ def test_department_store_request_notifies_each_next_role():
     requester_user, requester = create_employee("notify-requester", "NOTIFY-REQ", department)
     requester.branch = branch
     requester.save(update_fields=("branch", "updated_at"))
-    head_user, head = create_employee("notify-head", "NOTIFY-HOD", department)
-    head.branch = branch
-    head.save(update_fields=("branch", "updated_at"))
     stores_user, stores = create_employee("notify-stores", "NOTIFY-STORE", department)
     stores.branch = branch
     stores.save(update_fields=("branch", "updated_at"))
@@ -134,9 +138,9 @@ def test_department_store_request_notifies_each_next_role():
     procurement.branch = branch
     procurement.save(update_fields=("branch", "updated_at"))
 
-    head_user.groups.add(Group.objects.create(name="Department Head"))
-    stores_user.groups.add(Group.objects.create(name="Stores Manager"))
+    stores_user.groups.add(Group.objects.create(name="Store Keeper"))
     procurement_user.groups.add(Group.objects.create(name="Procurement Manager"))
+    StoreKeeperAssignment.objects.create(store=store, employee=stores)
 
     requisition = StoreRequisition.objects.create(
         department=department,
@@ -151,12 +155,6 @@ def test_department_store_request_notifies_each_next_role():
     )
 
     requisition.submit(actor=requester_user)
-    assert Notification.objects.filter(
-        employee=head,
-        title__contains="needs department approval",
-    ).exists()
-
-    requisition.approve_department(head, "Required for occupied rooms")
     assert Notification.objects.filter(
         employee=stores,
         title__contains="needs a stock decision",

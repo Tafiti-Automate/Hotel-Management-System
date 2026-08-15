@@ -26,7 +26,6 @@ class ApprovalMatrixRule(BaseModel):
     ASSIGNMENT_ROLE = "role"
     ASSIGNMENT_TYPES = (
         (ASSIGNMENT_FIXED_EMPLOYEE, "Fixed employee"),
-        (ASSIGNMENT_DEPARTMENT_HEAD, "Requesting department head"),
         (ASSIGNMENT_ROLE, "Employee role"),
     )
 
@@ -96,6 +95,10 @@ class ApprovalMatrixRule(BaseModel):
     def clean(self):
         super().clean()
         errors = {}
+        if self.assignment_type == self.ASSIGNMENT_DEPARTMENT_HEAD:
+            errors["assignment_type"] = (
+                "Department Head routing has been retired. Choose one of the configured operational roles."
+            )
         if self.assignment_type == self.ASSIGNMENT_FIXED_EMPLOYEE and not self.approver_id:
             errors["approver"] = "Choose the employee assigned to this approval stage."
         if self.assignment_type == self.ASSIGNMENT_ROLE and not self.approver_role_id:

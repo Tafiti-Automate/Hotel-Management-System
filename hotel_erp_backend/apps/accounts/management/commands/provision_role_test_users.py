@@ -20,12 +20,9 @@ ROLE_ACCOUNTS = (
     ("role-general-manager", "ROLE-GM", "General", "Manager", "General Manager", None),
     ("role-procurement", "ROLE-PROC", "Procurement", "Manager", "Procurement Manager", "Procurement"),
     ("role-cost-controller", "ROLE-COST", "Cost", "Controller", "Cost Controller", "Finance"),
-    ("role-finance", "ROLE-FIN", "Finance", "Manager", "Finance Manager", "Finance"),
-    ("role-director", "ROLE-DIR", "Hotel", "Director", "Director", None),
+    ("role-finance", "ROLE-FIN", "Financial", "Manager", "Financial Manager", "Finance"),
     ("role-store-keeper", "ROLE-KEEPER", "Store", "Keeper", "Store Keeper", "Procurement"),
-    ("role-department-head", "ROLE-HOD", "Department", "Head", "Department Head", "Front Office"),
     ("role-receiving", "ROLE-RECV", "Receiving", "Clerk", "Receiving Clerk", "Procurement"),
-    ("role-auditor", "ROLE-AUDIT", "Operations", "Auditor", "Auditor", None),
 )
 
 PASSWORD_VARIABLES = {

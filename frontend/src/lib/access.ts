@@ -46,13 +46,12 @@ function roleKey(user: Pick<AccessUser, 'role'>): string {
 }
 
 export function isStoresManager(user: Pick<AccessUser, 'role'>): boolean {
-  return ['stores manager', 'store manager'].includes(roleKey(user))
+  return roleKey(user) === 'store keeper'
 }
 
 export function canAccessRoute(user: AccessUser, route: string): boolean {
   if (user.isSuperuser || roleKey(user) === 'system administrator') return true
   if (route === 'dashboard' || route === 'detail') return true
-  if (route === 'items' && ['department head', 'department requester'].includes(roleKey(user))) return false
   const required = routePermissions[route]
   return required ? required.some((permission) => user.permissions.includes(permission)) : false
 }
@@ -65,8 +64,8 @@ export function canAccessModule(user: AccessUser, module: 'operations' | 'hr'): 
 }
 
 export function operationsLandingFor(user: AccessUser): { route: string; crumb: string } {
-  if (['stores manager', 'store manager'].includes(roleKey(user))) {
-    return { route: 'dashboard', crumb: 'Stores overview' }
+  if (roleKey(user) === 'store keeper') {
+    return { route: 'dashboard', crumb: 'Store Keeper overview' }
   }
   const candidates = [
     ['workflow-stores', 'Store Requests'],

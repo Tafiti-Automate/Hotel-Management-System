@@ -3,7 +3,6 @@ from uuid import uuid4
 
 import pytest
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group, Permission
 from django.core.exceptions import ValidationError
 from rest_framework.test import APIClient
 
@@ -339,12 +338,6 @@ def test_department_user_store_request_uses_own_identity(client):
     other_employee = Employee.objects.create(
         user=other_user, department=other_department, branch=branch, designation="Finance Officer"
     )
-    group = Group.objects.create(name="Department Head")
-    group.permissions.add(
-        Permission.objects.get(content_type__app_label="inventory", codename="add_storerequisition"),
-        Permission.objects.get(content_type__app_label="inventory", codename="view_storerequisition"),
-    )
-    user.groups.add(group)
     client.force_login(user)
 
     response = client.post(
@@ -365,7 +358,7 @@ def test_department_user_store_request_uses_own_identity(client):
 
 
 @pytest.mark.django_db
-def test_store_request_department_approval_and_head_bypass():
+def test_store_request_goes_directly_to_store_keeper_review():
     branch = Branch.objects.create(name="Approval Flow Hotel")
     department = Department.objects.create(name="Approval Flow Housekeeping")
     store = StoreLocation.objects.create(branch=branch, name="Approval Flow Store")
@@ -385,8 +378,6 @@ def test_store_request_department_approval_and_head_bypass():
     head = Employee.objects.create(
         user=head_user, department=department, branch=branch, designation="Department Head"
     )
-    head_group = Group.objects.create(name="Department Head")
-    head_user.groups.add(head_group)
 
     employee_request = StoreRequisition.objects.create(
         department=department, store=store, requested_by=employee
@@ -395,14 +386,11 @@ def test_store_request_department_approval_and_head_bypass():
         requisition=employee_request, item=item, quantity_requested=Decimal("2")
     )
     employee_request.submit(actor=employee_user)
-    assert employee_request.status == StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL
-
-    employee_request.approve_department(head, "Needed for guest rooms")
     assert employee_request.status == StoreRequisitionStatus.SUBMITTED
-    assert employee_request.department_approved_by == head
+    assert employee_request.department_approved_by is None
 
     purchase = employee_request.create_shortage_purchase_requisition(
-        created_by=head_user, reason="No approval soap is available in the issuing store."
+        created_by=employee_user, reason="No approval soap is available in the issuing store."
     )
     assert employee_request.status == StoreRequisitionStatus.AWAITING_PROCUREMENT
     assert employee_request.procurement_requisition == purchase
@@ -426,7 +414,7 @@ def test_store_request_department_approval_and_head_bypass():
     )
     head_request.submit(actor=head_user)
     assert head_request.status == StoreRequisitionStatus.SUBMITTED
-    assert head_request.department_approved_by == head
+    assert head_request.department_approved_by is None
 
 
 @pytest.mark.django_db
@@ -613,12 +601,6 @@ def test_employee_store_request_resolves_default_store_from_authenticated_branch
         department=department,
         branch=branch,
         designation="Attendant",
-    )
-    user.user_permissions.add(
-        Permission.objects.get(
-            content_type__app_label="inventory",
-            codename="add_storerequisition",
-        )
     )
     store = StoreLocation.objects.create(
         name="Main Store",

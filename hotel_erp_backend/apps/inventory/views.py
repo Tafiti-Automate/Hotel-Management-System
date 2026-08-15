@@ -7,6 +7,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.viewsets import ModelViewSet
@@ -105,6 +106,17 @@ def assigned_store_ids(user):
     ).values_list("store_id", flat=True)
 
 
+def scope_store_requisitions(queryset, user):
+    if user.is_superuser or has_role(user, "System Administrator", "General Manager"):
+        return queryset
+    employee = getattr(user, "employee_profile", None)
+    if not employee:
+        return queryset.none()
+    if has_role(user, "Store Keeper"):
+        return queryset.filter(store_id__in=assigned_store_ids(user))
+    return queryset.filter(requested_by=employee)
+
+
 class CostControllerAuthorityMixin:
     """Cost Controller owns item, UOM, conversion and supplier quote master data."""
 
@@ -175,7 +187,7 @@ class StoreLocationViewSet(CreatedByModelMixin, ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         if has_role(self.request.user, "Store Keeper") and not has_role(
-            self.request.user, "System Administrator", "General Manager", "Auditor"
+            self.request.user, "System Administrator", "General Manager"
         ):
             return queryset.filter(pk__in=assigned_store_ids(self.request.user))
         return queryset
@@ -215,7 +227,7 @@ class InventoryBalanceViewSet(CreatedByModelMixin, ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         if has_role(self.request.user, "Store Keeper") and not has_role(
-            self.request.user, "System Administrator", "General Manager", "Auditor"
+            self.request.user, "System Administrator", "General Manager"
         ):
             return queryset.filter(store_id__in=assigned_store_ids(self.request.user))
         return queryset
@@ -224,9 +236,9 @@ class InventoryBalanceViewSet(CreatedByModelMixin, ModelViewSet):
     def reconcile_reservation(self, request, pk=None):
         if not (
             request.user.is_superuser
-            or request.user.groups.filter(name__in=("System Administrator", "Stores Manager")).exists()
+            or request.user.groups.filter(name__in=("System Administrator", "Store Keeper")).exists()
         ):
-            raise PermissionDenied("Only the Stores Manager can reconcile reserved stock.")
+            raise PermissionDenied("Only the Store Keeper can reconcile reserved stock.")
         with transaction.atomic():
             balance = InventoryBalance.objects.select_for_update().get(pk=self.get_object().pk)
             lines = StoreRequisitionItem.objects.filter(
@@ -505,31 +517,33 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     filterset_fields = ("department", "store", "requested_by", "approved_by", "status")
     search_fields = ("requisition_no", "purpose", "department__name", "store__name")
     ordering_fields = ("requisition_no", "status", "required_date", "created_at")
+    permission_classes = (IsAuthenticated,)
 
     def get_queryset(self):
-        queryset = super().get_queryset()
-        user = self.request.user
-        if user.is_superuser or user.groups.filter(
-            name__in=(
-                "System Administrator", "General Manager", "Auditor",
+        return scope_store_requisitions(super().get_queryset(), self.request.user)
+
+    def _enforce_requester_edit(self, requisition):
+        if has_role(self.request.user, "System Administrator"):
+            return
+        employee = getattr(self.request.user, "employee_profile", None)
+        if (
+            employee
+            and requisition.requested_by_id == employee.id
+            and requisition.status in (
+                StoreRequisitionStatus.DRAFT,
+                StoreRequisitionStatus.REJECTED,
             )
-        ).exists():
-            return queryset
-        employee = getattr(user, "employee_profile", None)
-        if not employee:
-            return queryset.none()
-        if user.groups.filter(name="Store Keeper").exists():
-            return queryset.filter(store_id__in=assigned_store_ids(user))
-        # Kept solely to avoid abruptly locking historic assignments while the
-        # Store Keeper migration is rolled out. New access is assignment based.
-        if user.groups.filter(name="Stores Manager").exists():
-            return queryset
-        if user.groups.filter(name="Department Head").exists():
-            return queryset.filter(
-                department=employee.department,
-                store__branch=employee.branch,
-            )
-        return queryset.filter(requested_by=employee)
+        ):
+            return
+        raise PermissionDenied("Only the requester can edit their draft store request.")
+
+    def perform_update(self, serializer):
+        self._enforce_requester_edit(serializer.instance)
+        super().perform_update(serializer)
+
+    def perform_destroy(self, instance):
+        self._enforce_requester_edit(instance)
+        instance.delete()
 
     def _enforce_store_assignment(self, requisition):
         user = self.request.user
@@ -541,33 +555,14 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             is_active=True,
         ).exists():
             return
-        if user.groups.filter(name="Stores Manager").exists():
-            return
         raise PermissionDenied("Only the Store Keeper assigned to this store can process this request.")
 
     @action(detail=True, methods=["post"])
     def submit(self, request, pk=None):
         requisition = self.get_object()
+        self._enforce_requester_edit(requisition)
         try:
             requisition.submit(actor=request.user)
-        except DjangoValidationError as error:
-            raise_drf_validation_error(error)
-        return Response(self.get_serializer(requisition).data)
-
-    @action(detail=True, methods=["post"], url_path="department-approve")
-    def department_approve(self, request, pk=None):
-        requisition = self.get_object()
-        employee = getattr(request.user, "employee_profile", None)
-        is_department_head = request.user.is_superuser or request.user.groups.filter(
-            name__in=("System Administrator", "Department Head")
-        ).exists()
-        if not is_department_head:
-            raise PermissionDenied("Only the Department Head can approve this request.")
-        try:
-            requisition.approve_department(
-                approved_by=employee,
-                comments=request.data.get("comments", ""),
-            )
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
         return Response(self.get_serializer(requisition).data)
@@ -612,18 +607,7 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
         requisition = self.get_object()
-        if requisition.status == StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL:
-            allowed = request.user.is_superuser or request.user.groups.filter(
-                name__in=("System Administrator", "Department Head")
-            ).exists()
-        else:
-            try:
-                self._enforce_store_assignment(requisition)
-                allowed = True
-            except PermissionDenied:
-                allowed = False
-        if not allowed:
-            raise PermissionDenied("Your role cannot reject this request at its current stage.")
+        self._enforce_store_assignment(requisition)
         try:
             requisition.reject(
                 reason=request.data.get("reason", ""),
@@ -647,13 +631,12 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             and requisition.requested_by_id == employee.id
             and requisition.status in (
                 StoreRequisitionStatus.DRAFT,
-                StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL,
                 StoreRequisitionStatus.SUBMITTED,
             )
         )
         if not (stores_control or requester_can_cancel):
             raise PermissionDenied(
-                "Only the requester may cancel an unapproved request; approved reservations require the Stores Manager."
+                "Only the requester may cancel an unapproved request; approved reservations require the Store Keeper."
             )
         try:
             requisition.cancel(actor=request.user)
@@ -668,16 +651,50 @@ class StoreRequisitionItemViewSet(CreatedByModelMixin, ModelViewSet):
     filterset_fields = ("requisition", "item", "unit")
     search_fields = ("requisition__requisition_no", "item__name", "item__sku")
     ordering_fields = ("quantity_requested", "quantity_approved", "quantity_issued", "created_at")
+    permission_classes = (IsAuthenticated,)
 
     def get_queryset(self):
-        queryset = super().get_queryset()
-        if has_role(self.request.user, "Store Keeper") and not has_role(
-            self.request.user, "System Administrator", "General Manager", "Auditor"
-        ):
-            return queryset.filter(requisition__store_id__in=assigned_store_ids(self.request.user))
-        return queryset
+        requisitions = scope_store_requisitions(
+            StoreRequisition.objects.all(),
+            self.request.user,
+        )
+        return super().get_queryset().filter(requisition__in=requisitions)
+
+    def _enforce_line_edit(self, requisition):
+        if has_role(self.request.user, "System Administrator"):
+            return
+        employee = getattr(self.request.user, "employee_profile", None)
+        requester_edit = (
+            employee
+            and requisition.requested_by_id == employee.id
+            and requisition.status in (
+                StoreRequisitionStatus.DRAFT,
+                StoreRequisitionStatus.REJECTED,
+            )
+        )
+        keeper_edit = (
+            has_role(self.request.user, "Store Keeper")
+            and requisition.status == StoreRequisitionStatus.SUBMITTED
+            and StoreKeeperAssignment.objects.filter(
+                store=requisition.store,
+                employee=employee,
+                is_active=True,
+            ).exists()
+        )
+        if requester_edit or keeper_edit:
+            return
+        raise PermissionDenied("You cannot change lines on this store request.")
+
+    def perform_create(self, serializer):
+        self._enforce_line_edit(serializer.validated_data["requisition"])
+        super().perform_create(serializer)
+
+    def perform_update(self, serializer):
+        self._enforce_line_edit(serializer.instance.requisition)
+        super().perform_update(serializer)
 
     def perform_destroy(self, instance):
+        self._enforce_line_edit(instance.requisition)
         if instance.requisition.status not in (
             StoreRequisitionStatus.DRAFT,
             StoreRequisitionStatus.REJECTED,

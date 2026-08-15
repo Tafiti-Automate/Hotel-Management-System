@@ -105,7 +105,7 @@ def test_hotel_purchase_requisition_passes_ordered_controls():
     user_model = get_user_model()
     management = Department.objects.create(name="Management")
     approvers = []
-    for index, designation in enumerate(("Procurement Manager", "Finance Controller", "Director"), start=1):
+    for index, designation in enumerate(("Procurement Manager", "Financial Manager", "General Manager"), start=1):
         user = user_model.objects.create_user(
             username=f"approver-{index}",
             employee_code=f"EMP-APR-{index}",
@@ -255,9 +255,9 @@ def test_only_assigned_employee_can_decide_approval(client):
         employee_code="EMP-OTHER",
         password="test-pass-123",
     )
-    department_head = Group.objects.get(name="Department Head")
-    assigned_user.groups.add(department_head)
-    other_user.groups.add(department_head)
+    financial_manager = Group.objects.get(name="Financial Manager")
+    assigned_user.groups.add(financial_manager)
+    other_user.groups.add(financial_manager)
     assigned_employee = Employee.objects.create(
         user=assigned_user,
         department=department,
@@ -316,7 +316,7 @@ def test_only_assigned_employee_can_decide_approval(client):
 
 
 @pytest.mark.django_db
-def test_department_head_route_uses_requesting_department_and_property():
+def test_financial_manager_role_route_uses_requesting_property():
     call_command("setup_hotel_roles", verbosity=0)
     hotel = Hotel.objects.create(name="Routing Hotel")
     branch = Branch.objects.create(
@@ -327,30 +327,35 @@ def test_department_head_route_uses_requesting_department_and_property():
     housekeeping = Department.objects.create(name="Housekeeping Routing")
     food_beverage = Department.objects.create(name="Food and Beverage Routing")
     user_model = get_user_model()
-    department_head_group = Group.objects.get(name="Department Head")
+    financial_manager_group = Group.objects.get(name="Financial Manager")
+    other_branch = Branch.objects.create(
+        hotel=hotel,
+        name="Jinja Branch",
+        branch_code="JJA",
+    )
 
     housekeeping_user = user_model.objects.create_user(
-        username="housekeeping-head-routing",
+        username="housekeeping-finance-routing",
         employee_code="EMP-HK-ROUTE",
     )
-    housekeeping_user.groups.add(department_head_group)
+    housekeeping_user.groups.add(financial_manager_group)
     Employee.objects.create(
         user=housekeeping_user,
         department=housekeeping,
-        branch=branch,
-        designation="Executive Housekeeper",
+        branch=other_branch,
+        designation="Financial Manager",
     )
 
     food_head_user = user_model.objects.create_user(
-        username="food-head-routing",
+        username="food-finance-routing",
         employee_code="EMP-FB-ROUTE",
     )
-    food_head_user.groups.add(department_head_group)
-    food_head = Employee.objects.create(
+    food_head_user.groups.add(financial_manager_group)
+    food_finance = Employee.objects.create(
         user=food_head_user,
         department=food_beverage,
         branch=branch,
-        designation="Food and Beverage Manager",
+        designation="Financial Manager",
     )
     requester_user = user_model.objects.create_user(
         username="food-requester-routing",
@@ -363,12 +368,13 @@ def test_department_head_route_uses_requesting_department_and_property():
         designation="Restaurant Supervisor",
     )
     ApprovalMatrixRule.objects.create(
-        name="Dynamic department approval",
+        name="Dynamic financial approval",
         document_type=ApprovalMatrixRule.DOCUMENT_PURCHASE_REQUISITION,
         minimum_amount=Decimal("0.00"),
         stage=1,
-        stage_name="Department review",
-        assignment_type=ApprovalMatrixRule.ASSIGNMENT_DEPARTMENT_HEAD,
+        stage_name="Financial Manager review",
+        assignment_type=ApprovalMatrixRule.ASSIGNMENT_ROLE,
+        approver_role=financial_manager_group,
     )
     category = Category.objects.create(name="Restaurant Routing Supplies")
     item = Item.objects.create(
@@ -396,7 +402,7 @@ def test_department_head_route_uses_requesting_department_and_property():
     assert requisition.branch == branch
     assert requisition.hotel == hotel
     assert requisition.requisition_number.isdigit()
-    assert requisition.approval_workflow.get().approver == food_head
+    assert requisition.approval_workflow.get().approver == food_finance
 
 
 @pytest.mark.django_db

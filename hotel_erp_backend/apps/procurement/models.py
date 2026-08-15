@@ -280,12 +280,6 @@ class PurchaseRequisition(BaseModel):
                 )
             else:
                 for rule in rules:
-                    if (
-                        rule.assignment_type == rule.ASSIGNMENT_DEPARTMENT_HEAD
-                        and self.requester_id
-                        and self.requester.user.groups.filter(name="Department Head").exists()
-                    ):
-                        continue
                     try:
                         rule.resolve_approver(self)
                     except ValidationError as error:
@@ -300,11 +294,6 @@ class PurchaseRequisition(BaseModel):
         from apps.approvals.models import ApprovalMatrixRule, ApprovalWorkflow
 
         rules = list(ApprovalMatrixRule.matching_requisition_rules(self))
-        if self.requester_id and self.requester.user.groups.filter(name="Department Head").exists():
-            rules = [
-                rule for rule in rules
-                if rule.assignment_type != rule.ASSIGNMENT_DEPARTMENT_HEAD
-            ]
         if not rules:
             return []
         with transaction.atomic():
@@ -1281,11 +1270,11 @@ class PurchaseOrder(BaseModel):
                     "The LPO approval route must include Finance review followed by final Management approval."
                 )
             elif "finance" not in rules[0].stage_name.lower():
-                blockers.append("The first LPO approval stage must be the Finance Manager review.")
+                blockers.append("The first LPO approval stage must be the Financial Manager review.")
             final_stage = rules[-1].stage_name.lower()
-            if not any(label in final_stage for label in ("general manager", "director", "management")):
+            if not any(label in final_stage for label in ("general manager", "management")):
                 blockers.append(
-                    "The final LPO approval stage must be assigned to the General Manager or Director."
+                    "The final LPO approval stage must be assigned to the General Manager."
                 )
             resolved_approvers = []
             for rule in rules:

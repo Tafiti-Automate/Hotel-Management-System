@@ -745,7 +745,7 @@ class StoreRequisitionSerializer(serializers.ModelSerializer):
 
         user = request.user
         can_request_on_behalf = user.is_superuser or user.groups.filter(
-            name__in=("System Administrator", "Stores Manager")
+            name="System Administrator"
         ).exists()
         if can_request_on_behalf:
             if not attrs.get("store", getattr(self.instance, "store", None)):

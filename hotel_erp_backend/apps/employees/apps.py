@@ -5,3 +5,6 @@ class EmployeesConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "apps.employees"
     label = "employees"
+
+    def ready(self):
+        from apps.employees import signals  # noqa: F401

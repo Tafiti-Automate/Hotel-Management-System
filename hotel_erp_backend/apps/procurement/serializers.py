@@ -29,11 +29,8 @@ from apps.procurement.models import (
 COMMERCIAL_VISIBILITY_ROLES = {
     "Cost Controller",
     "Procurement Manager",
-    "Finance Manager",
-    "Finance Controller",
+    "Financial Manager",
     "General Manager",
-    "Director",
-    "Auditor",
     "System Administrator",
 }
 

@@ -693,7 +693,7 @@ def test_lpo_requires_independent_value_routed_approval_before_issue():
         user=approver_user,
         department=department,
         branch=branch,
-        designation="Finance Controller",
+        designation="Financial Manager",
     )
     manager_user = get_user_model().objects.create_user(
         username="lpo-general-manager",
