@@ -6,7 +6,6 @@ import { useApp } from '../state/AppContext'
 const panel: CSSProperties = { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, boxShadow: 'var(--shadow-sm)' }
 const roleKey = (role: string) => role.trim().toLowerCase()
 const monthKey = (date: unknown) => String(date || '').slice(0, 7)
-const today = new Date().toISOString().slice(0, 10)
 
 export default function Dashboard() {
   const app = useApp()
@@ -82,13 +81,11 @@ type DashboardConfig = {
 function buildDashboard(role: string, data: any): DashboardConfig {
   const reqs = data.requisitions || []
   const orders = data.orders || []
-  const balances = data.balances || []
   const items = data.items || []
   const storeReqs = data.storeRequisitions || []
   const issues = data.stockIssues || []
   const employees = data.employees || []
   const departments = data.departments || []
-  const low = items.filter((r: any) => ['Low', 'Critical'].includes(String(r.status)))
 
   if (['requester', 'staff', 'unassigned', 'department employee', 'employee'].includes(role)) {
     const mine = storeReqs
