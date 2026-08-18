@@ -125,6 +125,25 @@ function buildDashboard(role: string, data: any): DashboardConfig {
     }
   }
 
+  if (role === 'department head') {
+    const pending = storeReqs.filter((r: any) => normalStatus(r.status) === 'pending_department_approval')
+    const approved = storeReqs.filter((r: any) => Boolean(r.departmentApprovedAt) || ['submitted','approved','partially_approved','awaiting_procurement','partially_issued','issued','completed'].includes(normalStatus(r.status)))
+    const rejected = storeReqs.filter((r: any) => normalStatus(r.status) === 'rejected')
+    return {
+      subtitle: 'Department requests awaiting your authorization',
+      kpis: [
+        { label: 'Pending approval', value: pending.length, icon: 'approval', tone: pending.length ? 'warning' : 'neutral' },
+        { label: 'Department approved', value: approved.length, icon: 'check_circle', tone: approved.length ? 'success' : 'neutral' },
+        { label: 'Rejected', value: rejected.length, icon: 'cancel', tone: rejected.length ? 'danger' : 'neutral' },
+        { label: 'Department requests', value: storeReqs.length, icon: 'assignment' },
+      ],
+      trend: { title: 'Department request trend', subtitle: 'Requests submitted during the last six months', series: [{ name: 'Requests', points: monthly(storeReqs, 'created_at') }] },
+      status: { title: 'Requests by status', subtitle: 'Current department-to-stores progress', data: byStatus(storeReqs) },
+      bars: { title: 'Requests by purpose', subtitle: 'Current departmental demand', data: groupCount(storeReqs, 'purpose') },
+      queue: { title: 'Department approval queue', subtitle: 'Review item, quantity, and requester notes', action: 'Open approvals', route: 'workflow-stores', rows: pending.map((r: any) => queueStoreReq(r)) },
+    }
+  }
+
   if (role === 'receiving clerk') {
     const readyOrders = orders.filter((r: any) => /issued|partially_received/i.test(String(r.status)))
     const grns = data.grns || []
@@ -144,7 +163,7 @@ function buildDashboard(role: string, data: any): DashboardConfig {
   }
 
   if (role === 'store keeper') {
-    const submitted = storeReqs.filter((r: any) => ['submitted','pending_department_approval'].includes(normalStatus(r.status)))
+    const submitted = storeReqs.filter((r: any) => normalStatus(r.status) === 'submitted')
     const procurement = storeReqs.filter((r: any) => ['awaiting_procurement','procurement_in_progress'].includes(normalStatus(r.status)))
     const completed = storeReqs.filter((r: any) => ['issued','completed','fulfilled'].includes(normalStatus(r.status)))
     return {
@@ -301,7 +320,7 @@ function PanelHeader({ title, subtitle, action, onAction }: { title: string; sub
 function Status({ value }: { value: string }) { const bad=/critical|rejected|inactive/i.test(value), good=/approved|completed|active|applied|received/i.test(value); return <span style={{justifySelf:'end',color:bad?'var(--bad)':good?'var(--good)':'var(--warn)',background:bad?'var(--bad-soft)':good?'var(--good-soft)':'var(--warn-soft)',borderRadius:12,padding:'3px 8px',fontSize:10,fontWeight:600,textTransform:'capitalize'}}>{clean(value)}</span> }
 function Empty({ text }: { text: string }) { return <div style={{padding:30,color:'var(--text-faint)',textAlign:'center',fontSize:12.5}}>{text}</div> }
 function Legend({ labels }: { labels: string[] }) { return <div style={{display:'flex',gap:14,marginTop:12,flexWrap:'wrap'}}>{labels.map((l,i)=><span key={l} style={{fontSize:10.5,color:'var(--text-muted)'}}><i style={{display:'inline-block',width:8,height:8,borderRadius:2,background:`var(--chart-${i+1}, var(--accent))`,marginRight:5}}/>{l}</span>)}</div> }
-function dashboardTitle(role:string){ const names:Record<string,string>={'cost controller':'Cost Controller dashboard','store keeper':'Store Keeper dashboard','receiving clerk':'Receiving Clerk dashboard','financial manager':'Financial Manager dashboard','procurement manager':'Procurement Manager dashboard','general manager':'General Manager dashboard'}; return names[role] || `${role ? role.replace(/\b\w/g,c=>c.toUpperCase()) : 'Operations'} dashboard` }
+function dashboardTitle(role:string){ const names:Record<string,string>={'department head':'Department Head dashboard','cost controller':'Cost Controller dashboard','store keeper':'Store Keeper dashboard','receiving clerk':'Receiving Clerk dashboard','financial manager':'Financial Manager dashboard','procurement manager':'Procurement Manager dashboard','general manager':'General Manager dashboard'}; return names[role] || `${role ? role.replace(/\b\w/g,c=>c.toUpperCase()) : 'Operations'} dashboard` }
 function tone(value:string){ if(value==='danger')return{fg:'var(--bad)',bg:'var(--bad-soft)'};if(value==='warning')return{fg:'var(--warn)',bg:'var(--warn-soft)'};if(value==='success')return{fg:'var(--good)',bg:'var(--good-soft)'};return{fg:'var(--accent)',bg:'var(--accent-soft)'} }
 function clean(v:unknown){return String(v||'Unknown').replace(/_/g,' ')}
 function compact(v:number){return Intl.NumberFormat('en',{notation:'compact',maximumFractionDigits:1}).format(v)}

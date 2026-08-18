@@ -2,7 +2,7 @@ from decimal import Decimal
 
 import pytest
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, Permission
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 
@@ -256,6 +256,9 @@ def test_only_assigned_employee_can_decide_approval(client):
         password="test-pass-123",
     )
     financial_manager = Group.objects.get(name="Financial Manager")
+    financial_manager.permissions.add(
+        Permission.objects.get(codename="change_approvalworkflow")
+    )
     assigned_user.groups.add(financial_manager)
     other_user.groups.add(financial_manager)
     assigned_employee = Employee.objects.create(

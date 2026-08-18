@@ -273,9 +273,19 @@ class Command(BaseCommand):
                 "Nambasa",
                 "UG-HQ-106",
                 "Housekeeping",
-                "Executive Housekeeper",
+                "Room Attendant",
                 None,
                 "+256 701 410 106",
+            ),
+            "housekeeping_head": (
+                "rebecca.nansubuga",
+                "Rebecca",
+                "Nansubuga",
+                "UG-HQ-111",
+                "Housekeeping",
+                "Executive Housekeeper",
+                "Department Head",
+                "+256 772 410 111",
             ),
             "food_beverage": (
                 "ivan.mugisha",
@@ -343,7 +353,7 @@ class Command(BaseCommand):
                 department=departments[department_name],
                 branch=branch,
                 designation=designation,
-                gender="Female" if key in {"manager", "finance", "receiving", "housekeeping", "front_office"} else "Male",
+                gender="Female" if key in {"manager", "finance", "receiving", "housekeeping", "housekeeping_head", "front_office"} else "Male",
                 contact=phone,
                 address="Kampala, Uganda",
                 date_joined=timezone.localdate() - timedelta(days=420),
@@ -820,7 +830,11 @@ class Command(BaseCommand):
             remarks="Administration desk printing requirement.",
             created_by=employees["housekeeping"].user,
         )
-        request.submit()
+        request.submit(actor=employees["housekeeping"].user)
+        request.approve_department(
+            approved_by=employees["housekeeping_head"],
+            comments="Housekeeping requirement confirmed.",
+        )
         request.approve(
             approved_by=employees["stores"],
             comments="Stock availability confirmed and reserved.",

@@ -1192,26 +1192,78 @@ class StoreRequisition(BaseModel):
             raise ValidationError("Only draft or rejected store requisitions can be submitted.")
         if not self.items.exists():
             raise ValidationError("Store requisition must include at least one item.")
-        self.status = StoreRequisitionStatus.SUBMITTED
+        self.status = StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL
         self.department_approved_by = None
         self.department_approved_at = None
         self.department_approval_comments = ""
         self.rejection_reason = ""
+        self.approved_by = None
+        self.approved_at = None
+        self.approval_comments = ""
         self.save(update_fields=[
             "status",
             "department_approved_by",
             "department_approved_at",
             "department_approval_comments",
             "rejection_reason",
+            "approved_by",
+            "approved_at",
+            "approval_comments",
+            "updated_at",
+        ])
+        self.items.update(
+            quantity_approved=Decimal("0.00"),
+            storekeeper_comment="",
+        )
+        from apps.notifications.services import notify_roles
+
+        notify_roles(
+            ("Department Head",),
+            title=f"{self.requisition_no} needs department approval",
+            message=(
+                f"{self.requested_by} submitted a store request for {self.department}. "
+                "Review the requested articles, quantities, and notes."
+            ),
+            branch=self.store.branch,
+            department=self.department,
+            created_by=actor,
+            exclude_employee=self.requested_by,
+        )
+
+    def approve_department(self, approved_by, comments=""):
+        if self.status != StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL:
+            raise ValidationError(
+                "Only requests awaiting Department Head approval can be approved here."
+            )
+        if not approved_by or approved_by.department_id != self.department_id:
+            raise ValidationError(
+                "The approver must be a Department Head in the requesting department."
+            )
+        if self.store.branch_id and approved_by.branch_id != self.store.branch_id:
+            raise ValidationError(
+                "The approver must belong to the same branch as the request."
+            )
+        if approved_by.pk == self.requested_by_id:
+            raise ValidationError("A requester cannot approve their own store request.")
+
+        self.status = StoreRequisitionStatus.SUBMITTED
+        self.department_approved_by = approved_by
+        self.department_approved_at = timezone.now()
+        self.department_approval_comments = comments
+        self.save(update_fields=[
+            "status",
+            "department_approved_by",
+            "department_approved_at",
+            "department_approval_comments",
             "updated_at",
         ])
         self._notify_stores(
             title=f"{self.requisition_no} needs a stock decision",
             message=(
-                f"{self.department} submitted a department store request. "
+                f"The Department Head approved {self.department}'s store request. "
                 "Check availability and decide the quantities to reserve."
             ),
-            created_by=actor,
+            created_by=approved_by.user,
         )
 
     def create_shortage_purchase_requisition(self, created_by=None, reason=""):
@@ -1512,6 +1564,7 @@ class StoreRequisitionItem(BaseModel):
         validators=[validate_non_negative_decimal],
     )
     remarks = models.TextField(blank=True)
+    storekeeper_comment = models.TextField(blank=True)
 
     class Meta(BaseModel.Meta):
         constraints = [

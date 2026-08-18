@@ -79,7 +79,7 @@ def test_seed_presentation_data_builds_connected_uganda_workflows(monkeypatch):
 
     assert Hotel.objects.get().name == "Pearl Presentation Hotel"
     assert Branch.objects.count() == 2
-    assert Employee.objects.count() == 14
+    assert Employee.objects.count() == 15
     assert Supplier.objects.count() == 6
     assert PurchaseRequisition.objects.count() == 2
     assert VendorQuotation.objects.count() == 3
@@ -111,8 +111,8 @@ def test_seed_presentation_data_builds_connected_uganda_workflows(monkeypatch):
     account_specs = (
         ("anankya", "Store Keeper", "DEMO_STORE_KEEPER_PASSWORD", "Store-Test-Password-01!"),
         (
-            "esther.nambasa",
-            None,
+            "rebecca.nansubuga",
+            "Department Head",
             "DEMO_DEPARTMENT_HEAD_PASSWORD",
             "Department-Test-Password-02!",
         ),

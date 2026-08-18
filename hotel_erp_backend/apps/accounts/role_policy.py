@@ -3,6 +3,7 @@ from django.db.models import Q
 
 
 OPERATIONAL_ROLE_NAMES = (
+    "Department Head",
     "Cost Controller",
     "Store Keeper",
     "Receiving Clerk",

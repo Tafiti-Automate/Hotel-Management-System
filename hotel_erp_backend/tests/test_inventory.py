@@ -3,6 +3,7 @@ from uuid import uuid4
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
 from rest_framework.test import APIClient
 
@@ -23,6 +24,7 @@ from apps.inventory.models import (
     StockLedger,
     StockTransfer,
     StockTransferItem,
+    StoreKeeperAssignment,
     StoreLocation,
     StoreRequisition,
     StoreRequisitionItem,
@@ -318,6 +320,24 @@ def create_inventory_operations_context():
     return department, employee, store, item
 
 
+def approve_store_request_for_department(requisition):
+    head_user = get_user_model().objects.create_user(
+        username=f"department-head-{uuid4()}",
+        employee_code=f"HOD-{str(uuid4())[:8]}",
+        password="test-pass-123",
+    )
+    head_user.groups.add(Group.objects.get_or_create(name="Department Head")[0])
+    head = Employee.objects.create(
+        user=head_user,
+        department=requisition.department,
+        branch=requisition.store.branch,
+        designation="Department Head",
+    )
+    requisition.submit(actor=requisition.requested_by.user)
+    requisition.approve_department(head, comments="Department need confirmed.")
+    return head
+
+
 @pytest.mark.django_db
 def test_department_user_store_request_uses_own_identity(client):
     branch = Branch.objects.create(name="Identity Test Hotel")
@@ -358,7 +378,7 @@ def test_department_user_store_request_uses_own_identity(client):
 
 
 @pytest.mark.django_db
-def test_store_request_goes_directly_to_store_keeper_review():
+def test_store_request_requires_department_head_before_store_keeper_review():
     branch = Branch.objects.create(name="Approval Flow Hotel")
     department = Department.objects.create(name="Approval Flow Housekeeping")
     store = StoreLocation.objects.create(branch=branch, name="Approval Flow Store")
@@ -378,19 +398,61 @@ def test_store_request_goes_directly_to_store_keeper_review():
     head = Employee.objects.create(
         user=head_user, department=department, branch=branch, designation="Department Head"
     )
+    head_user.groups.add(Group.objects.get_or_create(name="Department Head")[0])
+    stores_user = get_user_model().objects.create_user(
+        username="approval-flow-storekeeper", employee_code="EMP-FLOW-STORES"
+    )
+    stores_user.groups.add(Group.objects.create(name="Store Keeper"))
+    stores = Employee.objects.create(
+        user=stores_user, department=department, branch=branch, designation="Store Keeper"
+    )
+    StoreKeeperAssignment.objects.create(store=store, employee=stores)
 
     employee_request = StoreRequisition.objects.create(
         department=department, store=store, requested_by=employee
     )
-    StoreRequisitionItem.objects.create(
-        requisition=employee_request, item=item, quantity_requested=Decimal("2")
+    request_line = StoreRequisitionItem.objects.create(
+        requisition=employee_request,
+        item=item,
+        quantity_requested=Decimal("2"),
+        remarks="For the second-floor guest rooms.",
     )
     employee_request.submit(actor=employee_user)
-    assert employee_request.status == StoreRequisitionStatus.SUBMITTED
+    assert employee_request.status == StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL
     assert employee_request.department_approved_by is None
+    with pytest.raises(ValidationError, match="Stores-reviewed submitted"):
+        employee_request.create_shortage_purchase_requisition(created_by=stores_user)
+
+    stores_client = APIClient()
+    stores_client.force_authenticate(stores_user)
+    assert stores_client.get("/api/v1/store-requisitions/").data["results"] == []
+
+    head_client = APIClient()
+    head_client.force_authenticate(head_user)
+    response = head_client.post(
+        f"/api/v1/store-requisitions/{employee_request.pk}/department-approve/",
+        {"comments": "The rooms require these supplies."},
+        format="json",
+    )
+    assert response.status_code == 200
+    employee_request.refresh_from_db()
+    assert employee_request.status == StoreRequisitionStatus.SUBMITTED
+    assert employee_request.department_approved_by == head
+    assert employee_request.department_approval_comments == "The rooms require these supplies."
+    assert stores_client.get("/api/v1/store-requisitions/").data["count"] == 1
+
+    response = stores_client.patch(
+        f"/api/v1/store-requisition-items/{request_line.pk}/",
+        {"quantity_approved": "2.00", "storekeeper_comment": "Available in stock."},
+        format="json",
+    )
+    assert response.status_code == 200
+    request_line.refresh_from_db()
+    assert request_line.remarks == "For the second-floor guest rooms."
+    assert request_line.storekeeper_comment == "Available in stock."
 
     purchase = employee_request.create_shortage_purchase_requisition(
-        created_by=employee_user, reason="No approval soap is available in the issuing store."
+        created_by=stores_user, reason="No approval soap is available in the issuing store."
     )
     assert employee_request.status == StoreRequisitionStatus.AWAITING_PROCUREMENT
     assert employee_request.procurement_requisition == purchase
@@ -413,8 +475,10 @@ def test_store_request_goes_directly_to_store_keeper_review():
         requisition=head_request, item=item, quantity_requested=Decimal("1")
     )
     head_request.submit(actor=head_user)
-    assert head_request.status == StoreRequisitionStatus.SUBMITTED
+    assert head_request.status == StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL
     assert head_request.department_approved_by is None
+    with pytest.raises(ValidationError, match="cannot approve their own"):
+        head_request.approve_department(head)
 
 
 @pytest.mark.django_db
@@ -432,7 +496,7 @@ def test_store_requisition_issue_and_department_return_update_stock():
         quantity_requested=Decimal("12.00"),
     )
 
-    requisition.submit()
+    approve_store_request_for_department(requisition)
     requisition.approve(approved_by=employee)
     assert InventoryBalance.objects.get(item=item, store=store).quantity_reserved == Decimal("12.00")
     issue = StockIssue.objects.create(
@@ -480,7 +544,7 @@ def test_cancelling_approved_request_releases_outstanding_reservation():
         department=employee.department, store=store, requested_by=employee, purpose="Cancelled need"
     )
     StoreRequisitionItem.objects.create(requisition=requisition, item=item, quantity_requested=Decimal("12.00"))
-    requisition.submit()
+    approve_store_request_for_department(requisition)
     requisition.approve(approved_by=employee)
     requisition.cancel(actor=employee.user)
 

@@ -50,6 +50,7 @@ const strictRoleRoutes: Record<string, Set<string>> = {
   'financial manager': new Set(['dashboard', 'workflow-procure']),
   'general manager': new Set(['dashboard', 'workflow-procure']),
   'receiving clerk': new Set(['dashboard', 'workflow-procure', 'grns']),
+  'department head': new Set(['dashboard', 'workflow-stores']),
   'staff': new Set(['dashboard', 'workflow-stores']),
   'employee': new Set(['dashboard', 'workflow-stores']),
   'department employee': new Set(['dashboard', 'workflow-stores']),

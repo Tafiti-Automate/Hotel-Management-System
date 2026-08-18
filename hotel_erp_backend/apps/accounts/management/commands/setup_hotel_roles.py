@@ -30,6 +30,16 @@ ROLE_SPECS = {
             "inventory": ["item", "storelocation", "unitofmeasure"],
         },
     },
+    "Department Head": {
+        "crud": {
+            "inventory": ["storerequisition", "storerequisitionitem"],
+        },
+        "view": {
+            "departments": ["branch", "department"],
+            "employees": ["employee"],
+            "inventory": ["item", "storelocation", "unitofmeasure"],
+        },
+    },
     "Procurement Manager": {
         "crud": {
             "procurement": [
@@ -118,7 +128,6 @@ ROLE_REPLACEMENTS = {
 OBSOLETE_ROLES = {
     *ROLE_REPLACEMENTS,
     "Department Requester",
-    "Department Head",
     "Auditor",
 }
 
@@ -192,12 +201,6 @@ class Command(BaseCommand):
         removable.delete()
         from apps.accounts.role_policy import grant_employee_self_service
         from apps.employees.models import Employee
-        from apps.inventory.models import StoreRequisition
-        from core.constants.choices import StoreRequisitionStatus
-
-        StoreRequisition.objects.filter(
-            status=StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL
-        ).update(status=StoreRequisitionStatus.SUBMITTED)
 
         for employee in Employee.objects.select_related("user"):
             grant_employee_self_service(employee.user)

@@ -57,6 +57,7 @@ class Command(BaseCommand):
 
         employees = {
             "head": self.employee("uat-department-requester", "UAT", "Department Employee", branch, department, None),
+            "department_head": self.employee("uat-department-head", "UAT", "Department Head", branch, department, "Department Head"),
             "procurement": self.employee("uat-procurement", "UAT", "Procurement Manager", branch, department, "Procurement Manager"),
             "finance": self.employee("uat-finance", "UAT", "Financial Manager", branch, department, "Financial Manager"),
             "manager": self.employee("uat-general-manager", "UAT", "General Manager", branch, department, "General Manager"),
@@ -310,7 +311,8 @@ class Command(BaseCommand):
             quantity_requested=Decimal("2.00"),
             created_by=employees["head"].user,
         )
-        request.submit()
+        request.submit(actor=employees["head"].user)
+        request.approve_department(approved_by=employees["department_head"])
         request.approve(approved_by=employees["stores"])
         issue = StockIssue.objects.create(
             requisition=request,

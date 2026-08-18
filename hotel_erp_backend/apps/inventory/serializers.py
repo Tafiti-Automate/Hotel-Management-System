@@ -686,7 +686,7 @@ class StoreRequisitionItemSerializer(serializers.ModelSerializer):
         if not requisition:
             return attrs
         if self.instance and requisition.status == StoreRequisitionStatus.SUBMITTED:
-            disallowed = set(attrs) - {"quantity_approved", "remarks"}
+            disallowed = set(attrs) - {"quantity_approved", "storekeeper_comment"}
             if disallowed:
                 raise serializers.ValidationError(
                     "Only the approved quantity and decision comment can change during approval."
@@ -728,10 +728,14 @@ class StoreRequisitionSerializer(serializers.ModelSerializer):
             "id",
             "requisition_no",
             "status",
+            "approved_by",
             "approved_at",
             "issued_at",
             "department_approved_at",
             "department_approved_by",
+            "department_approval_comments",
+            "approval_comments",
+            "rejection_reason",
             "procurement_requisition",
             "created_at",
             "updated_at",

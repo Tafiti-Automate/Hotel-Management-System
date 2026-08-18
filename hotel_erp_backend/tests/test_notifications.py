@@ -134,10 +134,14 @@ def test_department_store_request_notifies_each_next_role():
     stores_user, stores = create_employee("notify-stores", "NOTIFY-STORE", department)
     stores.branch = branch
     stores.save(update_fields=("branch", "updated_at"))
+    head_user, head = create_employee("notify-head", "NOTIFY-HOD", department)
+    head.branch = branch
+    head.save(update_fields=("branch", "updated_at"))
     procurement_user, procurement = create_employee("notify-procurement", "NOTIFY-PROC", department)
     procurement.branch = branch
     procurement.save(update_fields=("branch", "updated_at"))
 
+    head_user.groups.add(Group.objects.get_or_create(name="Department Head")[0])
     stores_user.groups.add(Group.objects.create(name="Store Keeper"))
     procurement_user.groups.add(Group.objects.create(name="Procurement Manager"))
     StoreKeeperAssignment.objects.create(store=store, employee=stores)
@@ -155,6 +159,19 @@ def test_department_store_request_notifies_each_next_role():
     )
 
     requisition.submit(actor=requester_user)
+    assert Notification.objects.filter(
+        employee=head,
+        title__contains="needs department approval",
+    ).exists()
+    assert not Notification.objects.filter(
+        employee=stores,
+        title__contains="needs a stock decision",
+    ).exists()
+
+    requisition.approve_department(
+        approved_by=head,
+        comments="Guest room requirement confirmed.",
+    )
     assert Notification.objects.filter(
         employee=stores,
         title__contains="needs a stock decision",

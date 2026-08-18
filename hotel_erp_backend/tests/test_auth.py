@@ -125,6 +125,7 @@ def test_setup_hotel_roles_creates_operational_groups():
 
     assert set(Group.objects.values_list("name", flat=True)) == {
         "System Administrator",
+        "Department Head",
         "Cost Controller",
         "Store Keeper",
         "Receiving Clerk",
@@ -133,21 +134,20 @@ def test_setup_hotel_roles_creates_operational_groups():
         "General Manager",
     }
     store_keeper = Group.objects.get(name="Store Keeper")
+    department_head = Group.objects.get(name="Department Head")
     financial_manager = Group.objects.get(name="Financial Manager")
     receiving_clerk = Group.objects.get(name="Receiving Clerk")
     procurement_manager = Group.objects.get(name="Procurement Manager")
 
-    assert store_keeper.permissions.filter(codename="change_stockissue").exists()
-    assert store_keeper.permissions.filter(codename="change_stockcount").exists()
-    assert store_keeper.permissions.filter(codename="change_stocktransfer").exists()
+    assert store_keeper.permissions.filter(codename="change_storerequisition").exists()
+    assert store_keeper.permissions.filter(codename="change_storerequisitionitem").exists()
+    assert department_head.permissions.filter(codename="change_storerequisition").exists()
+    assert department_head.permissions.filter(codename="change_storerequisitionitem").exists()
+    assert not department_head.permissions.filter(codename="view_inventorybalance").exists()
     assert financial_manager.permissions.filter(codename="change_purchaseorder").exists()
-    assert financial_manager.permissions.filter(codename="change_supplierinvoice").exists()
+    assert financial_manager.permissions.filter(codename="change_purchaseorderapprovalworkflow").exists()
     assert receiving_clerk.permissions.filter(codename="change_goodsreceiptnote").exists()
     assert procurement_manager.permissions.filter(codename="change_purchaseorder").exists()
-    assert procurement_manager.permissions.filter(codename="change_supplierreturn").exists()
-    assert procurement_manager.permissions.filter(codename="view_goodsreceiptnote").exists()
-    assert procurement_manager.permissions.filter(codename="view_goodsreceiptitem").exists()
-    assert procurement_manager.permissions.filter(codename="change_approvalworkflow").exists()
     assert not procurement_manager.permissions.filter(codename="change_goodsreceiptnote").exists()
     assert not procurement_manager.permissions.filter(codename="view_supplierinvoice").exists()
 

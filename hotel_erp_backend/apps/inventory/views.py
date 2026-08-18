@@ -96,6 +96,14 @@ def has_role(user, *roles):
     )
 
 
+def is_department_head(user):
+    return bool(
+        user
+        and user.is_authenticated
+        and user.groups.filter(name="Department Head").exists()
+    )
+
+
 def assigned_store_ids(user):
     employee = getattr(user, "employee_profile", None)
     if not employee:
@@ -113,6 +121,11 @@ def scope_store_requisitions(queryset, user):
     employee = getattr(user, "employee_profile", None)
     if not employee:
         return queryset.none()
+    if is_department_head(user):
+        return queryset.filter(
+            department=employee.department,
+            store__branch=employee.branch,
+        ).exclude(status=StoreRequisitionStatus.DRAFT)
     if has_role(user, "Store Keeper"):
         # A Department request reaches Stores before the Store Keeper confirms
         # the destination store. Therefore submitted requests must be visible to
@@ -120,7 +133,7 @@ def scope_store_requisitions(queryset, user):
         # the request's provisional/default store makes valid requests disappear.
         store_ids = assigned_store_ids(user)
         branch_ids = StoreLocation.objects.filter(pk__in=store_ids).values_list("branch_id", flat=True)
-        return queryset.filter(
+        return queryset.filter(department_approved_by__isnull=False).filter(
             Q(store_id__in=store_ids)
             | Q(status=StoreRequisitionStatus.SUBMITTED, store__branch_id__in=branch_ids)
         ).distinct()
@@ -546,7 +559,12 @@ class ReorderRuleViewSet(CreatedByModelMixin, ModelViewSet):
 
 class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = StoreRequisition.objects.select_related(
-        "department", "store", "requested_by", "approved_by", "procurement_requisition"
+        "department",
+        "store",
+        "requested_by",
+        "approved_by",
+        "department_approved_by",
+        "procurement_requisition",
     )
     serializer_class = StoreRequisitionSerializer
     filterset_fields = ("department", "store", "requested_by", "approved_by", "status")
@@ -592,12 +610,36 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             return
         raise PermissionDenied("Only the Store Keeper assigned to this store can process this request.")
 
+    def _enforce_department_head(self, requisition):
+        employee = getattr(self.request.user, "employee_profile", None)
+        if not is_department_head(self.request.user) or not employee:
+            raise PermissionDenied("Only the Department Head can decide this request.")
+        if employee.department_id != requisition.department_id:
+            raise PermissionDenied("You can only decide requests from your department.")
+        if requisition.store.branch_id and employee.branch_id != requisition.store.branch_id:
+            raise PermissionDenied("You can only decide requests from your branch.")
+        if employee.pk == requisition.requested_by_id:
+            raise PermissionDenied("You cannot approve or reject your own request.")
+
     @action(detail=True, methods=["post"])
     def submit(self, request, pk=None):
         requisition = self.get_object()
         self._enforce_requester_edit(requisition)
         try:
             requisition.submit(actor=request.user)
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        return Response(self.get_serializer(requisition).data)
+
+    @action(detail=True, methods=["post"], url_path="department-approve")
+    def department_approve(self, request, pk=None):
+        requisition = self.get_object()
+        self._enforce_department_head(requisition)
+        try:
+            requisition.approve_department(
+                approved_by=request.user.employee_profile,
+                comments=request.data.get("comments", ""),
+            )
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
         return Response(self.get_serializer(requisition).data)
@@ -663,7 +705,10 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
         requisition = self.get_object()
-        self._enforce_store_assignment(requisition)
+        if requisition.status == StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL:
+            self._enforce_department_head(requisition)
+        else:
+            self._enforce_store_assignment(requisition)
         try:
             requisition.reject(
                 reason=request.data.get("reason", ""),
@@ -687,6 +732,7 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             and requisition.requested_by_id == employee.id
             and requisition.status in (
                 StoreRequisitionStatus.DRAFT,
+                StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL,
                 StoreRequisitionStatus.SUBMITTED,
             )
         )

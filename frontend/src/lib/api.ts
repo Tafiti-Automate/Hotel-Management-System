@@ -1226,6 +1226,7 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
         issued: num(line.quantity_issued),
         outstanding: num(line.outstanding_quantity),
         remarks: text(line.remarks),
+        storekeeperComment: text(line.storekeeper_comment),
       }))
     const itemSummary = requestItems.length
       ? requestItems.slice(0, 2).map((line) => `${line.item} × ${line.requested}`).join(', ') + (requestItems.length > 2 ? ` +${requestItems.length - 2}` : '')
@@ -1239,6 +1240,9 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
       date: dateOnly(row.created_at),
       required_date: dateOnly(row.required_date),
       purpose: text(row.purpose),
+      departmentApprovedBy: employeeNames.get(text(row.department_approved_by)) || '',
+      departmentApprovedAt: text(row.department_approved_at),
+      departmentApprovalComments: text(row.department_approval_comments),
       itemSummary,
       items: requestItems,
       count: requestItems.length,
