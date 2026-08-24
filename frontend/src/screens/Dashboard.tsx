@@ -1,339 +1,201 @@
-import type { CSSProperties, ReactNode } from 'react'
+import type { CSSProperties } from 'react'
 import { Icon } from '../components/Icon'
 import { money } from '../lib/theme'
 import { useApp } from '../state/AppContext'
 
-const panel: CSSProperties = { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, boxShadow: 'var(--shadow-sm)' }
+const card: CSSProperties = { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, boxShadow: 'var(--shadow-sm)' }
 const roleKey = (role: string) => role.trim().toLowerCase()
-const monthKey = (date: unknown) => String(date || '').slice(0, 7)
+const statusKey = (value: unknown) => String(value || '').trim().toLowerCase().replace(/\s+/g, '_')
+const pendingApprovalStage = (row: any) => {
+  const steps = Array.isArray(row?.approval_steps) ? row.approval_steps : []
+  const pending = steps.find((step: any) => statusKey(step?.status) === 'pending')
+  return String(pending?.stage_name || '').toLowerCase()
+}
+const ref = (row: any) => String(row?.lpo_number || row?.grn_number || row?.requisition_no || row?.requisition_number || row?.po_number || row?.number || row?.id || 'Record')
+
+interface TaskCard {
+  label: string
+  count: number
+  hint: string
+  icon: string
+  route: string
+  routeLabel: string
+  tone?: 'accent' | 'warning' | 'good' | 'danger'
+}
+
+interface ActivityRow { id: string; title: string; detail: string; status: string; date: string; route: string; routeLabel: string }
+
+interface PrimaryAction {
+  title: string
+  hint: string
+  label: string
+  route: string
+  icon: string
+}
+
+interface DashboardView {
+  subtitle: string
+  tasks: TaskCard[]
+  activities: ActivityRow[]
+  queueTitle: string
+  queueHint: string
+  queueRoute: string
+  queueRouteLabel: string
+  responsibility: string
+  boundary: string
+  context: Array<{ label: string; value: string }>
+  primaryAction?: PrimaryAction
+}
 
 export default function Dashboard() {
   const app = useApp()
   const role = roleKey(app.user.role)
-  const data = app.data
-  const isHR = role === 'hr administrator'
-  const title = dashboardTitle(role)
+  const view = dashboardFor(role, app.data)
+  const greeting = greetingForHour(new Date().getHours())
 
-  const config = buildDashboard(role, data)
-  const syncTone = app.apiStatus === 'live' ? 'var(--good)' : app.apiStatus === 'loading' ? 'var(--warn)' : 'var(--bad)'
-
-  return <div className="dashboard-screen">
-    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 18 }}>
+  return <div className="role-dashboard" style={{ maxWidth: 1360, margin: '0 auto' }}>
+    <header className="role-dashboard-header" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap', marginBottom: 20 }}>
       <div>
-        <h1 style={{ margin: 0, color: 'var(--text)', fontSize: 25, fontWeight: 700, letterSpacing: '-.03em' }}>{title}</h1>
-        <p style={{ margin: '5px 0 0', color: 'var(--text-muted)', fontSize: 13.5 }}>{config.subtitle} · {app.currentBranch || app.user.branchName || 'Current branch'}</p>
+        <div style={{ color: 'var(--accent)', fontSize: 11.5, fontWeight: 750 }}>{app.user.role}</div>
+        <h1 style={{ margin: '3px 0 5px', color: 'var(--text)', fontSize: 29, fontWeight: 750, letterSpacing: '-.035em' }}>{greeting}, {firstName(app.user.name)}</h1>
+        <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 13.5 }}>{view.subtitle}</p>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ width: 7, height: 7, borderRadius: '50%', background: syncTone }} />
-        <span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{app.apiStatus === 'live' ? 'Live authorised data' : app.apiStatus === 'loading' ? 'Refreshing' : 'Connection unavailable'}</span>
-        <button aria-label="Refresh dashboard" onClick={app.refreshData} style={iconButton}><Icon name="refresh" size={18} /></button>
+      <button type="button" onClick={app.refreshData} style={secondaryButton}><Icon name="refresh" size={17} />Refresh</button>
+    </header>
+
+    {view.primaryAction && <section style={{ ...card, padding: 18, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 14, background: 'linear-gradient(135deg,var(--surface),var(--accent-soft))' }}>
+      <span style={{ width: 42, height: 42, display: 'grid', placeItems: 'center', borderRadius: 9, background: 'var(--accent)', color: '#fff' }}><Icon name={view.primaryAction.icon} size={21} color="#fff" /></span>
+      <div style={{ flex: 1 }}><div style={{ color: 'var(--text)', fontSize: 14, fontWeight: 750 }}>{view.primaryAction.title}</div><div style={{ marginTop: 3, color: 'var(--text-muted)', fontSize: 12 }}>{view.primaryAction.hint}</div></div>
+      <button type="button" onClick={() => app.navTo(view.primaryAction!.route, view.primaryAction!.label)} style={primaryButton}>{view.primaryAction.label}<Icon name="arrow_forward" size={17} /></button>
+    </section>}
+
+    <section style={{ marginBottom: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 9 }}><div><h2 style={{ margin: 0, color: 'var(--text)', fontSize: 17 }}>Action queue</h2><div style={{ marginTop: 2, color: 'var(--text-faint)', fontSize: 11.5 }}>What needs your attention now</div></div></div>
+      <div className="task-card-grid" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(4, Math.max(1, view.tasks.length))},minmax(190px,1fr))`, gap: 10 }}>
+        {view.tasks.map((task) => <Task key={task.label} task={task} onClick={() => app.navTo(task.route, task.routeLabel)} />)}
       </div>
-    </div>
+    </section>
 
-    <div className="enterprise-kpi-grid" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(config.kpis.length, 6)},minmax(150px,1fr))`, gap: 10 }}>
-      {config.kpis.map(kpi => <Kpi key={kpi.label} {...kpi} />)}
-    </div>
-
-    <div className="dashboard-ops-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.45fr) minmax(280px,.75fr)', gap: 14, marginTop: 14 }}>
-      <ChartCard title={config.trend.title} subtitle={config.trend.subtitle}>
-        <LineChart series={config.trend.series} />
-      </ChartCard>
-      <ChartCard title={config.status.title} subtitle={config.status.subtitle}>
-        <DonutChart data={config.status.data} />
-      </ChartCard>
-    </div>
-
-    <div className="dashboard-ops-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.1fr) minmax(0,1fr)', gap: 14, marginTop: 14 }}>
-      <ChartCard title={config.bars.title} subtitle={config.bars.subtitle}>
-        <BarChart data={config.bars.data} valueFormatter={config.bars.money ? money : undefined} />
-      </ChartCard>
-      <section style={panel}>
-        <PanelHeader title={config.queue.title} subtitle={config.queue.subtitle} action={config.queue.action} onAction={() => app.navTo(config.queue.route, config.queue.action)} />
-        {config.queue.rows.slice(0, 7).map((row, index) => <button key={String(row.id || index)} onClick={() => config.queue.route === 'requisitions' && row.id ? app.openDetail('requisitions', String(row.id), 'dashboard') : app.navTo(config.queue.route, config.queue.action)} className="hover-surface2" style={queueRow}>
-          <span><span style={primaryText}>{String(row.primary || 'Record')}</span><span style={secondaryText}>{String(row.secondary || '')}</span></span>
-          <span style={{ color: 'var(--text)', fontSize: 11.5, fontWeight: 600 }}>{row.value || ''}</span>
-          <Status value={String(row.status || 'Pending')} />
-          <Icon name="chevron_right" size={18} color="var(--text-faint)" />
+    <div className="dashboard-work-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.45fr) minmax(280px,.65fr)', gap: 14 }}>
+      <section style={{ ...card, overflow: 'hidden' }}>
+        <div style={sectionHeader}><div><div style={sectionTitle}>{view.queueTitle}</div><div style={sectionSub}>{view.queueHint}</div></div><button type="button" onClick={() => app.navTo(view.queueRoute, view.queueRouteLabel)} style={linkButton}>Open workspace <Icon name="arrow_forward" size={15} /></button></div>
+        {view.activities.slice(0, 8).map((row) => <button key={`${row.id}-${row.title}`} type="button" onClick={() => app.navTo(row.route, row.routeLabel)} className="hover-surface2" style={activityRow}>
+          <div style={{ minWidth: 0 }}><div style={{ color: 'var(--text)', fontSize: 12.5, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.title}</div><div style={{ marginTop: 3, color: 'var(--text-muted)', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.detail}</div></div>
+          <span style={statusBadge(row.status)}>{friendlyStatus(row.status)}</span>
+          <span style={{ color: 'var(--text-faint)', fontSize: 10.5 }}>{row.date || ''}</span>
+          <Icon name="chevron_right" size={17} color="var(--text-faint)" />
         </button>)}
-        {!config.queue.rows.length && <Empty text="Nothing currently requires action." />}
+        {!view.activities.length && <EmptyState text="Nothing currently requires your attention." />}
       </section>
-    </div>
 
-    <div style={{ marginTop: 12, color: 'var(--text-faint)', fontSize: 10.5 }}>
-      Dashboard scope: {isHR ? 'employee and department records permitted to this account' : 'records returned by the signed-in role and branch permissions'}.
+      <aside style={{ ...card, padding: 18 }}>
+        <div style={{ fontSize: 14, fontWeight: 750, color: 'var(--text)' }}>Your responsibility</div>
+        <div style={{ marginTop: 5, color: 'var(--text-muted)', fontSize: 12, lineHeight: 1.6 }}>{view.responsibility}</div>
+        <div style={{ borderTop: '1px solid var(--border)', margin: '16px 0' }} />
+        <div style={{ color: 'var(--text-faint)', fontSize: 10.5, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '.045em' }}>Information boundary</div>
+        <div style={{ marginTop: 7, color: 'var(--text)', fontSize: 12.5, lineHeight: 1.55 }}>{view.boundary}</div>
+        {view.context.length > 0 && <><div style={{ borderTop: '1px solid var(--border)', margin: '16px 0' }} /><div style={{ display: 'grid', gap: 8 }}>{view.context.map((item) => <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}><span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{item.label}</span><strong style={{ color: 'var(--text)', fontSize: 11.5 }}>{item.value}</strong></div>)}</div></>}
+      </aside>
     </div>
   </div>
 }
 
-type Point = { label: string; value: number }
-type Series = { name: string; points: Point[] }
-type KpiProps = { label: string; value: string | number; icon: string; tone?: 'neutral' | 'warning' | 'danger' | 'success' }
-
-type DashboardConfig = {
-  subtitle: string
-  kpis: KpiProps[]
-  trend: { title: string; subtitle: string; series: Series[] }
-  status: { title: string; subtitle: string; data: Point[] }
-  bars: { title: string; subtitle: string; data: Point[]; money?: boolean }
-  queue: { title: string; subtitle: string; action: string; route: string; rows: any[] }
+function Task({ task, onClick }: { task: TaskCard; onClick: () => void }) {
+  const palette = task.tone === 'danger' ? ['var(--bad)', 'var(--bad-soft)'] : task.tone === 'warning' ? ['var(--warn)', 'var(--warn-soft)'] : task.tone === 'good' ? ['var(--good)', 'var(--good-soft)'] : ['var(--accent)', 'var(--accent-soft)']
+  return <button type="button" onClick={onClick} className="hover-card" style={{ ...card, minHeight: 116, padding: 15, textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}><span style={{ width: 31, height: 31, display: 'grid', placeItems: 'center', borderRadius: 7, color: palette[0], background: palette[1] }}><Icon name={task.icon} size={18} /></span><strong style={{ color: 'var(--text)', fontSize: 24, letterSpacing: '-.025em' }}>{task.count}</strong></div>
+    <div style={{ marginTop: 12, color: 'var(--text)', fontSize: 12.5, fontWeight: 700 }}>{task.label}</div>
+    <div style={{ marginTop: 3, color: 'var(--text-faint)', fontSize: 10.5, lineHeight: 1.45 }}>{task.hint}</div>
+  </button>
 }
 
-function buildDashboard(role: string, data: any): DashboardConfig {
-  const reqs = data.requisitions || []
+function dashboardFor(role: string, data: any): DashboardView {
+  const requests = data.storeRequisitions || []
+  const procurement = data.requisitions || []
   const orders = data.orders || []
+  const grns = data.grns || []
+  const suppliers = data.suppliers || []
+  const supplierItems = data.supplierItems || []
   const items = data.items || []
-  const storeReqs = data.storeRequisitions || []
-  const issues = data.stockIssues || []
-  const employees = data.employees || []
-  const departments = data.departments || []
+  const uoms = data.uoms || []
+  const itemUnits = data.itemUnits || []
+  const task = (label: string, rows: any[], hint: string, icon: string, route: string, routeLabel: string, tone?: TaskCard['tone']): TaskCard => ({ label, count: rows.length, hint, icon, route, routeLabel, tone })
+  const activity = (rows: any[], title: (row:any)=>string, detail: (row:any)=>string, route: string, routeLabel: string): ActivityRow[] => rows.map((row) => ({ id: ref(row), title: title(row), detail: detail(row), status: String(row.status || row.statusCode || 'Open'), date: String(row.date || row.required_date || ''), route, routeLabel }))
 
-  if (['requester', 'staff', 'unassigned', 'department employee', 'employee'].includes(role)) {
-    const mine = storeReqs
-    const drafts = mine.filter((r: any) => normalStatus(r.status) === 'draft')
-    const pending = mine.filter((r: any) => ['pending_department_approval','submitted','approved','partially_approved','awaiting_procurement','partially_issued'].includes(normalStatus(r.status)))
-    const issued = mine.filter((r: any) => ['issued','completed'].includes(normalStatus(r.status)))
-    return {
-      subtitle: 'Your store requests and fulfilment progress',
-      kpis: [
-        { label: 'Total requests', value: mine.length, icon: 'assignment' },
-        { label: 'Drafts', value: drafts.length, icon: 'edit_note', tone: drafts.length ? 'warning' : 'neutral' },
-        { label: 'In progress', value: pending.length, icon: 'hourglass_top', tone: pending.length ? 'warning' : 'neutral' },
-        { label: 'Issued', value: issued.length, icon: 'task_alt', tone: issued.length ? 'success' : 'neutral' },
-      ],
-      trend: { title: 'My request trend', subtitle: 'Store requests created during the last six months', series: [{ name: 'Requests', points: monthly(mine, 'created_at') }] },
-      status: { title: 'My requests by status', subtitle: 'Current fulfilment stage', data: byStatus(mine) },
-      bars: { title: 'Requests by purpose', subtitle: 'Most common request purposes', data: groupCount(mine, 'purpose') },
-      queue: { title: 'Recent store requests', subtitle: 'Your latest requests and current status', action: 'View all requests', route: 'workflow-stores', rows: mine.map((r: any) => queueStoreReq(r)) },
-    }
-  }
-
-  if (role === 'cost controller') {
-    const suppliers = data.suppliers || []
-    const supplierItems = data.supplierItems || []
-    return {
-      subtitle: 'Supplier, article and quotation master data',
-      kpis: [
-        { label: 'Registered suppliers', value: suppliers.length, icon: 'local_shipping' },
-        { label: 'Registered articles', value: items.length, icon: 'inventory_2' },
-        { label: 'Supplier prices', value: supplierItems.length, icon: 'request_quote' },
-        { label: 'Units configured', value: (data.uoms || []).length, icon: 'straighten' },
-      ],
-      trend: { title: 'Supplier registrations', subtitle: 'Supplier master records added during the last six months', series: [{ name: 'Suppliers', points: monthly(suppliers, 'created_at') }] },
-      status: { title: 'Supplier status', subtitle: 'Active and inactive supplier records', data: byStatus(suppliers) },
-      bars: { title: 'Article catalogue', subtitle: 'Registered article master data', data: [] },
-      queue: { title: 'Supplier catalogue', subtitle: 'Maintain supplier quotations and item prices', action: 'Open supplier catalogue', route: 'supplierItems', rows: supplierItems.map((r: any) => ({ id: r.id, primary: r.item || r.name || 'Article', secondary: r.supplier || 'Supplier', value: r.unitPrice ? money(r.unitPrice) : '', status: r.status || 'Active' })) },
-    }
+  if (role === 'requester') {
+    const drafts = requests.filter((r:any)=>statusKey(r.statusCode || r.status)==='draft')
+    const pending = requests.filter((r:any)=>statusKey(r.statusCode || r.status)==='pending_department_approval')
+    const progressing = requests.filter((r:any)=>['submitted','awaiting_procurement','approved','partially_approved','partially_issued'].includes(statusKey(r.statusCode || r.status)))
+    const completed = requests.filter((r:any)=>['issued','completed'].includes(statusKey(r.statusCode || r.status)))
+    return base({
+      subtitle: 'Request what your department needs and track each requisition to completion.',
+      tasks: [task('Drafts', drafts, 'Continue before submitting', 'edit_note', 'workflow-stores', 'My requisitions'), task('Pending HOD', pending, 'Waiting for department approval', 'approval', 'workflow-stores', 'My requisitions', 'warning'), task('In progress', progressing, 'With Stores or Procurement', 'hourglass_top', 'workflow-stores', 'My requisitions'), task('Completed', completed, 'Fully issued requests', 'task_alt', 'workflow-stores', 'My requisitions', 'good')],
+      activities: activity(requests, r=>`Requisition ${ref(r)}`, r=>`${r.itemSummary || r.purpose || 'Department request'}`, 'workflow-stores', 'My requisitions'),
+      queueTitle: 'My requisitions', queueHint: 'Your latest department requests', queueRoute: 'workflow-stores', queueRouteLabel: 'My requisitions',
+      responsibility: 'Create department requisitions using only article, quantity and a reason or note, then submit them for HOD approval.',
+      boundary: 'Supplier names, quotations, prices and commercial totals are intentionally hidden from this role.',
+      context: [], primaryAction: { title: 'Need an item?', hint: 'Start one requisition and add all required articles before submitting.', label: 'New requisition', route: 'workflow-stores', icon: 'add' },
+    })
   }
 
   if (role === 'department head') {
-    const pending = storeReqs.filter((r: any) => normalStatus(r.status) === 'pending_department_approval')
-    const approved = storeReqs.filter((r: any) => Boolean(r.departmentApprovedAt) || ['submitted','approved','partially_approved','awaiting_procurement','partially_issued','issued','completed'].includes(normalStatus(r.status)))
-    const rejected = storeReqs.filter((r: any) => normalStatus(r.status) === 'rejected')
-    return {
-      subtitle: 'Department requests awaiting your authorization',
-      kpis: [
-        { label: 'Pending approval', value: pending.length, icon: 'approval', tone: pending.length ? 'warning' : 'neutral' },
-        { label: 'Department approved', value: approved.length, icon: 'check_circle', tone: approved.length ? 'success' : 'neutral' },
-        { label: 'Rejected', value: rejected.length, icon: 'cancel', tone: rejected.length ? 'danger' : 'neutral' },
-        { label: 'Department requests', value: storeReqs.length, icon: 'assignment' },
-      ],
-      trend: { title: 'Department request trend', subtitle: 'Requests submitted during the last six months', series: [{ name: 'Requests', points: monthly(storeReqs, 'created_at') }] },
-      status: { title: 'Requests by status', subtitle: 'Current department-to-stores progress', data: byStatus(storeReqs) },
-      bars: { title: 'Requests by purpose', subtitle: 'Current departmental demand', data: groupCount(storeReqs, 'purpose') },
-      queue: { title: 'Department approval queue', subtitle: 'Review item, quantity, and requester notes', action: 'Open approvals', route: 'workflow-stores', rows: pending.map((r: any) => queueStoreReq(r)) },
-    }
-  }
-
-  if (role === 'receiving clerk') {
-    const readyOrders = orders.filter((r: any) => /issued|partially_received/i.test(String(r.status)))
-    const grns = data.grns || []
-    return {
-      subtitle: 'Issued LPOs ready for receiving and GRN entry',
-      kpis: [
-        { label: 'Ready LPOs', value: readyOrders.length, icon: 'move_to_inbox', tone: readyOrders.length ? 'warning' : 'neutral' },
-        { label: 'GRNs recorded', value: grns.length, icon: 'receipt_long' },
-        { label: 'Partial deliveries', value: readyOrders.filter((r: any) => /partially_received/i.test(String(r.status))).length, icon: 'pending_actions' },
-        { label: 'Completed receipts', value: orders.filter((r: any) => /received/i.test(String(r.status))).length, icon: 'task_alt', tone: 'success' },
-      ],
-      trend: { title: 'Goods receipts', subtitle: 'GRNs recorded during the last six months', series: [{ name: 'GRNs', points: monthly(grns, 'receivedDate') }] },
-      status: { title: 'Receiving status', subtitle: 'Issued and partially received LPOs', data: byStatus(readyOrders) },
-      bars: { title: 'Receiving queue', subtitle: 'LPOs awaiting physical delivery confirmation', data: [] },
-      queue: { title: 'Ready for receiving', subtitle: 'Open issued LPOs', action: 'Open receiving', route: 'workflow-procure', rows: readyOrders.map((r: any) => ({ id: r.id, primary: r.id, secondary: r.supplier || 'Supplier', value: '', status: r.status })) },
-    }
-  }
+    const pending = requests.filter((r:any)=>statusKey(r.statusCode || r.status)==='pending_department_approval')
+    const approved = requests.filter((r:any)=>Boolean(r.departmentApprovedAt) || ['submitted','awaiting_procurement','approved','partially_approved','partially_issued','issued','completed'].includes(statusKey(r.statusCode || r.status)))
+    const rejected = requests.filter((r:any)=>statusKey(r.statusCode || r.status)==='rejected')
+    return base({ subtitle: 'Review department need and make a clear approval decision.', tasks: [task('Awaiting approval', pending, 'Requires your decision', 'approval', 'workflow-stores', 'Department approvals', pending.length ? 'warning' : 'good'), task('Approved', approved, 'Released to Store Keeper', 'check_circle', 'workflow-stores', 'Department approvals', 'good'), task('Rejected', rejected, 'Stopped or returned requests', 'cancel', 'workflow-stores', 'Department approvals', rejected.length ? 'danger' : 'accent')], activities: activity(pending, r=>`Requisition ${ref(r)}`, r=>`${r.requester || 'Requester'} · ${r.itemSummary || r.purpose || ''}`, 'workflow-stores', 'Department approvals'), queueTitle: 'Awaiting your decision', queueHint: 'Open a requisition to review items before deciding', queueRoute: 'workflow-stores', queueRouteLabel: 'Department approvals', responsibility: 'Confirm that the department request is legitimate. Approve it to the Store Keeper or reject it with a reason.', boundary: 'You review the department request only. Supplier and price decisions remain with Procurement.', context: [] }) }
 
   if (role === 'store keeper') {
-    const submitted = storeReqs.filter((r: any) => normalStatus(r.status) === 'submitted')
-    const procurement = storeReqs.filter((r: any) => ['awaiting_procurement','procurement_in_progress'].includes(normalStatus(r.status)))
-    const completed = storeReqs.filter((r: any) => ['issued','completed','fulfilled'].includes(normalStatus(r.status)))
-    return {
-      subtitle: 'Department requests, destination stores and procurement hand-off',
-      kpis: [
-        { label: 'Department requests', value: submitted.length, icon: 'assignment', tone: submitted.length ? 'warning' : 'neutral' },
-        { label: 'Sent to Procurement', value: procurement.length, icon: 'shopping_cart_checkout' },
-        { label: 'Completed requests', value: completed.length, icon: 'task_alt', tone: completed.length ? 'success' : 'neutral' },
-        { label: 'My visible stores', value: (data.locations || []).length, icon: 'warehouse' },
-      ],
-      trend: { title: 'Store requisitions', subtitle: 'Requests handled during the last six months', series: [{ name: 'Requests', points: monthly(storeReqs, 'created_at') }] },
-      status: { title: 'Requests by status', subtitle: 'Current store-to-procurement progress', data: byStatus(storeReqs) },
-      bars: { title: 'Requests by store', subtitle: 'Demand routed to each assigned store', data: groupCount(storeReqs, 'store') },
-      queue: { title: 'Department request queue', subtitle: 'Requests requiring Store Keeper action', action: 'Open store requests', route: 'workflow-stores', rows: submitted.map((r:any)=>queueStoreReq(r)) },
-    }
-  }
+    const newRows = requests.filter((r:any)=>statusKey(r.statusCode || r.status)==='submitted')
+    const procurementRows = requests.filter((r:any)=>statusKey(r.statusCode || r.status)==='awaiting_procurement')
+    const readyIssue = requests.filter((r:any)=>['approved','partially_approved','partially_issued'].includes(statusKey(r.statusCode || r.status)))
+    const complete = requests.filter((r:any)=>['issued','completed'].includes(statusKey(r.statusCode || r.status)))
+    return base({ subtitle: 'Process HOD-approved requests for your assigned store and complete department issue.', tasks: [task('Needs stock decision', newRows, 'Choose store and quantities', 'assignment', 'workflow-stores', 'Store Keeper queue', newRows.length ? 'warning' : 'good'), task('Awaiting Procurement', procurementRows, 'Sent for purchasing', 'shopping_cart_checkout', 'workflow-stores', 'Store Keeper queue'), task('Ready to issue', readyIssue, 'Stock can be issued', 'outbox', 'workflow-stores', 'Store Keeper queue', readyIssue.length ? 'warning' : 'good'), task('Completed', complete, 'Issued to departments', 'task_alt', 'workflow-stores', 'Store Keeper queue', 'good')], activities: activity([...newRows,...readyIssue,...procurementRows], r=>`Requisition ${ref(r)}`, r=>`${r.department || 'Department'} · ${r.itemSummary || ''}`, 'workflow-stores', 'Store Keeper queue'), queueTitle: 'Store Keeper work queue', queueHint: 'Department requests and goods ready to issue', queueRoute: 'workflow-stores', queueRouteLabel: 'Store Keeper queue', responsibility: 'Select the destination store, confirm the quantity to carry forward, send the Store Requisition to Procurement, and later issue received stock to the department.', boundary: 'Supplier selection and price information are intentionally hidden from Store Keeper.', context: [{label:'Visible stores',value:String((data.locations||[]).length)}] }) }
 
+  if (role === 'cost controller') {
+    const activeSuppliers = suppliers.filter((r:any)=>statusKey(r.status)==='active')
+    const activePrices = supplierItems.filter((r:any)=>statusKey(r.status)==='active')
+    const missingConversions = items.filter((item:any)=>!itemUnits.some((unit:any)=>String(unit.itemId || unit.item)===String(item.id)))
+    return base({ subtitle: 'Maintain the approved supplier, article, UOM and quotation information Procurement relies on.', tasks: [task('Suppliers', activeSuppliers, 'Approved supplier records', 'local_shipping', 'suppliers', 'Suppliers'), task('Supplier quotations', activePrices, 'Current item prices', 'request_quote', 'supplierItems', 'Supplier quotations'), task('Articles', items, 'Article master records', 'inventory_2', 'items', 'Articles / items'), task('UOM conversions', itemUnits, `${missingConversions.length} article(s) without conversion`, 'calculate', 'itemUnits', 'UOM conversions', missingConversions.length ? 'warning' : 'good')], activities: activity(supplierItems, r=>`${r.article || 'Article'} · ${r.supplier || 'Supplier'}`, r=>`${money(r.price || 0)} per ${r.unit || 'unit'} · Quote ${r.quotationReference || 'not recorded'}`, 'supplierItems', 'Supplier quotations'), queueTitle: 'Supplier quotation catalogue', queueHint: 'Supplier + article + quotation + price', queueRoute: 'supplierItems', queueRouteLabel: 'Supplier quotations', responsibility: 'Register vetted suppliers and maintain the articles they supply, quotation references, quoted prices, units and conversions.', boundary: 'You maintain master and quotation data. You do not approve department requisitions or LPOs.', context: [{label:'Units configured',value:String(uoms.length)},{label:'Active suppliers',value:String(activeSuppliers.length)}], primaryAction: { title: 'Maintain commercial master data', hint: 'Register an approved supplier or update the supplier quotation catalogue.', label: 'Open suppliers', route: 'suppliers', icon: 'local_shipping' } }) }
 
   if (role === 'procurement manager') {
-    const pending = reqs.filter((r: any) => !/completed|rejected/i.test(String(r.status)))
-    return {
-      subtitle: 'Purchase pipeline, LPOs and supplier activity',
-      kpis: [
-        { label: 'Open requisitions', value: pending.length, icon: 'request_quote', tone: pending.length ? 'warning' : 'neutral' },
-        { label: 'Requisition value', value: money(sum(reqs, 'total')), icon: 'payments' },
-        { label: 'Open LPOs', value: orders.filter((r: any) => !/received|closed|cancelled/i.test(String(r.status))).length, icon: 'description' },
-        { label: 'Suppliers available', value: (data.suppliers || []).length, icon: 'local_shipping' },
-      ],
-      trend: { title: 'Monthly procurement value', subtitle: 'Estimated requisition value over time', series: [{ name: 'UGX value', points: monthly(reqs, 'date', 'total') }] },
-      status: { title: 'Purchase requests by stage', subtitle: 'Current approval and procurement state', data: byStatus(reqs) },
-      bars: { title: 'Requisition value by department', subtitle: 'Visible purchasing demand in UGX', data: groupSum(reqs, 'dept', 'total'), money: true },
-      queue: { title: 'Procurement action queue', subtitle: 'Open requisitions requiring follow-up', action: 'Purchase requisitions', route: 'requisitions', rows: pending.map((r: any) => queueReq(r)) },
-    }
-  }
+    const supplierSelection = procurement.filter((r:any)=>{ const state=statusKey(r.statusCode || r.status); if(!['approved','partially_ordered'].includes(state)) return false; const lines=(data.requisitionItems||[]).filter((line:any)=>String(line.requisition)===String(r.id)); return !lines.length || lines.some((line:any)=>!line.procurement_supplier_price || Number(line.procurement_quantity||0)<=0 || Number(line.procurement_unit_cost||0)<=0) })
+    const drafts = orders.filter((r:any)=>statusKey(r.status)==='draft')
+    const approved = orders.filter((r:any)=>statusKey(r.status)==='approved')
+    const deliveries = orders.filter((r:any)=>['issued','partially_received'].includes(statusKey(r.status)))
+    return base({ subtitle: 'Allocate vetted suppliers by item, confirm current prices and manage LPOs through supplier issue.', tasks: [task('Supplier allocation', supplierSelection, 'Choose supplier per item', 'compare_arrows', 'workflow-procure', 'Procurement queue', supplierSelection.length ? 'warning' : 'good'), task('LPO preparation', drafts, 'Complete and send to Finance', 'description', 'workflow-procure', 'Procurement queue'), task('Approved · Print & Send', approved, 'Original print and supplier email', 'print', 'workflow-procure', 'Procurement queue', approved.length ? 'warning' : 'good'), task('Supplier delivery pending', deliveries, 'Issued or partially received', 'local_shipping', 'workflow-procure', 'Procurement queue')], activities: activity([...approved,...drafts,...supplierSelection], r=>statusKey(r.status)==='approved'?`LPO ${ref(r)}`:`${ref(r)}`, r=>r.supplier ? `${r.supplier} · ${money(r.total || 0)}` : `${r.dept || r.department || 'Store Requisition'} · ${r.reason || ''}`, 'workflow-procure', 'Procurement queue'), queueTitle: 'Procurement action queue', queueHint: 'Supplier decisions and LPO actions that need Procurement', queueRoute: 'workflow-procure', queueRouteLabel: 'Procurement queue', responsibility: 'Select the suitable vetted supplier for each item, confirm the current price, reduce quantity where needed, prepare LPOs, then print and email finally approved LPOs.', boundary: 'Procurement can see supplier and price information. Finance and GM approvals remain independent.', context: [{label:'Registered suppliers',value:String(suppliers.length)},{label:'Open supplier deliveries',value:String(deliveries.length)}] }) }
 
   if (role === 'financial manager') {
-    const approved = reqs.filter((r: any) => /approved|completed|ordered/i.test(String(r.status)))
-    return {
-      subtitle: 'Approved procurement commitments and expense exposure',
-      kpis: [
-        { label: 'Approved procurement', value: money(sum(approved, 'total')), icon: 'account_balance_wallet' },
-        { label: 'Approved requests', value: approved.length, icon: 'verified', tone: 'success' },
-        { label: 'LPO commitments', value: money(sum(orders, 'total')), icon: 'receipt_long' },
-        { label: 'Awaiting completion', value: orders.filter((r: any) => !/received|closed/i.test(String(r.status))).length, icon: 'pending_actions', tone: 'warning' },
-      ],
-      trend: { title: 'Monthly approved procurement', subtitle: 'Only approved financial commitments', series: [{ name: 'Approved UGX', points: monthly(approved, 'date', 'total') }] },
-      status: { title: 'LPO status', subtitle: 'Purchase orders available to Finance', data: byStatus(orders) },
-      bars: { title: 'Procurement value by department', subtitle: 'Approved requisitions only', data: groupSum(approved, 'dept', 'total'), money: true },
-      queue: { title: 'Financial review queue', subtitle: 'Open purchase orders and commitments', action: 'Finance control centre', route: 'workflow-pay', rows: orders.filter((r: any) => !/received|closed/i.test(String(r.status))).map((r: any) => ({ id: r.id, primary: r.id, secondary: r.supplier, value: money(r.total || 0), status: r.status })) },
-    }
-  }
+    const pending = orders.filter((r:any)=>statusKey(r.status)==='pending_approval' && /finance/.test(pendingApprovalStage(r)))
+    const approved = orders.filter((r:any)=>['approved','issued','partially_received','received'].includes(statusKey(r.status)))
+    const rejected = orders.filter((r:any)=>statusKey(r.status)==='rejected')
+    return base({ subtitle: 'Review LPO quantities and financial commitment before General Manager approval.', tasks: [task('Awaiting review', pending, 'Requires Finance decision', 'account_balance_wallet', 'workflow-procure', 'LPO approvals', pending.length ? 'warning' : 'good'), task('Approved / progressed', approved, 'Finance-approved LPOs', 'check_circle', 'workflow-procure', 'LPO approvals', 'good'), task('Rejected', rejected, 'Stopped LPOs', 'cancel', 'workflow-procure', 'LPO approvals', rejected.length ? 'danger' : 'accent')], activities: activity(pending, r=>`LPO ${ref(r)}`, r=>`${r.supplier || 'Supplier'} · ${money(r.total || 0)}`, 'workflow-procure', 'LPO approvals'), queueTitle: 'Financial approval queue', queueHint: 'LPOs requiring financial decision', queueRoute: 'workflow-procure', queueRouteLabel: 'LPO approvals', responsibility: 'Review supplier, quantity, price and total. Approve, reduce quantity with a reason, or reject the LPO.', boundary: 'You do not change Procurement’s original quantity or supplier decision; your approved quantity is stored separately.', context: [] }) }
 
   if (role === 'general manager') {
-    const finalReview = orders.filter((r: any) => /finance_approved|pending_management|pending_general|pending_director|awaiting_management/i.test(String(r.status)))
-    const approved = orders.filter((r: any) => /director_approved|management_approved|approved|issued|partially_received|received|closed/i.test(String(r.status)))
-    const rejected = orders.filter((r: any) => /rejected/i.test(String(r.status)))
-    return {
-      subtitle: 'Final LPO approval only',
-      kpis: [
-        { label: 'Awaiting final approval', value: finalReview.length, icon: 'approval', tone: finalReview.length ? 'warning' : 'neutral' },
-        { label: 'Approved LPOs', value: approved.length, icon: 'verified', tone: approved.length ? 'success' : 'neutral' },
-        { label: 'Rejected LPOs', value: rejected.length, icon: 'cancel', tone: rejected.length ? 'danger' : 'neutral' },
-        { label: 'Pending LPO value', value: money(sum(finalReview, 'total')), icon: 'receipt_long' },
-      ],
-      trend: { title: 'Final approval activity', subtitle: 'LPOs presented for management decision', series: [{ name: 'LPOs', points: monthly(orders, 'created_at') }] },
-      status: { title: 'LPO approval status', subtitle: 'Only purchase orders available to Management', data: byStatus(orders) },
-      bars: { title: 'Pending LPO value by supplier', subtitle: 'Commercial commitments awaiting final decision', data: groupSum(finalReview, 'supplier', 'total'), money: true },
-      queue: { title: 'Final LPO approval queue', subtitle: 'Finance-approved LPOs requiring General Manager decision', action: 'Open final approvals', route: 'workflow-procure', rows: finalReview.map((r: any) => ({ id: r.id, primary: r.id, secondary: r.supplier || 'Supplier', value: money(r.total || 0), status: r.status })) },
-    }
-  }
+    const pending = orders.filter((r:any)=>statusKey(r.status)==='pending_approval' && /(general manager|management)/.test(pendingApprovalStage(r)))
+    const approved = orders.filter((r:any)=>['approved','issued','partially_received','received'].includes(statusKey(r.status)))
+    const rejected = orders.filter((r:any)=>statusKey(r.status)==='rejected')
+    return base({ subtitle: 'Make the independent final decision on finance-reviewed LPOs.', tasks: [task('Final approval', pending, 'Requires your decision', 'verified_user', 'workflow-procure', 'Final LPO approvals', pending.length ? 'warning' : 'good'), task('Approved', approved, 'Authorized LPOs', 'check_circle', 'workflow-procure', 'Final LPO approvals', 'good'), task('Rejected', rejected, 'Workflow stopped', 'cancel', 'workflow-procure', 'Final LPO approvals', rejected.length ? 'danger' : 'accent')], activities: activity(pending, r=>`LPO ${ref(r)}`, r=>`${r.supplier || 'Supplier'} · ${money(r.total || 0)}`, 'workflow-procure', 'Final LPO approvals'), queueTitle: 'Final LPO approvals', queueHint: 'Finance-reviewed LPOs awaiting executive authorization', queueRoute: 'workflow-procure', queueRouteLabel: 'Final LPO approvals', responsibility: 'Approve the LPO for supplier issue or reject it with a reason. A rejection ends that LPO workflow.', boundary: 'This is an approval screen, not an editing screen. Procurement and Finance decisions remain visible but unchanged.', context: [] }) }
 
+  if (role === 'receiving clerk') {
+    const ready = orders.filter((r:any)=>statusKey(r.status)==='issued')
+    const partial = orders.filter((r:any)=>statusKey(r.status)==='partially_received')
+    const completed = orders.filter((r:any)=>statusKey(r.status)==='received')
+    return base({ subtitle: 'Receive only against issued LPOs and record what physically arrived.', tasks: [task('Ready for receiving', ready, 'Issued LPOs', 'move_to_inbox', 'workflow-procure', 'Receiving & GRN', ready.length ? 'warning' : 'good'), task('Partial deliveries', partial, 'Outstanding quantities remain', 'pending_actions', 'workflow-procure', 'Receiving & GRN', partial.length ? 'warning' : 'accent'), task('GRNs recorded', grns, 'Receipt documents', 'receipt_long', 'workflow-procure', 'Receiving & GRN'), task('Fully received', completed, 'Completed supplier deliveries', 'task_alt', 'workflow-procure', 'Receiving & GRN', 'good')], activities: activity([...ready,...partial], r=>`LPO ${ref(r)}`, r=>`${r.supplier || 'Supplier'} · ${r.count || 0} item(s)`, 'workflow-procure', 'Receiving & GRN'), queueTitle: 'Ready for receiving', queueHint: 'Issued and partially received LPOs', queueRoute: 'workflow-procure', queueRouteLabel: 'Receiving & GRN', responsibility: 'Confirm the supplier delivery against the LPO, record the invoice/delivery note, actual received quantity, accepted/rejected quantity and generate/post the GRN.', boundary: 'The original LPO quantity is read-only. Receiving records a separate actual quantity and the system calculates outstanding balance.', context: [] }) }
 
-  if (role === 'hr administrator') {
-    const active = employees.filter((r: any) => /active/i.test(String(r.status)))
-    return {
-      subtitle: 'Workforce composition and staffing activity',
-      kpis: [
-        { label: 'Total employees', value: employees.length, icon: 'groups' },
-        { label: 'Active employees', value: active.length, icon: 'person_check', tone: 'success' },
-        { label: 'Inactive employees', value: employees.length - active.length, icon: 'person_off', tone: employees.length - active.length ? 'warning' : 'neutral' },
-        { label: 'Departments', value: departments.length, icon: 'account_tree' },
-      ],
-      trend: { title: 'Hiring trend', subtitle: 'Employees by joining month', series: [{ name: 'New hires', points: monthly(employees, 'dateJoined') }] },
-      status: { title: 'Active versus inactive', subtitle: 'Current employment status', data: byStatus(employees) },
-      bars: { title: 'Employees by department', subtitle: 'Current staffing distribution', data: groupCount(employees, 'department') },
-      queue: { title: 'Recent employee records', subtitle: 'Latest staff additions', action: 'Employees', route: 'employees', rows: [...employees].sort((a: any,b: any) => String(b.dateJoined).localeCompare(String(a.dateJoined))).map((r: any) => ({ id: r.id, primary: r.name, secondary: `${r.department || 'No department'} · ${r.designation || 'Employee'}`, value: r.dateJoined || '', status: r.status })) },
-    }
-  }
-
-  // Safe fallback: uses only data already returned to this signed-in account.
-  return {
-    subtitle: 'Your authorised operational workload',
-    kpis: [
-      { label: 'Visible requests', value: reqs.length, icon: 'request_quote' },
-      { label: 'Pending actions', value: reqs.filter((r: any) => r.approvalActionable).length, icon: 'approval', tone: 'warning' },
-      { label: 'Visible issues', value: issues.length, icon: 'outbox' },
-      { label: 'Visible receipts', value: (data.grns || []).length, icon: 'move_to_inbox' },
-    ],
-    trend: { title: 'Recent request trend', subtitle: 'Records available to your account', series: [{ name: 'Requests', points: monthly(reqs, 'date') }] },
-    status: { title: 'Requests by status', subtitle: 'Authorised records only', data: byStatus(reqs) },
-    bars: { title: 'Requests by department', subtitle: 'Visible request distribution', data: groupCount(reqs, 'dept') },
-    queue: { title: 'Recent requests', subtitle: 'Latest authorised records', action: 'Purchase requisitions', route: 'requisitions', rows: reqs.map((r: any) => queueReq(r)) },
-  }
+  return base({ subtitle: 'Operational records available to your account.', tasks: [task('Department requests', requests, 'Visible requisitions', 'assignment', 'workflow-stores', 'Department workflow'), task('Procurement requests', procurement, 'Visible procurement records', 'shopping_cart_checkout', 'workflow-procure', 'Procurement workflow'), task('LPOs', orders, 'Visible purchase orders', 'description', 'workflow-procure', 'Procurement workflow'), task('GRNs', grns, 'Visible goods receipts', 'receipt_long', 'workflow-procure', 'Procurement workflow')], activities: [], queueTitle: 'Operations', queueHint: 'Use the workflow queues to continue work', queueRoute: 'workflow-procure', queueRouteLabel: 'Procurement workflow', responsibility: 'Administer only the operational areas assigned to this account.', boundary: 'Operational screens enforce role and backend permission controls.', context: [] })
 }
 
-function Kpi({ label, value, icon, tone: toneName = 'neutral' }: KpiProps) {
-  const colors = tone(toneName)
-  return <div className="hover-card" style={{ ...panel, minHeight: 112, padding: 15 }}>
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}><span style={{ color: 'var(--text-muted)', fontSize: 11.5, fontWeight: 500 }}>{label}</span><span style={{ width: 29, height: 29, borderRadius: 6, display: 'grid', placeItems: 'center', background: colors.bg }}><Icon name={icon} size={17} color={colors.fg} /></span></div>
-    <div style={{ color: 'var(--text)', fontSize: typeof value === 'string' && value.length > 11 ? 19 : 25, fontWeight: 700, letterSpacing: '-.025em', marginTop: 18 }}>{value}</div>
-  </div>
-}
+function base(config: DashboardView): DashboardView { return config }
+function firstName(name: string) { return String(name || '').trim().split(/\s+/)[0] || 'there' }
+function greetingForHour(hour: number) { return hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening' }
+function friendlyStatus(value: string) { return String(value || 'Open').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) }
+function statusBadge(value: string): CSSProperties { const key=statusKey(value); const danger=/rejected|cancelled/.test(key); const good=/approved|received|issued|completed|active/.test(key); const warn=/pending|partial|awaiting|draft/.test(key); return { justifySelf:'start', padding:'4px 8px', borderRadius:999, color:danger?'var(--bad)':good?'var(--good)':warn?'var(--warn)':'var(--accent)', background:danger?'var(--bad-soft)':good?'var(--good-soft)':warn?'var(--warn-soft)':'var(--accent-soft)', fontSize:10, fontWeight:700, whiteSpace:'nowrap' } }
+function EmptyState({ text }: { text: string }) { return <div style={{ padding: 34, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12.5 }}><Icon name="task_alt" size={25} color="var(--good)" /><div style={{ marginTop: 8 }}>{text}</div></div> }
 
-function ChartCard({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
-  return <section style={{ ...panel, minHeight: 310 }}><PanelHeader title={title} subtitle={subtitle} action="" onAction={() => undefined} /><div style={{ padding: 18 }}>{children}</div></section>
-}
-
-function LineChart({ series }: { series: Series[] }) {
-  const points = series.flatMap(s => s.points)
-  if (!points.length || !points.some(p => p.value)) return <Empty text="No chart data is available for this period." />
-  const max = Math.max(...points.map(p => p.value), 1)
-  return <div>
-    <div style={{ height: 190, display: 'flex', alignItems: 'stretch', gap: 8, borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
-      {(series[0]?.points || []).map((point) => <div key={point.label} title={`${point.label}: ${point.value.toLocaleString()}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', minWidth: 20 }}>
-        <span style={{ color: 'var(--text-faint)', fontSize: 9, marginBottom: 4 }}>{point.value ? compact(point.value) : ''}</span>
-        <div style={{ width: '65%', maxWidth: 34, minHeight: point.value ? 3 : 0, height: `${(point.value / max) * 145}px`, borderRadius: '5px 5px 1px 1px', background: 'var(--accent)', opacity: .82 }} />
-        <span style={{ color: 'var(--text-faint)', fontSize: 9, marginTop: 7 }}>{point.label.slice(5)}</span>
-      </div>)}
-    </div>
-    <Legend labels={series.map(s => s.name)} />
-  </div>
-}
-
-function DonutChart({ data }: { data: Point[] }) {
-  const total = data.reduce((s,p) => s+p.value,0)
-  if (!total) return <Empty text="No status data is available." />
-  let cursor = 0
-  const stops = data.slice(0,7).map((p,i) => { const start=cursor; cursor += p.value/total*100; return `var(--chart-${(i%6)+1}, var(--accent)) ${start}% ${cursor}%` }).join(',')
-  return <div style={{ display: 'grid', gridTemplateColumns: '150px minmax(0,1fr)', gap: 18, alignItems: 'center' }}>
-    <div title={`Total: ${total}`} style={{ width: 145, height: 145, borderRadius: '50%', background: `conic-gradient(${stops})`, display: 'grid', placeItems: 'center' }}><div style={{ width: 82, height: 82, borderRadius: '50%', background: 'var(--surface)', display: 'grid', placeItems: 'center', color: 'var(--text)', fontSize: 22, fontWeight: 700 }}>{total}</div></div>
-    <div>{data.slice(0,7).map((p,i)=><div key={p.label} title={`${p.label}: ${p.value}`} style={{ display:'grid',gridTemplateColumns:'10px minmax(0,1fr) auto',gap:8,alignItems:'center',padding:'5px 0',fontSize:11.5 }}><span style={{width:8,height:8,borderRadius:2,background:`var(--chart-${(i%6)+1}, var(--accent))`}}/><span style={{color:'var(--text-muted)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{clean(p.label)}</span><strong style={{color:'var(--text)'}}>{p.value}</strong></div>)}</div>
-  </div>
-}
-
-function BarChart({ data, valueFormatter }: { data: Point[]; valueFormatter?: (n:number)=>string }) {
-  const rows = data.slice(0,8), max = Math.max(...rows.map(p=>p.value),1)
-  if (!rows.length || !rows.some(p=>p.value)) return <Empty text="No category data is available." />
-  return <div>{rows.map(p=><div key={p.label} title={`${p.label}: ${valueFormatter ? valueFormatter(p.value) : p.value}`} style={{marginBottom:12}}><div style={{display:'flex',justifyContent:'space-between',gap:10,fontSize:11.5,marginBottom:5}}><span style={{color:'var(--text-muted)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{clean(p.label)}</span><strong style={{color:'var(--text)'}}>{valueFormatter ? valueFormatter(p.value) : p.value.toLocaleString()}</strong></div><div style={{height:8,borderRadius:8,background:'var(--surface-2)',overflow:'hidden'}}><div style={{height:'100%',width:`${Math.max(2,p.value/max*100)}%`,background:'var(--accent)',borderRadius:8}}/></div></div>)}</div>
-}
-
-function PanelHeader({ title, subtitle, action, onAction }: { title: string; subtitle: string; action: string; onAction: () => void }) {
-  return <div style={{ minHeight: 61, display: 'flex', alignItems: 'center', padding: '0 16px', borderBottom: '1px solid var(--border)' }}><div><div style={{ color: 'var(--text)', fontSize: 13.5, fontWeight: 650 }}>{title}</div><div style={{ color: 'var(--text-faint)', fontSize: 10.5, marginTop: 2 }}>{subtitle}</div></div>{action && <button onClick={onAction} style={{ marginLeft: 'auto', border: 0, background: 'transparent', color: 'var(--accent)', font: 'inherit', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>{action}</button>}</div>
-}
-function Status({ value }: { value: string }) { const bad=/critical|rejected|inactive/i.test(value), good=/approved|completed|active|applied|received/i.test(value); return <span style={{justifySelf:'end',color:bad?'var(--bad)':good?'var(--good)':'var(--warn)',background:bad?'var(--bad-soft)':good?'var(--good-soft)':'var(--warn-soft)',borderRadius:12,padding:'3px 8px',fontSize:10,fontWeight:600,textTransform:'capitalize'}}>{clean(value)}</span> }
-function Empty({ text }: { text: string }) { return <div style={{padding:30,color:'var(--text-faint)',textAlign:'center',fontSize:12.5}}>{text}</div> }
-function Legend({ labels }: { labels: string[] }) { return <div style={{display:'flex',gap:14,marginTop:12,flexWrap:'wrap'}}>{labels.map((l,i)=><span key={l} style={{fontSize:10.5,color:'var(--text-muted)'}}><i style={{display:'inline-block',width:8,height:8,borderRadius:2,background:`var(--chart-${i+1}, var(--accent))`,marginRight:5}}/>{l}</span>)}</div> }
-function dashboardTitle(role:string){ const names:Record<string,string>={'department head':'Department Head dashboard','cost controller':'Cost Controller dashboard','store keeper':'Store Keeper dashboard','receiving clerk':'Receiving Clerk dashboard','financial manager':'Financial Manager dashboard','procurement manager':'Procurement Manager dashboard','general manager':'General Manager dashboard'}; return names[role] || `${role ? role.replace(/\b\w/g,c=>c.toUpperCase()) : 'Operations'} dashboard` }
-function tone(value:string){ if(value==='danger')return{fg:'var(--bad)',bg:'var(--bad-soft)'};if(value==='warning')return{fg:'var(--warn)',bg:'var(--warn-soft)'};if(value==='success')return{fg:'var(--good)',bg:'var(--good-soft)'};return{fg:'var(--accent)',bg:'var(--accent-soft)'} }
-function clean(v:unknown){return String(v||'Unknown').replace(/_/g,' ')}
-function compact(v:number){return Intl.NumberFormat('en',{notation:'compact',maximumFractionDigits:1}).format(v)}
-function sum(rows:any[], key:string){return rows.reduce((s,r)=>s+Number(r[key]||0),0)}
-function byStatus(rows:any[]):Point[]{return groupCount(rows,'status')}
-function groupCount(rows:any[], key:string):Point[]{const m=new Map<string,number>();rows.forEach(r=>{const k=clean(r[key]);m.set(k,(m.get(k)||0)+1)});return [...m].map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value)}
-function groupSum(rows:any[], key:string, valueKey:string):Point[]{const m=new Map<string,number>();rows.forEach(r=>{const k=clean(r[key]);m.set(k,(m.get(k)||0)+Number(r[valueKey]||0))});return [...m].map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value)}
-function monthly(rows:any[], dateKey:string, valueKey?:string):Point[]{const months:string[]=[];const now=new Date();for(let i=5;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);months.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`)}return months.map(label=>({label,value:rows.filter(r=>monthKey(r[dateKey])===label).reduce((s,r)=>s+(valueKey?Number(r[valueKey]||0):1),0)}))}
-function normalStatus(value:unknown){return String(value||'').trim().toLowerCase().replace(/\s+/g,'_')}
-function queueReq(r:any){return{id:r.id,primary:r.id,secondary:`${r.dept||r.department||'Department'} · ${r.requester||'Requester'}`,value:money(r.total||0),status:r.status}}
-function queueStoreReq(r:any){return{id:r.id,primary:r.requisition_no||r.reference||r.id,secondary:r.purpose||'Store request',value:'',status:r.status}}
-
-const iconButton: CSSProperties = { width: 31, height: 31, display: 'grid', placeItems: 'center', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer' }
-const queueRow: CSSProperties = { width:'100%',display:'grid',gridTemplateColumns:'minmax(0,1.6fr) auto auto 18px',alignItems:'center',gap:13,padding:'11px 16px',border:0,borderBottom:'1px solid var(--border)',background:'transparent',textAlign:'left',cursor:'pointer',font:'inherit' }
-const primaryText: CSSProperties = { display:'block',color:'var(--text)',fontSize:12,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }
-const secondaryText: CSSProperties = { display:'block',color:'var(--text-faint)',fontSize:10.5,marginTop:3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }
+const sectionHeader: CSSProperties = { minHeight: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '0 16px', borderBottom: '1px solid var(--border)' }
+const sectionTitle: CSSProperties = { color: 'var(--text)', fontSize: 13.5, fontWeight: 750 }
+const sectionSub: CSSProperties = { color: 'var(--text-faint)', fontSize: 10.5, marginTop: 2 }
+const activityRow: CSSProperties = { width:'100%', display:'grid', gridTemplateColumns:'minmax(0,1fr) auto auto 18px', alignItems:'center', gap:12, padding:'12px 16px', border:0, borderBottom:'1px solid var(--border)', background:'transparent', textAlign:'left', cursor:'pointer', font:'inherit' }
+const primaryButton: CSSProperties = { minHeight:38, padding:'0 14px', display:'inline-flex', alignItems:'center', gap:7, border:0, borderRadius:7, background:'var(--accent)', color:'#fff', font:'inherit', fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }
+const secondaryButton: CSSProperties = { minHeight:36, padding:'0 12px', display:'inline-flex', alignItems:'center', gap:6, border:'1px solid var(--border)', borderRadius:7, background:'var(--surface)', color:'var(--text-muted)', font:'inherit', fontSize:12, fontWeight:650, cursor:'pointer' }
+const linkButton: CSSProperties = { border:0, background:'transparent', color:'var(--accent)', display:'inline-flex', alignItems:'center', gap:4, font:'inherit', fontSize:11.5, fontWeight:700, cursor:'pointer' }

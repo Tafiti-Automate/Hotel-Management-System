@@ -162,7 +162,7 @@ export default function InventoryWorkbench() {
   const isAdministrator = app.user.isSuperuser || role === 'system administrator'
   const isDepartmentHead = role === 'department head'
   const isStoresApprover = isAdministrator || role === 'store keeper'
-  const isStoresIssuer = isAdministrator
+  const isStoresIssuer = isAdministrator || role === 'store keeper'
   const otherTabs = role === 'store keeper' ? [] : tabs.filter(([key]) => !['requests', 'issues'].includes(key))
   const requestRoleStage: SupplyTask = isStoresApprover ? 'stores' : isDepartmentHead ? 'department' : 'prepare'
   const supplyPathActive = supplyPathHint || (tab === 'issues' ? 'issue' : tab === 'requests' ? requestRoleStage : '')
@@ -221,6 +221,9 @@ function RequestPanel({ app, data, form, setForm, busy, execute, stage }: any) {
   const submittedRequest = data.requests.find((row: Row) => id(row.id) === id(form.submitted))
   const submittedLines = data.requestItems.filter((row: Row) => id(row.requisition) === id(form.submitted))
   const decisionLine = submittedLines.find((row: Row) => id(row.id) === id(form.decisionLine))
+  const selectedStoreId = id(form.destinationStore || submittedRequest?.store)
+  const decisionBalance = decisionLine ? data.balances.find((row: Row) => id(row.item) === id(decisionLine.item) && id(row.store) === selectedStoreId) : undefined
+  const availableNow = num(decisionBalance?.available_quantity ?? decisionBalance?.available ?? 0)
   const shortageRequest = data.requests.find((row: Row) => id(row.id) === id(form.shortageRequest))
   const shortageLines = data.requestItems.filter((row: Row) => id(row.requisition) === id(form.shortageRequest))
   const readyForProcurement = data.requests.filter((request: Row) => isReadyForProcurement(request, data.requestItems))
@@ -294,7 +297,13 @@ function RequestPanel({ app, data, form, setForm, busy, execute, stage }: any) {
       <Action disabled={busy || !submittedRequest || !form.destinationStore} click={() => execute(() => runBackendAction('store-requisitions', id(form.submitted), 'assign-store', { store: form.destinationStore }), 'Destination store confirmed', { submitted: form.submitted, destinationStore: form.destinationStore })}>Confirm destination store</Action>
       <Rule />
       <Field label="Item to review"><Select value={form.decisionLine} change={(v) => { const line = submittedLines.find((r: Row) => id(r.id) === v); setForm({ ...form, decisionLine: v, approved: num(line?.quantity_approved) > 0 ? line?.quantity_approved : line?.base_quantity_requested || '', decisionComment: line?.storekeeper_comment || '' }) }} rows={submittedLines} label={(r) => `${itemName(app, r.item)} · requested ${r.base_quantity_requested}`} /></Field>
+      {decisionLine && <section style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 8, marginBottom: 10 }}>
+        <InfoBox label="Department requested" value={num(decisionLine.base_quantity_requested)} />
+        <InfoBox label="Available in selected store" value={availableNow} />
+        <InfoBox label="Store Keeper forwards" value={num(form.approved || decisionLine.quantity_approved || decisionLine.base_quantity_requested)} />
+      </section>}
       <Field label="Quantity to carry forward"><Input type="number" value={form.approved} change={(v) => setForm({ ...form, approved: v })} /></Field>
+      {decisionLine && <Hint>Stock availability is shown for context only. Your carried-forward quantity is a separate Store Keeper decision and cannot exceed the Department request.</Hint>}
       <Field label="Decision comment"><Input value={form.decisionComment} change={(v) => setForm({ ...form, decisionComment: v })} /></Field>
       <Action disabled={busy || !decisionLine || num(form.approved) < 0 || num(form.approved) > num(decisionLine?.base_quantity_requested) || (num(form.approved) === 0 && !id(form.decisionComment).trim())} click={() => execute(() => updateBackendRecord('store-requisition-items', id(decisionLine?.id), { quantity_approved: num(form.approved), storekeeper_comment: form.decisionComment || '' }), 'Store Keeper quantity saved', { submitted: form.submitted })}>Save this item decision</Action>
       <Rule />
@@ -685,6 +694,7 @@ function RequestTimeline({ row, app }: { row: Row; app: any }) {
   ].filter(Boolean) as Array<{ label: string; detail: string; at: string }>
   return <section style={{ marginTop: 22 }}><h3 style={{ margin: '0 0 10px', fontSize: 13 }}>Activity</h3><div style={{ borderLeft: '2px solid var(--border)', marginLeft: 6 }}>{events.map((event) => <div key={`${event.label}-${event.at}`} style={{ position: 'relative', padding: '0 0 14px 18px' }}><span style={{ position: 'absolute', left: -6, top: 3, width: 10, height: 10, borderRadius: 10, background: 'var(--accent)', border: '2px solid var(--surface)' }} /><div style={{ color: 'var(--text)', fontSize: 11.5, fontWeight: 750 }}>{event.label}</div><div style={{ marginTop: 2, color: 'var(--text-muted)', fontSize: 10.5 }}>{[event.detail, formatDateTime(event.at)].filter(Boolean).join(' · ')}</div></div>)}</div></section>
 }
+function InfoBox({ label, value }: { label: string; value: unknown }) { return <div style={{ padding: '9px 10px', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface-2)' }}><div style={{ color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 750, textTransform: 'uppercase' }}>{label}</div><div style={{ marginTop: 3, color: 'var(--text)', fontSize: 13, fontWeight: 750 }}>{id(value)}</div></div> }
 function SectionLabel({ children }: { children: ReactNode }) { return <div style={{ margin: '4px 0 10px', color: 'var(--text)', fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em' }}>{children}</div> }
 const statusLabel = (value: string) => ({ draft: 'Draft', pending_department_approval: 'Pending Department Approval', submitted: 'Pending Store Keeper Action', approved: 'Approved', partially_approved: 'Partially Approved', awaiting_procurement: 'Awaiting Procurement', partially_issued: 'Partially Issued', issued: 'Issued', completed: 'Completed', rejected: 'Rejected', cancelled: 'Cancelled' } as Record<string,string>)[value] || value.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase())
 const formatDateTime = (value: string) => value ? new Date(value).toLocaleString() : ''

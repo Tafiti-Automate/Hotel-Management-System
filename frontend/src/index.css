@@ -1649,3 +1649,43 @@ html:not([data-theme="dark"]) textarea {
 html:not([data-theme="dark"]) .form-drawer {
   background: #F7F9FC !important;
 }
+
+/* Client workflow UI: task-first, restrained enterprise layout. */
+.role-dashboard .hover-card,
+.role-dashboard button,
+.supplier-master-grid button {
+  transition: border-color .16s ease, background .16s ease, transform .16s ease, box-shadow .16s ease;
+}
+.role-dashboard .hover-card:hover { border-color: var(--border-2); box-shadow: var(--shadow); transform: translateY(-1px); }
+.role-dashboard button:focus-visible,
+.supplier-master-grid button:focus-visible { outline: 3px solid var(--accent-soft); outline-offset: 2px; }
+
+@media (max-width: 1100px) {
+  .task-card-grid { grid-template-columns: repeat(2,minmax(180px,1fr)) !important; }
+  .dashboard-work-grid { grid-template-columns: 1fr !important; }
+  .supplier-master-grid { grid-template-columns: 1fr !important; }
+  .supplier-master-grid aside { position: static !important; }
+}
+
+@media (max-width: 760px) {
+  .task-card-grid { grid-template-columns: 1fr 1fr !important; }
+  .supplier-table-head { display: none !important; }
+  .supplier-master-grid section > button { grid-template-columns: minmax(0,1fr) auto !important; }
+  .supplier-master-grid section > button > :nth-child(2),
+  .supplier-master-grid section > button > :nth-child(3),
+  .supplier-master-grid section > button > :nth-child(4) { display: none !important; }
+}
+
+@media (max-width: 520px) {
+  .task-card-grid { grid-template-columns: 1fr !important; }
+  .role-dashboard-header { align-items: stretch !important; }
+}
+
+@media (max-width: 1050px) {
+  .supplier-quote-table-head { display: none !important; }
+  .supplier-quote-row {
+    grid-template-columns: minmax(0,1fr) auto !important;
+    gap: 6px 12px !important;
+  }
+  .supplier-quote-row > *:nth-child(n+3):not(:last-child) { display: none !important; }
+}

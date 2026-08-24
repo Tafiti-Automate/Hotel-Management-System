@@ -85,7 +85,8 @@ export default function ProcurementWorkbench() {
   const role = app.user.role.toLowerCase()
   const [stage, setStage] = useState<Stage>(() => {
     if (role === 'receiving clerk') return 'receipt'
-    if (['procurement manager', 'procurement officer', 'financial manager', 'general manager'].includes(role)) return 'lpo'
+    if (['procurement manager', 'procurement officer'].includes(role)) return 'quote'
+    if (['financial manager', 'general manager'].includes(role)) return 'lpo'
     if (app.user.isSuperuser) return 'request'
     return (Object.keys(stagePermissions) as Stage[]).find((candidate) =>
       app.user.permissions.includes(stagePermissions[candidate].view)
@@ -265,8 +266,8 @@ export default function ProcurementWorkbench() {
   const allowedStages = app.user.isSuperuser || role === 'system administrator' ? null : roleStages[role]
   const tabs: Array<[Stage, string, string]> = ([
     ['request', '1', 'Requisition'], ['quote', '2', 'Supplier allocation'],
-    ['lpo', '3', 'LPO approval'], ['receipt', '4', 'Receiving & GRN'],
-    ['inspect', '5', 'Inspection'], ['return', '6', 'Supplier return'],
+    ['lpo', '3', 'LPO approval'], ['receipt', '4', role === 'receiving clerk' ? '1. Receive goods' : 'Receiving & GRN'],
+    ['inspect', '5', role === 'receiving clerk' ? '2. Confirm & post GRN' : 'Inspection'], ['return', '6', 'Supplier return'],
   ] as Array<[Stage, string, string]>).filter(([key]) => can(stagePermissions[key].view) && (!allowedStages || allowedStages.includes(key)))
   const stageGuidance: Record<Stage, { actor: string; description: string; icon: string }> = {
     request: { actor: 'Requester', description: 'Add every required article, then submit the requisition.', icon: 'playlist_add' },
@@ -305,27 +306,44 @@ export default function ProcurementWorkbench() {
         <div className="workbench-hero" style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
           <span style={heroIcon}><Icon name="shopping_cart_checkout" size={24} color="#fff" /></span>
           <div>
-            <div style={eyebrow}>Procure to receive</div>
-            <h1 style={{ margin: '3px 0', fontSize: 23, color: 'var(--text)' }}>Procurement workbench</h1>
-            <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>Build each document from its approved predecessor. All changes are saved directly to the backend.</div>
+            <div style={eyebrow}>{role === 'financial manager' ? 'Financial control' : role === 'general manager' ? 'Executive control' : role === 'receiving clerk' ? 'Goods receiving' : 'Procurement'}</div>
+            <h1 style={{ margin: '3px 0', fontSize: 23, color: 'var(--text)' }}>{role === 'financial manager' ? 'LPO Financial Approval' : role === 'general manager' ? 'Final LPO Approval' : role === 'receiving clerk' ? 'Receiving & GRN' : 'Procurement Queue'}</h1>
+            <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{role === 'financial manager' ? 'Review the commercial commitment, preserve Procurement quantity history, then approve, reduce or reject.' : role === 'general manager' ? 'Make the final approve-or-reject decision. Approved LPOs return to Procurement for controlled issue.' : role === 'receiving clerk' ? 'Receive only against issued LPOs. Ordered quantities stay read-only while actual received quantities are recorded separately.' : 'Allocate vetted suppliers by item, confirm current prices, prepare LPOs and issue finally approved documents to suppliers.'}</div>
           </div>
           <button onClick={() => void load()} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button>
         </div>
       </div>
       <div className="workbench-metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(150px,1fr))', gap: 10, marginBottom: 16 }}>
-        <Metric label="Open commitments" value={money(metrics.commitment)} icon="account_balance_wallet" />
-        <Metric label="Overdue LPOs" value={id(metrics.overdue)} icon="schedule" tone={metrics.overdue ? 'warn' : 'good'} />
-        <Metric label="Unposted receipt lines" value={id(metrics.unposted)} icon="pending_actions" tone={metrics.unposted ? 'warn' : 'good'} />
-        <Metric label="Supplier acceptance" value={`${metrics.acceptance}%`} icon="verified" tone={metrics.acceptance >= 90 ? 'good' : 'warn'} />
+        {role === 'financial manager' ? <>
+          <Metric label="Awaiting Finance" value={id(scopedData.orders.filter((row) => id(row.status) === 'pending_approval' && isFinanceApproval(row)).length)} icon="approval" tone="warn" />
+          <Metric label="Visible LPO value" value={money(scopedData.orders.reduce((total,row)=>total+num(row.total_amount),0))} icon="account_balance_wallet" />
+          <Metric label="Approved LPOs" value={id(scopedData.orders.filter((row)=>['approved','issued','partially_received','received'].includes(id(row.status))).length)} icon="check_circle" tone="good" />
+          <Metric label="Rejected LPOs" value={id(scopedData.orders.filter((row)=>id(row.status)==='rejected').length)} icon="cancel" />
+        </> : role === 'general manager' ? <>
+          <Metric label="Awaiting Final Approval" value={id(scopedData.orders.filter((row) => id(row.status) === 'pending_approval' && isManagementApproval(row)).length)} icon="verified_user" tone="warn" />
+          <Metric label="Pending LPO Value" value={money(scopedData.orders.filter((row)=>id(row.status)==='pending_approval'&&isManagementApproval(row)).reduce((total,row)=>total+num(row.total_amount),0))} icon="receipt_long" />
+          <Metric label="Finally Approved" value={id(scopedData.orders.filter((row)=>['approved','issued','partially_received','received'].includes(id(row.status))).length)} icon="check_circle" tone="good" />
+          <Metric label="Rejected" value={id(scopedData.orders.filter((row)=>id(row.status)==='rejected').length)} icon="cancel" />
+        </> : role === 'receiving clerk' ? <>
+          <Metric label="Ready for Receiving" value={id(scopedData.orders.filter((row)=>id(row.status)==='issued').length)} icon="move_to_inbox" tone="warn" />
+          <Metric label="Partial Deliveries" value={id(scopedData.orders.filter((row)=>id(row.status)==='partially_received').length)} icon="pending_actions" tone="warn" />
+          <Metric label="Open GRNs" value={id(scopedData.receipts.length)} icon="receipt_long" />
+          <Metric label="Unposted Receipt Lines" value={id(metrics.unposted)} icon="fact_check" tone={metrics.unposted ? 'warn' : 'good'} />
+        </> : <>
+          <Metric label="Store Requisitions" value={id(scopedData.requisitions.filter((row)=>['store_requisition','store_shortage'].includes(id(row.procurement_source))).length)} icon="assignment" />
+          <Metric label="Supplier Allocation" value={id(scopedData.requisitions.filter((row)=>['approved','partially_ordered'].includes(id(row.status))).length)} icon="compare_arrows" tone="warn" />
+          <Metric label="Approved · Print & Send" value={id(scopedData.orders.filter((row)=>id(row.status)==='approved').length)} icon="print" tone="warn" />
+          <Metric label="Supplier Delivery Pending" value={id(scopedData.orders.filter((row)=>['issued','partially_received'].includes(id(row.status))).length)} icon="local_shipping" />
+        </>}
       </div>
 
-      <WorkflowPath
-        title="Procurement workflow"
-        summary="Track requisitions, quotations, orders and receipts."
+      {tabs.length > 1 && <WorkflowPath
+        title={role === 'receiving clerk' ? 'Receiving workflow' : 'Procurement workflow'}
+        summary={role === 'receiving clerk' ? 'Receive the delivery, then confirm accepted quantities and post the GRN.' : 'Allocate suppliers, prepare the LPO and control supplier issue.'}
         activeKey={stage}
         onSelect={(key) => setStage(key as Stage)}
         steps={tabs.map(([key, , label]) => ({ key, label, ...stageGuidance[key] }))}
-      />
+      />}
 
       {message && <div style={{ ...card, padding: 13, marginBottom: 14, borderColor: 'rgba(220,38,38,.3)', color: 'var(--bad)', fontSize: 12.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}><span>{message}</span><button type="button" onClick={() => void load()} style={secondary}>Retry</button></div>}
       {loading ? <div style={{ ...card, padding: 50, textAlign: 'center', color: 'var(--text-faint)' }}>Loading procurement records from the backend…</div> : (
@@ -390,6 +408,9 @@ function QuotePanel({ data, form, setForm, busy, run, requisitionLabel, names, s
   const maxPurchaseQuantity = selectedFactor > 0 ? floorPurchaseQuantity(requestedBase / selectedFactor) : 0
   const enteredPurchaseQuantity = num(form.quantity || maxPurchaseQuantity)
   const enteredBaseQuantity = enteredPurchaseQuantity * selectedFactor
+  const confirmedPrice = num(form.price ?? selectedCatalogue?.price)
+  const quotedPrice = num(selectedCatalogue?.price)
+  const priceChanged = Boolean(selectedCatalogue && Math.abs(confirmedPrice - quotedPrice) > 0.000001)
   const allocationExceedsRequest = selectedFactor <= 0 || enteredBaseQuantity > requestedBase + 0.000001
   const allocatedCount = reqLines.filter((line: Row) => line.procurement_supplier_price && num(line.procurement_quantity) > 0).length
 
@@ -431,10 +452,10 @@ function QuotePanel({ data, form, setForm, busy, run, requisitionLabel, names, s
     {selectedCatalogue && <>
       <ReadOnlyValue label="Selected supplier" value={selectedSupplier?.name || selectedCatalogue.supplier} />
       <Two><Field label="Procurement quantity"><Input type="number" value={form.quantity || maxPurchaseQuantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><Field label="Current confirmed price"><Input type="number" value={form.price ?? selectedCatalogue.price} onChange={(v) => setForm({ ...form, price: v })} /></Field></Two>
-      <Field label="Procurement note"><Input value={form.procurementNote || ''} onChange={(v) => setForm({ ...form, procurementNote: v })} placeholder="Optional price confirmation / supplier note" /></Field>
+      <Field label={priceChanged ? 'Reason for price change *' : 'Procurement note'}><Input value={form.procurementNote || ''} onChange={(v) => setForm({ ...form, procurementNote: v })} placeholder={priceChanged ? 'Example: Supplier confirmed revised current price by phone' : 'Optional confirmation note'} /></Field>{priceChanged && <Hint>The supplier quotation remains unchanged. This reason is saved with Procurement’s confirmed current price for audit.</Hint>}
       {selectedCatalogue && <UnitConversionNote quantity={enteredPurchaseQuantity} factor={selectedFactor} selectedUnit={id(selectedCatalogue.unit) || 'purchase unit'} baseUnit={id(selectedItem?.uom) || 'base units'} unitPrice={num(form.price ?? selectedCatalogue.price)} />}
       {allocationExceedsRequest && <Hint>Converted quantity cannot exceed the Store Keeper quantity of {requestedBase} {id(selectedItem?.uom) || 'base units'}. Maximum for this supplier unit is {maxPurchaseQuantity} {id(selectedCatalogue.unit) || 'units'}.</Hint>}
-      <Action tone="good" disabled={busy || !form.requisition || !form.reqLine || !form.cataloguePrice || enteredPurchaseQuantity <= 0 || allocationExceedsRequest || num(form.price ?? selectedCatalogue.price) <= 0} onClick={() => run(
+      <Action tone="good" disabled={busy || !form.requisition || !form.reqLine || !form.cataloguePrice || enteredPurchaseQuantity <= 0 || allocationExceedsRequest || confirmedPrice <= 0 || (priceChanged && !id(form.procurementNote).trim())} onClick={() => run(
         () => runBackendAction('requisitions', id(form.requisition), 'allocate-line', { line_id: form.reqLine, supplier_price: form.cataloguePrice, quantity: enteredPurchaseQuantity, unit_price: num(form.price ?? selectedCatalogue.price), note: form.procurementNote || '' }),
         'Supplier allocated to requisition item',
         { requisition: form.requisition },
@@ -572,12 +593,12 @@ function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel
       {order && <LpoSummary order={order} lines={lines} names={names} />}
       {order && !canDecideFinance && <Hint>This LPO is currently with Finance. Procurement can monitor it but cannot make the Finance decision.</Hint>}
       {order && canDecideFinance && <>
-        <SectionLabel>Optional quantity reduction</SectionLabel>
+        <SectionLabel>Financial quantity review</SectionLabel>
         <Field label="LPO item"><Select value={form.financeLine} onChange={(v) => { const selected = lines.find((row: Row) => id(row.id) === v); setForm({ ...form, financeLine: v, financeQuantity: selected?.approved_quantity ?? selected?.quantity ?? '', financeReason: selected?.finance_reduction_reason || '' }) }} rows={lines} label={(row: Row) => `${names.items.get(id(row.item)) || id(row.item)} · Procurement ${row.procurement_quantity ?? row.quantity}`} /></Field>
         <Two><Field label="Quantity approved by Finance"><Input type="number" value={form.financeQuantity} onChange={(v) => setForm({ ...form, financeQuantity: v })} /></Field><Field label="Reason when reduced"><Input value={form.financeReason} onChange={(v) => setForm({ ...form, financeReason: v })} placeholder="Required only when reduced" /></Field></Two>
         <Action disabled={busy || !financeLine || num(form.financeQuantity) < 0 || num(form.financeQuantity) > num(financeLine.procurement_quantity ?? financeLine.quantity) || (num(form.financeQuantity) < num(financeLine.procurement_quantity ?? financeLine.quantity) && !id(form.financeReason).trim())} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'finance-reduce-quantities', { comments: form.approvalComments || '', lines: [{ id: id(financeLine.id), approved_quantity: num(form.financeQuantity), reason: form.financeReason || '' }] }), 'Finance quantity decision recorded')}>Save quantity decision</Action>
         <Field label="Finance decision comment"><Input value={form.approvalComments} onChange={(v) => setForm({ ...form, approvalComments: v })} placeholder="Required when rejecting" /></Field>
-        <Action tone="good" disabled={busy || !currentApproval} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'approve', { comments: form.approvalComments || '' }), 'Finance approved the LPO and sent it to the General Manager')}>Approve and send to General Manager</Action>
+        <Action tone="good" disabled={busy || !currentApproval} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'approve', { comments: form.approvalComments || '' }), 'Finance approved the LPO and sent it to the General Manager')}>Approve LPO & Send to General Manager</Action>
         <Action tone="danger" disabled={busy || !currentApproval || !id(form.approvalComments).trim()} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'reject', { comments: form.approvalComments }), 'LPO rejected; this document is now closed')}>Reject LPO</Action>
       </>}
     </>}
@@ -589,7 +610,7 @@ function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel
       {order && !canDecideManagement && <Hint>Finance has approved this LPO. It is now waiting for the independent General Manager decision.</Hint>}
       {order && canDecideManagement && <>
         <Field label="General Manager decision comment"><Input value={form.approvalComments} onChange={(v) => setForm({ ...form, approvalComments: v })} placeholder="Required when rejecting" /></Field>
-        <Action tone="good" disabled={busy || !currentApproval} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'approve', { comments: form.approvalComments || '' }), 'Final LPO approval recorded and returned to Procurement')}>Give final approval</Action>
+        <Action tone="good" disabled={busy || !currentApproval} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'approve', { comments: form.approvalComments || '' }), 'Final LPO approval recorded and returned to Procurement')}>Approve LPO</Action>
         <Action tone="danger" disabled={busy || !currentApproval || !id(form.approvalComments).trim()} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'reject', { comments: form.approvalComments }), 'LPO rejected; this document is now closed')}>Reject LPO</Action>
       </>}
     </>}
@@ -622,17 +643,18 @@ function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel
   </Panel>
 }
 
+function friendlyLpoStatus(status: string, steps: Row[]) { if (status === 'pending_approval') { const pending = steps.find((step) => id(step.status) === 'pending'); if (/finance/i.test(id(pending?.stage_name))) return 'Awaiting Finance'; if (/(general manager|management)/i.test(id(pending?.stage_name))) return 'Awaiting General Manager'; return 'Awaiting Approval' } if (status === 'approved') return 'Approved · Print & Send'; if (status === 'issued') return 'Sent to Supplier'; if (status === 'partially_received') return 'Partially Received'; if (status === 'received') return 'Fully Received'; return status.replace(/_/g, ' ') }
+
 function LpoSummary({ order, lines, names }: { order: Row; lines: Row[]; names: Record<string, Map<string, string>> }) {
   const approvalSteps = Array.isArray(order.approval_steps) ? order.approval_steps as Row[] : []
   return <section style={{ margin: '10px 0 14px', overflow: 'hidden', border: '1px solid var(--border)', borderRadius: 8 }}>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8, padding: 11, background: 'var(--surface-2)' }}>
-      <ReadOnlyValue label="LPO number" value={id(order.lpo_number)} />
-      <ReadOnlyValue label="PO number" value={id(order.po_number)} />
-      <ReadOnlyValue label="Status" value={id(order.status).replace(/_/g, ' ')} />
+      <ReadOnlyValue label="LPO number" value={id(order.lpo_number) || id(order.po_number)} />
       <ReadOnlyValue label="Supplier" value={names.suppliers.get(id(order.supplier)) || 'Inherited supplier'} />
-      <ReadOnlyValue label="Total" value={money(order.total_amount)} />
+      <ReadOnlyValue label="Status" value={friendlyLpoStatus(id(order.status), approvalSteps)} />
+      <ReadOnlyValue label="LPO total" value={money(order.total_amount)} />
     </div>
-    {approvalSteps.length > 0 && <div style={{ padding: '9px 11px', borderTop: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 10.5, lineHeight: 1.55 }}>{approvalSteps.map((step) => `${id(step.stage_name)}: ${id(step.status)}`).join(' · ')}</div>}
+    {approvalSteps.length > 0 && <div style={{ padding: '10px 11px', borderTop: '1px solid var(--border)' }}><div style={{ marginBottom: 7, color:'var(--text-faint)', fontSize:9.5, fontWeight:750, textTransform:'uppercase' }}>Approval timeline</div><div style={{ display:'flex', gap:7, flexWrap:'wrap' }}>{approvalSteps.map((step) => <span key={`${id(step.stage_name)}-${id(step.stage)}`} style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'5px 8px', borderRadius:999, background:id(step.status)==='approved'?'var(--good-soft)':id(step.status)==='rejected'?'var(--bad-soft)':'var(--warn-soft)', color:id(step.status)==='approved'?'var(--good)':id(step.status)==='rejected'?'var(--bad)':'var(--warn)', fontSize:10, fontWeight:700 }}><Icon name={id(step.status)==='approved'?'check_circle':id(step.status)==='rejected'?'cancel':'schedule'} size={13} />{id(step.stage_name)} · {id(step.status).replace(/_/g,' ')}</span>)}</div></div>}
     <div style={{ padding: '8px 11px', display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) .6fr .7fr .8fr', gap: 8, borderTop: '1px solid var(--border)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}><span>Article</span><span>Quantity</span><span>Unit price</span><span>Total</span></div>
     {lines.map((row) => <div key={id(row.id)} style={{ padding: '9px 11px', display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) .6fr .7fr .8fr', gap: 8, borderTop: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 10.8 }}><strong style={{ color: 'var(--text)' }}>{names.items.get(id(row.item)) || id(row.item)}</strong><span>{id(row.approved_quantity ?? row.quantity)}</span><span>{money(row.unit_cost)}</span><span>{money(num(row.approved_quantity ?? row.quantity) * num(row.unit_cost))}</span></div>)}
     {!lines.length && <div style={{ padding: 13, borderTop: '1px solid var(--border)', color: 'var(--text-faint)', fontSize: 10.5 }}>No LPO items are available.</div>}
@@ -673,6 +695,7 @@ function ReceiptPanel({ data, form, setForm, busy, run, orderLabel, receiptLabel
     {line && num(form.quantity) > outstanding && <Hint>Cannot receive more than the outstanding quantity of {outstanding}.</Hint>}
     {duplicate && <Hint>This LPO line is already on this GRN. Use a new GRN for a later partial delivery.</Hint>}
     <Action disabled={busy || duplicate || !form.receipt || !form.orderLine || num(form.quantity) <= 0 || num(form.quantity) > outstanding} onClick={() => run(() => createBackendRecord('grn-items', { goods_receipt: form.receipt, purchase_order_item: form.orderLine, quantity_received: num(form.quantity), expiry_date: null }), 'Received quantity recorded; original LPO quantity remains unchanged')}>Record received quantity</Action>
+    {receiptLines.length > 0 && <Hint>Next: open “2. Confirm & post GRN” to record accepted/rejected quantities and post accepted stock. The LPO quantity remains unchanged.</Hint>}
   </Panel>
 }
 
@@ -777,10 +800,6 @@ function StageTable({ stage, lpoQueue, data, names, onSelect }: { stage: Stage; 
     {rows.map((row) => <button type="button" key={id(row.id)} onClick={() => onSelect(row)} className="procurement-record-row" style={{ width: '100%', display: 'grid', gridTemplateColumns: '1.2fr 1.5fr 1fr .8fr 24px', alignItems: 'center', gap: 12, padding: '12px 17px', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit', fontSize: 12.5 }}>{cells(row).map((cell, i) => <span key={i} style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: i === 0 ? 'var(--text)' : 'var(--text-muted)', fontWeight: i === 0 ? 700 : 500 }}>{cell || '—'}</span>)}<Icon name="chevron_right" size={18} color="var(--text-faint)" /></button>)}
     {!rows.length && <div style={{ padding: 45, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12.5 }}>Nothing has reached this stage yet. Complete the previous step first.</div>}
   </>
-}
-
-function ComparisonField({ label, value }: { label: string; value: string }) {
-  return <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '5px 0', borderTop: '1px solid var(--border)', fontSize: 10.5 }}><span style={{ color: 'var(--text-faint)' }}>{label}</span><span style={{ color: 'var(--text-muted)', textAlign: 'right', fontWeight: 600 }}>{value}</span></div>
 }
 
 function ProcurementRecordDrawer({ stage, row, data, names, canAttach, onClose, onChanged }: {

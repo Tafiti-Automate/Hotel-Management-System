@@ -89,14 +89,14 @@ export function canAccessModule(user: AccessUser, module: 'operations' | 'hr'): 
 export function operationsLandingFor(user: AccessUser): { route: string; crumb: string } {
   const role = roleKey(user)
   const roleLanding: Record<string, { route: string; crumb: string }> = {
-    requester: { route: 'workflow-stores', crumb: 'My department requisitions' },
-    'department head': { route: 'workflow-stores', crumb: 'Department request approvals' },
-    'store keeper': { route: 'workflow-stores', crumb: 'Store Keeper queue' },
+    requester: { route: 'dashboard', crumb: 'My requisitions dashboard' },
+    'department head': { route: 'dashboard', crumb: 'Department approvals dashboard' },
+    'store keeper': { route: 'dashboard', crumb: 'Store Keeper dashboard' },
     'cost controller': { route: 'dashboard', crumb: 'Cost Controller dashboard' },
-    'procurement manager': { route: 'workflow-procure', crumb: 'Procurement workbench' },
-    'financial manager': { route: 'workflow-procure', crumb: 'Finance LPO approvals' },
-    'general manager': { route: 'workflow-procure', crumb: 'Final LPO approvals' },
-    'receiving clerk': { route: 'workflow-procure', crumb: 'Receiving & GRN' },
+    'procurement manager': { route: 'dashboard', crumb: 'Procurement dashboard' },
+    'financial manager': { route: 'dashboard', crumb: 'Financial approvals dashboard' },
+    'general manager': { route: 'dashboard', crumb: 'Final approvals dashboard' },
+    'receiving clerk': { route: 'dashboard', crumb: 'Receiving dashboard' },
   }
   const preferred = roleLanding[role]
   if (preferred && canAccessRoute(user, preferred.route)) return preferred

@@ -13,9 +13,10 @@ import ProcurementWorkbench from './ProcurementWorkbench'
 import FinanceWorkbench from './FinanceWorkbench'
 import InventoryWorkbench from './InventoryWorkbench'
 import AuditLog from './AuditLog'
-import StoresDashboard from './StoresDashboard'
 import AccessManagement from './AccessManagement'
-import { canAccessRoute, isStoresManager } from '../lib/access'
+import SupplierManagement from './SupplierManagement'
+import SupplierQuotationManagement from './SupplierQuotationManagement'
+import { canAccessRoute } from '../lib/access'
 
 const listRoutes: string[] = [
   'items', 'categories', 'uoms', 'itemUnits', 'locations', 'suppliers',
@@ -31,14 +32,16 @@ export default function AppShell() {
   const { route } = app
 
   let content: React.ReactNode = null
-  if (!canAccessRoute(app.user, route)) content = isStoresManager(app.user) ? <StoresDashboard /> : <Dashboard />
-  else if (route === 'dashboard') content = isStoresManager(app.user) ? <StoresDashboard /> : <Dashboard />
+  if (!canAccessRoute(app.user, route)) content = <Dashboard />
+  else if (route === 'dashboard') content = <Dashboard />
   else if (route === 'hr-dashboard') content = <HRDashboard />
   else if (route === 'workflow-procure') content = <ProcurementWorkbench />
   else if (route === 'workflow-stores') content = <InventoryWorkbench />
   else if (route === 'workflow-consume') content = <InventoryWorkbench />
   else if (route === 'workflow-pay') content = <FinanceWorkbench />
   else if (route === 'workflow-configure') content = <WorkflowHub kind="configure" />
+  else if (route === 'suppliers') content = <SupplierManagement />
+  else if (route === 'supplierItems') content = <SupplierQuotationManagement />
   else if (listRoutes.includes(route)) content = <ListView />
   else if (route === 'detail') content = <DetailView />
   else if (route === 'reports') content = <Reports />
