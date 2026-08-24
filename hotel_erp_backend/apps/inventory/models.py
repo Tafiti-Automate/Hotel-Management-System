@@ -1378,9 +1378,10 @@ class StoreRequisition(BaseModel):
         for line in self.items.select_related("item"):
             balance = InventoryBalance.objects.filter(item=line.item, store=self.store).first()
             available = balance.available_quantity if balance else Decimal("0.00")
-            if available < line.base_quantity_requested:
+            required = line.quantity_approved if line.quantity_approved > Decimal("0.00") else line.base_quantity_requested
+            if available < required:
                 shortages.append(
-                    f"{line.item}: {available} available, {line.base_quantity_requested} required"
+                    f"{line.item}: {available} available, {required} required from the Store Keeper decision"
                 )
         if shortages:
             raise ValidationError(

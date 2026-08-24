@@ -21,29 +21,8 @@ def _suffix(reference, fallback):
 
 
 def format_existing_references(apps, schema_editor):
-    PurchaseRequisition = apps.get_model("procurement", "PurchaseRequisition")
-    PurchaseOrder = apps.get_model("procurement", "PurchaseOrder")
-
-    requisitions = PurchaseRequisition.objects.select_related("branch", "hotel").order_by(
-        "created_at", "pk"
-    )
-    for fallback, requisition in enumerate(requisitions.iterator(), start=1):
-        reference_date = requisition.created_at
-        number = _suffix(requisition.requisition_number, fallback)
-        PurchaseRequisition.objects.filter(pk=requisition.pk).update(
-            requisition_number=f"i{reference_date:%y}-{number:05d}"
-        )
-
-    orders = PurchaseOrder.objects.select_related(
-        "requisition__branch", "requisition__hotel"
-    ).order_by("created_at", "pk")
-    for fallback, order in enumerate(orders.iterator(), start=1):
-        reference_date = order.created_at
-        number = _suffix(order.lpo_number, fallback)
-        scope = _scope_code(order.requisition.branch, order.requisition.hotel)
-        PurchaseOrder.objects.filter(pk=order.pk).update(
-            lpo_number=f"{scope}{reference_date:%Y%m}-{number:05d}"
-        )
+    """Keep the globally assigned numeric references from migration 0021."""
+    return
 
 
 class Migration(migrations.Migration):

@@ -1,7 +1,7 @@
 """Client-approved operational role templates.
 
-Role names are fixed business identities. Their permission sets are seeded with safe
-workflow defaults, but an administrator may later add/remove individual permissions.
+Role names and permission sets are fixed business identities approved by the client.
+Administrators assign people to roles; they do not redesign operational permissions.
 """
 from django.contrib.auth.models import Group, Permission
 from django.db import transaction
@@ -37,6 +37,7 @@ ROLE_SPECS = {
         # select the destination store and record carried-forward quantities, but
         # supplier/price permissions are deliberately absent.
         "change": {"inventory": ["storerequisition", "storerequisitionitem"]},
+        "crud": {"inventory": ["stockissue", "stockissueitem"]},
         "view": {
             "departments": ["department", "branch"],
             "employees": ["employee"],
@@ -48,7 +49,6 @@ ROLE_SPECS = {
             "procurement": [
                 "purchaseorder", "purchaseorderitem", "procurementattachment",
                 "procurementcommunication", "purchaserequisition", "requisitionitem",
-                "vendorquotation", "vendorquotationitem",
             ],
         },
         "change": {"inventory": ["supplieritemprice"]},
@@ -84,7 +84,10 @@ ROLE_SPECS = {
         },
     },
     "Receiving Clerk": {
-        "crud": {"procurement": ["goodsreceiptitem", "goodsreceiptnote", "procurementattachment"]},
+        "crud": {"procurement": [
+            "goodsreceiptitem", "goodsreceiptnote", "goodsinspection",
+            "goodsinspectionitem", "procurementattachment",
+        ]},
         "view": {
             "departments": ["branch", "department"],
             "inventory": ["item", "storelocation", "unitofmeasure"],
@@ -150,10 +153,10 @@ def permissions_for_spec(spec):
 
 @transaction.atomic
 def sync_client_roles(*, reset_permissions=True):
-    """Create canonical roles, migrate aliases, and optionally restore defaults.
+    """Create canonical roles, migrate aliases, and enforce client-approved access.
 
-    ``reset_permissions`` is True only for initial/bootstrap synchronization. Normal
-    administrator edits are never overwritten by ordinary reads or logins.
+    ``reset_permissions`` is retained for compatibility with existing callers; the
+    approved operational permission sets are always restored.
     """
     groups = {}
     created_roles = set()
@@ -182,10 +185,8 @@ def sync_client_roles(*, reset_permissions=True):
         old_group.delete()
 
     for name, spec in ROLE_SPECS.items():
-        # Bootstrap new/empty roles automatically. Once an administrator customizes a
-        # role, later migrations leave that customized permission set untouched. The
-        # explicit setup_hotel_roles command remains the intentional reset-to-defaults.
-        if reset_permissions or name in created_roles or groups[name].permissions.count() == 0:
-            groups[name].permissions.set(permissions_for_spec(spec))
+        # Operational permissions are client-approved policy, not administrator
+        # configuration. Every synchronization restores the canonical permission set.
+        groups[name].permissions.set(permissions_for_spec(spec))
 
     return groups

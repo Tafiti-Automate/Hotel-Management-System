@@ -229,7 +229,7 @@ export default function ProcurementWorkbench() {
       void openRecord(row)
       return
     }
-    const queue: LpoQueue = ['draft', 'rejected'].includes(status)
+    const queue: LpoQueue = status === 'draft'
       ? 'prepare'
       : status === 'pending_approval' && isFinanceApproval(row)
         ? 'finance'
@@ -260,24 +260,24 @@ export default function ProcurementWorkbench() {
     'procurement manager': ['request', 'quote', 'lpo'],
     'financial manager': ['lpo'],
     'general manager': ['lpo'],
-    'receiving clerk': ['receipt'],
+    'receiving clerk': ['receipt', 'inspect'],
   }
   const allowedStages = app.user.isSuperuser || role === 'system administrator' ? null : roleStages[role]
   const tabs: Array<[Stage, string, string]> = ([
-    ['request', '1', 'Requisition'], ['quote', '2', 'Supplier & price'],
+    ['request', '1', 'Requisition'], ['quote', '2', 'Supplier allocation'],
     ['lpo', '3', 'LPO approval'], ['receipt', '4', 'Receiving & GRN'],
     ['inspect', '5', 'Inspection'], ['return', '6', 'Supplier return'],
   ] as Array<[Stage, string, string]>).filter(([key]) => can(stagePermissions[key].view) && (!allowedStages || allowedStages.includes(key)))
   const stageGuidance: Record<Stage, { actor: string; description: string; icon: string }> = {
     request: { actor: 'Requester', description: 'Add every required article, then submit the requisition.', icon: 'playlist_add' },
-    quote: { actor: 'Procurement', description: 'Choose a vetted supplier quotation from the Cost Controller catalogue and confirm the current price.', icon: 'compare_arrows' },
+    quote: { actor: 'Procurement', description: 'Allocate a vetted supplier and current price to each requisition item.', icon: 'compare_arrows' },
     lpo: role === 'financial manager'
       ? { actor: 'Financial Manager', description: 'Review price and quantities, then approve or return the LPO.', icon: 'receipt_long' }
       : role === 'general manager'
         ? { actor: 'General Manager', description: 'Make the independent final approval decision.', icon: 'receipt_long' }
         : { actor: 'Procurement and approvers', description: 'Prepare the LPO, follow its approvals, then print and send it.', icon: 'receipt_long' },
     receipt: { actor: 'Receiving / stores', description: 'Record what the supplier delivered against the LPO.', icon: 'move_to_inbox' },
-    inspect: { actor: 'Inspector', description: 'Accept or reject delivered quantities before stock posting.', icon: 'fact_check' },
+    inspect: { actor: 'Receiving Clerk', description: 'Confirm accepted or rejected delivered quantities before posting the GRN.', icon: 'fact_check' },
     return: { actor: 'Stores / procurement', description: 'If needed, send rejected or damaged goods back to the supplier.', icon: 'assignment_return' },
   }
   useEffect(() => {
@@ -336,7 +336,7 @@ export default function ProcurementWorkbench() {
           <aside style={{ ...card, padding: 18 }}>
             {!canChangeStage && stage !== 'lpo' && <ReadOnlyStage />}
             {canChangeStage && stage === 'request' && <RequestPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel }} items={app.data.items} stores={app.data.locations} departments={app.data.departments} />}
-            {canChangeStage && stage === 'quote' && <QuotePanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, names }} suppliers={app.data.suppliers} supplierItems={app.data.supplierItems} items={app.data.items} />}
+            {canChangeStage && stage === 'quote' && <QuotePanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, names }} suppliers={app.data.suppliers} supplierItems={app.data.supplierItems} items={app.data.items} itemUnits={app.data.itemUnits} />}
             {stage === 'lpo' && <LpoPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, orderLabel, names, lpoQueue, setLpoQueue }} role={role} canManage={canManageLpo} userName={app.user.name} suppliers={app.data.suppliers} units={app.data.uoms} items={app.data.items} itemUnits={app.data.itemUnits} />}
             {canChangeStage && stage === 'receipt' && <ReceiptPanel {...{ data: scopedData, form, setForm, busy, run, orderLabel, receiptLabel, names }} employees={app.data.employees} stores={app.data.locations} />}
             {canChangeStage && stage === 'inspect' && <InspectionPanel {...{ data: scopedData, form, setForm, busy, run, receiptLabel, names }} employees={app.data.employees} />}
@@ -374,112 +374,71 @@ function RequestPanel({ data, form, setForm, requisitionLabel, items }: any) {
   </Panel>
 }
 
-function QuotePanel({ data, form, setForm, busy, run, requisitionLabel, names, suppliers, supplierItems, items }: any) {
-  const requisitions = data.requisitions.filter((row: Row) => ['store_requisition','store_shortage'].includes(id(row.procurement_source)))
+function QuotePanel({ data, form, setForm, busy, run, requisitionLabel, names, suppliers, supplierItems, items, itemUnits }: any) {
+  const requisitions = data.requisitions.filter((row: Row) => ['store_requisition','store_shortage'].includes(id(row.procurement_source)) && ['approved','partially_ordered'].includes(id(row.status)))
   const reqLines = data.requisitionItems.filter((row: Row) => id(row.requisition) === id(form.requisition))
   const selectedReqLine = reqLines.find((row: Row) => id(row.id) === id(form.reqLine))
   const catalogue = selectedReqLine
-    ? supplierItems
-        .filter((entry: Row) => id(entry.articleId) === id(selectedReqLine.item) && id(entry.status) === 'Active')
-        .sort((left: Row, right: Row) => {
-          const leftRank = id(left.preferred) === 'Preferred' ? 0 : id(left.pricePosition) === 'Lowest' ? 1 : 2
-          const rightRank = id(right.preferred) === 'Preferred' ? 0 : id(right.pricePosition) === 'Lowest' ? 1 : 2
-          return leftRank - rightRank || num(left.basePrice || left.price) - num(right.basePrice || right.price)
-        })
+    ? supplierItems.filter((entry: Row) => id(entry.articleId) === id(selectedReqLine.item) && id(entry.status) === 'Active')
+        .sort((left: Row, right: Row) => num(left.basePrice || left.price) - num(right.basePrice || right.price))
     : []
   const selectedCatalogue = catalogue.find((entry: Row) => id(entry.id) === id(form.cataloguePrice))
-  const supplierId = id(selectedCatalogue?.supplierId || form.supplier)
-  const quotes = data.quotations.filter((row: Row) => id(row.requisition) === id(form.requisition))
-  const selectedQuote = quotes.find((row: Row) => id(row.id) === id(form.quotation))
-  const quoteLines = data.quotationItems.filter((row: Row) => id(row.quotation) === id(form.quotation))
+  const selectedSupplier = suppliers.find((supplier: Row) => id(supplier.id) === id(selectedCatalogue?.supplierId))
   const selectedItem = items.find((item: Row) => id(item.id) === id(selectedReqLine?.item))
-  const requested = num(selectedReqLine?.approved_quantity ?? selectedReqLine?.quantity)
-  const chosenUnit = id(form.unit) || id(selectedCatalogue?.unitId) || id(selectedReqLine?.unit) || id(selectedItem?.baseUnitId)
-  const maxQuantity = num(selectedReqLine?.approved_quantity ?? selectedReqLine?.quantity)
-  const matchingSupplier = suppliers.find((supplier: Row) => id(supplier.id) === supplierId)
-  const quotationForSupplier = quotes.find((row: Row) => id(row.supplier) === supplierId)
-  const selectOffer = (entry: Row, line: Row = selectedReqLine) => {
-    const linkedQuote = quotes.find((quote: Row) => id(quote.supplier) === id(entry.supplierId))
-    const article = items.find((item: Row) => id(item.id) === id(line?.item))
-    const quantity = num(line?.approved_quantity ?? line?.quantity)
-    setForm({
-      requisition: form.requisition,
-      reqLine: id(line?.id),
-      cataloguePrice: id(entry.id),
-      supplier: id(entry.supplierId),
-      quotation: id(linkedQuote?.id),
-      unit: id(entry.unitId || line?.unit || article?.baseUnitId),
-      quantity,
-      price: entry.price,
-      days: entry.leadTime,
-    })
-  }
+  const requestedBase = num(selectedReqLine?.remaining_order_quantity ?? selectedReqLine?.approved_base_quantity ?? selectedReqLine?.approved_quantity ?? selectedReqLine?.quantity)
+  const selectedFactor = selectedCatalogue ? conversionFactorFor(selectedItem, selectedCatalogue.unitId, itemUnits) : 1
+  const maxPurchaseQuantity = selectedFactor > 0 ? floorPurchaseQuantity(requestedBase / selectedFactor) : 0
+  const enteredPurchaseQuantity = num(form.quantity || maxPurchaseQuantity)
+  const enteredBaseQuantity = enteredPurchaseQuantity * selectedFactor
+  const allocationExceedsRequest = selectedFactor <= 0 || enteredBaseQuantity > requestedBase + 0.000001
+  const allocatedCount = reqLines.filter((line: Row) => line.procurement_supplier_price && num(line.procurement_quantity) > 0).length
+
   const selectArticle = (value: string) => {
     const line = reqLines.find((row: Row) => id(row.id) === value)
-    const offers = supplierItems
-      .filter((entry: Row) => id(entry.articleId) === id(line?.item) && id(entry.status) === 'Active')
-      .sort((left: Row, right: Row) => {
-        const leftRank = id(left.preferred) === 'Preferred' ? 0 : id(left.pricePosition) === 'Lowest' ? 1 : 2
-        const rightRank = id(right.preferred) === 'Preferred' ? 0 : id(right.pricePosition) === 'Lowest' ? 1 : 2
-        return leftRank - rightRank || num(left.basePrice || left.price) - num(right.basePrice || right.price)
-      })
-    if (line && offers.length) {
-      selectOffer(offers[0], line)
-      return
-    }
     const article = items.find((item: Row) => id(item.id) === id(line?.item))
+    const offers = supplierItems.filter((entry: Row) => id(entry.articleId) === id(line?.item) && id(entry.status) === 'Active')
+      .sort((left: Row, right: Row) => num(left.basePrice || left.price) - num(right.basePrice || right.price))
+    const existing = offers.find((entry: Row) => id(entry.id) === id(line?.procurement_supplier_price))
+    const offer = existing || offers[0]
+    const baseLimit = num(line?.remaining_order_quantity ?? line?.approved_base_quantity ?? line?.approved_quantity ?? line?.quantity)
+    const factor = offer ? conversionFactorFor(article, offer.unitId, itemUnits) : 1
+    const suggestedQuantity = factor > 0 ? floorPurchaseQuantity(baseLimit / factor) : 0
     setForm({
-      requisition: form.requisition,
-      reqLine: value,
-      cataloguePrice: '',
-      supplier: '',
-      quotation: '',
-      unit: id(line?.unit || article?.baseUnitId),
-      quantity: num(line?.approved_quantity ?? line?.quantity),
-      price: '',
-      days: '',
+      requisition: form.requisition, reqLine: value, cataloguePrice: id(offer?.id),
+      quantity: line?.procurement_quantity ?? suggestedQuantity,
+      price: line?.procurement_unit_cost ?? offer?.price ?? '', procurementNote: line?.procurement_note || '',
     })
   }
-  return <Panel title="Supplier & price selection" note="Start from the Store Keeper requisition, then choose a vetted supplier price registered by the Cost Controller.">
-    <Field label="Store requisition"><Select value={form.requisition} onChange={(v) => setForm({ requisition: v })} rows={requisitions} label={requisitionLabel} /></Field>
-    <Field label="Requested article"><Select value={form.reqLine} onChange={selectArticle} rows={reqLines} label={(row: Row) => `${names.items.get(id(row.item)) || 'Article'} · requested ${row.approved_quantity ?? row.quantity}`} /></Field>
-    {selectedReqLine && <Hint>The article and requested quantity come from Stores. Procurement can reduce the quantity, never increase it.</Hint>}
+
+  return <Panel title="Supplier allocation by item" note="Each Article can use a different vetted supplier. The system will group matching suppliers into separate LPOs automatically.">
+    <Field label="Store Requisition"><Select value={form.requisition} onChange={(v) => setForm({ requisition: v })} rows={requisitions} label={requisitionLabel} /></Field>
+    {form.requisition && <Hint>{allocatedCount} of {reqLines.length} items allocated. Allocate every item before generating LPOs.</Hint>}
+    <Field label="Requisition item"><Select value={form.reqLine} onChange={selectArticle} rows={reqLines} label={(row: Row) => `${names.items.get(id(row.item)) || 'Article'} · Store Keeper ${row.approved_quantity ?? row.quantity}${row.procurement_supplier_price ? ' · allocated' : ''}`} /></Field>
+    {selectedReqLine && <Hint>The Store Keeper quantity stays unchanged. Procurement may reduce its own order quantity but cannot increase it.</Hint>}
     {selectedReqLine && catalogue.length > 0 && <>
-      <SectionLabel>Suppliers registered for this article</SectionLabel>
+      <SectionLabel>Vetted suppliers for this Article</SectionLabel>
       <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
         {catalogue.map((entry: Row) => {
           const selected = id(entry.id) === id(selectedCatalogue?.id)
-          return <button key={id(entry.id)} type="button" onClick={() => selectOffer(entry)} style={{ padding: 11, border: `1px solid ${selected ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 8, background: selected ? 'var(--accent-soft)' : 'var(--surface)', color: 'var(--text)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><strong style={{ fontSize: 12 }}>{id(entry.supplier)}</strong>{id(entry.preferred) === 'Preferred' && <span style={{ padding: '2px 6px', borderRadius: 20, background: 'var(--good-soft)', color: 'var(--good)', fontSize: 8.5, fontWeight: 800 }}>PREFERRED</span>}{id(entry.pricePosition) === 'Lowest' && <span style={{ padding: '2px 6px', borderRadius: 20, background: 'var(--accent-soft)', color: 'var(--accent)', fontSize: 8.5, fontWeight: 800 }}>LOWEST BASE PRICE</span>}</div>
-            <div style={{ marginTop: 7, fontSize: 13, fontWeight: 800 }}>{money(entry.price)} <span style={{ color: 'var(--text-muted)', fontSize: 10.5, fontWeight: 500 }}>per {id(entry.unit) || 'configured unit'}</span></div>
-            <div style={{ marginTop: 5, color: 'var(--text-muted)', fontSize: 10.2, lineHeight: 1.5 }}>Lead time: {id(entry.leadTime || 0)} days · Minimum order: {id(entry.minimumOrder || 0)} · Quote: {id(entry.quotationReference) || 'Not recorded'}{entry.quotationValidUntil ? ` · Valid until ${id(entry.quotationValidUntil)}` : ''}</div>
+          return <button key={id(entry.id)} type="button" onClick={() => { const factor = conversionFactorFor(selectedItem, entry.unitId, itemUnits); setForm({ ...form, cataloguePrice: id(entry.id), price: entry.price, quantity: factor > 0 ? floorPurchaseQuantity(requestedBase / factor) : 0 }) }} style={{ padding: 11, border: `1px solid ${selected ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 8, background: selected ? 'var(--accent-soft)' : 'var(--surface)', color: 'var(--text)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><strong>{id(entry.supplier)}</strong><span style={{ fontWeight: 800 }}>{money(entry.price)}</span></div>
+            <div style={{ marginTop: 5, color: 'var(--text-muted)', fontSize: 10.5 }}>per {id(entry.unit) || 'configured unit'} · Lead {id(entry.leadTime || 0)} days · Quote {id(entry.quotationReference) || 'reference not recorded'}{entry.quotationValidUntil ? ` · valid to ${id(entry.quotationValidUntil)}` : ''}</div>
           </button>
         })}
       </div>
     </>}
-    {selectedReqLine && !catalogue.length && <Hint>No active Cost Controller supplier quotation is registered for this article. Register/update it in Supplier Catalogue before preparing the LPO.</Hint>}
-    {selectedCatalogue && <section style={{ margin: '10px 0 12px', padding: 11, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface-2)', fontSize: 11.2, lineHeight: 1.6, color: 'var(--text-muted)' }}>
-      <div><strong style={{ color: 'var(--text)' }}>{matchingSupplier?.name || selectedCatalogue.supplier}</strong></div>
-      <div>Cost Controller quote: {money(selectedCatalogue.price)} per {selectedCatalogue.unit || 'unit'} · Lead days: {selectedCatalogue.leadTime || 0}</div>
-      <div>Quotation reference: {selectedCatalogue.quotationReference || 'Not recorded'}{selectedCatalogue.quotationValidUntil ? ` · Valid until ${selectedCatalogue.quotationValidUntil}` : ''}</div>
-    </section>}
-    {selectedCatalogue && !quotationForSupplier && <Action disabled={busy || !form.requisition || !supplierId} onClick={() => run(
-      () => createBackendRecord('quotations', { requisition: form.requisition, supplier: supplierId, total_amount: 0 }),
-      'Supplier offer attached to this requisition',
-      (created: unknown) => ({ ...form, quotation: id((created as Row).id) }),
-    )}>Use this supplier offer</Action>}
-    {selectedCatalogue && quotationForSupplier && <Hint>{matchingSupplier?.name || selectedCatalogue.supplier} is linked to this requisition. The attached unit, price and lead time are filled below.</Hint>}
-    {selectedQuote && <>
-      <ReadOnlyValue label="Purchase unit inherited from supplier catalogue" value={selectedCatalogue?.unit || names.units.get(chosenUnit) || 'Configured unit'} />
-      <Two><Field label="Procurement quantity"><Input type="number" value={form.quantity || requested} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><Field label="Current supplier price (prefilled)"><Input type="number" value={form.price ?? selectedCatalogue?.price} onChange={(v) => setForm({ ...form, price: v })} /></Field></Two>
-      <Field label="Lead days (prefilled)"><Input type="number" value={form.days ?? selectedCatalogue?.leadTime} onChange={(v) => setForm({ ...form, days: v })} /></Field>
-      {num(form.quantity || requested) > maxQuantity && <Hint>Quantity cannot exceed the Store Keeper requisition.</Hint>}
-      <Action disabled={busy || !form.quotation || !form.reqLine || !chosenUnit || num(form.quantity || requested) <= 0 || num(form.quantity || requested) > maxQuantity || num(form.price ?? selectedCatalogue?.price) <= 0 || quoteLines.some((row: Row) => id(row.requisition_item) === id(form.reqLine))} onClick={() => run(
-        () => createBackendRecord('quotation-items', { quotation: form.quotation, requisition_item: form.reqLine, unit: chosenUnit, quantity: num(form.quantity || requested), unit_price: num(form.price ?? selectedCatalogue?.price), delivery_days: num(form.days ?? selectedCatalogue?.leadTime) }),
-        'Supplier price attached to inherited requisition line',
-        { ...form },
-      )}>Attach supplier and current price</Action>
-      <Action tone="good" disabled={busy || !form.quotation || !quoteLines.length} onClick={() => run(() => runBackendAction('quotations', id(form.quotation), 'award', { selection_reason: 'Selected by Procurement Manager from vetted supplier catalogue and confirmed current price.' }), 'Supplier selected for LPO')}>Confirm supplier selection</Action>
+    {selectedReqLine && !catalogue.length && <Hint>No active supplier quotation is registered for this Article. The Cost Controller must add one in Supplier Catalogue first.</Hint>}
+    {selectedCatalogue && <>
+      <ReadOnlyValue label="Selected supplier" value={selectedSupplier?.name || selectedCatalogue.supplier} />
+      <Two><Field label="Procurement quantity"><Input type="number" value={form.quantity || maxPurchaseQuantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><Field label="Current confirmed price"><Input type="number" value={form.price ?? selectedCatalogue.price} onChange={(v) => setForm({ ...form, price: v })} /></Field></Two>
+      <Field label="Procurement note"><Input value={form.procurementNote || ''} onChange={(v) => setForm({ ...form, procurementNote: v })} placeholder="Optional price confirmation / supplier note" /></Field>
+      {selectedCatalogue && <UnitConversionNote quantity={enteredPurchaseQuantity} factor={selectedFactor} selectedUnit={id(selectedCatalogue.unit) || 'purchase unit'} baseUnit={id(selectedItem?.uom) || 'base units'} unitPrice={num(form.price ?? selectedCatalogue.price)} />}
+      {allocationExceedsRequest && <Hint>Converted quantity cannot exceed the Store Keeper quantity of {requestedBase} {id(selectedItem?.uom) || 'base units'}. Maximum for this supplier unit is {maxPurchaseQuantity} {id(selectedCatalogue.unit) || 'units'}.</Hint>}
+      <Action tone="good" disabled={busy || !form.requisition || !form.reqLine || !form.cataloguePrice || enteredPurchaseQuantity <= 0 || allocationExceedsRequest || num(form.price ?? selectedCatalogue.price) <= 0} onClick={() => run(
+        () => runBackendAction('requisitions', id(form.requisition), 'allocate-line', { line_id: form.reqLine, supplier_price: form.cataloguePrice, quantity: enteredPurchaseQuantity, unit_price: num(form.price ?? selectedCatalogue.price), note: form.procurementNote || '' }),
+        'Supplier allocated to requisition item',
+        { requisition: form.requisition },
+      )}>Save supplier allocation</Action>
     </>}
   </Panel>
 }
@@ -488,16 +447,16 @@ function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel
   const activeOrderRequisitions = new Set(
     data.orders.filter((row: Row) => id(row.status) !== 'cancelled').map((row: Row) => id(row.requisition)),
   )
-  const readyRequisitions = data.requisitions.filter((row: Row) =>
-    ['approved', 'partially_ordered'].includes(id(row.status))
-    && Boolean(id(row.selected_supplier || row.preferred_supplier))
-    && !activeOrderRequisitions.has(id(row.id)),
-  )
-  const prepareOrders = data.orders.filter((row: Row) => ['draft', 'rejected'].includes(id(row.status)))
+  const readyRequisitions = data.requisitions.filter((row: Row) => {
+    if (!['approved', 'partially_ordered'].includes(id(row.status)) || activeOrderRequisitions.has(id(row.id))) return false
+    const reqLines = data.requisitionItems.filter((line: Row) => id(line.requisition) === id(row.id))
+    return Boolean(reqLines.length) && reqLines.every((line: Row) => Boolean(line.procurement_supplier_price) && num(line.procurement_quantity) > 0 && num(line.procurement_unit_cost) > 0)
+  })
+  const prepareOrders = data.orders.filter((row: Row) => id(row.status) === 'draft')
   const financeOrders = data.orders.filter((row: Row) => id(row.status) === 'pending_approval' && isFinanceApproval(row))
   const managementOrders = data.orders.filter((row: Row) => id(row.status) === 'pending_approval' && isManagementApproval(row))
   const approvedOrders = data.orders.filter((row: Row) => id(row.status) === 'approved')
-  const historyOrders = data.orders.filter((row: Row) => ['issued', 'partially_received', 'received', 'cancelled'].includes(id(row.status)))
+  const historyOrders = data.orders.filter((row: Row) => ['issued', 'partially_received', 'received', 'rejected', 'cancelled'].includes(id(row.status)))
   const activeQueueOrders = lpoQueue === 'prepare' ? prepareOrders
     : lpoQueue === 'finance' ? financeOrders
       : lpoQueue === 'management' ? managementOrders
@@ -509,7 +468,7 @@ function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel
         { key: 'finance', label: 'Awaiting Finance', count: financeOrders.length },
         { key: 'management', label: 'Awaiting GM', count: managementOrders.length },
         { key: 'approved', label: 'Approved · Print & Send', count: approvedOrders.length },
-        { key: 'history', label: 'Sent LPO archive', count: historyOrders.length },
+        { key: 'history', label: 'LPO archive', count: historyOrders.length },
       ]
     : role === 'financial manager'
       ? [{ key: 'finance', label: 'Awaiting Finance', count: financeOrders.length }]
@@ -579,17 +538,17 @@ function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel
       <Field label="Requisition ready for LPO"><Select value={form.requisition} onChange={(v) => setForm({ requisition: v })} rows={readyRequisitions} label={requisitionLabel} /></Field>
       {!readyRequisitions.length && <Hint>{prepareOrders.length ? 'The approved requisition already has a draft LPO. Continue that draft below.' : 'No newly approved requisition is waiting for LPO preparation.'}</Hint>}
       {selectedRequisition && <section style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8, marginBottom: 12 }}>
-        <ReadOnlyValue label="Supplier" value={names.suppliers.get(id(selectedRequisition.selected_supplier || selectedRequisition.preferred_supplier)) || 'Inherited from awarded quotation'} />
+        <ReadOnlyValue label="Supplier allocation" value="Per Article · LPOs split automatically by supplier" />
         <ReadOnlyValue label="Prepared by" value={userName} />
         <ReadOnlyValue label="Destination" value="Inherited from Store Requisition" />
         <ReadOnlyValue label="Source" value={id(selectedRequisition.requisition_number)} />
       </section>}
       <Two><Field label="Requested delivery date"><Input type="date" value={form.expectedDate} onChange={(v) => setForm({ ...form, expectedDate: v })} /></Field><Field label="Order valid until"><Input type="date" value={form.validUntil} onChange={(v) => setForm({ ...form, validUntil: v })} /></Field></Two>
-      <Action disabled={busy || !form.requisition} onClick={() => run(() => runBackendAction('requisitions', id(form.requisition), 'create-purchase-order', { expected_date: form.expectedDate || null, valid_until: form.validUntil || null }), 'Draft LPO generated with supplier, preparer, destination, articles, quantities and prices inherited')}>Generate draft LPO</Action>
+      <Action disabled={busy || !form.requisition} onClick={() => run(() => runBackendAction('requisitions', id(form.requisition), 'create-allocated-lpos', { expected_date: form.expectedDate || null, valid_until: form.validUntil || null }), 'Draft LPOs generated and grouped by supplier')}>Generate supplier LPOs</Action>
       <Divider />
-      <SectionLabel>Continue a draft or returned LPO</SectionLabel>
-      <Field label="Draft / returned LPO"><Select value={form.order} onChange={chooseOrder} rows={prepareOrders} label={(row: Row) => `${orderLabel(row)} · ${id(row.status).replace(/_/g, ' ')}`} /></Field>
-      {!prepareOrders.length && <Hint>No draft or returned LPO needs Procurement action.</Hint>}
+      <SectionLabel>Continue a draft LPO</SectionLabel>
+      <Field label="Draft LPO"><Select value={form.order} onChange={chooseOrder} rows={prepareOrders} label={(row: Row) => `${orderLabel(row)} · ${id(row.status).replace(/_/g, ' ')}`} /></Field>
+      {!prepareOrders.length && <Hint>No draft LPO needs Procurement action.</Hint>}
       {order && <LpoSummary order={order} lines={lines} names={names} />}
       {order && <>
         <Field label="LPO item"><Select value={form.orderLine} onChange={(v) => { const found = lines.find((row: Row) => id(row.id) === v); setForm({ ...form, orderLine: v, quantity: found ? safeQuantityForLine(found) : '', cost: found?.unit_cost, unit: found?.unit }) }} rows={lines} label={(row: Row) => names.items.get(id(row.item)) || id(row.item)} /></Field>
@@ -619,7 +578,7 @@ function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel
         <Action disabled={busy || !financeLine || num(form.financeQuantity) < 0 || num(form.financeQuantity) > num(financeLine.procurement_quantity ?? financeLine.quantity) || (num(form.financeQuantity) < num(financeLine.procurement_quantity ?? financeLine.quantity) && !id(form.financeReason).trim())} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'finance-reduce-quantities', { comments: form.approvalComments || '', lines: [{ id: id(financeLine.id), approved_quantity: num(form.financeQuantity), reason: form.financeReason || '' }] }), 'Finance quantity decision recorded')}>Save quantity decision</Action>
         <Field label="Finance decision comment"><Input value={form.approvalComments} onChange={(v) => setForm({ ...form, approvalComments: v })} placeholder="Required when rejecting" /></Field>
         <Action tone="good" disabled={busy || !currentApproval} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'approve', { comments: form.approvalComments || '' }), 'Finance approved the LPO and sent it to the General Manager')}>Approve and send to General Manager</Action>
-        <Action tone="danger" disabled={busy || !currentApproval || !id(form.approvalComments).trim()} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'reject', { comments: form.approvalComments }), 'LPO returned to Procurement for revision')}>Reject and return to Procurement</Action>
+        <Action tone="danger" disabled={busy || !currentApproval || !id(form.approvalComments).trim()} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'reject', { comments: form.approvalComments }), 'LPO rejected; this document is now closed')}>Reject LPO</Action>
       </>}
     </>}
 
@@ -631,7 +590,7 @@ function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel
       {order && canDecideManagement && <>
         <Field label="General Manager decision comment"><Input value={form.approvalComments} onChange={(v) => setForm({ ...form, approvalComments: v })} placeholder="Required when rejecting" /></Field>
         <Action tone="good" disabled={busy || !currentApproval} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'approve', { comments: form.approvalComments || '' }), 'Final LPO approval recorded and returned to Procurement')}>Give final approval</Action>
-        <Action tone="danger" disabled={busy || !currentApproval || !id(form.approvalComments).trim()} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'reject', { comments: form.approvalComments }), 'LPO returned to Procurement for revision')}>Reject and return to Procurement</Action>
+        <Action tone="danger" disabled={busy || !currentApproval || !id(form.approvalComments).trim()} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'reject', { comments: form.approvalComments }), 'LPO rejected; this document is now closed')}>Reject LPO</Action>
       </>}
     </>}
 
@@ -776,50 +735,40 @@ function StageTable({ stage, lpoQueue, data, names, onSelect }: { stage: Stage; 
   let rows: Row[] = []
   let title = ''
   if (stage === 'request') { rows = data.requisitionItems; title = 'Requisition lines' }
-  if (stage === 'quote') { rows = data.quotations; title = 'Supplier comparison' }
+  if (stage === 'quote') { rows = data.requisitionItems; title = 'Supplier allocation by item' }
   if (stage === 'lpo') {
-    if (lpoQueue === 'prepare') { rows = data.orders.filter((row) => ['draft', 'rejected'].includes(id(row.status))); title = 'Draft and returned LPOs' }
+    if (lpoQueue === 'prepare') { rows = data.orders.filter((row) => id(row.status) === 'draft'); title = 'Draft LPOs' }
     if (lpoQueue === 'finance') { rows = data.orders.filter((row) => id(row.status) === 'pending_approval' && isFinanceApproval(row)); title = 'LPOs awaiting Finance' }
     if (lpoQueue === 'management') { rows = data.orders.filter((row) => id(row.status) === 'pending_approval' && isManagementApproval(row)); title = 'LPOs awaiting General Manager' }
     if (lpoQueue === 'approved') { rows = data.orders.filter((row) => id(row.status) === 'approved'); title = 'Finally approved LPOs' }
-    if (lpoQueue === 'history') { rows = data.orders.filter((row) => ['issued', 'partially_received', 'received', 'cancelled'].includes(id(row.status))); title = 'Sent LPO archive · read only' }
+    if (lpoQueue === 'history') { rows = data.orders.filter((row) => ['issued', 'partially_received', 'received', 'rejected', 'cancelled'].includes(id(row.status))); title = 'LPO archive · read only' }
   }
   if (stage === 'receipt') { rows = data.receipts; title = 'Goods receipt notes' }
   if (stage === 'inspect') { rows = data.inspections; title = 'Inspection records' }
   if (stage === 'return') { rows = data.returns; title = 'Supplier returns' }
   if (stage === 'quote') {
-    const requisitionIds = Array.from(new Set(rows.map((row) => id(row.requisition))))
+    const requisitions = data.requisitions.filter((row) => ['store_requisition','store_shortage'].includes(id(row.procurement_source)) && ['approved','partially_ordered'].includes(id(row.status)))
     return <div>
-      <div style={{ padding: '15px 17px', borderBottom: '1px solid var(--border)', fontSize: 13, fontWeight: 800 }}>Side-by-side supplier comparison</div>
-      {requisitionIds.map((requisitionId) => {
-        const quotations = rows.filter((row) => id(row.requisition) === requisitionId)
-        return <section key={requisitionId} style={{ padding: 16, borderBottom: '1px solid var(--border)' }}>
-          <div style={{ marginBottom: 10, color: 'var(--text)', fontSize: 12, fontWeight: 750 }}>{requisitionNumber(requisitionId)} <span style={{ color: 'var(--text-faint)', fontWeight: 500 }}>· {quotations.length} supplier quotation{quotations.length === 1 ? '' : 's'}</span></div>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(Math.max(quotations.length, 1), 3)},minmax(210px,1fr))`, gap: 10, overflowX: 'auto' }}>
-            {quotations.map((quote) => {
-              const winner = data.quotationItems.some((line) => id(line.quotation) === id(quote.id) && line.selected)
-              return <button type="button" key={id(quote.id)} onClick={() => onSelect(quote)} className="procurement-record-row" style={{ minWidth: 210, padding: 14, textAlign: 'left', border: `1px solid ${winner ? 'var(--good)' : 'var(--border)'}`, borderRadius: 7, background: winner ? 'var(--good-soft)' : 'var(--surface)', cursor: 'pointer', font: 'inherit' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}><strong style={{ color: 'var(--text)', fontSize: 12.5 }}>{names.suppliers.get(id(quote.supplier)) || id(quote.supplier)}</strong>{winner && <span style={{ color: 'var(--good)', fontSize: 10, fontWeight: 800 }}>WINNER</span>}</div>
-                <div style={{ margin: '12px 0', color: 'var(--text)', fontSize: 17, fontWeight: 750 }}>{money(quote.total_amount)}</div>
-                <ComparisonField label="Subtotal" value={money(quote.subtotal)} />
-                <ComparisonField label="Tax" value={money(quote.tax_amount)} />
-                <ComparisonField label="Transport" value={money(quote.transport_cost)} />
-                <ComparisonField label="Discount" value={money(quote.discount_amount)} />
-                <ComparisonField label="Payment" value={id(quote.payment_terms) || 'Not entered'} />
-                <ComparisonField label="Delivery" value={id(quote.delivery_date) || 'Not entered'} />
-                <ComparisonField label="Valid until" value={id(quote.valid_until) || 'Not entered'} />
-                <ComparisonField label="Score" value={`${num(quote.evaluation_score)}/100`} />
-              </button>
-            })}
+      <div style={{ padding: '15px 17px', borderBottom: '1px solid var(--border)', fontSize: 13, fontWeight: 800 }}>Supplier allocation by requisition item</div>
+      {requisitions.map((requisition) => {
+        const lines = data.requisitionItems.filter((line) => id(line.requisition) === id(requisition.id))
+        return <section key={id(requisition.id)} style={{ padding: 16, borderBottom: '1px solid var(--border)' }}>
+          <div style={{ marginBottom: 10, color: 'var(--text)', fontSize: 12, fontWeight: 750 }}>{requisitionNumber(id(requisition.id))}</div>
+          <div style={{ display: 'grid', gap: 7 }}>
+            {lines.map((line) => <div key={id(line.id)} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) .65fr minmax(130px,.9fr)', gap: 10, padding: 10, border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface)', fontSize: 11.5 }}>
+              <span style={{ color: 'var(--text)', fontWeight: 700 }}>{names.items.get(id(line.item)) || id(line.item)}</span>
+              <span style={{ color: 'var(--text-muted)' }}>{id(line.procurement_quantity || line.approved_quantity || line.quantity)}</span>
+              <span style={{ color: line.procurement_supplier_price ? 'var(--good)' : 'var(--warn)', fontWeight: 700 }}>{line.procurement_supplier_price ? (names.suppliers.get(id(line.procurement_supplier)) || 'Supplier allocated') : 'Needs supplier'}</span>
+            </div>)}
           </div>
         </section>
       })}
-      {!rows.length && <div style={{ padding: 45, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12.5 }}>No supplier quotations have been entered.</div>}
+      {!requisitions.length && <div style={{ padding: 20, color: 'var(--text-faint)' }}>No approved Store Requisitions are waiting for supplier allocation.</div>}
     </div>
   }
   const cells = (row: Row): string[] => {
     if (stage === 'request') return [requisitionNumber(id(row.requisition)), names.items.get(id(row.item)) || id(row.item), id(row.quantity), money(row.estimated_total)]
-    if (stage === 'lpo') return [`LPO ${id(row.lpo_number)} · PO ${id(row.po_number)}`, names.suppliers.get(id(row.supplier)) || id(row.supplier), money(row.total_amount), id(row.status)]
+    if (stage === 'lpo') return [`LPO ${id(row.lpo_number) || id(row.po_number)}`, names.suppliers.get(id(row.supplier)) || id(row.supplier), money(row.total_amount), id(row.status)]
     if (stage === 'receipt') return [id(row.grn_number) || `GRN-${id(row.id).slice(0, 8)}`, id(row.received_date), names.employees.get(id(row.received_by)) || id(row.received_by), `${data.receiptItems.filter((line) => id(line.goods_receipt) === id(row.id)).length} lines`]
     if (stage === 'inspect') return [`INS-${id(row.id).slice(0, 8)}`, `GRN-${id(row.goods_receipt).slice(0, 8)}`, names.employees.get(id(row.inspected_by)) || id(row.inspected_by), id(row.status)]
     return [id(row.return_no), names.suppliers.get(id(row.supplier)) || id(row.supplier), id(row.return_date), id(row.status)]

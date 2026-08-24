@@ -586,6 +586,7 @@ class Command(BaseCommand):
         uom_kgs = UnitOfMeasure.objects.create(name="Kilograms", abbreviation="kg", is_active=True, created_by=admin_user)
         uom_crate = UnitOfMeasure.objects.create(name="Crates", abbreviation="crate", is_active=True, created_by=admin_user)
         uom_carton = UnitOfMeasure.objects.create(name="Cartons", abbreviation="carton", is_active=True, created_by=admin_user)
+        uom_tot = UnitOfMeasure.objects.create(name="Tot", abbreviation="tot", is_active=True, created_by=admin_user)
 
         # ==========================================
         # 11. CREATE ITEMS

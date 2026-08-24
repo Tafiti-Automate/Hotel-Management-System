@@ -129,7 +129,7 @@ class UserSerializer(serializers.ModelSerializer):
 class RoleSerializer(serializers.ModelSerializer):
     system_role = serializers.SerializerMethodField()
     permission_ids = serializers.PrimaryKeyRelatedField(
-        source="permissions", queryset=Permission.objects.all(), many=True, required=False
+        source="permissions", many=True, read_only=True
     )
     user_count = serializers.IntegerField(read_only=True)
 
@@ -144,7 +144,7 @@ class RoleSerializer(serializers.ModelSerializer):
     def validate_name(self, value):
         from apps.accounts.role_policy import SYSTEM_ROLE_NAMES
         if self.instance and self.instance.name in SYSTEM_ROLE_NAMES and value != self.instance.name:
-            raise serializers.ValidationError("Predefined workflow role names cannot be changed. Adjust permissions instead.")
+            raise serializers.ValidationError("Predefined workflow role names cannot be changed.")
         return value
 
 

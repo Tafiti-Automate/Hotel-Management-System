@@ -853,24 +853,10 @@ def test_lpo_requires_independent_value_routed_approval_before_issue():
         unit_cost=Decimal("1000.00"),
         destination_store=store,
     )
-    ApprovalMatrixRule.objects.create(
-        name="Independent LPO release",
-        document_type=ApprovalMatrixRule.DOCUMENT_PURCHASE_ORDER,
-        minimum_amount=Decimal("0.00"),
-        stage=1,
-        stage_name="Finance LPO approval",
-        assignment_type=ApprovalMatrixRule.ASSIGNMENT_FIXED_EMPLOYEE,
-        approver=approver,
-    )
-    ApprovalMatrixRule.objects.create(
-        name="Final LPO release",
-        document_type=ApprovalMatrixRule.DOCUMENT_PURCHASE_ORDER,
-        minimum_amount=Decimal("0.00"),
-        stage=2,
-        stage_name="General Manager LPO approval",
-        assignment_type=ApprovalMatrixRule.ASSIGNMENT_FIXED_EMPLOYEE,
-        approver=manager,
-    )
+    finance_group, _ = Group.objects.get_or_create(name="Financial Manager")
+    general_group, _ = Group.objects.get_or_create(name="General Manager")
+    approver_user.groups.add(finance_group)
+    manager_user.groups.add(general_group)
 
     with pytest.raises(ValidationError, match="approved LPO"):
         order.issue(sent_by=employee)
@@ -1343,3 +1329,86 @@ def test_incomplete_inspection_cannot_be_posted_and_posted_grn_is_immutable():
     receipt_line.quantity_received = Decimal("3.00")
     with pytest.raises(ValidationError, match="Posted or cancelled GRN"):
         receipt_line.save()
+
+@pytest.mark.django_db
+def test_procurement_allocations_split_one_store_requisition_into_supplier_lpos():
+    employee, department, supplier_a, item_a = create_procurement_context()
+    branch = Branch.objects.create(name="Allocation Branch", branch_code="ALC")
+    employee.branch = branch
+    employee.save(update_fields=("branch", "updated_at"))
+    store = StoreLocation.objects.create(branch=branch, name="Main Store")
+
+    supplier_b = Supplier.objects.create(
+        name="Second Supplier",
+        email="second@example.com",
+        phone="+256700000099",
+        address="Kampala",
+        tin_number="TIN-099",
+        registration_number="REG-099",
+    )
+    item_b = Item.objects.create(
+        category=item_a.category,
+        name="Sugar",
+        sku="SUGAR-001",
+        unit="kilogram",
+        base_unit=item_a.base_unit,
+        reorder_level=Decimal("5.00"),
+    )
+    price_a = SupplierItemPrice.objects.create(
+        supplier=supplier_a,
+        item=item_a,
+        unit=item_a.base_unit,
+        unit_price=Decimal("4500.00"),
+        lead_time_days=2,
+    )
+    price_b = SupplierItemPrice.objects.create(
+        supplier=supplier_b,
+        item=item_b,
+        unit=item_b.base_unit,
+        unit_price=Decimal("5200.00"),
+        lead_time_days=3,
+    )
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        branch=branch,
+        reason="Store Keeper forwarded multi-item request",
+        status=PRStatus.APPROVED,
+    )
+    line_a = RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item_a,
+        unit=item_a.base_unit,
+        quantity=Decimal("10.00"),
+        approved_quantity=Decimal("10.00"),
+        destination_store=store,
+    )
+    line_b = RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item_b,
+        unit=item_b.base_unit,
+        quantity=Decimal("6.00"),
+        approved_quantity=Decimal("6.00"),
+        destination_store=store,
+    )
+    for line, supplier, price, quantity in (
+        (line_a, supplier_a, price_a, Decimal("8.00")),
+        (line_b, supplier_b, price_b, Decimal("5.00")),
+    ):
+        line.procurement_supplier = supplier
+        line.procurement_supplier_price = price
+        line.procurement_unit = price.unit
+        line.procurement_quantity = quantity
+        line.procurement_unit_cost = price.unit_price
+        line.save(update_fields=(
+            "procurement_supplier", "procurement_supplier_price", "procurement_unit",
+            "procurement_quantity", "procurement_unit_cost", "updated_at",
+        ))
+
+    orders = requisition.create_allocated_purchase_orders(ordered_by=employee, created_by=employee.user)
+
+    assert len(orders) == 2
+    assert {order.supplier_id for order in orders} == {supplier_a.id, supplier_b.id}
+    assert all(order.po_number == order.lpo_number for order in orders)
+    assert all(order.lpo_number.isdigit() and len(order.lpo_number) == 6 for order in orders)
+    assert sorted(order.items.count() for order in orders) == [1, 1]

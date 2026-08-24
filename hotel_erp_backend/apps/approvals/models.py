@@ -580,16 +580,8 @@ class PurchaseOrderApprovalWorkflow(BaseModel):
                 "updated_at",
             )
         )
-        # A rejection returns the commercial decision to Procurement. Keep the
-        # immutable activity history, but do not silently carry a Finance
-        # quantity override into the next revision of the LPO.
-        self.purchase_order.items.update(
-            finance_approved_quantity=None,
-            finance_approved_base_quantity=None,
-            finance_reduction_reason="",
-            updated_at=timezone.now(),
-        )
-        self.purchase_order.update_total_amount()
+        # Rejection is terminal for this LPO. Preserve Procurement and Finance
+        # quantities exactly as they stood at the decision point for audit.
         self.purchase_order.record_activity(
             action="rejected",
             actor=self.decided_by,

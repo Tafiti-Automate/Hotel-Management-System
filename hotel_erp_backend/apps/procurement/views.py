@@ -193,7 +193,7 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             raise ValidationError({"stage": "Choose request, quote, lpo, receipt, inspect, or return."})
         stage_permission = {
             "request": "procurement.view_purchaserequisition",
-            "quote": "procurement.view_vendorquotation",
+            "quote": "inventory.view_supplieritemprice",
             "lpo": "procurement.view_purchaseorder",
             "receipt": "procurement.view_goodsreceiptnote",
             "inspect": "procurement.view_goodsinspection",
@@ -243,13 +243,6 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
         ):
             approvals = ApprovalWorkflow.objects.filter(requisition_id__in=requisition_ids)
             payload["approvals"] = ApprovalWorkflowSerializer(approvals, many=True, context={"request": request}).data
-        if stage == "quote":
-            quotations = VendorQuotation.objects.filter(requisition_id__in=requisition_ids)
-            payload["quotations"] = VendorQuotationSerializer(quotations, many=True, context={"request": request}).data
-            payload["quotationItems"] = VendorQuotationItemSerializer(
-                VendorQuotationItem.objects.filter(quotation__requisition_id__in=requisition_ids),
-                many=True, context={"request": request},
-            ).data
         if stage in {"lpo", "receipt", "inspect", "return"}:
             payload["orders"] = PurchaseOrderSerializer(orders, many=True, context={"request": request}).data
             payload["orderItems"] = PurchaseOrderItemSerializer(
@@ -342,6 +335,127 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
         return Response(self.get_serializer(requisition).data)
+
+    def _allocate_procurement_line(self, request, requisition, payload):
+        from apps.inventory.models import SupplierItemPrice, SupplierItemPriceHistory
+
+        line = requisition.items.select_for_update().select_related("item").filter(
+            pk=payload.get("line_id") or payload.get("id")
+        ).first()
+        if not line:
+            raise ValidationError({"line_id": "Select an Article from this Store Requisition."})
+        price = SupplierItemPrice.objects.select_for_update().select_related(
+            "supplier", "item", "unit"
+        ).filter(pk=payload.get("supplier_price"), is_active=True).first()
+        if not price or price.item_id != line.item_id:
+            raise ValidationError({"supplier_price": f"Choose an active vetted supplier quotation for {line.item}."})
+        quantity = Decimal(str(payload.get("quantity") or "0"))
+        unit = price.unit or line.item.base_unit
+        base_quantity = line.item.quantity_in_base_units(quantity, unit)
+        if quantity <= 0 or base_quantity > line.remaining_order_quantity:
+            raise ValidationError({
+                "quantity": f"Procurement quantity for {line.item} must be positive and cannot exceed {line.remaining_order_quantity} base units."
+            })
+        confirmed_price = Decimal(str(payload.get("unit_price") or price.unit_price))
+        if confirmed_price <= 0:
+            raise ValidationError({"unit_price": f"Enter a valid current supplier price for {line.item}."})
+        if confirmed_price != price.unit_price:
+            SupplierItemPriceHistory.objects.create(
+                supplier_item_price=price, supplier=price.supplier, item=price.item,
+                unit=price.unit, unit_price=price.unit_price, currency=price.currency,
+                effective_from=price.effective_from, effective_to=timezone.localdate(),
+                changed_by=request.user, source="procurement_confirmation",
+            )
+            price.unit_price = confirmed_price
+            price.effective_from = timezone.localdate()
+            price.last_quoted_at = timezone.localdate()
+            # A phone/current-price confirmation may occur after the original
+            # quotation validity date. Preserve the old validity in history but
+            # do not let an expired date block the newly confirmed current price.
+            if price.quotation_valid_until and price.quotation_valid_until < timezone.localdate():
+                price.quotation_valid_until = None
+            price.full_clean()
+            price.save(update_fields=[
+                "unit_price", "effective_from", "last_quoted_at",
+                "quotation_valid_until", "updated_at",
+            ])
+        line.procurement_supplier = price.supplier
+        line.procurement_supplier_price = price
+        line.procurement_unit = unit
+        line.procurement_quantity = quantity
+        line.procurement_unit_cost = confirmed_price
+        line.procurement_note = str(payload.get("note") or "").strip()
+        line.procurement_allocated_at = timezone.now()
+        line.procurement_allocated_by = request.user
+        line.full_clean()
+        line.save(update_fields=[
+            "procurement_supplier", "procurement_supplier_price", "procurement_unit",
+            "procurement_quantity", "procurement_unit_cost", "procurement_note",
+            "procurement_allocated_at", "procurement_allocated_by", "updated_at",
+        ])
+        return line
+
+    @action(detail=True, methods=["post"], url_path="allocate-line")
+    def allocate_line(self, request, pk=None):
+        requisition = self.get_object()
+        if not user_has_role(request.user, "System Administrator", "Procurement Manager"):
+            raise PermissionDenied("Only the Procurement Manager can allocate suppliers.")
+        if requisition.status not in (PRStatus.APPROVED, PRStatus.PARTIALLY_ORDERED):
+            raise ValidationError("Only an approved Store Requisition can be allocated to suppliers.")
+        try:
+            with transaction.atomic():
+                locked = PurchaseRequisition.objects.select_for_update().get(pk=requisition.pk)
+                line = self._allocate_procurement_line(request, locked, request.data)
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        return Response(RequisitionItemSerializer(line, context=self.get_serializer_context()).data)
+
+    @action(detail=True, methods=["post"], url_path="create-allocated-lpos")
+    def create_allocated_lpos(self, request, pk=None):
+        requisition = self.get_object()
+        if not user_has_role(request.user, "System Administrator", "Procurement Manager"):
+            raise PermissionDenied("Only the Procurement Manager can prepare LPOs.")
+        try:
+            orders = requisition.create_allocated_purchase_orders(
+                ordered_by=getattr(request.user, "employee_profile", None),
+                expected_date=request.data.get("expected_date") or None,
+                valid_until=request.data.get("valid_until") or None,
+                note=str(request.data.get("note") or ""),
+                created_by=request.user,
+            )
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        return Response(
+            PurchaseOrderSerializer(orders, many=True, context=self.get_serializer_context()).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["post"], url_path="allocate-and-create-lpos")
+    def allocate_and_create_lpos(self, request, pk=None):
+        requisition = self.get_object()
+        if not user_has_role(request.user, "System Administrator", "Procurement Manager"):
+            raise PermissionDenied("Only the Procurement Manager can allocate suppliers and prepare LPOs.")
+        allocations = request.data.get("lines") or []
+        if not isinstance(allocations, list) or not allocations:
+            raise ValidationError({"lines": "Allocate at least one requisition line."})
+        try:
+            with transaction.atomic():
+                locked = PurchaseRequisition.objects.select_for_update().get(pk=requisition.pk)
+                for allocation in allocations:
+                    self._allocate_procurement_line(request, locked, allocation)
+                orders = locked.create_allocated_purchase_orders(
+                    ordered_by=getattr(request.user, "employee_profile", None),
+                    expected_date=request.data.get("expected_date") or None,
+                    valid_until=request.data.get("valid_until") or None,
+                    note=str(request.data.get("note") or ""),
+                    created_by=request.user,
+                )
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        return Response(
+            PurchaseOrderSerializer(orders, many=True, context=self.get_serializer_context()).data,
+            status=status.HTTP_201_CREATED,
+        )
 
     @action(detail=True, methods=["post"], url_path="create-purchase-order")
     def create_purchase_order(self, request, pk=None):

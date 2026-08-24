@@ -116,8 +116,8 @@ class UserViewSet(ModelViewSet):
     ordering_fields = ("username", "employee_code", "date_joined")
 
 
-class RoleViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.UpdateModelMixin, GenericViewSet):
-    """Predefined role names are fixed; administrators may tune their permissions."""
+class RoleViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, GenericViewSet):
+    """Operational roles and permissions are fixed; administrators only assign users."""
     queryset = Group.objects.annotate(user_count=Count("user")).order_by("name")
     serializer_class = RoleSerializer
     permission_classes = [IsAdminUser]

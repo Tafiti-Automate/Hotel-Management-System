@@ -272,6 +272,14 @@ class RequisitionItemSerializer(serializers.ModelSerializer):
             "quantity",
             "approved_quantity",
             "estimated_unit_cost",
+            "procurement_supplier",
+            "procurement_supplier_price",
+            "procurement_unit",
+            "procurement_quantity",
+            "procurement_unit_cost",
+            "procurement_note",
+            "procurement_allocated_at",
+            "procurement_allocated_by",
             "destination_type",
             "destination_store",
             "destination_department",
@@ -289,6 +297,14 @@ class RequisitionItemSerializer(serializers.ModelSerializer):
         read_only_fields = (
             "id",
             "approved_quantity",
+            "procurement_supplier",
+            "procurement_supplier_price",
+            "procurement_unit",
+            "procurement_quantity",
+            "procurement_unit_cost",
+            "procurement_note",
+            "procurement_allocated_at",
+            "procurement_allocated_by",
             "estimated_total",
             "requested_base_quantity",
             "approved_base_quantity",
@@ -342,8 +358,13 @@ class RequisitionItemSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         if not can_view_commercial_data(self.context.get("request")):
-            data.pop("estimated_unit_cost", None)
-            data.pop("estimated_total", None)
+            for field in (
+                "estimated_unit_cost", "estimated_total", "procurement_supplier",
+                "procurement_supplier_price", "procurement_unit", "procurement_quantity",
+                "procurement_unit_cost", "procurement_note", "procurement_allocated_at",
+                "procurement_allocated_by",
+            ):
+                data.pop(field, None)
         return data
 
 

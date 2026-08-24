@@ -67,6 +67,13 @@ DJANGO_SUPERUSER_USERNAME=admin2
 DJANGO_SUPERUSER_PASSWORD=<strong initial admin password>
 DJANGO_SUPERUSER_EMPLOYEE_CODE=EMP-ADMIN2
 DJANGO_SUPERUSER_EMAIL=admin2@example.com
+EMAIL_HOST=<smtp-provider-host>
+EMAIL_PORT=587
+EMAIL_HOST_USER=<smtp-login>
+EMAIL_HOST_PASSWORD=<smtp-password-or-app-password>
+EMAIL_USE_TLS=True
+EMAIL_USE_SSL=False
+DEFAULT_FROM_EMAIL=<verified-sender-address>
 ```
 
 `DATABASE_URL` must be added to the **Django backend service**, not edited on the Postgres service:
@@ -78,6 +85,10 @@ The backend reads this connection URL through `dj-database-url`, and the Railway
 all Django migrations before Gunicorn starts. When `DJANGO_SUPERUSER_USERNAME` and
 `DJANGO_SUPERUSER_PASSWORD` are set, the same command creates/updates that superuser during deploy.
 You can then sign in with either the username or employee code.
+
+The email variables belong on the Django backend service. They are required for sending approved
+LPO PDFs to suppliers; the system does not mark an LPO as issued or start its lead-time clock until
+the mail provider confirms delivery. Never commit the SMTP password to this repository.
 
 ### Add Uganda presentation data
 
