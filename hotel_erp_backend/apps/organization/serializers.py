@@ -4,9 +4,16 @@ from django.conf import settings
 from rest_framework import serializers
 
 from apps.organization.models import Hotel
+from core.phone_validation import normalize_uganda_phone
 
 
 class HotelSerializer(serializers.ModelSerializer):
+    def validate_phone(self, value):
+        return normalize_uganda_phone(value)
+
+    def validate_alternate_phone(self, value):
+        return normalize_uganda_phone(value)
+
     branch_count = serializers.IntegerField(source="branches.count", read_only=True)
 
     class Meta:

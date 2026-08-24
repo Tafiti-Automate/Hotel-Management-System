@@ -350,8 +350,9 @@ def test_department_user_store_request_uses_own_identity(client):
         username="department-requester", employee_code="EMP-REQUESTER", password="test-pass-123"
     )
     own_employee = Employee.objects.create(
-        user=user, department=own_department, branch=branch, designation="Department Head"
+        user=user, department=own_department, branch=branch, designation="Requester"
     )
+    user.groups.add(Group.objects.get_or_create(name="Requester")[0])
     other_user = get_user_model().objects.create_user(
         username="other-requester", employee_code="EMP-OTHER", password="test-pass-123"
     )
@@ -374,7 +375,7 @@ def test_department_user_store_request_uses_own_identity(client):
     requisition = StoreRequisition.objects.get(pk=response.json()["id"])
     assert requisition.department == own_department
     assert requisition.requested_by == own_employee
-    assert requisition.store == store
+    assert requisition.store is None
 
 
 @pytest.mark.django_db
@@ -390,8 +391,9 @@ def test_store_request_requires_department_head_before_store_keeper_review():
         username="requesting-employee", employee_code="EMP-FLOW-EMPLOYEE"
     )
     employee = Employee.objects.create(
-        user=employee_user, department=department, branch=branch, designation="Attendant"
+        user=employee_user, department=department, branch=branch, designation="Requester"
     )
+    employee_user.groups.add(Group.objects.get_or_create(name="Requester")[0])
     head_user = get_user_model().objects.create_user(
         username="requesting-head", employee_code="EMP-FLOW-HEAD"
     )
@@ -664,8 +666,9 @@ def test_employee_store_request_resolves_default_store_from_authenticated_branch
         user=user,
         department=department,
         branch=branch,
-        designation="Attendant",
+        designation="Requester",
     )
+    user.groups.add(Group.objects.get_or_create(name="Requester")[0])
     store = StoreLocation.objects.create(
         name="Main Store",
         branch=branch,
@@ -683,4 +686,4 @@ def test_employee_store_request_resolves_default_store_from_authenticated_branch
     request = StoreRequisition.objects.get(pk=response.data["id"])
     assert request.requested_by == employee
     assert request.department == department
-    assert request.store == store
+    assert request.store is None

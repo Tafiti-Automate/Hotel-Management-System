@@ -124,7 +124,7 @@ def scope_store_requisitions(queryset, user):
     if is_department_head(user):
         return queryset.filter(
             department=employee.department,
-            store__branch=employee.branch,
+            requested_by__branch=employee.branch,
         ).exclude(status=StoreRequisitionStatus.DRAFT)
     if has_role(user, "Store Keeper"):
         # A Department request reaches Stores before the Store Keeper confirms
@@ -135,13 +135,13 @@ def scope_store_requisitions(queryset, user):
         branch_ids = StoreLocation.objects.filter(pk__in=store_ids).values_list("branch_id", flat=True)
         return queryset.filter(department_approved_by__isnull=False).filter(
             Q(store_id__in=store_ids)
-            | Q(status=StoreRequisitionStatus.SUBMITTED, store__branch_id__in=branch_ids)
+            | Q(status=StoreRequisitionStatus.SUBMITTED, requested_by__branch_id__in=branch_ids)
         ).distinct()
-    # Management/Finance/Procurement do not read Department store requests through
-    # this endpoint. Their work starts from the linked procurement/LPO documents.
-    if has_role(user, "General Manager", "Financial Manager", "Procurement Manager", "Receiving Clerk", "Cost Controller"):
-        return queryset.none()
-    return queryset.filter(requested_by=employee)
+    # Only an explicitly assigned Requester may originate/track Department requests.
+    if has_role(user, "Requester"):
+        return queryset.filter(requested_by=employee)
+    # All other operational roles start from their own workflow document/stage.
+    return queryset.none()
 
 
 class CostControllerAuthorityMixin:
@@ -575,12 +575,18 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     def get_queryset(self):
         return scope_store_requisitions(super().get_queryset(), self.request.user)
 
+    def perform_create(self, serializer):
+        if not has_role(self.request.user, "System Administrator", "Requester"):
+            raise PermissionDenied("Only an assigned Requester can create a Department request.")
+        super().perform_create(serializer)
+
     def _enforce_requester_edit(self, requisition):
         if has_role(self.request.user, "System Administrator"):
             return
         employee = getattr(self.request.user, "employee_profile", None)
         if (
-            employee
+            has_role(self.request.user, "Requester")
+            and employee
             and requisition.requested_by_id == employee.id
             and requisition.status in (
                 StoreRequisitionStatus.DRAFT,
@@ -616,7 +622,8 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             raise PermissionDenied("Only the Department Head can decide this request.")
         if employee.department_id != requisition.department_id:
             raise PermissionDenied("You can only decide requests from your department.")
-        if requisition.store.branch_id and employee.branch_id != requisition.store.branch_id:
+        requester_branch_id = getattr(requisition.requested_by, "branch_id", None)
+        if requester_branch_id and employee.branch_id != requester_branch_id:
             raise PermissionDenied("You can only decide requests from your branch.")
         if employee.pk == requisition.requested_by_id:
             raise PermissionDenied("You cannot approve or reject your own request.")
@@ -683,7 +690,7 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
         requisition = self.get_object()
         self._enforce_store_assignment(requisition)
         try:
-            purchase = requisition.create_shortage_purchase_requisition(
+            purchase = requisition.create_procurement_requisition(
                 created_by=request.user,
                 reason=request.data.get("reason", ""),
             )
@@ -767,7 +774,8 @@ class StoreRequisitionItemViewSet(CreatedByModelMixin, ModelViewSet):
             return
         employee = getattr(self.request.user, "employee_profile", None)
         requester_edit = (
-            employee
+            has_role(self.request.user, "Requester")
+            and employee
             and requisition.requested_by_id == employee.id
             and requisition.status in (
                 StoreRequisitionStatus.DRAFT,

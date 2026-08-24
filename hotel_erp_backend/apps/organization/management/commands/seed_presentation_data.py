@@ -208,7 +208,7 @@ class Command(BaseCommand):
     def create_employees(self, *, branch, departments, sample_password, created_by):
         specs = {
             "manager": (
-                "grace.nakato",
+                "grace.generalmanager",
                 "Grace",
                 "Nakato",
                 "UG-HQ-101",
@@ -218,7 +218,7 @@ class Command(BaseCommand):
                 "+256 772 410 101",
             ),
             "procurement": (
-                "daniel.okello",
+                "daniel.procurementmanager",
                 "Daniel",
                 "Okello",
                 "UG-HQ-102",
@@ -228,7 +228,7 @@ class Command(BaseCommand):
                 "+256 701 410 102",
             ),
             "finance": (
-                "ruth.namusoke",
+                "ruth.financialmanager",
                 "Ruth",
                 "Namusoke",
                 "UG-HQ-103",
@@ -238,7 +238,7 @@ class Command(BaseCommand):
                 "+256 772 410 103",
             ),
             "stores": (
-                "samuel.kato",
+                "samuel.storekeeper",
                 "Samuel",
                 "Kato",
                 "UG-HQ-104",
@@ -248,7 +248,7 @@ class Command(BaseCommand):
                 "+256 701 410 104",
             ),
             "receiving": (
-                "mercy.akello",
+                "mercy.receivingclerk",
                 "Mercy",
                 "Akello",
                 "UG-HQ-105",
@@ -258,7 +258,7 @@ class Command(BaseCommand):
                 "+256 772 410 105",
             ),
             "cost_controller": (
-                "alice.nakato",
+                "alice.costcontroller",
                 "Alice",
                 "Nakato",
                 "UG-HQ-110",
@@ -268,17 +268,17 @@ class Command(BaseCommand):
                 "+256 701 410 110",
             ),
             "housekeeping": (
-                "esther.nambasa",
+                "esther.requester",
                 "Esther",
                 "Nambasa",
                 "UG-HQ-106",
                 "Housekeeping",
                 "Room Attendant",
-                None,
+                "Requester",
                 "+256 701 410 106",
             ),
             "housekeeping_head": (
-                "rebecca.nansubuga",
+                "rebecca.departmenthead",
                 "Rebecca",
                 "Nansubuga",
                 "UG-HQ-111",

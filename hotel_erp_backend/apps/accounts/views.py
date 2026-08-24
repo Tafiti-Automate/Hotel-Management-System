@@ -4,9 +4,11 @@ from django.db.models import Count
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
+from rest_framework import mixins
+from rest_framework.viewsets import GenericViewSet, ModelViewSet, ReadOnlyModelViewSet
 
 from apps.accounts.serializers import PermissionSerializer, RoleSerializer, UserSerializer, TECHNICAL_ROLE_NAMES
 
@@ -114,12 +116,14 @@ class UserViewSet(ModelViewSet):
     ordering_fields = ("username", "employee_code", "date_joined")
 
 
-class RoleViewSet(ModelViewSet):
+class RoleViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.UpdateModelMixin, GenericViewSet):
+    """Predefined role names are fixed; administrators may tune their permissions."""
     queryset = Group.objects.annotate(user_count=Count("user")).order_by("name")
     serializer_class = RoleSerializer
     permission_classes = [IsAdminUser]
     search_fields = ("name",)
     ordering_fields = ("name",)
+
 
 
 class PermissionViewSet(ReadOnlyModelViewSet):

@@ -187,10 +187,10 @@ class PurchaseRequisition(BaseModel):
                 self.requester_id
                 and self.department_id
                 and self.requester.department_id != self.department_id
-                and self.procurement_source != ProcurementSource.STORE_SHORTAGE
+                and self.procurement_source not in (ProcurementSource.STORE_SHORTAGE, ProcurementSource.STORE_REQUISITION)
             ):
                 errors["requester"] = "The requester must belong to the selected department."
-        if self.procurement_source == ProcurementSource.STORE_SHORTAGE and not self.source_store_requisition_id:
+        if self.procurement_source in (ProcurementSource.STORE_SHORTAGE, ProcurementSource.STORE_REQUISITION) and not self.source_store_requisition_id:
             errors["source_store_requisition"] = "Store-shortage requisitions require a source Store Request."
             if (
                 self.requester_id

@@ -4,6 +4,7 @@ from django.contrib.auth.models import Group
 from rest_framework import serializers
 
 from apps.employees.models import Designation, Employee
+from core.phone_validation import normalize_uganda_phone
 
 
 class DesignationSerializer(serializers.ModelSerializer):
@@ -26,6 +27,12 @@ class EmployeeSerializer(serializers.ModelSerializer):
     department_name = serializers.CharField(source="department.name", read_only=True)
     branch_name = serializers.CharField(source="branch.name", read_only=True)
 
+
+    def validate_user_phone(self, value):
+        return normalize_uganda_phone(value)
+
+    def validate_contact(self, value):
+        return normalize_uganda_phone(value)
 
     def validate_gender(self, value):
         value = str(value or "").strip().title()
@@ -90,6 +97,8 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def create(self, validated_data):
+        # Registration always starts as active. Status becomes an edit-time lifecycle control.
+        validated_data["is_active"] = True
         user_data = validated_data.pop("user", {})
         password = validated_data.pop("password")
         role = validated_data.pop("role", None)

@@ -1,9 +1,13 @@
 from rest_framework import serializers
 
 from apps.vendors.models import Supplier
+from core.phone_validation import normalize_uganda_phone
 
 
 class SupplierSerializer(serializers.ModelSerializer):
+    def validate_phone(self, value):
+        return normalize_uganda_phone(value, allow_blank=False)
+
     class Meta:
         model = Supplier
         fields = (

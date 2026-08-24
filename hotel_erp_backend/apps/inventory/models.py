@@ -1130,7 +1130,9 @@ class StoreRequisition(BaseModel):
         StoreLocation,
         on_delete=models.PROTECT,
         related_name="store_requisitions",
-        help_text="Store expected to issue the requested stock.",
+        null=True,
+        blank=True,
+        help_text="Destination store selected by the Store Keeper after Department Head approval.",
     )
     requested_by = models.ForeignKey(
         "employees.Employee",
@@ -1224,7 +1226,7 @@ class StoreRequisition(BaseModel):
                 f"{self.requested_by} submitted a store request for {self.department}. "
                 "Review the requested articles, quantities, and notes."
             ),
-            branch=self.store.branch,
+            branch=getattr(self.requested_by, "branch", None),
             department=self.department,
             created_by=actor,
             exclude_employee=self.requested_by,
@@ -1239,9 +1241,10 @@ class StoreRequisition(BaseModel):
             raise ValidationError(
                 "The approver must be a Department Head in the requesting department."
             )
-        if self.store.branch_id and approved_by.branch_id != self.store.branch_id:
+        requester_branch_id = getattr(self.requested_by, "branch_id", None)
+        if requester_branch_id and approved_by.branch_id != requester_branch_id:
             raise ValidationError(
-                "The approver must belong to the same branch as the request."
+                "The approver must belong to the same branch as the requester."
             )
         if approved_by.pk == self.requested_by_id:
             raise ValidationError("A requester cannot approve their own store request.")
@@ -1258,72 +1261,82 @@ class StoreRequisition(BaseModel):
             "updated_at",
         ])
         self._notify_stores(
-            title=f"{self.requisition_no} needs a stock decision",
+            title=f"{self.requisition_no} needs Store Keeper action",
             message=(
-                f"The Department Head approved {self.department}'s store request. "
-                "Check availability and decide the quantities to reserve."
+                f"The Department Head approved {self.department}'s request. "
+                "Confirm the destination store and quantities to forward to Procurement."
             ),
             created_by=approved_by.user,
         )
 
-    def create_shortage_purchase_requisition(self, created_by=None, reason=""):
+    def create_procurement_requisition(self, created_by=None, reason=""):
+        """Create the Store Keeper predecessor document sent to Procurement.
+
+        The client workflow does not procure only the calculated stock shortage.
+        The Store Keeper confirms a quantity for each Department-request line and
+        sends those confirmed quantities to Procurement. The original Department
+        quantity remains immutable for audit.
+        """
         if self.status != StoreRequisitionStatus.SUBMITTED:
-            raise ValidationError("Only a Stores-reviewed submitted request can be sent to Procurement.")
+            raise ValidationError("Only an HOD-approved Department request can be sent to Procurement.")
         if self.procurement_requisition_id:
-            raise ValidationError("A Purchase Requisition already exists for this department request.")
+            raise ValidationError("A Store Keeper requisition already exists for this Department request.")
         if not self.items.exists():
-            raise ValidationError("The department request has no items.")
+            raise ValidationError("The Department request has no items.")
+        if not self.store_id:
+            raise ValidationError("Select the destination store before sending the requisition to Procurement.")
 
         from apps.procurement.models import PurchaseRequisition, RequisitionItem
         from core.constants.choices import ProcurementSource, RequisitionType
 
+        decided_lines = []
+        for line in self.items.select_related("item", "unit"):
+            quantity = line.quantity_approved or Decimal("0.00")
+            if quantity < 0 or quantity > line.base_quantity_requested:
+                raise ValidationError(
+                    f"Store Keeper quantity for {line.item} must be between 0 and {line.base_quantity_requested}."
+                )
+            if quantity == 0 and not (line.storekeeper_comment or "").strip():
+                raise ValidationError(
+                    f"Confirm a quantity for {line.item}, or enter a comment explaining why none is forwarded."
+                )
+            if quantity > 0:
+                decided_lines.append((line, quantity))
+        if not decided_lines:
+            raise ValidationError("Confirm at least one item quantity before forwarding to Procurement.")
+
         purchase = PurchaseRequisition.objects.create(
             request_type=RequisitionType.DEPARTMENT,
-            procurement_source=ProcurementSource.STORE_SHORTAGE,
+            procurement_source=ProcurementSource.STORE_REQUISITION,
             source_store_requisition=self,
             requester=self.requested_by,
             department=self.department,
             branch=self.store.branch,
             expected_date=self.required_date,
-            reason=reason or (
-                f"Stock shortage confirmed by Stores for {self.requisition_no}. "
-                f"Department purpose: {self.purpose or 'Not provided'}."
+            reason=reason or f"Store Keeper requisition from Department request {self.requisition_no}.",
+            control_notes=(
+                f"Predecessor Department request: {self.requisition_no}. "
+                f"Destination store: {self.store}. Department quantities remain unchanged."
             ),
-            control_notes=f"Generated from department material request {self.requisition_no}.",
             created_by=created_by,
         )
-        shortage_lines = []
-        for line in self.items.select_related("item", "unit"):
-            required = line.quantity_approved or line.base_quantity_requested
-            balance = InventoryBalance.objects.filter(item=line.item, store=self.store).first()
-            available = balance.available_quantity if balance else Decimal("0.00")
-            shortage = max(Decimal("0.00"), required - available)
-            if shortage <= 0:
-                continue
-            shortage_lines.append((line, shortage))
+        for line, quantity in decided_lines:
             RequisitionItem.objects.create(
                 requisition=purchase,
                 item=line.item,
                 unit=line.item.base_unit,
-                quantity=shortage,
+                quantity=quantity,
+                approved_quantity=quantity,
                 estimated_unit_cost=Decimal("0.00"),
                 description=(
-                    f"Shortage from {self.requisition_no}: required {required}, "
-                    f"available {available}, shortage {shortage}."
-                ),
+                    f"Department requested {line.base_quantity_requested}; "
+                    f"Store Keeper forwarded {quantity}. "
+                    f"{line.storekeeper_comment or ''}"
+                ).strip(),
                 destination_type=RequisitionItem.DESTINATION_STORE,
                 destination_store=self.store,
                 created_by=created_by,
             )
-        if not shortage_lines:
-            purchase.delete()
-            raise ValidationError("No stock shortage remains for this request.")
-        # This document is the Store Keeper's hand-off to Procurement, not a
-        # second financial approval route. Commercial approval starts only once
-        # Procurement has prepared the LPO for Finance and Management.
-        purchase.items.filter(approved_quantity__isnull=True).update(
-            approved_quantity=models.F("quantity")
-        )
         purchase.status = "approved"
         purchase.approved_at = timezone.now()
         purchase.save(update_fields=["status", "approved_at", "updated_at"])
@@ -1331,25 +1344,32 @@ class StoreRequisition(BaseModel):
             action="store_keeper_sent_to_procurement",
             previous_status="draft",
             actor=created_by,
-            comments="Store shortage confirmed and sent to Procurement for supplier selection and LPO preparation.",
-            metadata={"store_requisition": self.requisition_no},
+            comments="Store Keeper confirmed destination and quantities and sent the linked requisition to Procurement.",
+            metadata={"department_request": self.requisition_no, "destination_store": str(self.store_id)},
         )
         self.procurement_requisition = purchase
         self.status = StoreRequisitionStatus.AWAITING_PROCUREMENT
-        self.save(update_fields=["procurement_requisition", "status", "updated_at"])
-        from apps.notifications.services import notify_roles
+        self.approved_by = getattr(created_by, "employee_profile", None) if created_by else self.approved_by
+        self.approved_at = timezone.now()
+        self.approval_comments = reason or self.approval_comments
+        self.save(update_fields=["procurement_requisition", "status", "approved_by", "approved_at", "approval_comments", "updated_at"])
 
+        from apps.notifications.services import notify_roles
         notify_roles(
             ("Procurement Manager",),
-            title=f"{self.requisition_no} has a confirmed stock shortage",
+            title=f"{purchase.requisition_number} is ready for Procurement",
             message=(
-                f"Stores created {purchase.requisition_number} for unavailable items. "
-                "Prepare and submit the linked purchase request."
+                f"Store Keeper forwarded {self.requisition_no} for {self.department}. "
+                "Select the vetted supplier, confirm current price, and prepare the LPO."
             ),
             branch=self.store.branch,
             created_by=created_by,
         )
         return purchase
+
+    def create_shortage_purchase_requisition(self, created_by=None, reason=""):
+        """Backward-compatible alias for older API/tests."""
+        return self.create_procurement_requisition(created_by=created_by, reason=reason)
 
     def resume_after_procurement(self, actor=None):
         if self.status != StoreRequisitionStatus.AWAITING_PROCUREMENT:
@@ -1483,11 +1503,17 @@ class StoreRequisition(BaseModel):
     def _notify_stores(self, *, title, message, created_by=None):
         from apps.notifications.services import notify_employee, notify_roles
 
-        keepers = self.store.keeper_assignments.select_related("employee", "employee__user").filter(
+        branch = self.store.branch if self.store_id else getattr(self.requested_by, "branch", None)
+        assignments = StoreKeeperAssignment.objects.select_related(
+            "employee", "employee__user", "store"
+        ).filter(
             is_active=True,
+            store__is_active=True,
             employee__is_active=True,
             employee__user__is_active=True,
         )
+        if branch is not None:
+            assignments = assignments.filter(store__branch=branch)
         notifications = [
             notification
             for notification in (
@@ -1497,7 +1523,7 @@ class StoreRequisition(BaseModel):
                     message=message,
                     created_by=created_by,
                 )
-                for assignment in keepers
+                for assignment in assignments
             )
             if notification
         ]
@@ -1507,7 +1533,7 @@ class StoreRequisition(BaseModel):
             ("Store Keeper",),
             title=title,
             message=message,
-            branch=self.store.branch,
+            branch=branch,
             created_by=created_by,
         )
 

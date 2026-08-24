@@ -3,7 +3,6 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.core.management import call_command
 from django.test import override_settings
-
 from apps.departments.models import Branch, Department
 from apps.employees.models import Employee
 
@@ -125,6 +124,7 @@ def test_setup_hotel_roles_creates_operational_groups():
 
     assert set(Group.objects.values_list("name", flat=True)) == {
         "System Administrator",
+        "Requester",
         "Department Head",
         "Cost Controller",
         "Store Keeper",
@@ -133,13 +133,17 @@ def test_setup_hotel_roles_creates_operational_groups():
         "Procurement Manager",
         "General Manager",
     }
+    requester = Group.objects.get(name="Requester")
     store_keeper = Group.objects.get(name="Store Keeper")
     department_head = Group.objects.get(name="Department Head")
     financial_manager = Group.objects.get(name="Financial Manager")
     receiving_clerk = Group.objects.get(name="Receiving Clerk")
     procurement_manager = Group.objects.get(name="Procurement Manager")
 
+    assert requester.permissions.filter(codename="add_storerequisition").exists()
+    assert requester.permissions.filter(codename="add_storerequisitionitem").exists()
     assert store_keeper.permissions.filter(codename="change_storerequisition").exists()
+    assert not store_keeper.permissions.filter(codename="add_storerequisition").exists()
     assert store_keeper.permissions.filter(codename="change_storerequisitionitem").exists()
     assert department_head.permissions.filter(codename="change_storerequisition").exists()
     assert department_head.permissions.filter(codename="change_storerequisitionitem").exists()
@@ -148,6 +152,8 @@ def test_setup_hotel_roles_creates_operational_groups():
     assert financial_manager.permissions.filter(codename="change_purchaseorderapprovalworkflow").exists()
     assert receiving_clerk.permissions.filter(codename="change_goodsreceiptnote").exists()
     assert procurement_manager.permissions.filter(codename="change_purchaseorder").exists()
+    assert procurement_manager.permissions.filter(codename="add_vendorquotation").exists()
+    assert procurement_manager.permissions.filter(codename="change_vendorquotationitem").exists()
     assert not procurement_manager.permissions.filter(codename="change_goodsreceiptnote").exists()
     assert not procurement_manager.permissions.filter(codename="view_supplierinvoice").exists()
 

@@ -2,6 +2,8 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from rest_framework import serializers
 
+from core.phone_validation import normalize_uganda_phone
+
 
 User = get_user_model()
 
@@ -40,6 +42,9 @@ class UserSerializer(serializers.ModelSerializer):
         )
         read_only_fields = ("id", "date_joined", "last_login", "linked_employee")
 
+
+    def validate_phone(self, value):
+        return normalize_uganda_phone(value)
 
     def validate(self, attrs):
         role = attrs.get("role")
@@ -122,6 +127,7 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class RoleSerializer(serializers.ModelSerializer):
+    system_role = serializers.SerializerMethodField()
     permission_ids = serializers.PrimaryKeyRelatedField(
         source="permissions", queryset=Permission.objects.all(), many=True, required=False
     )
@@ -129,7 +135,17 @@ class RoleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Group
-        fields = ("id", "name", "permission_ids", "user_count")
+        fields = ("id", "name", "permission_ids", "user_count", "system_role")
+
+    def get_system_role(self, obj):
+        from apps.accounts.role_policy import SYSTEM_ROLE_NAMES
+        return obj.name in SYSTEM_ROLE_NAMES
+
+    def validate_name(self, value):
+        from apps.accounts.role_policy import SYSTEM_ROLE_NAMES
+        if self.instance and self.instance.name in SYSTEM_ROLE_NAMES and value != self.instance.name:
+            raise serializers.ValidationError("Predefined workflow role names cannot be changed. Adjust permissions instead.")
+        return value
 
 
 class PermissionSerializer(serializers.ModelSerializer):

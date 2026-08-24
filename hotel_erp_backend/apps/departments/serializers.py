@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from apps.departments.models import Branch, Department
+from core.phone_validation import normalize_uganda_phone
 
 
 class DepartmentSerializer(serializers.ModelSerializer):
@@ -19,6 +20,9 @@ class DepartmentSerializer(serializers.ModelSerializer):
 
 
 class BranchSerializer(serializers.ModelSerializer):
+    def validate_contact(self, value):
+        return normalize_uganda_phone(value)
+
     hotel_name = serializers.CharField(source="hotel.name", read_only=True)
 
     class Meta:

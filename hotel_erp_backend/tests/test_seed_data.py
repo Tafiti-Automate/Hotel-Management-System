@@ -93,7 +93,12 @@ def test_seed_presentation_data_builds_connected_uganda_workflows(monkeypatch):
     assert Notification.objects.filter(
         title__contains="requires approval"
     ).exists()
-    assert get_user_model().objects.get(username="grace.nakato").check_password(
+    assert list(
+        get_user_model().objects.get(username="esther.requester").groups.values_list(
+            "name", flat=True
+        )
+    ) == ["Requester"]
+    assert get_user_model().objects.get(username="grace.generalmanager").check_password(
         "sample-pass-123"
     )
     assert "created successfully" in output.getvalue()
@@ -109,24 +114,48 @@ def test_seed_presentation_data_builds_connected_uganda_workflows(monkeypatch):
     assert Sale.objects.count() == counts["sales"]
 
     account_specs = (
-        ("anankya", "Store Keeper", "DEMO_STORE_KEEPER_PASSWORD", "Store-Test-Password-01!"),
+        ("esther.requester", "Requester", "DEMO_REQUESTER_PASSWORD", "Requester-Test-Password-01!"),
         (
-            "rebecca.nansubuga",
+            "rebecca.departmenthead",
             "Department Head",
             "DEMO_DEPARTMENT_HEAD_PASSWORD",
             "Department-Test-Password-02!",
         ),
         (
-            "grace.nakato",
-            "General Manager",
-            "DEMO_GENERAL_MANAGER_PASSWORD",
-            "Manager-Test-Password-03!",
+            "alice.costcontroller",
+            "Cost Controller",
+            "DEMO_COST_CONTROLLER_PASSWORD",
+            "Cost-Control-Test-Password-03!",
         ),
         (
-            "daniel.okello",
+            "samuel.storekeeper",
+            "Store Keeper",
+            "DEMO_STORE_KEEPER_PASSWORD",
+            "Store-Test-Password-04!",
+        ),
+        (
+            "daniel.procurementmanager",
             "Procurement Manager",
             "DEMO_PROCUREMENT_MANAGER_PASSWORD",
-            "Procurement-Test-Password-04!",
+            "Procurement-Test-Password-05!",
+        ),
+        (
+            "ruth.financialmanager",
+            "Financial Manager",
+            "DEMO_FINANCIAL_MANAGER_PASSWORD",
+            "Finance-Test-Password-06!",
+        ),
+        (
+            "grace.generalmanager",
+            "General Manager",
+            "DEMO_GENERAL_MANAGER_PASSWORD",
+            "Manager-Test-Password-07!",
+        ),
+        (
+            "mercy.receivingclerk",
+            "Receiving Clerk",
+            "DEMO_RECEIVING_CLERK_PASSWORD",
+            "Receiving-Test-Password-08!",
         ),
     )
     for _, _, variable_name, password in account_specs:
@@ -140,7 +169,7 @@ def test_seed_presentation_data_builds_connected_uganda_workflows(monkeypatch):
         assert list(user.groups.values_list("name", flat=True)) == ([role] if role else [])
         assert not user.is_staff
         assert not user.is_superuser
-        assert user.user_permissions.filter(codename="add_storerequisition").exists()
+        assert not user.user_permissions.exists()
 
 
 @pytest.mark.django_db

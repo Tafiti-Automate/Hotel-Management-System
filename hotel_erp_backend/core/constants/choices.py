@@ -42,7 +42,8 @@ class RequisitionType(models.TextChoices):
 
 
 class ProcurementSource(models.TextChoices):
-    STORE_SHORTAGE = "store_shortage", "Store shortage"
+    STORE_REQUISITION = "store_requisition", "Store Keeper requisition"
+    STORE_SHORTAGE = "store_shortage", "Store shortage (legacy)"
     MANUAL = "manual", "Manual procurement"
     CAPITAL_ASSET = "capital_asset", "Capital asset"
     EMERGENCY = "emergency", "Emergency purchase"

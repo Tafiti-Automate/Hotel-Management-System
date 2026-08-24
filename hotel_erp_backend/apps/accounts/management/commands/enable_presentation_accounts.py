@@ -11,16 +11,20 @@ from apps.accounts.role_policy import grant_employee_self_service
 
 
 ACCOUNT_SPECS = (
-    ("anankya", "Store Keeper", "DEMO_STORE_KEEPER_PASSWORD"),
-    ("rebecca.nansubuga", "Department Head", "DEMO_DEPARTMENT_HEAD_PASSWORD"),
-    ("grace.nakato", "General Manager", "DEMO_GENERAL_MANAGER_PASSWORD"),
-    ("daniel.okello", "Procurement Manager", "DEMO_PROCUREMENT_MANAGER_PASSWORD"),
+    ("esther.requester", "Requester", "DEMO_REQUESTER_PASSWORD"),
+    ("rebecca.departmenthead", "Department Head", "DEMO_DEPARTMENT_HEAD_PASSWORD"),
+    ("alice.costcontroller", "Cost Controller", "DEMO_COST_CONTROLLER_PASSWORD"),
+    ("samuel.storekeeper", "Store Keeper", "DEMO_STORE_KEEPER_PASSWORD"),
+    ("daniel.procurementmanager", "Procurement Manager", "DEMO_PROCUREMENT_MANAGER_PASSWORD"),
+    ("ruth.financialmanager", "Financial Manager", "DEMO_FINANCIAL_MANAGER_PASSWORD"),
+    ("grace.generalmanager", "General Manager", "DEMO_GENERAL_MANAGER_PASSWORD"),
+    ("mercy.receivingclerk", "Receiving Clerk", "DEMO_RECEIVING_CLERK_PASSWORD"),
 )
 
 
 class Command(BaseCommand):
     help = (
-        "Enable the four named presentation accounts using separate passwords "
+        "Enable the eight named presentation accounts using separate passwords "
         "from environment variables and enforce their expected role groups."
     )
 

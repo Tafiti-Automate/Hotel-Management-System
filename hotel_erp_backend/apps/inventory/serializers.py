@@ -770,22 +770,12 @@ class StoreRequisitionSerializer(serializers.ModelSerializer):
                 "Your employee profile is not assigned to a branch."
             )
 
-        store = attrs.get("store", getattr(self.instance, "store", None))
+        # The Department does not choose the destination store. It is assigned
+        # by the Store Keeper only after Department Head approval.
         if self.instance is None:
-            store = StoreLocation.objects.filter(
-                branch=employee.branch, is_active=True, is_default=True
-            ).first() or StoreLocation.objects.filter(
-                branch=employee.branch, is_active=True
-            ).order_by("name").first()
-            if not store:
-                raise serializers.ValidationError(
-                    {"store": "No active issuing store is configured for your branch."}
-                )
-            attrs["store"] = store
-        if store and employee.branch_id and store.branch_id != employee.branch_id:
-            raise serializers.ValidationError(
-                {"store": "Select a store in your assigned branch."}
-            )
+            attrs["store"] = None
+        elif "store" in attrs:
+            attrs.pop("store", None)
         attrs["department"] = employee.department
         attrs["requested_by"] = employee
         return attrs
