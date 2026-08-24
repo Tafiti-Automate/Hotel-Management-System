@@ -425,6 +425,48 @@ def test_requisition_creates_purchase_order_from_selected_supplier_quote():
 
 
 @pytest.mark.django_db
+def test_purchase_order_conversion_rounds_down_without_exceeding_approved_quantity():
+    employee, department, supplier, item = create_procurement_context()
+    crate = UnitOfMeasure.objects.create(name="Crate", abbreviation="crt")
+    ItemUnitPrice.objects.create(
+        item=item,
+        unit=crate,
+        conversion_factor=Decimal("24.0000"),
+    )
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        reason="One hundred pieces of water",
+        status=PRStatus.APPROVED,
+    )
+    requisition_item = RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity=Decimal("100.00"),
+        approved_quantity=Decimal("100.00"),
+    )
+    quotation = VendorQuotation.objects.create(
+        requisition=requisition,
+        supplier=supplier,
+    )
+    VendorQuotationItem.objects.create(
+        quotation=quotation,
+        requisition_item=requisition_item,
+        unit=crate,
+        quantity=Decimal("4.17"),
+        unit_price=Decimal("28000.00"),
+        selected=True,
+    )
+
+    order = requisition.create_purchase_order(ordered_by=employee)
+    order_item = order.items.get()
+
+    assert order_item.quantity == Decimal("4.16")
+    assert order_item.base_quantity == Decimal("99.84")
+    assert order.quantity_commitment_blockers() == []
+
+
+@pytest.mark.django_db
 def test_lpo_line_cannot_use_article_outside_source_requisition():
     employee, department, supplier, item = create_procurement_context()
     other_item = Item.objects.create(

@@ -1,5 +1,5 @@
 from datetime import timedelta
-from decimal import Decimal
+from decimal import Decimal, ROUND_DOWN
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -602,8 +602,17 @@ class PurchaseRequisition(BaseModel):
         )
         if quotation_item:
             conversion = requisition_item.conversion_factor_for_unit(quotation_item.unit)
+            quantity = (remaining_base_quantity / conversion).quantize(
+                Decimal("0.01"),
+                rounding=ROUND_DOWN,
+            )
+            if quantity <= Decimal("0.00"):
+                raise ValidationError(
+                    f"The remaining approved quantity for {requisition_item.item} "
+                    f"is smaller than 0.01 {quotation_item.unit}."
+                )
             return (
-                (remaining_base_quantity / conversion).quantize(Decimal("0.01")),
+                quantity,
                 quotation_item.unit,
                 quotation_item.unit_price,
             )
@@ -622,8 +631,17 @@ class PurchaseRequisition(BaseModel):
         )
         if supplier_price:
             conversion = requisition_item.conversion_factor_for_unit(supplier_price.unit)
+            quantity = (remaining_base_quantity / conversion).quantize(
+                Decimal("0.01"),
+                rounding=ROUND_DOWN,
+            )
+            if quantity <= Decimal("0.00"):
+                raise ValidationError(
+                    f"The remaining approved quantity for {requisition_item.item} "
+                    f"is smaller than 0.01 {supplier_price.unit}."
+                )
             return (
-                (remaining_base_quantity / conversion).quantize(Decimal("0.01")),
+                quantity,
                 supplier_price.unit,
                 supplier_price.unit_price,
             )
