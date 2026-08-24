@@ -1,4 +1,5 @@
 from decimal import Decimal
+import re
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -404,7 +405,7 @@ def test_financial_manager_role_route_uses_requesting_property():
     requisition.refresh_from_db()
     assert requisition.branch == branch
     assert requisition.hotel == hotel
-    assert requisition.requisition_number.isdigit()
+    assert re.fullmatch(r"i\d{2}-\d{5,}", requisition.requisition_number)
     assert requisition.approval_workflow.get().approver == food_finance
 
 

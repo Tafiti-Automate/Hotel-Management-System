@@ -1,5 +1,6 @@
 from datetime import timedelta
 from decimal import Decimal, ROUND_DOWN
+import re
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -10,6 +11,18 @@ from django.utils import timezone
 from core.constants.choices import GoodsInspectionStatus, GoodsReceiptStatus, POStatus, PRStatus, ProcurementSource, RequisitionType, SupplierReturnStatus
 from core.mixins.models import BaseModel
 from core.validators.quantities import validate_non_negative_decimal, validate_positive_decimal
+
+
+def _lpo_scope_code(branch=None, hotel=None):
+    """Return a stable property code like the reference document's ``EAP``."""
+    source = getattr(branch, "branch_code", "") or ""
+    if not source and hotel:
+        source = "".join(
+            word[0]
+            for word in str(hotel.name).split()
+            if word and word.lower() not in {"of", "the", "and"}
+        )
+    return re.sub(r"[^A-Za-z0-9]", "", source).upper()[:4] or "LPO"
 
 
 class RequisitionSequence(BaseModel):
@@ -179,9 +192,12 @@ class PurchaseRequisition(BaseModel):
         if self.hotel_id and (not self.currency or self.currency == "UGX"):
             self.currency = self.hotel.currency or "UGX"
         if not self.requisition_number:
-            self.requisition_number = ProcurementDocumentSequence.next_number(
-                ProcurementDocumentSequence.DOCUMENT_REQUISITION
+            sequence = int(
+                ProcurementDocumentSequence.next_number(
+                    ProcurementDocumentSequence.DOCUMENT_REQUISITION
+                )
             )
+            self.requisition_number = f"i{timezone.localdate():%y}-{sequence:05d}"
         super().save(*args, **kwargs)
 
     def clean(self):
@@ -1050,11 +1066,16 @@ class PurchaseOrder(BaseModel):
             ProcurementDocumentSequence.DOCUMENT_PURCHASE_ORDER
         )
 
-    @classmethod
-    def next_lpo_number(cls):
-        return ProcurementDocumentSequence.next_number(
-            ProcurementDocumentSequence.DOCUMENT_LPO
+    def next_lpo_number(self):
+        sequence = int(
+            ProcurementDocumentSequence.next_number(
+                ProcurementDocumentSequence.DOCUMENT_LPO
+            )
         )
+        branch = self.requisition.branch if self.requisition_id else None
+        hotel = self.requisition.hotel if self.requisition_id else None
+        scope = _lpo_scope_code(branch, hotel)
+        return f"{scope}{timezone.localdate():%Y%m}-{sequence:05d}"
 
     def clean(self):
         super().clean()

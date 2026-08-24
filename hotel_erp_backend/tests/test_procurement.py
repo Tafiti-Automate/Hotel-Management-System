@@ -1,6 +1,7 @@
 from decimal import Decimal
 from datetime import timedelta
 from importlib import import_module
+import re
 
 import pytest
 from django.apps import apps as django_apps
@@ -420,9 +421,9 @@ def test_requisition_creates_purchase_order_from_selected_supplier_quote():
 
     order_item = order.items.get()
     assert order.supplier == supplier
-    assert requisition.requisition_number.isdigit()
+    assert re.fullmatch(r"i\d{2}-\d{5,}", requisition.requisition_number)
     assert order.po_number.isdigit()
-    assert order.lpo_number.isdigit()
+    assert re.fullmatch(r"[A-Z0-9]{3,4}\d{6}-\d{5,}", order.lpo_number)
     assert len(
         {requisition.requisition_number, order.po_number, order.lpo_number}
     ) == 3
