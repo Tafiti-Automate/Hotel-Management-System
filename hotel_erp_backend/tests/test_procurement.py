@@ -335,6 +335,36 @@ def test_requisition_readiness_explains_missing_prerequisites():
 
 
 @pytest.mark.django_db
+def test_procurement_lpo_workspace_includes_approved_requisition_before_order_exists():
+    employee, department, supplier, item = create_procurement_context()
+    procurement_group, _ = Group.objects.get_or_create(name="Procurement Manager")
+    procurement_group.permissions.add(
+        Permission.objects.get(codename="view_purchaseorder")
+    )
+    employee.user.groups.add(procurement_group)
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        reason="Ready for first LPO",
+        status=PRStatus.APPROVED,
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity=Decimal("2.00"),
+        approved_quantity=Decimal("2.00"),
+    )
+
+    client = APIClient()
+    client.force_authenticate(employee.user)
+    response = client.get("/api/v1/requisitions/workspace/?stage=lpo")
+
+    assert response.status_code == 200
+    assert str(requisition.pk) in {row["id"] for row in response.data["requisitions"]}
+    assert response.data["orders"] == []
+
+
+@pytest.mark.django_db
 def test_lpo_readiness_requires_approved_source_and_order_lines():
     employee, department, supplier, item = create_procurement_context()
     requisition = PurchaseRequisition.objects.create(

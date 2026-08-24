@@ -66,6 +66,7 @@ def validate_configured_item_unit(item, unit):
 class PurchaseRequisitionSerializer(serializers.ModelSerializer):
     estimated_total = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     approval_steps = serializers.SerializerMethodField()
+    selected_supplier = serializers.SerializerMethodField()
 
     class Meta:
         model = PurchaseRequisition
@@ -80,6 +81,7 @@ class PurchaseRequisitionSerializer(serializers.ModelSerializer):
             "requester",
             "department",
             "preferred_supplier",
+            "selected_supplier",
             "status",
             "reason",
             "expected_date",
@@ -99,11 +101,15 @@ class PurchaseRequisitionSerializer(serializers.ModelSerializer):
             "created_by",
         )
         read_only_fields = (
-            "id", "requisition_number", "hotel", "source_store_requisition", "status",
+            "id", "requisition_number", "hotel", "source_store_requisition", "selected_supplier", "status",
             "submitted_at", "approved_at", "rejected_at", "returned_at",
             "fulfilled_at", "cancelled_at", "closed_at", "created_at",
             "updated_at", "created_by",
         )
+
+    def get_selected_supplier(self, obj):
+        supplier = obj.preferred_supplier or obj._selected_supplier()
+        return str(supplier.pk) if supplier else None
 
     def get_approval_steps(self, obj):
         steps = list(obj.approval_workflow.all())

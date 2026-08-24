@@ -181,9 +181,16 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
                 request.user,
             )
             order_ids = orders.values_list("id", flat=True)
-            requisitions = self.queryset.filter(
-                id__in=orders.values_list("requisition_id", flat=True)
-            )
+            if stage == "lpo" and user_has_role(
+                request.user, "System Administrator", "Procurement Manager"
+            ):
+                # Procurement must see approved requisitions before an LPO exists;
+                # otherwise the LPO creation selector is an impossible empty state.
+                requisitions = self.get_queryset()
+            else:
+                requisitions = self.queryset.filter(
+                    id__in=orders.values_list("requisition_id", flat=True)
+                )
         else:
             requisitions = self.get_queryset()
             order_ids = PurchaseOrder.objects.none().values_list("id", flat=True)
