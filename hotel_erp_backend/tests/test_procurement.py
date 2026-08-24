@@ -1,7 +1,9 @@
 from decimal import Decimal
 from datetime import timedelta
+from importlib import import_module
 
 import pytest
+from django.apps import apps as django_apps
 from django.core import mail
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
@@ -32,6 +34,7 @@ from apps.procurement.models import (
     PurchaseOrder,
     PurchaseOrderItem,
     PurchaseRequisition,
+    ProcurementDocumentSequence,
     RequisitionItem,
     VendorQuotation,
     VendorQuotationItem,
@@ -179,7 +182,7 @@ def test_goods_receipt_item_posts_received_stock_to_inventory():
         unit_cost=Decimal("7000.00"),
     )
     authorize_order_for_test(order)
-    order.issue(sent_by=employee)
+    order.issue(sent_by=employee, sent_to_email="unregistered@example.com")
     receipt = GoodsReceiptNote.objects.create(
         purchase_order=order,
         received_by=employee,
@@ -417,12 +420,55 @@ def test_requisition_creates_purchase_order_from_selected_supplier_quote():
 
     order_item = order.items.get()
     assert order.supplier == supplier
+    assert requisition.requisition_number.isdigit()
     assert order.po_number.isdigit()
+    assert order.lpo_number.isdigit()
+    assert len(
+        {requisition.requisition_number, order.po_number, order.lpo_number}
+    ) == 3
     assert order.status == POStatus.DRAFT
     assert order.total_amount == Decimal("32000.00")
     assert order_item.item == item
     assert order_item.quantity == Decimal("4.00")
     assert order_item.unit_cost == Decimal("8000.00")
+
+
+@pytest.mark.django_db
+def test_document_number_migration_repairs_existing_collisions_and_legacy_values():
+    employee, department, supplier, _ = create_procurement_context()
+    requisition = PurchaseRequisition.objects.create(
+        requisition_number="000001",
+        requester=employee,
+        department=department,
+        reason="Legacy numbering",
+        status=PRStatus.APPROVED,
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition,
+        supplier=supplier,
+        ordered_by=employee,
+    )
+    PurchaseOrder.objects.filter(pk=order.pk).update(
+        po_number="000001",
+        lpo_number="HIST-LPO-01",
+    )
+
+    migration = import_module(
+        "apps.procurement.migrations.0021_global_numeric_document_numbers"
+    )
+    migration.assign_global_numeric_references(django_apps, None)
+
+    requisition.refresh_from_db()
+    order.refresh_from_db()
+    references = {
+        requisition.requisition_number,
+        order.po_number,
+        order.lpo_number,
+    }
+    assert len(references) == 3
+    assert all(reference.isdigit() for reference in references)
+    sequence = ProcurementDocumentSequence.objects.get(document_type="procurement")
+    assert sequence.current_value >= max(int(reference) for reference in references)
 
 
 @pytest.mark.django_db
@@ -1079,7 +1125,7 @@ def test_supplier_email_contains_lpo_pdf_and_starts_lead_clock_after_success():
 
     response = client.post(
         f"/api/v1/purchase-orders/{order.pk}/issue/",
-        {"sent_to_email": supplier.email},
+        {},
         format="json",
     )
 
@@ -1088,9 +1134,11 @@ def test_supplier_email_contains_lpo_pdf_and_starts_lead_clock_after_success():
     assert order.status == POStatus.ISSUED
     assert order.sent_at is not None
     assert order.delivery_due_date == order.sent_at.date() + timedelta(days=4)
+    assert order.sent_to_email == supplier.email
     assert order.email_status == "sent"
     assert len(mail.outbox) == 1
-    assert mail.outbox[0].attachments[0].filename == f"LPO-{order.po_number}.pdf"
+    assert mail.outbox[0].to == [supplier.email]
+    assert mail.outbox[0].attachments[0].filename == f"LPO-{order.lpo_number}.pdf"
     assert mail.outbox[0].attachments[0].mimetype == "application/pdf"
 
 

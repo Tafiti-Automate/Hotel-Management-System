@@ -102,7 +102,7 @@ def build_purchase_order_pdf(
         leftMargin=13 * mm,
         topMargin=11 * mm,
         bottomMargin=13 * mm,
-        title=f"Local Purchase Order {order.po_number}",
+        title=f"Local Purchase Order {order.lpo_number}",
         author=hotel.name if hotel else "Hotel Management System",
     )
 
@@ -159,7 +159,8 @@ def build_purchase_order_pdf(
         [Paragraph("Terms of Payment", small), Paragraph(f": {_text(order.supplier.payment_terms)}", normal)],
     ]
     order_data = [
-        [Paragraph("LPO No.", small), Paragraph(f": <b>{_text(order.po_number)}</b>", normal)],
+        [Paragraph("LPO No.", small), Paragraph(f": <b>{_text(order.lpo_number)}</b>", normal)],
+        [Paragraph("PO No.", small), Paragraph(f": {_text(order.po_number)}", normal)],
         [Paragraph("Requisition No.", small), Paragraph(f": {_text(order.requisition.requisition_number)}", normal)],
         [Paragraph("Delivery Date", small), Paragraph(f": {_date(delivery_date or order.delivery_due_date or order.expected_date)}", normal)],
         [Paragraph("LPO Submit Date", small), Paragraph(f": {_date(created_date)}", normal)],

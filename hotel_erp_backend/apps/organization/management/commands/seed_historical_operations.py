@@ -304,9 +304,7 @@ class Command(BaseCommand):
             supplier = suppliers[index % len(suppliers)]
             quantity = Decimal(20 + (index % 5) * 5)
             cost = (prices[item.pk] * Decimal("0.62")).quantize(Decimal("0.01"))
-            pr_no = f"{batch}-PR-{index + 1:02d}"
             requisition = PurchaseRequisition.objects.create(
-                requisition_number=pr_no,
                 hotel=hotel,
                 branch=branch,
                 request_type=RequisitionType.DEPARTMENT,
@@ -343,7 +341,6 @@ class Command(BaseCommand):
             )
             order = PurchaseOrder.objects.create(
                 requisition=requisition, supplier=supplier, ordered_by=operator, store=store,
-                po_number=f"{batch}-PO-{index + 1:02d}",
                 expected_date=event_date + timedelta(days=3), sent_at=timezone.now(),
                 sent_by=operator, sent_to_email=supplier.email,
                 supplier_acknowledged_at=timezone.now(), supplier_acknowledged_by=supplier.contact_person,
@@ -356,7 +353,7 @@ class Command(BaseCommand):
             order.status = POStatus.ISSUED
             order.save(update_fields=("status", "updated_at"))
             grn = GoodsReceiptNote.objects.create(
-                grn_number=f"{batch}-GRN-{index + 1:02d}", purchase_order=order,
+                purchase_order=order,
                 received_by=operator, received_date=event_date + timedelta(days=3),
                 delivery_note_no=f"{batch}-DN-{index + 1:02d}",
                 note="Delivery received in good condition.", created_by=admin,
@@ -398,7 +395,7 @@ class Command(BaseCommand):
             item = items[index % len(items)]
             quantity = Decimal(2 + index % 4)
             request = StoreRequisition.objects.create(
-                requisition_no=f"{batch}-SR-{index + 1:02d}", department=department,
+                department=department,
                 store=store, requested_by=requester, approved_by=approver,
                 status=StoreRequisitionStatus.APPROVED, required_date=event_date,
                 purpose=f"Routine departmental issue of {item.name} for guest service.",

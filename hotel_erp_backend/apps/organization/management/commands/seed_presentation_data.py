@@ -645,7 +645,7 @@ class Command(BaseCommand):
             purchase_order=order,
             supplier=selected_supplier,
             recipient=selected_supplier.email,
-            subject=f"Local Purchase Order {order.po_number}",
+            subject=f"Local Purchase Order {order.lpo_number}",
             status="sent",
             sent_at=timezone.now(),
             created_by=employees["procurement"].user,

@@ -526,7 +526,7 @@ class PurchaseOrderApprovalWorkflow(BaseModel):
 
             notify_employee(
                 self.purchase_order.ordered_by,
-                title=f"LPO {self.purchase_order.po_number} finally approved",
+                title=f"LPO {self.purchase_order.lpo_number} finally approved",
                 message=(
                     "The General Manager has given final approval. Open Procurement "
                     "Workbench, choose Approved · Print & Send, print the ORIGINAL LPO, "

@@ -363,7 +363,6 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
                 supplier=supplier,
                 ordered_by=ordered_by,
                 store=store,
-                po_number=request.data.get("po_number", ""),
                 expected_date=request.data.get("expected_date") or None,
                 valid_until=request.data.get("valid_until") or None,
                 note=request.data.get("note", ""),
@@ -499,7 +498,9 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
     ).prefetch_related("approval_workflow__approver__user")
     serializer_class = PurchaseOrderSerializer
     filterset_fields = ("status", "requisition", "supplier", "ordered_by", "store")
-    search_fields = ("po_number", "supplier__name", "ordered_by__user__employee_code", "store__name")
+    search_fields = (
+        "lpo_number", "po_number", "supplier__name", "ordered_by__user__employee_code", "store__name"
+    )
     ordering_fields = ("po_number", "status", "created_at")
 
     def get_permissions(self):
@@ -610,12 +611,12 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                 raise ValidationError({"sent_by": "Selected employee was not found."})
         else:
             sent_by = getattr(request.user, "employee_profile", None)
-        recipient = str(
-            request.data.get("sent_to_email") or order.sent_to_email or order.supplier.email
-        ).strip()
+        recipient = str(order.supplier.email or "").strip()
         if not recipient:
-            raise ValidationError("The supplier has no email address.")
-        subject = f"Local Purchase Order {order.po_number}"
+            raise ValidationError(
+                "The selected supplier has no registered email address. Update the supplier record before sending."
+            )
+        subject = f"Local Purchase Order {order.lpo_number}"
         communication = ProcurementCommunication.objects.create(
             purchase_order=order,
             supplier=order.supplier,
@@ -634,13 +635,13 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
             email = EmailMessage(
                 subject=subject,
                 body=(
-                    f"Please find attached Local Purchase Order {order.po_number}. "
+                    f"Please find attached Local Purchase Order {order.lpo_number}. "
                     f"Quote this number on your delivery note and invoice."
                 ),
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 to=[recipient],
             )
-            email.attach(f"LPO-{order.po_number}.pdf", pdf, "application/pdf")
+            email.attach(f"LPO-{order.lpo_number}.pdf", pdf, "application/pdf")
             email.send(fail_silently=False)
         except Exception as error:
             communication.status = "failed"
@@ -680,12 +681,14 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
         self._require_procurement_manager(request)
         if order.status == POStatus.DRAFT:
             raise ValidationError("Issue the LPO before resending it.")
-        recipient = str(request.data.get("sent_to_email") or order.sent_to_email or order.supplier.email).strip()
+        recipient = str(order.supplier.email or "").strip()
         if not recipient:
-            raise ValidationError("The supplier has no email address.")
+            raise ValidationError(
+                "The selected supplier has no registered email address. Update the supplier record before resending."
+            )
         communication = ProcurementCommunication.objects.create(
             purchase_order=order, supplier=order.supplier, recipient=recipient,
-            subject=f"Local Purchase Order {order.po_number}", status="pending",
+            subject=f"Local Purchase Order {order.lpo_number}", status="pending",
             created_by=request.user if request.user.is_authenticated else None,
         )
         try:
@@ -697,13 +700,13 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
             email = EmailMessage(
                 subject=communication.subject,
                 body=(
-                    f"Please find attached the resent Local Purchase Order {order.po_number}. "
+                    f"Please find attached the resent Local Purchase Order {order.lpo_number}. "
                     "Quote this number on your delivery note and invoice."
                 ),
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 to=[recipient],
             )
-            email.attach(f"LPO-{order.po_number}.pdf", pdf, "application/pdf")
+            email.attach(f"LPO-{order.lpo_number}.pdf", pdf, "application/pdf")
             email.send(fail_silently=False)
             communication.status = "sent"
             communication.sent_at = timezone.now()
@@ -734,7 +737,7 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
             purchase_order=order, supplier=order.supplier,
             direction=ProcurementCommunication.DIRECTION_INBOUND,
             recipient=order.supplier_acknowledged_by,
-            subject=f"Supplier acknowledgement for {order.po_number}",
+            subject=f"Supplier acknowledgement for {order.lpo_number}",
             status="received", sent_at=order.supplier_acknowledged_at,
             created_by=request.user if request.user.is_authenticated else None,
         )
@@ -785,7 +788,7 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
         response = HttpResponse(pdf, content_type="application/pdf")
         response["Content-Disposition"] = content_disposition_header(
             False,
-            f"LPO-{order.po_number}-{print_record.classification}-{print_record.print_number}.pdf",
+            f"LPO-{order.lpo_number}-{print_record.classification}-{print_record.print_number}.pdf",
         )
         response["Cache-Control"] = "private, no-store"
         response["X-LPO-Print-Classification"] = print_record.classification.upper()

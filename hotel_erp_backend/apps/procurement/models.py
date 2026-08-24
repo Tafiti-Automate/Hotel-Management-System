@@ -55,7 +55,9 @@ class ProcurementDocumentSequence(BaseModel):
     receiving clerk to quote a document number over the phone.
     """
 
+    DOCUMENT_GLOBAL = "procurement"
     DOCUMENT_REQUISITION = "requisition"
+    DOCUMENT_PURCHASE_ORDER = "purchase_order"
     DOCUMENT_LPO = "lpo"
     DOCUMENT_GRN = "grn"
 
@@ -69,10 +71,17 @@ class ProcurementDocumentSequence(BaseModel):
         return f"{self.document_type}: {self.current_value}"
 
     @classmethod
-    def next_number(cls, document_type):
+    def next_number(cls, document_type=None):
+        """Return the next globally unique numeric procurement reference.
+
+        ``document_type`` remains accepted so existing callers stay compatible,
+        but every controlled procurement document now advances one shared
+        sequence.  A requisition, PO, LPO, store requisition, and GRN therefore
+        cannot be assigned the same visible number.
+        """
         with transaction.atomic():
             sequence, _ = cls.objects.select_for_update().get_or_create(
-                document_type=document_type,
+                document_type=cls.DOCUMENT_GLOBAL,
             )
             sequence.current_value += 1
             sequence.save(update_fields=["current_value", "updated_at"])
@@ -975,6 +984,7 @@ class PurchaseOrder(BaseModel):
         blank=True,
     )
     po_number = models.CharField(max_length=50, unique=True, blank=True)
+    lpo_number = models.CharField(max_length=50, unique=True, blank=True)
     status = models.CharField(
         max_length=30,
         choices=POStatus.choices,
@@ -1025,15 +1035,23 @@ class PurchaseOrder(BaseModel):
         ordering = ("-created_at",)
 
     def __str__(self):
-        return self.po_number
+        return self.lpo_number or self.po_number
 
     def save(self, *args, **kwargs):
         if not self.po_number:
             self.po_number = self.next_po_number()
+        if not self.lpo_number:
+            self.lpo_number = self.next_lpo_number()
         super().save(*args, **kwargs)
 
     @classmethod
     def next_po_number(cls):
+        return ProcurementDocumentSequence.next_number(
+            ProcurementDocumentSequence.DOCUMENT_PURCHASE_ORDER
+        )
+
+    @classmethod
+    def next_lpo_number(cls):
         return ProcurementDocumentSequence.next_number(
             ProcurementDocumentSequence.DOCUMENT_LPO
         )
@@ -1383,10 +1401,16 @@ class PurchaseOrder(BaseModel):
         if not self.items.exists():
             raise ValidationError("Purchase order must include at least one item before sending.")
 
+        registered_supplier_email = str(self.supplier.email or "").strip()
+        if not registered_supplier_email:
+            raise ValidationError(
+                "The selected supplier has no registered email address. Update the supplier record before sending."
+            )
+
         self.status = POStatus.ISSUED
         self.sent_at = timezone.now()
         self.sent_by = sent_by or self.sent_by
-        self.sent_to_email = sent_to_email or self.sent_to_email or self.supplier.email
+        self.sent_to_email = registered_supplier_email
         if not self.expected_date and self.lead_time_days:
             self.expected_date = self.delivery_due_date
         self.save(update_fields=["status", "sent_at", "sent_by", "sent_to_email", "expected_date", "updated_at"])
@@ -1433,8 +1457,10 @@ class PurchaseOrder(BaseModel):
             warnings.append(
                 "No receiving store is assigned; receipt lines must use direct department issue."
             )
-        if not self.sent_to_email and not self.supplier.email:
-            blockers.append("The supplier must have an email address before the LPO is sent.")
+        if not self.supplier.email:
+            blockers.append(
+                "The selected supplier has no registered email address. Update the supplier record before sending."
+            )
         email_backend = getattr(settings, "EMAIL_BACKEND", "")
         if email_backend.endswith("smtp.EmailBackend"):
             if not getattr(settings, "EMAIL_HOST", "") or str(

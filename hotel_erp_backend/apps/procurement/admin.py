@@ -290,6 +290,7 @@ class VendorQuotationAdmin(CreatedByAdminMixin, admin.ModelAdmin):
 @admin.register(PurchaseOrder)
 class PurchaseOrderAdmin(CreatedByAdminMixin, admin.ModelAdmin):
     list_display = (
+        "lpo_number",
         "po_number",
         "supplier",
         "store",
@@ -304,13 +305,14 @@ class PurchaseOrderAdmin(CreatedByAdminMixin, admin.ModelAdmin):
     list_select_related = ("requisition", "supplier", "ordered_by", "store", "sent_by")
     autocomplete_fields = ("requisition", "supplier", "ordered_by", "store", "sent_by")
     search_fields = (
+        "lpo_number",
         "po_number",
         "supplier__name",
         "ordered_by__user__employee_code",
         "store__name",
         "sent_to_email",
     )
-    readonly_fields = ("sent_at",)
+    readonly_fields = ("lpo_number", "po_number", "sent_at")
     date_hierarchy = "created_at"
     inlines = [PurchaseOrderItemInline]
 
@@ -321,7 +323,9 @@ class PurchaseOrderItemAdmin(CreatedByAdminMixin, admin.ModelAdmin):
     list_filter = ("unit",)
     list_select_related = ("purchase_order", "item", "unit")
     autocomplete_fields = ("purchase_order", "item", "unit")
-    search_fields = ("purchase_order__po_number", "item__name", "item__sku")
+    search_fields = (
+        "purchase_order__lpo_number", "purchase_order__po_number", "item__name", "item__sku"
+    )
     readonly_fields = ("base_quantity", "line_total")
     date_hierarchy = "created_at"
 

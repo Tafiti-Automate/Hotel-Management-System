@@ -422,6 +422,7 @@ class VendorQuotationSerializer(serializers.ModelSerializer):
 
 class PurchaseOrderSerializer(serializers.ModelSerializer):
     approval_steps = serializers.SerializerMethodField()
+    supplier_email = serializers.EmailField(source="supplier.email", read_only=True)
     delivery_due_date = serializers.DateField(read_only=True)
     next_print_classification = serializers.CharField(read_only=True)
     print_count = serializers.SerializerMethodField()
@@ -436,6 +437,8 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "ordered_by",
             "store",
             "po_number",
+            "lpo_number",
+            "supplier_email",
             "status",
             "revision",
             "submitted_for_approval_at",
@@ -474,6 +477,9 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "sent_at",
             "sent_by",
             "sent_to_email",
+            "po_number",
+            "lpo_number",
+            "supplier_email",
             "email_status",
             "last_email_error",
             "supplier_acknowledged_at",
@@ -551,7 +557,9 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             for field in ("total_amount",):
                 data.pop(field, None)
             if has_role(request, "Store Keeper"):
-                for field in ("supplier", "sent_to_email", "lead_time_days", "delivery_due_date"):
+                for field in (
+                    "supplier", "supplier_email", "sent_to_email", "lead_time_days", "delivery_due_date"
+                ):
                     data.pop(field, None)
         return data
 
