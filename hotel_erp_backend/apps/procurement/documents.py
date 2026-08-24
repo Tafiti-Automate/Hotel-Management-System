@@ -5,7 +5,7 @@ from html import escape
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import (
@@ -41,6 +41,16 @@ def _money(value):
     return f"{value or 0:,.2f}"
 
 
+def _order_status(order):
+    return {
+        "approved": "Approved (not issued)",
+        "issued": "PO Open (not received)",
+        "partially_received": "PO Partially Received",
+        "received": "PO Received",
+        "cancelled": "PO Cancelled",
+    }.get(order.status, order.get_status_display())
+
+
 def _logo(hotel):
     if not hotel or not hotel.logo:
         return None
@@ -48,7 +58,7 @@ def _logo(hotel):
         hotel.logo.open("rb")
         content = BytesIO(hotel.logo.read())
         hotel.logo.close()
-        logo = Image(content, width=49 * mm, height=22 * mm, kind="proportional")
+        logo = Image(content, width=58 * mm, height=23 * mm, kind="proportional")
         logo.hAlign = "LEFT"
         return logo
     except (OSError, ValueError):
@@ -69,39 +79,45 @@ def build_purchase_order_pdf(
     normal = ParagraphStyle(
         "LpoNormal",
         parent=styles["Normal"],
-        fontName="Helvetica",
-        fontSize=8.5,
-        leading=10.5,
-        textColor=colors.HexColor("#172033"),
+        fontName="Times-Roman",
+        fontSize=8.2,
+        leading=9.6,
+        textColor=colors.black,
     )
-    small = ParagraphStyle("LpoSmall", parent=normal, fontSize=7.2, leading=8.8)
+    small = ParagraphStyle("LpoSmall", parent=normal, fontSize=7.4, leading=8.6)
     heading = ParagraphStyle(
         "LpoHeading",
         parent=styles["Heading1"],
-        fontName="Helvetica-Bold",
-        fontSize=15,
-        leading=18,
+        fontName="Times-Bold",
+        fontSize=14,
+        leading=16,
         alignment=TA_CENTER,
-        spaceAfter=2 * mm,
+        spaceAfter=1 * mm,
     )
     classification_style = ParagraphStyle(
         "LpoClassification",
         parent=normal,
-        fontName="Helvetica-Bold",
-        fontSize=9,
-        leading=11,
+        fontName="Times-Bold",
+        fontSize=8.2,
+        leading=9.5,
         alignment=TA_CENTER,
         textColor=colors.HexColor("#b42318") if "COPY" in classification.upper() else colors.HexColor("#166534"),
     )
     right = ParagraphStyle("LpoRight", parent=normal, alignment=TA_RIGHT)
+    company_right = ParagraphStyle(
+        "LpoCompanyRight",
+        parent=right,
+        fontSize=9.2,
+        leading=10.5,
+    )
 
     document = SimpleDocTemplate(
         buffer,
-        pagesize=A4,
-        rightMargin=13 * mm,
-        leftMargin=13 * mm,
-        topMargin=11 * mm,
-        bottomMargin=13 * mm,
+        pagesize=letter,
+        rightMargin=12 * mm,
+        leftMargin=12 * mm,
+        topMargin=10 * mm,
+        bottomMargin=12 * mm,
         title=f"Local Purchase Order {order.lpo_number}",
         author=hotel.name if hotel else "Hotel Management System",
     )
@@ -122,8 +138,8 @@ def build_purchase_order_pdf(
 
     branding = _logo(hotel) or Paragraph(_text(hotel.name if hotel else "HOTEL"), heading)
     header = Table(
-        [[branding, Paragraph("<br/>".join(hotel_lines), right)]],
-        colWidths=[88 * mm, 94 * mm],
+        [[branding, Paragraph("<br/>".join(hotel_lines), company_right)]],
+        colWidths=[92 * mm, 99 * mm],
     )
     header.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -165,21 +181,21 @@ def build_purchase_order_pdf(
         [Paragraph("Delivery Date", small), Paragraph(f": {_date(delivery_date or order.delivery_due_date or order.expected_date)}", normal)],
         [Paragraph("LPO Submit Date", small), Paragraph(f": {_date(created_date)}", normal)],
         [Paragraph("Order Valid Until", small), Paragraph(f": {_date(order.valid_until)}", normal)],
-        [Paragraph("Status", small), Paragraph(f": {_text(order.get_status_display())}", normal)],
-        [Paragraph("Currency", small), Paragraph(f": {_text(order.requisition.currency)}", normal)],
+        [Paragraph("Status", small), Paragraph(f": {_text(_order_status(order))}", normal)],
+        [Paragraph("PO Currency", small), Paragraph(f": {_text(order.requisition.currency)}", normal)],
         [Paragraph("Supply To", small), Paragraph(f": {_text(', '.join(destinations))}", normal)],
     ]
-    supplier_table = Table(supplier_data, colWidths=[29 * mm, 61 * mm])
-    order_table = Table(order_data, colWidths=[34 * mm, 56 * mm])
+    supplier_table = Table(supplier_data, colWidths=[30 * mm, 64 * mm])
+    order_table = Table(order_data, colWidths=[32 * mm, 65 * mm])
     for table in (supplier_table, order_table):
         table.setStyle(TableStyle([
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("LEFTPADDING", (0, 0), (-1, -1), 0),
             ("RIGHTPADDING", (0, 0), (-1, -1), 1),
-            ("TOPPADDING", (0, 0), (-1, -1), 1),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+            ("TOPPADDING", (0, 0), (-1, -1), 0.6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0.6),
         ]))
-    meta = Table([[supplier_table, order_table]], colWidths=[92 * mm, 90 * mm])
+    meta = Table([[supplier_table, order_table]], colWidths=[94 * mm, 97 * mm])
     meta.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
@@ -211,18 +227,19 @@ def build_purchase_order_pdf(
     lines = Table(
         line_rows,
         repeatRows=1,
-        colWidths=[65 * mm, 19 * mm, 19 * mm, 26 * mm, 15 * mm, 15 * mm, 23 * mm],
+        colWidths=[72 * mm, 17 * mm, 17 * mm, 25 * mm, 15 * mm, 15 * mm, 30 * mm],
     )
     lines.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#d9dde3")),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("GRID", (0, 0), (-1, 0), 0.45, colors.HexColor("#4b5563")),
-        ("LINEBELOW", (0, -1), (-1, -1), 0.35, colors.HexColor("#c7cdd6")),
+        ("FONTNAME", (0, 0), (-1, 0), "Times-Bold"),
+        ("GRID", (0, 0), (-1, 0), 0.55, colors.black),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 3),
         ("RIGHTPADDING", (0, 0), (-1, -1), 3),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, 0), 2.2),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 2.2),
+        ("TOPPADDING", (0, 1), (-1, -1), 1.5),
+        ("BOTTOMPADDING", (0, 1), (-1, -1), 1.5),
     ]))
 
     total_table = Table([
@@ -234,6 +251,7 @@ def build_purchase_order_pdf(
     total_table.setStyle(TableStyle([
         ("LINEABOVE", (0, 2), (-1, 2), 0.6, colors.black),
         ("LINEBELOW", (0, 2), (-1, 2), 0.9, colors.black),
+        ("LINEBELOW", (0, 2), (-1, 2), 0.3, colors.black, None, (1, 1), 1.6),
         ("LEFTPADDING", (0, 0), (-1, -1), 2),
         ("RIGHTPADDING", (0, 0), (-1, -1), 2),
         ("TOPPADDING", (0, 0), (-1, -1), 2),
@@ -249,7 +267,7 @@ def build_purchase_order_pdf(
     conditions_table = Table([[
         Paragraph("<b>Acceptance of this order is acceptance of all conditions herein</b><br/>" + "<br/>".join(conditions), small),
         total_table,
-    ]], colWidths=[105 * mm, 77 * mm])
+    ]], colWidths=[114 * mm, 77 * mm])
     conditions_table.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
@@ -274,51 +292,58 @@ def build_purchase_order_pdf(
     approvals = Table(
         approval_rows,
         repeatRows=1,
-        colWidths=[19 * mm, 22 * mm, 48 * mm, 53 * mm, 40 * mm],
+        colWidths=[19 * mm, 21 * mm, 49 * mm, 59 * mm, 43 * mm],
     )
     approvals.setStyle(TableStyle([
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.HexColor("#6b7280")),
+        ("FONTNAME", (0, 0), (-1, 0), "Times-Bold"),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 2),
         ("RIGHTPADDING", (0, 0), (-1, -1), 2),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING", (0, 0), (-1, -1), 1.5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5),
     ]))
+
+    line_count = max(1, len(line_rows) - 1)
+    approval_count = max(1, len(approval_rows) - 1)
+    bottom_anchor = max(
+        8,
+        67 - max(0, line_count - 2) * 5.4 - max(0, approval_count - 2) * 3.4,
+    )
 
     story = [
         header,
-        Spacer(1, 7 * mm),
+        Spacer(1, 4 * mm),
         Paragraph("LOCAL PURCHASE ORDER", heading),
         Paragraph(_text(classification), classification_style),
-        Spacer(1, 7 * mm),
+        Spacer(1, 5 * mm),
         meta,
-        Spacer(1, 4 * mm),
+        Spacer(1, 3 * mm),
         Paragraph(
-            f"<i>Requested By:</i> &nbsp; <b>{_text(requested_by)}</b>"
-            f" &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <i>Printed By:</i> &nbsp; <b>{_text(printed_name)}</b>",
+            f"<i>Requested By :</i> &nbsp; {_text(requested_by)}"
+            f" &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <i>Printed By :</i> &nbsp; {_text(printed_name)}",
             normal,
         ),
-        Spacer(1, 2 * mm),
+        Spacer(1, 1 * mm),
         lines,
-        Spacer(1, 9 * mm),
+        Spacer(1, bottom_anchor * mm),
         KeepTogether([conditions_table]),
-        Spacer(1, 7 * mm),
+        Spacer(1, 5 * mm),
         Paragraph(
-            "<b>This LPO has been electronically approved and therefore substitutes a hand-written signature, as follows:</b>",
+            "<b>This PO has been electronically approved and therefore substitutes a hand-written signature, as follows:</b>",
             normal,
         ),
-        Spacer(1, 2 * mm),
+        Spacer(1, 1.5 * mm),
         approvals,
     ]
 
     def footer(canvas, doc):
         canvas.saveState()
-        canvas.setFont("Helvetica", 7)
-        canvas.setFillColor(colors.HexColor("#596579"))
+        canvas.setFont("Times-Roman", 7)
+        canvas.setFillColor(colors.HexColor("#6b7280"))
         website = hotel.website if hotel and hotel.website else "Generated by Hotel Management System"
-        canvas.drawString(13 * mm, 7 * mm, website)
-        canvas.drawRightString(A4[0] - 13 * mm, 7 * mm, f"Page {doc.page}")
+        canvas.drawString(12 * mm, 6 * mm, website)
+        canvas.setFillColor(colors.black)
+        canvas.drawRightString(letter[0] - 12 * mm, 6 * mm, f"Page {doc.page}")
         canvas.restoreState()
 
     document.build(story, onFirstPage=footer, onLaterPages=footer)
