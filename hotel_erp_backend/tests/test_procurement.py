@@ -1,7 +1,7 @@
-from decimal import Decimal
-from datetime import timedelta
-from importlib import import_module
 import re
+from datetime import timedelta
+from decimal import Decimal
+from importlib import import_module
 
 import pytest
 from django.apps import apps as django_apps

@@ -1,6 +1,6 @@
+import re
 from datetime import timedelta
 from decimal import Decimal, ROUND_DOWN
-import re
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -61,12 +61,7 @@ class RequisitionSequence(BaseModel):
 
 
 class ProcurementDocumentSequence(BaseModel):
-    """Concurrency-safe, non-reusable business document numbers.
-
-    Client-facing purchase documents use a numeric reference only.  Prefixes are
-    useful internally, but make it unnecessarily difficult for a supplier or
-    receiving clerk to quote a document number over the phone.
-    """
+    """Concurrency-safe numeric core for non-reusable document references."""
 
     DOCUMENT_GLOBAL = "procurement"
     DOCUMENT_REQUISITION = "requisition"
@@ -85,12 +80,11 @@ class ProcurementDocumentSequence(BaseModel):
 
     @classmethod
     def next_number(cls, document_type=None):
-        """Return the next globally unique numeric procurement reference.
+        """Return the next globally unique numeric reference component.
 
         ``document_type`` remains accepted so existing callers stay compatible,
-        but every controlled procurement document now advances one shared
-        sequence.  A requisition, PO, LPO, store requisition, and GRN therefore
-        cannot be assigned the same visible number.
+        but every controlled document advances one shared sequence. Individual
+        models add the required business prefix and date format.
         """
         with transaction.atomic():
             sequence, _ = cls.objects.select_for_update().get_or_create(
