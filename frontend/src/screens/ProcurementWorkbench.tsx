@@ -208,6 +208,26 @@ export default function ProcurementWorkbench() {
     setData((current) => ({ ...current, ...Object.fromEntries(evidence.filter(([key]) => key)) }))
   }
 
+  const selectWorkspaceRecord = (row: Row) => {
+    if (stage !== 'lpo') {
+      void openRecord(row)
+      return
+    }
+    const status = id(row.status)
+    const queue: LpoQueue = ['draft', 'rejected'].includes(status)
+      ? 'prepare'
+      : status === 'pending_approval' && isFinanceApproval(row)
+        ? 'finance'
+        : status === 'pending_approval'
+          ? 'management'
+          : status === 'approved'
+            ? 'approved'
+            : 'history'
+    setSelectedRecord(null)
+    setLpoQueue(queue)
+    setForm({ order: id(row.id) })
+  }
+
   const names = useMemo(() => ({
     items: new Map(app.data.items.map((row) => [id(row.id), id(row.name)])),
     suppliers: new Map(app.data.suppliers.map((row) => [id(row.id), id(row.name)])),
@@ -296,7 +316,7 @@ export default function ProcurementWorkbench() {
       {loading ? <div style={{ ...card, padding: 50, textAlign: 'center', color: 'var(--text-faint)' }}>Loading procurement records from the backend…</div> : (
         <div className="workbench-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.45fr) minmax(340px,.75fr)', gap: 16, alignItems: 'start' }}>
           <section style={{ ...card, overflow: 'hidden' }}>
-            <StageTable stage={stage} lpoQueue={lpoQueue} data={scopedData} names={names} onSelect={(row) => void openRecord(row)} />
+            <StageTable stage={stage} lpoQueue={lpoQueue} data={scopedData} names={names} onSelect={selectWorkspaceRecord} />
           </section>
           <aside style={{ ...card, padding: 18 }}>
             {!canChangeStage && stage !== 'lpo' && <ReadOnlyStage />}
@@ -511,6 +531,21 @@ function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel
     if (!requisitionLine) return false
     return num(orderLine.base_quantity) > num(requisitionLine.remaining_order_quantity ?? requisitionLine.approved_base_quantity) + 0.000001
   })
+  useEffect(() => {
+    if (lpoQueue !== 'prepare' || form.order || form.requisition || prepareOrders.length !== 1) return
+    setForm({ order: id(prepareOrders[0].id) })
+  }, [lpoQueue, form.order, form.requisition, prepareOrders, setForm])
+  useEffect(() => {
+    if (lpoQueue !== 'prepare' || !order || form.orderLine || lines.length !== 1) return
+    const onlyLine = lines[0]
+    setForm((current: Row) => ({
+      ...current,
+      orderLine: id(onlyLine.id),
+      quantity: safeQuantityForLine(onlyLine),
+      cost: onlyLine.unit_cost,
+      unit: onlyLine.unit,
+    }))
+  }, [lpoQueue, order, form.orderLine, lines, setForm])
 
   return <Panel title="Local Purchase Orders" note="Work only from the queue assigned to your role. Source documents and commercial decisions remain linked for audit.">
     <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 11, marginBottom: 13, borderBottom: '1px solid var(--border)' }}>
@@ -520,7 +555,7 @@ function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel
     {lpoQueue === 'prepare' && canManage && <>
       <SectionLabel>Start from the approved Procurement decision</SectionLabel>
       <Field label="Requisition ready for LPO"><Select value={form.requisition} onChange={(v) => setForm({ requisition: v })} rows={readyRequisitions} label={requisitionLabel} /></Field>
-      {!readyRequisitions.length && <Hint>No newly approved requisition is waiting for LPO preparation.</Hint>}
+      {!readyRequisitions.length && <Hint>{prepareOrders.length ? 'The approved requisition already has a draft LPO. Continue that draft below.' : 'No newly approved requisition is waiting for LPO preparation.'}</Hint>}
       {selectedRequisition && <section style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8, marginBottom: 12 }}>
         <ReadOnlyValue label="Supplier" value={names.suppliers.get(id(selectedRequisition.selected_supplier || selectedRequisition.preferred_supplier)) || 'Inherited from awarded quotation'} />
         <ReadOnlyValue label="Prepared by" value={userName} />
