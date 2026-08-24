@@ -950,13 +950,100 @@ def test_controlled_lpo_pdf_marks_first_print_original_and_later_prints_copy():
 
 
 @pytest.mark.django_db
+def test_controlled_lpo_endpoint_accepts_pdf_content_negotiation():
+    employee, department, supplier, item = create_procurement_context()
+    procurement_group, _ = Group.objects.get_or_create(name="Procurement Manager")
+    procurement_group.permissions.add(
+        Permission.objects.get(codename="change_purchaseorder")
+    )
+    employee.user.groups.add(procurement_group)
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        reason="Download the controlled supplier order",
+        status=PRStatus.APPROVED,
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity=Decimal("2.00"),
+        approved_quantity=Decimal("2.00"),
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition,
+        supplier=supplier,
+        ordered_by=employee,
+    )
+    PurchaseOrderItem.objects.create(
+        purchase_order=order,
+        item=item,
+        quantity=Decimal("2.00"),
+        unit_cost=Decimal("7000.00"),
+    )
+    order.status = POStatus.APPROVED
+    order.save(update_fields=("status", "updated_at"))
+    client = APIClient()
+    client.force_authenticate(employee.user)
+
+    response = client.post(
+        f"/api/v1/purchase-orders/{order.pk}/controlled-document/",
+        HTTP_ACCEPT="application/pdf",
+    )
+
+    assert response.status_code == 200
+    assert response["Content-Type"] == "application/pdf"
+    assert response["X-LPO-Print-Classification"] == "ORIGINAL"
+    assert response.content.startswith(b"%PDF")
+
+
+@pytest.mark.django_db
+@override_settings(
+    EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend",
+    EMAIL_HOST="",
+    DEFAULT_FROM_EMAIL="procurement@localhost",
+)
+def test_approved_lpo_reports_missing_production_email_configuration():
+    employee, department, supplier, item = create_procurement_context()
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        reason="Supplier email configuration check",
+        status=PRStatus.APPROVED,
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity=Decimal("1.00"),
+        approved_quantity=Decimal("1.00"),
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition,
+        supplier=supplier,
+        ordered_by=employee,
+    )
+    PurchaseOrderItem.objects.create(
+        purchase_order=order,
+        item=item,
+        quantity=Decimal("1.00"),
+        unit_cost=Decimal("5000.00"),
+    )
+    order.status = POStatus.APPROVED
+    order.save(update_fields=("status", "updated_at"))
+
+    readiness = order.issue_readiness()
+
+    assert readiness["can_proceed"] is False
+    assert any("Production email is not configured" in blocker for blocker in readiness["blockers"])
+
+
+@pytest.mark.django_db
 @override_settings(
     EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
     DEFAULT_FROM_EMAIL="purchasing@example.com",
 )
 def test_supplier_email_contains_lpo_pdf_and_starts_lead_clock_after_success():
     employee, department, supplier, item = create_procurement_context()
-    procurement_group = Group.objects.create(name="Procurement Manager")
+    procurement_group, _ = Group.objects.get_or_create(name="Procurement Manager")
     procurement_group.permissions.add(
         Permission.objects.get(codename="change_purchaseorder")
     )

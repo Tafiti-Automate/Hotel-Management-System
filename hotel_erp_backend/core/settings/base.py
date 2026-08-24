@@ -139,7 +139,22 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
-DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "procurement@localhost")
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.smtp.EmailBackend",
+)
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "").strip()
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "").strip()
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True").lower() in {
+    "1", "true", "yes",
+}
+EMAIL_USE_SSL = os.environ.get("EMAIL_USE_SSL", "False").lower() in {
+    "1", "true", "yes",
+}
+EMAIL_TIMEOUT = int(os.environ.get("EMAIL_TIMEOUT", "20"))
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "procurement@localhost").strip()
 PROCUREMENT_MIN_QUOTATIONS = int(os.environ.get("PROCUREMENT_MIN_QUOTATIONS", "3"))
 PROCUREMENT_QUOTATION_THRESHOLD = float(
     os.environ.get("PROCUREMENT_QUOTATION_THRESHOLD", "1000000")

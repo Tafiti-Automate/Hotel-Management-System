@@ -1435,6 +1435,20 @@ class PurchaseOrder(BaseModel):
             )
         if not self.sent_to_email and not self.supplier.email:
             blockers.append("The supplier must have an email address before the LPO is sent.")
+        email_backend = getattr(settings, "EMAIL_BACKEND", "")
+        if email_backend.endswith("smtp.EmailBackend"):
+            if not getattr(settings, "EMAIL_HOST", "") or str(
+                getattr(settings, "DEFAULT_FROM_EMAIL", "")
+            ).endswith("@localhost"):
+                blockers.append(
+                    "Production email is not configured. Set EMAIL_HOST, EMAIL_PORT, "
+                    "EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, DEFAULT_FROM_EMAIL and "
+                    "EMAIL_USE_TLS in the backend deployment environment."
+                )
+            if getattr(settings, "EMAIL_USE_TLS", False) and getattr(
+                settings, "EMAIL_USE_SSL", False
+            ):
+                blockers.append("Email cannot enable both TLS and SSL. Choose one connection mode.")
         if self.valid_until and self.valid_until < timezone.localdate():
             blockers.append("The LPO validity date has expired. Extend it before emailing the supplier.")
         return {"can_proceed": not blockers, "blockers": blockers, "warnings": warnings}

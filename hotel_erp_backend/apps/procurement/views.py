@@ -1,5 +1,7 @@
 from decimal import Decimal
 from datetime import timedelta
+import json
+import smtplib
 
 from django.http import Http404, HttpResponse
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -11,6 +13,7 @@ from django.utils.http import content_disposition_header
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.renderers import BaseRenderer, JSONRenderer
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
@@ -56,6 +59,39 @@ from apps.procurement.serializers import (
     VendorQuotationSerializer,
 )
 from core.mixins.viewsets import CreatedByModelMixin
+
+
+class PDFRenderer(BaseRenderer):
+    """Allow controlled document actions to negotiate application/pdf."""
+
+    media_type = "application/pdf"
+    format = "pdf"
+    charset = None
+    render_style = "binary"
+
+    def render(self, data, accepted_media_type=None, renderer_context=None):
+        if isinstance(data, bytes):
+            return data
+        return json.dumps(data, default=str).encode("utf-8")
+
+
+def email_delivery_failure_message(error):
+    """Return an actionable message without exposing mail credentials."""
+    if isinstance(error, smtplib.SMTPAuthenticationError):
+        return (
+            "The mail server rejected the sender login. Check EMAIL_HOST_USER and "
+            "EMAIL_HOST_PASSWORD in the backend deployment environment."
+        )
+    if isinstance(error, smtplib.SMTPRecipientsRefused):
+        return "The mail provider rejected the supplier email address. Confirm the address and retry."
+    if isinstance(error, (ConnectionRefusedError, TimeoutError, OSError)):
+        return (
+            "The production mail server could not be reached. Check EMAIL_HOST, EMAIL_PORT, "
+            "EMAIL_USE_TLS and the mail provider's network settings."
+        )
+    if isinstance(error, smtplib.SMTPException):
+        return "The mail provider could not deliver the LPO. Check the backend email settings and retry."
+    return "The LPO email could not be delivered. Check the backend mail configuration and retry."
 
 
 def raise_drf_validation_error(error):
@@ -613,7 +649,10 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
             order.email_status = "failed"
             order.last_email_error = str(error)
             order.save(update_fields=["email_status", "last_email_error", "updated_at"])
-            raise ValidationError(f"Email delivery failed; the lead-time clock was not started: {error}")
+            raise ValidationError(
+                f"Email delivery failed; the lead-time clock was not started. "
+                f"{email_delivery_failure_message(error)}"
+            )
         try:
             with transaction.atomic():
                 order = PurchaseOrder.objects.select_for_update().get(pk=order.pk)
@@ -675,7 +714,9 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
             communication.error_message = str(error)
             order.email_status = "failed"
             order.last_email_error = str(error)
-            raise ValidationError(f"Email delivery failed: {error}")
+            raise ValidationError(
+                f"Email delivery failed. {email_delivery_failure_message(error)}"
+            )
         finally:
             communication.save(update_fields=["status", "sent_at", "error_message", "updated_at"])
             order.save(update_fields=["email_status", "last_email_error", "updated_at"])
@@ -717,7 +758,12 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
             }
         )
 
-    @action(detail=True, methods=["post"], url_path="controlled-document")
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="controlled-document",
+        renderer_classes=[PDFRenderer, JSONRenderer],
+    )
     def controlled_document(self, request, pk=None):
         """Reserve the print number and return the matching ORIGINAL/COPY PDF."""
         order = self.get_object()
