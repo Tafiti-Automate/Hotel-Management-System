@@ -85,6 +85,7 @@ export default function ProcurementWorkbench() {
   const role = app.user.role.toLowerCase()
   const [stage, setStage] = useState<Stage>(() => {
     if (role === 'receiving clerk') return 'receipt'
+    if (['procurement manager', 'procurement officer', 'financial manager', 'general manager'].includes(role)) return 'lpo'
     if (app.user.isSuperuser) return 'request'
     return (Object.keys(stagePermissions) as Stage[]).find((candidate) =>
       app.user.permissions.includes(stagePermissions[candidate].view)
@@ -97,6 +98,7 @@ export default function ProcurementWorkbench() {
   const [message, setMessage] = useState('')
   const [selectedRecord, setSelectedRecord] = useState<Row | null>(null)
   const [lpoQueue, setLpoQueue] = useState<LpoQueue>(() => defaultLpoQueue(role))
+  const knownApprovedOrderIds = useRef<Set<string>>(new Set())
   const can = useCallback(
     (permission: string) => app.user.isSuperuser || app.user.permissions.includes(permission),
     [app.user.isSuperuser, app.user.permissions],
@@ -159,6 +161,15 @@ export default function ProcurementWorkbench() {
     next.returnItems = data.returnItems.filter((row) => returns.has(id(row.supplier_return)))
     return next
   }, [app.currentBranch, app.data.branches, app.user.branchId, data])
+  useEffect(() => {
+    if (stage !== 'lpo' || loading || !['procurement manager', 'procurement officer'].includes(role)) return
+    const approvedOrders = scopedData.orders.filter((row) => id(row.status) === 'approved')
+    const unseenApproved = approvedOrders.filter((row) => !knownApprovedOrderIds.current.has(id(row.id)))
+    knownApprovedOrderIds.current = new Set(approvedOrders.map((row) => id(row.id)))
+    if (!unseenApproved.length) return
+    setLpoQueue('approved')
+    setForm({ order: id(unseenApproved[0].id) })
+  }, [stage, loading, role, scopedData.orders])
 
   const run = async (
     operation: () => Promise<unknown>,
@@ -619,13 +630,21 @@ function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel
     </>}
 
     {lpoQueue === 'approved' && canManage && <>
+      <section style={{ marginBottom: 13, padding: 12, border: '1px solid var(--good)', borderRadius: 8, background: 'var(--good-soft)', color: 'var(--text)', fontSize: 11, lineHeight: 1.55 }}>
+        <strong>General Manager approval is complete.</strong>
+        <div>Next: download the ORIGINAL LPO, then email it to the supplier. Emailing marks it as issued, starts lead time, and makes it visible to Receiving.</div>
+      </section>
       <Field label="Finally approved LPO"><Select value={form.order} onChange={chooseOrder} rows={approvedOrders} label={orderLabel} /></Field>
       {!approvedOrders.length && <Hint>No finally approved LPO is waiting to be printed and sent.</Hint>}
       {order && <LpoSummary order={order} lines={lines} names={names} />}
       {order && <>
-        <Action disabled={busy} onClick={() => run(() => downloadControlledPurchaseOrder(id(order.id)), `${id(order.next_print_classification) || 'Controlled'} LPO downloaded`)}>Download {id(order.next_print_classification) || 'controlled'} LPO</Action>
+        <Action disabled={busy} onClick={() => run(
+          () => downloadControlledPurchaseOrder(id(order.id)),
+          `${id(order.next_print_classification) || 'Controlled'} LPO downloaded`,
+          { ...form },
+        )}>1. Download {id(order.next_print_classification) || 'controlled'} LPO</Action>
         <Field label="Supplier email"><Input type="email" value={form.email} onChange={(v) => setForm({ ...form, email: v })} placeholder="Leave blank to use the registered supplier email" /></Field>
-        <Action tone="good" disabled={busy} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'issue', { sent_to_email: form.email || '' }), 'Approved LPO emailed to supplier; lead-time clock started')}>Email LPO and start lead time</Action>
+        <Action tone="good" disabled={busy} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'issue', { sent_to_email: form.email || '' }), 'Approved LPO emailed to supplier; lead-time clock started')}>2. Email LPO and start lead time</Action>
       </>}
     </>}
 
