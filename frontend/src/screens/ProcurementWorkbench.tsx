@@ -225,6 +225,10 @@ export default function ProcurementWorkbench() {
       return
     }
     const status = id(row.status)
+    if (['issued', 'partially_received', 'received', 'cancelled'].includes(status)) {
+      void openRecord(row)
+      return
+    }
     const queue: LpoQueue = ['draft', 'rejected'].includes(status)
       ? 'prepare'
       : status === 'pending_approval' && isFinanceApproval(row)
@@ -498,14 +502,14 @@ function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel
     : lpoQueue === 'finance' ? financeOrders
       : lpoQueue === 'management' ? managementOrders
         : lpoQueue === 'approved' ? approvedOrders
-          : historyOrders
+          : []
   const queueOptions: Array<{ key: LpoQueue; label: string; count: number }> = canManage
     ? [
         { key: 'prepare', label: 'Prepare LPO', count: readyRequisitions.length + prepareOrders.length },
         { key: 'finance', label: 'Awaiting Finance', count: financeOrders.length },
         { key: 'management', label: 'Awaiting GM', count: managementOrders.length },
         { key: 'approved', label: 'Approved · Print & Send', count: approvedOrders.length },
-        { key: 'history', label: 'History', count: historyOrders.length },
+        { key: 'history', label: 'Sent LPO archive', count: historyOrders.length },
       ]
     : role === 'financial manager'
       ? [{ key: 'finance', label: 'Awaiting Finance', count: financeOrders.length }]
@@ -652,15 +656,9 @@ function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel
     </>}
 
     {lpoQueue === 'history' && canManage && <>
-      <Field label="Issued / completed LPO"><Select value={form.order} onChange={chooseOrder} rows={historyOrders} label={(row: Row) => `${orderLabel(row)} · ${id(row.status).replace(/_/g, ' ')}`} /></Field>
+      <SectionLabel>Sent LPO archive · read only</SectionLabel>
+      <Hint>Sent LPOs cannot be selected for preparation, editing, approval, or issue again. Open a record from the archive list only to inspect its audit history or download a controlled COPY.</Hint>
       {!historyOrders.length && <Hint>No issued or completed LPO history is available.</Hint>}
-      {order && <LpoSummary order={order} lines={lines} names={names} />}
-      {order && id(order.status) !== 'cancelled' && <>
-        <Action disabled={busy} onClick={() => run(() => downloadControlledPurchaseOrder(id(order.id)), `${id(order.next_print_classification) || 'COPY'} LPO downloaded`)}>Download {id(order.next_print_classification) || 'COPY'}</Action>
-        <ReadOnlyValue label="Registered supplier email" value={registeredSupplierEmail || 'No email registered'} />
-        {!registeredSupplierEmail && <Hint>Update this supplier's email in Supplier Registration before resending the LPO.</Hint>}
-        <Action disabled={busy || !registeredSupplierEmail} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'resend'), 'LPO email resent to the registered supplier email without resetting the original lead-time start')}>Resend LPO email</Action>
-      </>}
     </>}
   </Panel>
 }
@@ -784,7 +782,7 @@ function StageTable({ stage, lpoQueue, data, names, onSelect }: { stage: Stage; 
     if (lpoQueue === 'finance') { rows = data.orders.filter((row) => id(row.status) === 'pending_approval' && isFinanceApproval(row)); title = 'LPOs awaiting Finance' }
     if (lpoQueue === 'management') { rows = data.orders.filter((row) => id(row.status) === 'pending_approval' && isManagementApproval(row)); title = 'LPOs awaiting General Manager' }
     if (lpoQueue === 'approved') { rows = data.orders.filter((row) => id(row.status) === 'approved'); title = 'Finally approved LPOs' }
-    if (lpoQueue === 'history') { rows = data.orders.filter((row) => ['issued', 'partially_received', 'received', 'cancelled'].includes(id(row.status))); title = 'Issued and completed LPO history' }
+    if (lpoQueue === 'history') { rows = data.orders.filter((row) => ['issued', 'partially_received', 'received', 'cancelled'].includes(id(row.status))); title = 'Sent LPO archive · read only' }
   }
   if (stage === 'receipt') { rows = data.receipts; title = 'Goods receipt notes' }
   if (stage === 'inspect') { rows = data.inspections; title = 'Inspection records' }
