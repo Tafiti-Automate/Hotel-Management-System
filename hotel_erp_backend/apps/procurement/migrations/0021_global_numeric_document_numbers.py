@@ -70,7 +70,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="purchaseorder",
             name="lpo_number",
-            field=models.CharField(blank=True, max_length=50, null=True, unique=True),
+            field=models.CharField(blank=True, max_length=50, null=True),
         ),
         migrations.RunPython(assign_global_numeric_references, migrations.RunPython.noop),
     ]
