@@ -522,6 +522,18 @@ class PurchaseOrderApprovalWorkflow(BaseModel):
                     "updated_at",
                 )
             )
+            from apps.notifications.services import notify_employee
+
+            notify_employee(
+                self.purchase_order.ordered_by,
+                title=f"LPO {self.purchase_order.po_number} finally approved",
+                message=(
+                    "The General Manager has given final approval. Open Procurement "
+                    "Workbench, choose Approved · Print & Send, print the ORIGINAL LPO, "
+                    "then email it to the supplier to start the lead-time clock."
+                ),
+                created_by=self.decided_by,
+            )
         self.purchase_order.record_activity(
             action="approval_stage_approved",
             actor=self.decided_by,

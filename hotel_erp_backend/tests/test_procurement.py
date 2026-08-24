@@ -37,6 +37,7 @@ from apps.procurement.models import (
     VendorQuotationItem,
 )
 from apps.procurement.documents import build_purchase_order_pdf
+from apps.notifications.models import Notification
 from apps.procurement.serializers import (
     GoodsReceiptItemSerializer,
     PurchaseOrderItemSerializer,
@@ -841,6 +842,9 @@ def test_lpo_requires_independent_value_routed_approval_before_issue():
     order.refresh_from_db()
     assert order.status == POStatus.APPROVED
     assert order.approved_by == manager
+    notification = Notification.objects.get(employee=employee)
+    assert "finally approved" in notification.title
+    assert "Approved · Print & Send" in notification.message
 
     order.issue(sent_by=employee)
     assert order.status == POStatus.ISSUED
