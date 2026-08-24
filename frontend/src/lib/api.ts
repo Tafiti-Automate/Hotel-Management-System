@@ -1104,6 +1104,7 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
       supplierId: text(row.supplier),
       supplierSku: text(row.supplier_sku),
       unit: text(row.unit_name) || unitNames.get(text(row.unit)) || '',
+      unitId: text(row.unit),
       price: num(row.unit_price),
       basePrice: num(row.base_unit_price),
       currency: text(row.currency, 'UGX'),

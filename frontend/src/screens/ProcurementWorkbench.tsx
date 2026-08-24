@@ -8,6 +8,7 @@ import { chipStyleFor, money } from '../lib/theme'
 import { useApp } from '../state/AppContext'
 
 type Stage = 'request' | 'quote' | 'lpo' | 'receipt' | 'inspect' | 'return'
+type LpoQueue = 'prepare' | 'finance' | 'management' | 'approved' | 'history'
 type Datasets = Record<string, Row[]>
 
 const paths = {
@@ -57,6 +58,21 @@ const empty: Datasets = Object.fromEntries(Object.keys(paths).map((key) => [key,
 
 function id(value: unknown) { return String(value || '') }
 function num(value: unknown) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0 }
+function currentApprovalStep(order: Row): Row | undefined {
+  const steps = Array.isArray(order.approval_steps) ? order.approval_steps as Row[] : []
+  return steps.find((step) => id(step.status) === 'pending')
+}
+function isFinanceApproval(order: Row): boolean {
+  return /finance/i.test(id(currentApprovalStep(order)?.stage_name))
+}
+function isManagementApproval(order: Row): boolean {
+  return /(general manager|management)/i.test(id(currentApprovalStep(order)?.stage_name))
+}
+function defaultLpoQueue(role: string): LpoQueue {
+  if (role === 'financial manager') return 'finance'
+  if (role === 'general manager') return 'management'
+  return 'prepare'
+}
 function fileSize(value: unknown) {
   const bytes = num(value)
   if (bytes < 1024) return `${bytes} B`
@@ -66,8 +82,8 @@ function fileSize(value: unknown) {
 
 export default function ProcurementWorkbench() {
   const app = useApp()
+  const role = app.user.role.toLowerCase()
   const [stage, setStage] = useState<Stage>(() => {
-    const role = app.user.role.toLowerCase()
     if (role === 'receiving clerk') return 'receipt'
     if (app.user.isSuperuser) return 'request'
     return (Object.keys(stagePermissions) as Stage[]).find((candidate) =>
@@ -80,6 +96,7 @@ export default function ProcurementWorkbench() {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [selectedRecord, setSelectedRecord] = useState<Row | null>(null)
+  const [lpoQueue, setLpoQueue] = useState<LpoQueue>(() => defaultLpoQueue(role))
   const can = useCallback(
     (permission: string) => app.user.isSuperuser || app.user.permissions.includes(permission),
     [app.user.isSuperuser, app.user.permissions],
@@ -100,6 +117,7 @@ export default function ProcurementWorkbench() {
 
   useEffect(() => { void load() }, [load])
   useEffect(() => { setForm({}); setMessage(''); setSelectedRecord(null) }, [stage])
+  useEffect(() => { setLpoQueue(defaultLpoQueue(role)) }, [role])
   useEffect(() => {
     if (!app.procurementDraftId) return
     setStage('request')
@@ -142,13 +160,17 @@ export default function ProcurementWorkbench() {
     return next
   }, [app.currentBranch, app.data.branches, app.user.branchId, data])
 
-  const run = async (operation: () => Promise<unknown>, success: string) => {
+  const run = async (
+    operation: () => Promise<unknown>,
+    success: string,
+    nextForm?: Row | ((result: unknown) => Row),
+  ) => {
     setBusy(true)
     setMessage('')
     try {
-      await operation()
+      const result = await operation()
       await Promise.all([load(), Promise.resolve(app.refreshData())])
-      setForm({})
+      setForm(typeof nextForm === 'function' ? nextForm(result) : nextForm || {})
       app.showToast(success)
     } catch (error) {
       const detail = errorMessage(error)
@@ -199,7 +221,6 @@ export default function ProcurementWorkbench() {
   const orderLabel = (row: Row) => `${id(row.po_number) || id(row.id).slice(0, 8)} · ${names.suppliers.get(id(row.supplier)) || 'Supplier'}`
   const receiptLabel = (row: Row) => id(row.grn_number) || `GRN-${id(row.id).slice(0, 8).toUpperCase()}`
 
-  const role = app.user.role.toLowerCase()
   const roleStages: Partial<Record<string, Stage[]>> = {
     'procurement manager': ['request', 'quote', 'lpo'],
     'financial manager': ['lpo'],
@@ -215,7 +236,11 @@ export default function ProcurementWorkbench() {
   const stageGuidance: Record<Stage, { actor: string; description: string; icon: string }> = {
     request: { actor: 'Requester', description: 'Add every required article, then submit the requisition.', icon: 'playlist_add' },
     quote: { actor: 'Procurement', description: 'Choose a vetted supplier quotation from the Cost Controller catalogue and confirm the current price.', icon: 'compare_arrows' },
-    lpo: { actor: 'Buyer and LPO approvers', description: 'Prepare, independently approve, then issue the supplier order.', icon: 'receipt_long' },
+    lpo: role === 'financial manager'
+      ? { actor: 'Financial Manager', description: 'Review price and quantities, then approve or return the LPO.', icon: 'receipt_long' }
+      : role === 'general manager'
+        ? { actor: 'General Manager', description: 'Make the independent final approval decision.', icon: 'receipt_long' }
+        : { actor: 'Procurement and approvers', description: 'Prepare the LPO, follow its approvals, then print and send it.', icon: 'receipt_long' },
     receipt: { actor: 'Receiving / stores', description: 'Record what the supplier delivered against the LPO.', icon: 'move_to_inbox' },
     inspect: { actor: 'Inspector', description: 'Accept or reject delivered quantities before stock posting.', icon: 'fact_check' },
     return: { actor: 'Stores / procurement', description: 'If needed, send rejected or damaged goods back to the supplier.', icon: 'assignment_return' },
@@ -271,13 +296,13 @@ export default function ProcurementWorkbench() {
       {loading ? <div style={{ ...card, padding: 50, textAlign: 'center', color: 'var(--text-faint)' }}>Loading procurement records from the backend…</div> : (
         <div className="workbench-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.45fr) minmax(340px,.75fr)', gap: 16, alignItems: 'start' }}>
           <section style={{ ...card, overflow: 'hidden' }}>
-            <StageTable stage={stage} data={scopedData} names={names} onSelect={(row) => void openRecord(row)} />
+            <StageTable stage={stage} lpoQueue={lpoQueue} data={scopedData} names={names} onSelect={(row) => void openRecord(row)} />
           </section>
           <aside style={{ ...card, padding: 18 }}>
             {!canChangeStage && stage !== 'lpo' && <ReadOnlyStage />}
             {canChangeStage && stage === 'request' && <RequestPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel }} items={app.data.items} stores={app.data.locations} departments={app.data.departments} />}
-            {canChangeStage && stage === 'quote' && <QuotePanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, names }} suppliers={app.data.suppliers} supplierItems={app.data.supplierItems} units={app.data.uoms} items={app.data.items} itemUnits={app.data.itemUnits} />}
-            {stage === 'lpo' && <LpoPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, orderLabel, names }} role={role} canManage={canManageLpo} suppliers={app.data.suppliers} employees={app.data.employees} stores={app.data.locations} units={app.data.uoms} items={app.data.items} itemUnits={app.data.itemUnits} />}
+            {canChangeStage && stage === 'quote' && <QuotePanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, names }} suppliers={app.data.suppliers} supplierItems={app.data.supplierItems} items={app.data.items} />}
+            {stage === 'lpo' && <LpoPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, orderLabel, names, lpoQueue, setLpoQueue }} role={role} canManage={canManageLpo} userName={app.user.name} suppliers={app.data.suppliers} units={app.data.uoms} items={app.data.items} itemUnits={app.data.itemUnits} />}
             {canChangeStage && stage === 'receipt' && <ReceiptPanel {...{ data: scopedData, form, setForm, busy, run, orderLabel, receiptLabel, names }} employees={app.data.employees} stores={app.data.locations} />}
             {canChangeStage && stage === 'inspect' && <InspectionPanel {...{ data: scopedData, form, setForm, busy, run, receiptLabel, names }} employees={app.data.employees} />}
             {canChangeStage && stage === 'return' && <ReturnPanel {...{ data: scopedData, form, setForm, busy, run, receiptLabel, names }} employees={app.data.employees} stores={app.data.locations} />}
@@ -314,11 +339,19 @@ function RequestPanel({ data, form, setForm, requisitionLabel, items }: any) {
   </Panel>
 }
 
-function QuotePanel({ data, form, setForm, busy, run, requisitionLabel, names, suppliers, supplierItems, units, items, itemUnits }: any) {
+function QuotePanel({ data, form, setForm, busy, run, requisitionLabel, names, suppliers, supplierItems, items }: any) {
   const requisitions = data.requisitions.filter((row: Row) => ['store_requisition','store_shortage'].includes(id(row.procurement_source)))
   const reqLines = data.requisitionItems.filter((row: Row) => id(row.requisition) === id(form.requisition))
   const selectedReqLine = reqLines.find((row: Row) => id(row.id) === id(form.reqLine))
-  const catalogue = supplierItems.filter((entry: Row) => !selectedReqLine || id(entry.articleId) === id(selectedReqLine.item))
+  const catalogue = selectedReqLine
+    ? supplierItems
+        .filter((entry: Row) => id(entry.articleId) === id(selectedReqLine.item) && id(entry.status) === 'Active')
+        .sort((left: Row, right: Row) => {
+          const leftRank = id(left.preferred) === 'Preferred' ? 0 : id(left.pricePosition) === 'Lowest' ? 1 : 2
+          const rightRank = id(right.preferred) === 'Preferred' ? 0 : id(right.pricePosition) === 'Lowest' ? 1 : 2
+          return leftRank - rightRank || num(left.basePrice || left.price) - num(right.basePrice || right.price)
+        })
+    : []
   const selectedCatalogue = catalogue.find((entry: Row) => id(entry.id) === id(form.cataloguePrice))
   const supplierId = id(selectedCatalogue?.supplierId || form.supplier)
   const quotes = data.quotations.filter((row: Row) => id(row.requisition) === id(form.requisition))
@@ -326,98 +359,237 @@ function QuotePanel({ data, form, setForm, busy, run, requisitionLabel, names, s
   const quoteLines = data.quotationItems.filter((row: Row) => id(row.quotation) === id(form.quotation))
   const selectedItem = items.find((item: Row) => id(item.id) === id(selectedReqLine?.item))
   const requested = num(selectedReqLine?.approved_quantity ?? selectedReqLine?.quantity)
-  const availableUnits = configuredUnitsForItem(selectedItem, units, itemUnits)
-  const chosenUnit = id(form.unit) || id(selectedReqLine?.unit) || id(selectedItem?.baseUnitId)
+  const chosenUnit = id(form.unit) || id(selectedCatalogue?.unitId) || id(selectedReqLine?.unit) || id(selectedItem?.baseUnitId)
   const maxQuantity = num(selectedReqLine?.approved_quantity ?? selectedReqLine?.quantity)
   const matchingSupplier = suppliers.find((supplier: Row) => id(supplier.id) === supplierId)
   const quotationForSupplier = quotes.find((row: Row) => id(row.supplier) === supplierId)
+  const selectOffer = (entry: Row, line: Row = selectedReqLine) => {
+    const linkedQuote = quotes.find((quote: Row) => id(quote.supplier) === id(entry.supplierId))
+    const article = items.find((item: Row) => id(item.id) === id(line?.item))
+    const quantity = num(line?.approved_quantity ?? line?.quantity)
+    setForm({
+      requisition: form.requisition,
+      reqLine: id(line?.id),
+      cataloguePrice: id(entry.id),
+      supplier: id(entry.supplierId),
+      quotation: id(linkedQuote?.id),
+      unit: id(entry.unitId || line?.unit || article?.baseUnitId),
+      quantity,
+      price: entry.price,
+      days: entry.leadTime,
+    })
+  }
+  const selectArticle = (value: string) => {
+    const line = reqLines.find((row: Row) => id(row.id) === value)
+    const offers = supplierItems
+      .filter((entry: Row) => id(entry.articleId) === id(line?.item) && id(entry.status) === 'Active')
+      .sort((left: Row, right: Row) => {
+        const leftRank = id(left.preferred) === 'Preferred' ? 0 : id(left.pricePosition) === 'Lowest' ? 1 : 2
+        const rightRank = id(right.preferred) === 'Preferred' ? 0 : id(right.pricePosition) === 'Lowest' ? 1 : 2
+        return leftRank - rightRank || num(left.basePrice || left.price) - num(right.basePrice || right.price)
+      })
+    if (line && offers.length) {
+      selectOffer(offers[0], line)
+      return
+    }
+    const article = items.find((item: Row) => id(item.id) === id(line?.item))
+    setForm({
+      requisition: form.requisition,
+      reqLine: value,
+      cataloguePrice: '',
+      supplier: '',
+      quotation: '',
+      unit: id(line?.unit || article?.baseUnitId),
+      quantity: num(line?.approved_quantity ?? line?.quantity),
+      price: '',
+      days: '',
+    })
+  }
   return <Panel title="Supplier & price selection" note="Start from the Store Keeper requisition, then choose a vetted supplier price registered by the Cost Controller.">
     <Field label="Store requisition"><Select value={form.requisition} onChange={(v) => setForm({ requisition: v })} rows={requisitions} label={requisitionLabel} /></Field>
-    <Field label="Requested article"><Select value={form.reqLine} onChange={(v) => setForm({ ...form, reqLine: v, cataloguePrice: '', supplier: '', quotation: '', price: '', unit: '', quantity: '' })} rows={reqLines} label={(row: Row) => `${names.items.get(id(row.item)) || 'Article'} · requested ${row.approved_quantity ?? row.quantity}`} /></Field>
+    <Field label="Requested article"><Select value={form.reqLine} onChange={selectArticle} rows={reqLines} label={(row: Row) => `${names.items.get(id(row.item)) || 'Article'} · requested ${row.approved_quantity ?? row.quantity}`} /></Field>
     {selectedReqLine && <Hint>The article and requested quantity come from Stores. Procurement can reduce the quantity, never increase it.</Hint>}
-    <Field label="Registered supplier quotation"><Select value={form.cataloguePrice} onChange={(v) => { const entry = catalogue.find((row: Row) => id(row.id) === v); const unit = units.find((row: Row) => id(row.name) === id(entry?.unit)); setForm({ ...form, cataloguePrice: v, supplier: entry?.supplierId || '', quotation: '', unit: unit?.id || selectedReqLine?.unit || selectedItem?.baseUnitId || '', quantity: requested, price: entry?.price || '', days: entry?.leadTime || '' }) }} rows={catalogue} label={(row: Row) => `${row.supplier} · ${row.unit || 'unit'} · ${money(row.price)}${row.quotationReference ? ` · ${row.quotationReference}` : ''}`} /></Field>
+    {selectedReqLine && catalogue.length > 0 && <>
+      <SectionLabel>Suppliers registered for this article</SectionLabel>
+      <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
+        {catalogue.map((entry: Row) => {
+          const selected = id(entry.id) === id(selectedCatalogue?.id)
+          return <button key={id(entry.id)} type="button" onClick={() => selectOffer(entry)} style={{ padding: 11, border: `1px solid ${selected ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 8, background: selected ? 'var(--accent-soft)' : 'var(--surface)', color: 'var(--text)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><strong style={{ fontSize: 12 }}>{id(entry.supplier)}</strong>{id(entry.preferred) === 'Preferred' && <span style={{ padding: '2px 6px', borderRadius: 20, background: 'var(--good-soft)', color: 'var(--good)', fontSize: 8.5, fontWeight: 800 }}>PREFERRED</span>}{id(entry.pricePosition) === 'Lowest' && <span style={{ padding: '2px 6px', borderRadius: 20, background: 'var(--accent-soft)', color: 'var(--accent)', fontSize: 8.5, fontWeight: 800 }}>LOWEST BASE PRICE</span>}</div>
+            <div style={{ marginTop: 7, fontSize: 13, fontWeight: 800 }}>{money(entry.price)} <span style={{ color: 'var(--text-muted)', fontSize: 10.5, fontWeight: 500 }}>per {id(entry.unit) || 'configured unit'}</span></div>
+            <div style={{ marginTop: 5, color: 'var(--text-muted)', fontSize: 10.2, lineHeight: 1.5 }}>Lead time: {id(entry.leadTime || 0)} days · Minimum order: {id(entry.minimumOrder || 0)} · Quote: {id(entry.quotationReference) || 'Not recorded'}{entry.quotationValidUntil ? ` · Valid until ${id(entry.quotationValidUntil)}` : ''}</div>
+          </button>
+        })}
+      </div>
+    </>}
     {selectedReqLine && !catalogue.length && <Hint>No active Cost Controller supplier quotation is registered for this article. Register/update it in Supplier Catalogue before preparing the LPO.</Hint>}
     {selectedCatalogue && <section style={{ margin: '10px 0 12px', padding: 11, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface-2)', fontSize: 11.2, lineHeight: 1.6, color: 'var(--text-muted)' }}>
       <div><strong style={{ color: 'var(--text)' }}>{matchingSupplier?.name || selectedCatalogue.supplier}</strong></div>
       <div>Cost Controller quote: {money(selectedCatalogue.price)} per {selectedCatalogue.unit || 'unit'} · Lead days: {selectedCatalogue.leadTime || 0}</div>
       <div>Quotation reference: {selectedCatalogue.quotationReference || 'Not recorded'}{selectedCatalogue.quotationValidUntil ? ` · Valid until ${selectedCatalogue.quotationValidUntil}` : ''}</div>
     </section>}
-    {selectedCatalogue && !quotationForSupplier && <Action disabled={busy || !form.requisition || !supplierId} onClick={() => run(() => createBackendRecord('quotations', { requisition: form.requisition, supplier: supplierId, total_amount: 0 }), 'Supplier selected for this requisition')}>Use this supplier</Action>}
-    {quotationForSupplier && !form.quotation && <Action disabled={busy} onClick={() => setForm({ ...form, quotation: id(quotationForSupplier.id) })}>Continue with selected supplier</Action>}
-    <Field label="Selected supplier record"><Select value={form.quotation} onChange={(v) => setForm({ ...form, quotation: v })} rows={quotes} label={(row: Row) => `${names.suppliers.get(id(row.supplier)) || 'Supplier'} · ${id(row.status || 'draft')}`} /></Field>
+    {selectedCatalogue && !quotationForSupplier && <Action disabled={busy || !form.requisition || !supplierId} onClick={() => run(
+      () => createBackendRecord('quotations', { requisition: form.requisition, supplier: supplierId, total_amount: 0 }),
+      'Supplier offer attached to this requisition',
+      (created: unknown) => ({ ...form, quotation: id((created as Row).id) }),
+    )}>Use this supplier offer</Action>}
+    {selectedCatalogue && quotationForSupplier && <Hint>{matchingSupplier?.name || selectedCatalogue.supplier} is linked to this requisition. The attached unit, price and lead time are filled below.</Hint>}
     {selectedQuote && <>
-      <Field label="Purchase unit"><Select value={chosenUnit} onChange={(v) => setForm({ ...form, unit: v })} rows={availableUnits} /></Field>
-      <Two><Field label="Procurement quantity"><Input type="number" value={form.quantity || requested} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><Field label="Current supplier price"><Input type="number" value={form.price ?? selectedCatalogue?.price} onChange={(v) => setForm({ ...form, price: v })} /></Field></Two>
-      <Field label="Lead days"><Input type="number" value={form.days ?? selectedCatalogue?.leadTime} onChange={(v) => setForm({ ...form, days: v })} /></Field>
+      <ReadOnlyValue label="Purchase unit inherited from supplier catalogue" value={selectedCatalogue?.unit || names.units.get(chosenUnit) || 'Configured unit'} />
+      <Two><Field label="Procurement quantity"><Input type="number" value={form.quantity || requested} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><Field label="Current supplier price (prefilled)"><Input type="number" value={form.price ?? selectedCatalogue?.price} onChange={(v) => setForm({ ...form, price: v })} /></Field></Two>
+      <Field label="Lead days (prefilled)"><Input type="number" value={form.days ?? selectedCatalogue?.leadTime} onChange={(v) => setForm({ ...form, days: v })} /></Field>
       {num(form.quantity || requested) > maxQuantity && <Hint>Quantity cannot exceed the Store Keeper requisition.</Hint>}
-      <Action disabled={busy || !form.quotation || !form.reqLine || !chosenUnit || num(form.quantity || requested) <= 0 || num(form.quantity || requested) > maxQuantity || num(form.price ?? selectedCatalogue?.price) <= 0 || quoteLines.some((row: Row) => id(row.requisition_item) === id(form.reqLine))} onClick={() => run(() => createBackendRecord('quotation-items', { quotation: form.quotation, requisition_item: form.reqLine, unit: chosenUnit, quantity: num(form.quantity || requested), unit_price: num(form.price ?? selectedCatalogue?.price), delivery_days: num(form.days ?? selectedCatalogue?.leadTime) }), 'Supplier price attached to inherited requisition line')}>Attach supplier and current price</Action>
+      <Action disabled={busy || !form.quotation || !form.reqLine || !chosenUnit || num(form.quantity || requested) <= 0 || num(form.quantity || requested) > maxQuantity || num(form.price ?? selectedCatalogue?.price) <= 0 || quoteLines.some((row: Row) => id(row.requisition_item) === id(form.reqLine))} onClick={() => run(
+        () => createBackendRecord('quotation-items', { quotation: form.quotation, requisition_item: form.reqLine, unit: chosenUnit, quantity: num(form.quantity || requested), unit_price: num(form.price ?? selectedCatalogue?.price), delivery_days: num(form.days ?? selectedCatalogue?.leadTime) }),
+        'Supplier price attached to inherited requisition line',
+        { ...form },
+      )}>Attach supplier and current price</Action>
       <Action tone="good" disabled={busy || !form.quotation || !quoteLines.length} onClick={() => run(() => runBackendAction('quotations', id(form.quotation), 'award', { selection_reason: 'Selected by Procurement Manager from vetted supplier catalogue and confirmed current price.' }), 'Supplier selected for LPO')}>Confirm supplier selection</Action>
     </>}
   </Panel>
 }
 
-function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel, names, suppliers, employees, stores, units, items, itemUnits, canManage, role }: any) {
-  const approved = data.requisitions.filter((row: Row) => ['approved', 'partially_ordered'].includes(id(row.status)))
+function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel, names, units, items, itemUnits, canManage, role, userName, lpoQueue, setLpoQueue }: any) {
+  const activeOrderRequisitions = new Set(
+    data.orders.filter((row: Row) => id(row.status) !== 'cancelled').map((row: Row) => id(row.requisition)),
+  )
+  const readyRequisitions = data.requisitions.filter((row: Row) =>
+    ['approved', 'partially_ordered'].includes(id(row.status))
+    && Boolean(id(row.selected_supplier || row.preferred_supplier))
+    && !activeOrderRequisitions.has(id(row.id)),
+  )
+  const prepareOrders = data.orders.filter((row: Row) => ['draft', 'rejected'].includes(id(row.status)))
+  const financeOrders = data.orders.filter((row: Row) => id(row.status) === 'pending_approval' && isFinanceApproval(row))
+  const managementOrders = data.orders.filter((row: Row) => id(row.status) === 'pending_approval' && isManagementApproval(row))
+  const approvedOrders = data.orders.filter((row: Row) => id(row.status) === 'approved')
+  const historyOrders = data.orders.filter((row: Row) => ['issued', 'partially_received', 'received', 'cancelled'].includes(id(row.status)))
+  const queueOptions: Array<{ key: LpoQueue; label: string; count: number }> = canManage
+    ? [
+        { key: 'prepare', label: 'Prepare LPO', count: readyRequisitions.length + prepareOrders.length },
+        { key: 'finance', label: 'Awaiting Finance', count: financeOrders.length },
+        { key: 'management', label: 'Awaiting GM', count: managementOrders.length },
+        { key: 'approved', label: 'Approved · Print & Send', count: approvedOrders.length },
+        { key: 'history', label: 'History', count: historyOrders.length },
+      ]
+    : role === 'financial manager'
+      ? [{ key: 'finance', label: 'Awaiting Finance', count: financeOrders.length }]
+      : [{ key: 'management', label: 'Awaiting GM', count: managementOrders.length }]
   const order = data.orders.find((row: Row) => id(row.id) === id(form.order))
   const lines = data.orderItems.filter((row: Row) => id(row.purchase_order) === id(form.order))
   const line = lines.find((row: Row) => id(row.id) === id(form.orderLine))
   const selectedItem = items.find((item: Row) => id(item.id) === id(line?.item))
   const availableUnits = configuredUnitsForItem(selectedItem, units, itemUnits)
   const conversion = conversionFactorFor(selectedItem, form.unit || line?.unit, itemUnits)
-  const editable = ['draft', 'rejected'].includes(id(order?.status))
-  const pendingApproval = id(order?.status) === 'pending_approval'
-  const approvedOrder = id(order?.status) === 'approved'
-  const approvalSteps = Array.isArray(order?.approval_steps) ? order.approval_steps : []
-  const currentApproval = approvalSteps.find((step: Row) => id(step.status) === 'pending')
-  const financeStage = Boolean(currentApproval && /finance/i.test(id(currentApproval.stage_name)))
-  const managementStage = Boolean(currentApproval && /(general manager|management)/i.test(id(currentApproval.stage_name)))
-  const canActOnApproval = Boolean(currentApproval && ((role === 'financial manager' && financeStage) || (role === 'general manager' && managementStage) || role === 'system administrator'))
+  const currentApproval = order ? currentApprovalStep(order) : undefined
   const financeLine = lines.find((row: Row) => id(row.id) === id(form.financeLine))
-  return <Panel title="Local Purchase Order" note={canManage ? "Generate the LPO from the approved Procurement decision, then submit it to Finance and General Management." : "Review only the LPOs waiting for your approval stage."}>
-    {canManage && <>
-      <Field label="Approved Store-linked requisition"><Select value={form.requisition} onChange={(v) => setForm({ requisition: v })} rows={approved} label={requisitionLabel} /></Field>
-      <Field label="Supplier"><Select value={form.supplier} onChange={(v) => setForm({ ...form, supplier: v })} rows={suppliers} optional /></Field>
-      <Field label="Ordered by"><Select value={form.employee} onChange={(v) => setForm({ ...form, employee: v })} rows={employees} /></Field>
-      <Field label="Receiving store"><Select value={form.store} onChange={(v) => setForm({ ...form, store: v })} rows={stores} optional /></Field>
-      <Two><Field label="Requested delivery date"><Input type="date" value={form.expectedDate} onChange={(v) => setForm({ ...form, expectedDate: v })} /></Field><Field label="Order valid until"><Input type="date" value={form.validUntil} onChange={(v) => setForm({ ...form, validUntil: v })} /></Field></Two>
-      <Action disabled={busy || !form.requisition || !form.employee} onClick={() => run(() => runBackendAction('requisitions', id(form.requisition), 'create-purchase-order', { supplier: form.supplier || null, ordered_by: form.employee, store: form.store || null, expected_date: form.expectedDate || null, valid_until: form.validUntil || null }), 'Draft LPO generated from the predecessor requisition')}>Generate LPO from requisition</Action>
-      <Divider />
-    </>}
-    <Field label="LPO approval workflow"><Select value={form.order} onChange={(v) => setForm({ order: v })} rows={data.orders.filter((r: Row) => !['issued', 'partially_received', 'received', 'cancelled'].includes(id(r.status)))} label={(row: Row) => `${orderLabel(row)} · ${id(row.status).replace(/_/g, ' ')}`} /></Field>
-    {order && <div style={{ marginBottom: 11, padding: 10, borderRadius: 6, color: pendingApproval ? 'var(--warn)' : approvedOrder ? 'var(--good)' : 'var(--text-muted)', background: pendingApproval ? 'var(--warn-soft)' : approvedOrder ? 'var(--good-soft)' : 'var(--surface-2)', fontSize: 10.8, lineHeight: 1.55 }}>
-      <strong>Revision {id(order.revision || 1)} · {id(order.status).replace(/_/g, ' ')}</strong>
-      {currentApproval && <div>Current decision: {id(currentApproval.stage_name)} · {id(currentApproval.approver_name)}</div>}
-      {approvalSteps.length > 0 && <div>{approvalSteps.map((step: Row) => `${id(step.stage_name)}: ${id(step.status)}`).join(' · ')}</div>}
-    </div>}
-    {canManage && <>
-      <Field label="LPO line inherited from requisition"><Select value={form.orderLine} onChange={(v) => { const found = lines.find((r: Row) => id(r.id) === v); setForm({ ...form, order: form.order, orderLine: v, quantity: found?.quantity, cost: found?.unit_cost, unit: found?.unit }) }} rows={lines} label={(row: Row) => names.items.get(id(row.item)) || id(row.item)} /></Field>
-      <Field label="Purchase unit"><Select value={form.unit} onChange={(v) => { const factor = conversionFactorFor(selectedItem, v, itemUnits); setForm({ ...form, unit: v, quantity: factor > 0 ? Number((num(line?.base_quantity) / factor).toFixed(4)) : form.quantity }) }} rows={availableUnits} /></Field>
-      <Two><Field label={`Procurement quantity (${names.units.get(id(form.unit || line?.unit)) || selectedItem?.uom || 'unit'})`}><Input type="number" value={form.quantity ?? line?.quantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><Field label="Confirmed supplier price"><Input type="number" value={form.cost ?? line?.unit_cost} onChange={(v) => setForm({ ...form, cost: v })} /></Field></Two>
-      {line && <UnitConversionNote quantity={num(form.quantity ?? line.quantity)} factor={conversion} selectedUnit={names.units.get(id(form.unit || line.unit)) || 'selected unit'} baseUnit={selectedItem?.uom || 'base units'} unitPrice={num(form.cost ?? line.unit_cost)} />}
-      <Action disabled={busy || !editable || !form.orderLine} onClick={() => run(() => updateBackendRecord('purchase-order-items', id(form.orderLine), { quantity: num(form.quantity), unit_cost: num(form.cost), unit: form.unit || null }), 'Procurement LPO line updated without changing the source requisition')}>Save Procurement decision</Action>
-      <Action disabled={busy || !editable || !form.order || !lines.length} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'submit-for-approval'), 'LPO sent to Financial Manager')}>Send to Financial Manager</Action>
-    </>}
-    {pendingApproval && canActOnApproval && <>
-      <Field label="Approval comments"><Input value={form.approvalComments} onChange={(v) => setForm({ ...form, approvalComments: v })} placeholder="Required when rejecting" /></Field>
-      {financeStage && <section style={{ margin: '12px 0', padding: 12, border: '1px solid var(--warn)', borderRadius: 8, background: 'var(--warn-soft)' }}>
-        <div style={{ marginBottom: 8, color: 'var(--text)', fontSize: 12, fontWeight: 800 }}>Finance quantity control</div>
-        <div style={{ marginBottom: 10, color: 'var(--text-muted)', fontSize: 10.5, lineHeight: 1.45 }}>Finance may reduce a line before approval. Procurement’s original quantity remains in the LPO audit trail.</div>
-        <Field label="LPO line"><Select value={form.financeLine} onChange={(v) => { const selected = lines.find((row: Row) => id(row.id) === v); setForm({ ...form, financeLine: v, financeQuantity: selected?.approved_quantity ?? selected?.quantity ?? '', financeReason: selected?.finance_reduction_reason || '' }) }} rows={lines} label={(row: Row) => `${names.items.get(id(row.item)) || id(row.item)} · Procurement ${row.procurement_quantity ?? row.quantity}`} /></Field>
-        <Two><Field label="Finance-approved quantity"><Input type="number" value={form.financeQuantity} onChange={(v) => setForm({ ...form, financeQuantity: v })} /></Field><Field label="Reduction reason"><Input value={form.financeReason} onChange={(v) => setForm({ ...form, financeReason: v })} placeholder="Required if reduced" /></Field></Two>
-        <Action disabled={busy || !financeLine || num(form.financeQuantity) < 0 || num(form.financeQuantity) > num(financeLine.procurement_quantity ?? financeLine.quantity) || (num(form.financeQuantity) < num(financeLine.procurement_quantity ?? financeLine.quantity) && !id(form.financeReason).trim())} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'finance-reduce-quantities', { comments: form.approvalComments || '', lines: [{ id: id(financeLine.id), approved_quantity: num(form.financeQuantity), reason: form.financeReason || '' }] }), 'Finance quantity decision recorded')}>Save finance quantity</Action>
+  const canDecideFinance = role === 'financial manager' || role === 'system administrator'
+  const canDecideManagement = role === 'general manager' || role === 'system administrator'
+  const selectedRequisition = readyRequisitions.find((row: Row) => id(row.id) === id(form.requisition))
+
+  const chooseQueue = (queue: LpoQueue) => {
+    setLpoQueue(queue)
+    setForm({})
+  }
+  const chooseOrder = (value: string) => setForm({ order: value })
+
+  return <Panel title="Local Purchase Orders" note="Work only from the queue assigned to your role. Source documents and commercial decisions remain linked for audit.">
+    <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 11, marginBottom: 13, borderBottom: '1px solid var(--border)' }}>
+      {queueOptions.map((queue) => <button key={queue.key} type="button" onClick={() => chooseQueue(queue.key)} style={{ flex: 'none', padding: '7px 9px', border: `1px solid ${lpoQueue === queue.key ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 7, background: lpoQueue === queue.key ? 'var(--accent-soft)' : 'var(--surface)', color: lpoQueue === queue.key ? 'var(--accent)' : 'var(--text-muted)', font: 'inherit', fontSize: 10.5, fontWeight: 750, cursor: 'pointer' }}>{queue.label} ({queue.count})</button>)}
+    </div>
+
+    {lpoQueue === 'prepare' && canManage && <>
+      <SectionLabel>Start from the approved Procurement decision</SectionLabel>
+      <Field label="Requisition ready for LPO"><Select value={form.requisition} onChange={(v) => setForm({ requisition: v })} rows={readyRequisitions} label={requisitionLabel} /></Field>
+      {!readyRequisitions.length && <Hint>No newly approved requisition is waiting for LPO preparation.</Hint>}
+      {selectedRequisition && <section style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8, marginBottom: 12 }}>
+        <ReadOnlyValue label="Supplier" value={names.suppliers.get(id(selectedRequisition.selected_supplier || selectedRequisition.preferred_supplier)) || 'Inherited from awarded quotation'} />
+        <ReadOnlyValue label="Prepared by" value={userName} />
+        <ReadOnlyValue label="Destination" value="Inherited from Store Requisition" />
+        <ReadOnlyValue label="Source" value={id(selectedRequisition.requisition_number)} />
       </section>}
-      <Action tone="good" disabled={busy || !currentApproval} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'approve', { comments: form.approvalComments || '' }), 'LPO approval recorded')}>Approve current stage</Action>
-      <Action tone="danger" disabled={busy || !currentApproval || !form.approvalComments} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'reject', { comments: form.approvalComments }), 'LPO returned to Procurement as rejected')}>Reject for revision</Action>
-    </>}
-    {canManage && <>
+      <Two><Field label="Requested delivery date"><Input type="date" value={form.expectedDate} onChange={(v) => setForm({ ...form, expectedDate: v })} /></Field><Field label="Order valid until"><Input type="date" value={form.validUntil} onChange={(v) => setForm({ ...form, validUntil: v })} /></Field></Two>
+      <Action disabled={busy || !form.requisition} onClick={() => run(() => runBackendAction('requisitions', id(form.requisition), 'create-purchase-order', { expected_date: form.expectedDate || null, valid_until: form.validUntil || null }), 'Draft LPO generated with supplier, preparer, destination, articles, quantities and prices inherited')}>Generate draft LPO</Action>
       <Divider />
-      <Field label="Supplier email"><Input type="email" value={form.email} onChange={(v) => setForm({ ...form, email: v })} placeholder={order ? 'Defaults to registered supplier email' : ''} /></Field>
-      <Action tone="good" disabled={busy || !approvedOrder || !form.order} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'issue', { sent_to_email: form.email || '' }), 'Approved LPO emailed to supplier; lead-time clock started')}>Email approved LPO to supplier</Action>
-      <Field label="Issued LPO"><Select value={form.issuedOrder} onChange={(v) => setForm({ issuedOrder: v })} rows={data.orders.filter((r: Row) => ['issued', 'partially_received', 'received'].includes(id(r.status)))} label={orderLabel} /></Field>
-      <Field label="Resend email to"><Input type="email" value={form.resendEmail} onChange={(v) => setForm({ ...form, resendEmail: v })} /></Field>
-      <Action disabled={busy || !form.issuedOrder} onClick={() => run(() => runBackendAction('purchase-orders', id(form.issuedOrder), 'resend', { sent_to_email: form.resendEmail || '' }), 'LPO email resent without resetting original lead-time start')}>Resend LPO email</Action>
+      <SectionLabel>Continue a draft or returned LPO</SectionLabel>
+      <Field label="Draft / returned LPO"><Select value={form.order} onChange={chooseOrder} rows={prepareOrders} label={(row: Row) => `${orderLabel(row)} · ${id(row.status).replace(/_/g, ' ')}`} /></Field>
+      {!prepareOrders.length && <Hint>No draft or returned LPO needs Procurement action.</Hint>}
+      {order && <LpoSummary order={order} lines={lines} names={names} />}
+      {order && <>
+        <Field label="LPO item"><Select value={form.orderLine} onChange={(v) => { const found = lines.find((row: Row) => id(row.id) === v); setForm({ ...form, orderLine: v, quantity: found?.quantity, cost: found?.unit_cost, unit: found?.unit }) }} rows={lines} label={(row: Row) => names.items.get(id(row.item)) || id(row.item)} /></Field>
+        <Field label="Purchase unit"><Select value={form.unit} onChange={(v) => { const factor = conversionFactorFor(selectedItem, v, itemUnits); setForm({ ...form, unit: v, quantity: factor > 0 ? Number((num(line?.base_quantity) / factor).toFixed(4)) : form.quantity }) }} rows={availableUnits} /></Field>
+        <Two><Field label={`Procurement quantity (${names.units.get(id(form.unit || line?.unit)) || selectedItem?.uom || 'unit'})`}><Input type="number" value={form.quantity ?? line?.quantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><Field label="Confirmed supplier price"><Input type="number" value={form.cost ?? line?.unit_cost} onChange={(v) => setForm({ ...form, cost: v })} /></Field></Two>
+        {line && <UnitConversionNote quantity={num(form.quantity ?? line.quantity)} factor={conversion} selectedUnit={names.units.get(id(form.unit || line.unit)) || 'selected unit'} baseUnit={selectedItem?.uom || 'base units'} unitPrice={num(form.cost ?? line.unit_cost)} />}
+        <Action disabled={busy || !form.orderLine} onClick={() => run(() => updateBackendRecord('purchase-order-items', id(form.orderLine), { quantity: num(form.quantity), unit_cost: num(form.cost), unit: form.unit || null }), 'Procurement LPO line updated without changing the source requisition')}>Save LPO item</Action>
+        <Action tone="good" disabled={busy || !lines.length} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'submit-for-approval'), 'LPO sent to Financial Manager')}>Send to Financial Manager</Action>
+      </>}
+    </>}
+
+    {lpoQueue === 'finance' && <>
+      <Field label="LPO awaiting Finance"><Select value={form.order} onChange={chooseOrder} rows={financeOrders} label={orderLabel} /></Field>
+      {!financeOrders.length && <Hint>No LPO is waiting for Finance approval.</Hint>}
+      {order && <LpoSummary order={order} lines={lines} names={names} />}
+      {order && !canDecideFinance && <Hint>This LPO is currently with Finance. Procurement can monitor it but cannot make the Finance decision.</Hint>}
+      {order && canDecideFinance && <>
+        <SectionLabel>Optional quantity reduction</SectionLabel>
+        <Field label="LPO item"><Select value={form.financeLine} onChange={(v) => { const selected = lines.find((row: Row) => id(row.id) === v); setForm({ ...form, financeLine: v, financeQuantity: selected?.approved_quantity ?? selected?.quantity ?? '', financeReason: selected?.finance_reduction_reason || '' }) }} rows={lines} label={(row: Row) => `${names.items.get(id(row.item)) || id(row.item)} · Procurement ${row.procurement_quantity ?? row.quantity}`} /></Field>
+        <Two><Field label="Quantity approved by Finance"><Input type="number" value={form.financeQuantity} onChange={(v) => setForm({ ...form, financeQuantity: v })} /></Field><Field label="Reason when reduced"><Input value={form.financeReason} onChange={(v) => setForm({ ...form, financeReason: v })} placeholder="Required only when reduced" /></Field></Two>
+        <Action disabled={busy || !financeLine || num(form.financeQuantity) < 0 || num(form.financeQuantity) > num(financeLine.procurement_quantity ?? financeLine.quantity) || (num(form.financeQuantity) < num(financeLine.procurement_quantity ?? financeLine.quantity) && !id(form.financeReason).trim())} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'finance-reduce-quantities', { comments: form.approvalComments || '', lines: [{ id: id(financeLine.id), approved_quantity: num(form.financeQuantity), reason: form.financeReason || '' }] }), 'Finance quantity decision recorded')}>Save quantity decision</Action>
+        <Field label="Finance decision comment"><Input value={form.approvalComments} onChange={(v) => setForm({ ...form, approvalComments: v })} placeholder="Required when rejecting" /></Field>
+        <Action tone="good" disabled={busy || !currentApproval} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'approve', { comments: form.approvalComments || '' }), 'Finance approved the LPO and sent it to the General Manager')}>Approve and send to General Manager</Action>
+        <Action tone="danger" disabled={busy || !currentApproval || !id(form.approvalComments).trim()} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'reject', { comments: form.approvalComments }), 'LPO returned to Procurement for revision')}>Reject and return to Procurement</Action>
+      </>}
+    </>}
+
+    {lpoQueue === 'management' && <>
+      <Field label="LPO awaiting General Manager"><Select value={form.order} onChange={chooseOrder} rows={managementOrders} label={orderLabel} /></Field>
+      {!managementOrders.length && <Hint>No LPO is waiting for final General Manager approval.</Hint>}
+      {order && <LpoSummary order={order} lines={lines} names={names} />}
+      {order && !canDecideManagement && <Hint>Finance has approved this LPO. It is now waiting for the independent General Manager decision.</Hint>}
+      {order && canDecideManagement && <>
+        <Field label="General Manager decision comment"><Input value={form.approvalComments} onChange={(v) => setForm({ ...form, approvalComments: v })} placeholder="Required when rejecting" /></Field>
+        <Action tone="good" disabled={busy || !currentApproval} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'approve', { comments: form.approvalComments || '' }), 'Final LPO approval recorded and returned to Procurement')}>Give final approval</Action>
+        <Action tone="danger" disabled={busy || !currentApproval || !id(form.approvalComments).trim()} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'reject', { comments: form.approvalComments }), 'LPO returned to Procurement for revision')}>Reject and return to Procurement</Action>
+      </>}
+    </>}
+
+    {lpoQueue === 'approved' && canManage && <>
+      <Field label="Finally approved LPO"><Select value={form.order} onChange={chooseOrder} rows={approvedOrders} label={orderLabel} /></Field>
+      {!approvedOrders.length && <Hint>No finally approved LPO is waiting to be printed and sent.</Hint>}
+      {order && <LpoSummary order={order} lines={lines} names={names} />}
+      {order && <>
+        <Action disabled={busy} onClick={() => run(() => downloadControlledPurchaseOrder(id(order.id)), `${id(order.next_print_classification) || 'Controlled'} LPO downloaded`)}>Download {id(order.next_print_classification) || 'controlled'} LPO</Action>
+        <Field label="Supplier email"><Input type="email" value={form.email} onChange={(v) => setForm({ ...form, email: v })} placeholder="Leave blank to use the registered supplier email" /></Field>
+        <Action tone="good" disabled={busy} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'issue', { sent_to_email: form.email || '' }), 'Approved LPO emailed to supplier; lead-time clock started')}>Email LPO and start lead time</Action>
+      </>}
+    </>}
+
+    {lpoQueue === 'history' && canManage && <>
+      <Field label="Issued / completed LPO"><Select value={form.order} onChange={chooseOrder} rows={historyOrders} label={(row: Row) => `${orderLabel(row)} · ${id(row.status).replace(/_/g, ' ')}`} /></Field>
+      {!historyOrders.length && <Hint>No issued or completed LPO history is available.</Hint>}
+      {order && <LpoSummary order={order} lines={lines} names={names} />}
+      {order && id(order.status) !== 'cancelled' && <>
+        <Action disabled={busy} onClick={() => run(() => downloadControlledPurchaseOrder(id(order.id)), `${id(order.next_print_classification) || 'COPY'} LPO downloaded`)}>Download {id(order.next_print_classification) || 'COPY'}</Action>
+        <Field label="Resend email to"><Input type="email" value={form.resendEmail} onChange={(v) => setForm({ ...form, resendEmail: v })} placeholder="Leave blank to use the registered supplier email" /></Field>
+        <Action disabled={busy} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'resend', { sent_to_email: form.resendEmail || '' }), 'LPO email resent without resetting the original lead-time start')}>Resend LPO email</Action>
+      </>}
     </>}
   </Panel>
+}
+
+function LpoSummary({ order, lines, names }: { order: Row; lines: Row[]; names: Record<string, Map<string, string>> }) {
+  const approvalSteps = Array.isArray(order.approval_steps) ? order.approval_steps as Row[] : []
+  return <section style={{ margin: '10px 0 14px', overflow: 'hidden', border: '1px solid var(--border)', borderRadius: 8 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8, padding: 11, background: 'var(--surface-2)' }}>
+      <ReadOnlyValue label="LPO" value={id(order.po_number)} />
+      <ReadOnlyValue label="Status" value={id(order.status).replace(/_/g, ' ')} />
+      <ReadOnlyValue label="Supplier" value={names.suppliers.get(id(order.supplier)) || 'Inherited supplier'} />
+      <ReadOnlyValue label="Total" value={money(order.total_amount)} />
+    </div>
+    {approvalSteps.length > 0 && <div style={{ padding: '9px 11px', borderTop: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 10.5, lineHeight: 1.55 }}>{approvalSteps.map((step) => `${id(step.stage_name)}: ${id(step.status)}`).join(' · ')}</div>}
+    <div style={{ padding: '8px 11px', display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) .6fr .7fr .8fr', gap: 8, borderTop: '1px solid var(--border)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}><span>Article</span><span>Quantity</span><span>Unit price</span><span>Total</span></div>
+    {lines.map((row) => <div key={id(row.id)} style={{ padding: '9px 11px', display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) .6fr .7fr .8fr', gap: 8, borderTop: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 10.8 }}><strong style={{ color: 'var(--text)' }}>{names.items.get(id(row.item)) || id(row.item)}</strong><span>{id(row.approved_quantity ?? row.quantity)}</span><span>{money(row.unit_cost)}</span><span>{money(num(row.approved_quantity ?? row.quantity) * num(row.unit_cost))}</span></div>)}
+    {!lines.length && <div style={{ padding: 13, borderTop: '1px solid var(--border)', color: 'var(--text-faint)', fontSize: 10.5 }}>No LPO items are available.</div>}
+  </section>
 }
 
 function ReceiptPanel({ data, form, setForm, busy, run, orderLabel, receiptLabel, names, stores }: any) {
@@ -509,7 +681,7 @@ function ReturnPanel({ data, form, setForm, busy, run, receiptLabel, names, empl
   </Panel>
 }
 
-function StageTable({ stage, data, names, onSelect }: { stage: Stage; data: Datasets; names: Record<string, Map<string, string>>; onSelect: (row: Row) => void }) {
+function StageTable({ stage, lpoQueue, data, names, onSelect }: { stage: Stage; lpoQueue: LpoQueue; data: Datasets; names: Record<string, Map<string, string>>; onSelect: (row: Row) => void }) {
   const requisitionNumber = (requisitionId: string) =>
     id(data.requisitions.find((record) => id(record.id) === requisitionId)?.requisition_number)
     || `PR-${requisitionId.slice(0, 8).toUpperCase()}`
@@ -517,7 +689,13 @@ function StageTable({ stage, data, names, onSelect }: { stage: Stage; data: Data
   let title = ''
   if (stage === 'request') { rows = data.requisitionItems; title = 'Requisition lines' }
   if (stage === 'quote') { rows = data.quotations; title = 'Supplier comparison' }
-  if (stage === 'lpo') { rows = data.orders; title = 'Local purchase orders' }
+  if (stage === 'lpo') {
+    if (lpoQueue === 'prepare') { rows = data.orders.filter((row) => ['draft', 'rejected'].includes(id(row.status))); title = 'Draft and returned LPOs' }
+    if (lpoQueue === 'finance') { rows = data.orders.filter((row) => id(row.status) === 'pending_approval' && isFinanceApproval(row)); title = 'LPOs awaiting Finance' }
+    if (lpoQueue === 'management') { rows = data.orders.filter((row) => id(row.status) === 'pending_approval' && isManagementApproval(row)); title = 'LPOs awaiting General Manager' }
+    if (lpoQueue === 'approved') { rows = data.orders.filter((row) => id(row.status) === 'approved'); title = 'Finally approved LPOs' }
+    if (lpoQueue === 'history') { rows = data.orders.filter((row) => ['issued', 'partially_received', 'received', 'cancelled'].includes(id(row.status))); title = 'Issued and completed LPO history' }
+  }
   if (stage === 'receipt') { rows = data.receipts; title = 'Goods receipt notes' }
   if (stage === 'inspect') { rows = data.inspections; title = 'Inspection records' }
   if (stage === 'return') { rows = data.returns; title = 'Supplier returns' }
@@ -953,6 +1131,7 @@ function ReadOnlyStage() {
   </Panel>
 }
 function Field({ label, children }: { label: string; children: ReactNode }) { return <label style={{ display: 'block', marginBottom: 11 }}><HelpLabel label={label} style={labelStyle} />{children}</label> }
+function SectionLabel({ children }: { children: ReactNode }) { return <div style={{ margin: '2px 0 10px', color: 'var(--text)', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em' }}>{children}</div> }
 function Two({ children }: { children: ReactNode }) { return <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9 }}>{children}</div> }
 function Input({ value, onChange, type = 'text', placeholder = '' }: { value: unknown; onChange: (value: string) => void; type?: string; placeholder?: string }) { return <input type={type} value={String(value ?? '')} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} style={control} /> }
 function Select({ value, onChange, rows, label = (row: Row) => id(row.name), optional = false }: { value: unknown; onChange: (value: string) => void; rows: Row[]; label?: (row: Row) => string; optional?: boolean }) {
