@@ -73,9 +73,4 @@ class Migration(migrations.Migration):
             field=models.CharField(blank=True, max_length=50, null=True, unique=True),
         ),
         migrations.RunPython(assign_global_numeric_references, migrations.RunPython.noop),
-        migrations.AlterField(
-            model_name="purchaseorder",
-            name="lpo_number",
-            field=models.CharField(blank=True, max_length=50, unique=True),
-        ),
     ]
