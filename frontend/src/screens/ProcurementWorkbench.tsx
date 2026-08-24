@@ -108,10 +108,18 @@ export default function ProcurementWorkbench() {
   }, [app.procurementDraftId, app.consumeProcurementDraft])
   const scopedData = useMemo(() => {
     if (!app.currentBranch) return data
-    const employees = new Set(app.data.employees.map((row) => id(row.id)))
-    const stores = new Set(app.data.locations.map((row) => id(row.id)))
+    const selectedBranchId = id(
+      app.data.branches.find((branch) => id(branch.name) === id(app.currentBranch))?.id
+      || app.user.branchId,
+    )
     const next = { ...data }
-    next.requisitions = data.requisitions.filter((row) => !row.requester || employees.has(id(row.requester)))
+    // The workspace API has already applied role-based visibility. Scope by the
+    // requisition's branch directly; Procurement is deliberately not permitted
+    // to browse the employee directory, so requester-based scoping hides every
+    // valid Store Keeper hand-off when app.data.employees is empty.
+    next.requisitions = selectedBranchId
+      ? data.requisitions.filter((row) => !row.branch || id(row.branch) === selectedBranchId)
+      : data.requisitions
     const requisitions = new Set(next.requisitions.map((row) => id(row.id)))
     next.requisitionItems = data.requisitionItems.filter((row) => requisitions.has(id(row.requisition)))
     next.approvals = data.approvals.filter((row) => requisitions.has(id(row.requisition)))
@@ -119,7 +127,7 @@ export default function ProcurementWorkbench() {
     next.quotations = data.quotations.filter((row) => requisitions.has(id(row.requisition)))
     const quotations = new Set(next.quotations.map((row) => id(row.id)))
     next.quotationItems = data.quotationItems.filter((row) => quotations.has(id(row.quotation)))
-    next.orders = data.orders.filter((row) => requisitions.has(id(row.requisition)) && (!row.store || stores.has(id(row.store))))
+    next.orders = data.orders.filter((row) => requisitions.has(id(row.requisition)))
     const orders = new Set(next.orders.map((row) => id(row.id)))
     next.orderItems = data.orderItems.filter((row) => orders.has(id(row.purchase_order)))
     next.receipts = data.receipts.filter((row) => orders.has(id(row.purchase_order)))
@@ -128,11 +136,11 @@ export default function ProcurementWorkbench() {
     next.inspections = data.inspections.filter((row) => receipts.has(id(row.goods_receipt)))
     const inspections = new Set(next.inspections.map((row) => id(row.id)))
     next.inspectionItems = data.inspectionItems.filter((row) => inspections.has(id(row.inspection)))
-    next.returns = data.returns.filter((row) => receipts.has(id(row.goods_receipt)) && stores.has(id(row.store)))
+    next.returns = data.returns.filter((row) => receipts.has(id(row.goods_receipt)))
     const returns = new Set(next.returns.map((row) => id(row.id)))
     next.returnItems = data.returnItems.filter((row) => returns.has(id(row.supplier_return)))
     return next
-  }, [app.currentBranch, app.data.employees, app.data.locations, data])
+  }, [app.currentBranch, app.data.branches, app.user.branchId, data])
 
   const run = async (operation: () => Promise<unknown>, success: string) => {
     setBusy(true)
