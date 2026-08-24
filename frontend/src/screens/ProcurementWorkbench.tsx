@@ -483,6 +483,11 @@ function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel
   const managementOrders = data.orders.filter((row: Row) => id(row.status) === 'pending_approval' && isManagementApproval(row))
   const approvedOrders = data.orders.filter((row: Row) => id(row.status) === 'approved')
   const historyOrders = data.orders.filter((row: Row) => ['issued', 'partially_received', 'received', 'cancelled'].includes(id(row.status)))
+  const activeQueueOrders = lpoQueue === 'prepare' ? prepareOrders
+    : lpoQueue === 'finance' ? financeOrders
+      : lpoQueue === 'management' ? managementOrders
+        : lpoQueue === 'approved' ? approvedOrders
+          : historyOrders
   const queueOptions: Array<{ key: LpoQueue; label: string; count: number }> = canManage
     ? [
         { key: 'prepare', label: 'Prepare LPO', count: readyRequisitions.length + prepareOrders.length },
@@ -532,9 +537,9 @@ function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel
     return num(orderLine.base_quantity) > num(requisitionLine.remaining_order_quantity ?? requisitionLine.approved_base_quantity) + 0.000001
   })
   useEffect(() => {
-    if (lpoQueue !== 'prepare' || form.order || form.requisition || prepareOrders.length !== 1) return
-    setForm({ order: id(prepareOrders[0].id) })
-  }, [lpoQueue, form.order, form.requisition, prepareOrders, setForm])
+    if (form.order || form.requisition || activeQueueOrders.length !== 1) return
+    setForm({ order: id(activeQueueOrders[0].id) })
+  }, [form.order, form.requisition, activeQueueOrders, setForm])
   useEffect(() => {
     if (lpoQueue !== 'prepare' || !order || form.orderLine || lines.length !== 1) return
     const onlyLine = lines[0]
@@ -548,8 +553,8 @@ function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel
   }, [lpoQueue, order, form.orderLine, lines, setForm])
 
   return <Panel title="Local Purchase Orders" note="Work only from the queue assigned to your role. Source documents and commercial decisions remain linked for audit.">
-    <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 11, marginBottom: 13, borderBottom: '1px solid var(--border)' }}>
-      {queueOptions.map((queue) => <button key={queue.key} type="button" onClick={() => chooseQueue(queue.key)} style={{ flex: 'none', padding: '7px 9px', border: `1px solid ${lpoQueue === queue.key ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 7, background: lpoQueue === queue.key ? 'var(--accent-soft)' : 'var(--surface)', color: lpoQueue === queue.key ? 'var(--accent)' : 'var(--text-muted)', font: 'inherit', fontSize: 10.5, fontWeight: 750, cursor: 'pointer' }}>{queue.label} ({queue.count})</button>)}
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 6, paddingBottom: 11, marginBottom: 13, borderBottom: '1px solid var(--border)' }}>
+      {queueOptions.map((queue) => <button key={queue.key} type="button" onClick={() => chooseQueue(queue.key)} style={{ minWidth: 0, padding: '7px 9px', border: `1px solid ${lpoQueue === queue.key ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 7, background: lpoQueue === queue.key ? 'var(--accent-soft)' : 'var(--surface)', color: lpoQueue === queue.key ? 'var(--accent)' : 'var(--text-muted)', font: 'inherit', fontSize: 10.5, fontWeight: 750, cursor: 'pointer' }}>{queue.label} ({queue.count})</button>)}
     </div>
 
     {lpoQueue === 'prepare' && canManage && <>
@@ -668,7 +673,7 @@ function ReceiptPanel({ data, form, setForm, busy, run, orderLabel, receiptLabel
   const duplicate = receiptLines.some((row: Row) => id(row.purchase_order_item) === id(form.orderLine))
   return <Panel title="Receiving & GRN" note="Select an issued LPO. Supplier, articles, destination and approved quantities are inherited; only the physical quantity received is entered.">
     <Field label="Ready LPO"><Select value={form.order} onChange={(v) => setForm({ order: v, receipt: '', orderLine: '', quantity: '' })} rows={readyOrders} label={orderLabel} /></Field>
-    {!readyOrders.length && <Hint>No issued or partially received LPO is ready for receipt.</Hint>}
+    {!readyOrders.length && <Hint>Nothing is ready for Receiving yet. After final General Manager approval, Procurement must open “Approved · Print & Send” and email the LPO to the supplier. It will appear here when its status becomes issued.</Hint>}
     {selectedOrder && <Hint>This LPO is the receiving source document. Its approved quantities are never edited by Receiving.</Hint>}
     <Field label="Received date"><Input type="date" value={form.date} onChange={(v) => setForm({ ...form, date: v })} /></Field>
     <Field label="Supplier invoice number"><Input value={form.invoiceNumber} onChange={(v) => setForm({ ...form, invoiceNumber: v })} /></Field>
