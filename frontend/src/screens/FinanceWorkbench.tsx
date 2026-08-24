@@ -63,7 +63,7 @@ export default function FinanceWorkbench() {
 
   const suppliers = useMemo(() => new Map(app.data.suppliers.map((row) => [sid(row.id), sid(row.name)])), [app.data.suppliers])
   const stores = app.data.locations
-  const orderLabel = (row: Row) => `${sid(row.po_number)} · ${suppliers.get(sid(row.supplier)) || 'Supplier'} · ${money(row.total_amount)}`
+  const orderLabel = (row: Row) => `${sid(row.lpo_number || row.po_number)} · ${suppliers.get(sid(row.supplier)) || 'Supplier'} · ${money(row.total_amount)}`
   const invoiceLabel = (row: Row) => `${sid(row.invoice_number)} · ${suppliers.get(sid(row.supplier)) || 'Supplier'} · ${money(row.balance_due)} due`
   const tabs: Array<[FinanceTab, string, string]> = [
     ['invoices', 'request_page', 'Invoices & matching'], ['payments', 'payments', 'Supplier payments'],

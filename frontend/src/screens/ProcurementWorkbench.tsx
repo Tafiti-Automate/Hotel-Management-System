@@ -249,7 +249,7 @@ export default function ProcurementWorkbench() {
   }), [app.data])
 
   const requisitionLabel = (row: Row) => `${id(row.requisition_number) || `PR-${id(row.id).slice(0, 8).toUpperCase()}`} · ${['store_requisition','store_shortage'].includes(id(row.procurement_source)) ? 'Store Requisition' : 'Manual'} · ${id(row.reason)}`
-  const orderLabel = (row: Row) => `${id(row.po_number) || id(row.id).slice(0, 8)} · ${names.suppliers.get(id(row.supplier)) || 'Supplier'}`
+  const orderLabel = (row: Row) => `${id(row.lpo_number) || id(row.po_number) || id(row.id).slice(0, 8)} · ${names.suppliers.get(id(row.supplier)) || 'Supplier'}`
   const receiptLabel = (row: Row) => id(row.grn_number) || `GRN-${id(row.id).slice(0, 8).toUpperCase()}`
 
   const roleStages: Partial<Record<string, Stage[]>> = {
@@ -480,7 +480,7 @@ function QuotePanel({ data, form, setForm, busy, run, requisitionLabel, names, s
   </Panel>
 }
 
-function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel, names, units, items, itemUnits, canManage, role, userName, lpoQueue, setLpoQueue }: any) {
+function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel, names, suppliers, units, items, itemUnits, canManage, role, userName, lpoQueue, setLpoQueue }: any) {
   const activeOrderRequisitions = new Set(
     data.orders.filter((row: Row) => id(row.status) !== 'cancelled').map((row: Row) => id(row.requisition)),
   )
@@ -511,6 +511,8 @@ function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel
       ? [{ key: 'finance', label: 'Awaiting Finance', count: financeOrders.length }]
       : [{ key: 'management', label: 'Awaiting GM', count: managementOrders.length }]
   const order = data.orders.find((row: Row) => id(row.id) === id(form.order))
+  const registeredSupplier = suppliers.find((row: Row) => id(row.id) === id(order?.supplier))
+  const registeredSupplierEmail = id(order?.supplier_email || registeredSupplier?.email).trim()
   const lines = data.orderItems.filter((row: Row) => id(row.purchase_order) === id(form.order))
   const line = lines.find((row: Row) => id(row.id) === id(form.orderLine))
   const selectedItem = items.find((item: Row) => id(item.id) === id(line?.item))
@@ -643,8 +645,9 @@ function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel
           `${id(order.next_print_classification) || 'Controlled'} LPO downloaded`,
           { ...form },
         )}>1. Download {id(order.next_print_classification) || 'controlled'} LPO</Action>
-        <Field label="Supplier email"><Input type="email" value={form.email} onChange={(v) => setForm({ ...form, email: v })} placeholder="Leave blank to use the registered supplier email" /></Field>
-        <Action tone="good" disabled={busy} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'issue', { sent_to_email: form.email || '' }), 'Approved LPO emailed to supplier; lead-time clock started')}>2. Email LPO and start lead time</Action>
+        <ReadOnlyValue label="Registered supplier email" value={registeredSupplierEmail || 'No email registered'} />
+        {!registeredSupplierEmail && <Hint>Update this supplier's email in Supplier Registration before sending the LPO.</Hint>}
+        <Action tone="good" disabled={busy || !registeredSupplierEmail} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'issue'), 'Approved LPO emailed to the registered supplier email; lead-time clock started')}>2. Email LPO and start lead time</Action>
       </>}
     </>}
 
@@ -654,8 +657,9 @@ function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel
       {order && <LpoSummary order={order} lines={lines} names={names} />}
       {order && id(order.status) !== 'cancelled' && <>
         <Action disabled={busy} onClick={() => run(() => downloadControlledPurchaseOrder(id(order.id)), `${id(order.next_print_classification) || 'COPY'} LPO downloaded`)}>Download {id(order.next_print_classification) || 'COPY'}</Action>
-        <Field label="Resend email to"><Input type="email" value={form.resendEmail} onChange={(v) => setForm({ ...form, resendEmail: v })} placeholder="Leave blank to use the registered supplier email" /></Field>
-        <Action disabled={busy} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'resend', { sent_to_email: form.resendEmail || '' }), 'LPO email resent without resetting the original lead-time start')}>Resend LPO email</Action>
+        <ReadOnlyValue label="Registered supplier email" value={registeredSupplierEmail || 'No email registered'} />
+        {!registeredSupplierEmail && <Hint>Update this supplier's email in Supplier Registration before resending the LPO.</Hint>}
+        <Action disabled={busy || !registeredSupplierEmail} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'resend'), 'LPO email resent to the registered supplier email without resetting the original lead-time start')}>Resend LPO email</Action>
       </>}
     </>}
   </Panel>
@@ -665,7 +669,8 @@ function LpoSummary({ order, lines, names }: { order: Row; lines: Row[]; names: 
   const approvalSteps = Array.isArray(order.approval_steps) ? order.approval_steps as Row[] : []
   return <section style={{ margin: '10px 0 14px', overflow: 'hidden', border: '1px solid var(--border)', borderRadius: 8 }}>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8, padding: 11, background: 'var(--surface-2)' }}>
-      <ReadOnlyValue label="LPO" value={id(order.po_number)} />
+      <ReadOnlyValue label="LPO number" value={id(order.lpo_number)} />
+      <ReadOnlyValue label="PO number" value={id(order.po_number)} />
       <ReadOnlyValue label="Status" value={id(order.status).replace(/_/g, ' ')} />
       <ReadOnlyValue label="Supplier" value={names.suppliers.get(id(order.supplier)) || 'Inherited supplier'} />
       <ReadOnlyValue label="Total" value={money(order.total_amount)} />
@@ -816,7 +821,7 @@ function StageTable({ stage, lpoQueue, data, names, onSelect }: { stage: Stage; 
   }
   const cells = (row: Row): string[] => {
     if (stage === 'request') return [requisitionNumber(id(row.requisition)), names.items.get(id(row.item)) || id(row.item), id(row.quantity), money(row.estimated_total)]
-    if (stage === 'lpo') return [id(row.po_number), names.suppliers.get(id(row.supplier)) || id(row.supplier), money(row.total_amount), id(row.status)]
+    if (stage === 'lpo') return [`LPO ${id(row.lpo_number)} · PO ${id(row.po_number)}`, names.suppliers.get(id(row.supplier)) || id(row.supplier), money(row.total_amount), id(row.status)]
     if (stage === 'receipt') return [id(row.grn_number) || `GRN-${id(row.id).slice(0, 8)}`, id(row.received_date), names.employees.get(id(row.received_by)) || id(row.received_by), `${data.receiptItems.filter((line) => id(line.goods_receipt) === id(row.id)).length} lines`]
     if (stage === 'inspect') return [`INS-${id(row.id).slice(0, 8)}`, `GRN-${id(row.goods_receipt).slice(0, 8)}`, names.employees.get(id(row.inspected_by)) || id(row.inspected_by), id(row.status)]
     return [id(row.return_no), names.suppliers.get(id(row.supplier)) || id(row.supplier), id(row.return_date), id(row.status)]
@@ -865,7 +870,7 @@ function ProcurementRecordDrawer({ stage, row, data, names, canAttach, onClose, 
             : 'Supplier return'
   const reference = stage === 'request' ? id(requisition?.requisition_number) || `PR-${id(row.requisition).slice(0, 8).toUpperCase()}`
     : stage === 'quote' ? `QUOTE-${id(row.id).slice(0, 8).toUpperCase()}`
-      : stage === 'lpo' ? id(row.po_number) || id(row.id)
+      : stage === 'lpo' ? id(row.lpo_number) || id(row.po_number) || id(row.id)
         : stage === 'receipt' ? id(row.grn_number) || `GRN-${id(row.id).slice(0, 8).toUpperCase()}`
           : stage === 'inspect' ? `INS-${id(row.id).slice(0, 8).toUpperCase()}`
             : id(row.return_no) || id(row.id)
@@ -895,6 +900,8 @@ function ProcurementRecordDrawer({ stage, row, data, names, canAttach, onClose, 
     ['Quoted total', money(row.total_amount)],
     ['Evaluation', winner ? 'Selected winner' : 'Open quotation'],
   ] : stage === 'lpo' ? [
+    ['LPO number', id(row.lpo_number)],
+    ['PO number', id(row.po_number)],
     ['Supplier', names.suppliers.get(id(row.supplier)) || id(row.supplier)],
     ['Receiving store', names.stores.get(id(row.store)) || id(row.store) || '—'],
     ['Order total', money(row.total_amount)],
@@ -907,7 +914,7 @@ function ProcurementRecordDrawer({ stage, row, data, names, canAttach, onClose, 
     ['Email delivery', id(row.email_status).replace(/_/g, ' ') || 'Not sent'],
     ['Supplier acknowledgement', id(row.supplier_acknowledged_by) || 'Not acknowledged'],
   ] : stage === 'receipt' ? [
-    ['Purchase order', id(data.orders.find((order) => id(order.id) === id(row.purchase_order))?.po_number) || id(row.purchase_order)],
+    ['LPO', id(data.orders.find((order) => id(order.id) === id(row.purchase_order))?.lpo_number) || id(row.purchase_order)],
     ['Received date', id(row.received_date)],
     ['Received by', names.employees.get(id(row.received_by)) || id(row.received_by)],
     ['Delivery note', id(row.delivery_note_no) || '—'],
