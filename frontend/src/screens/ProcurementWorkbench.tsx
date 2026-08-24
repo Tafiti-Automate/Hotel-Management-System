@@ -480,6 +480,10 @@ function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel
   const selectedItem = items.find((item: Row) => id(item.id) === id(line?.item))
   const availableUnits = configuredUnitsForItem(selectedItem, units, itemUnits)
   const conversion = conversionFactorFor(selectedItem, form.unit || line?.unit, itemUnits)
+  const sourceLine = data.requisitionItems.find((row: Row) => id(row.id) === id(line?.requisition_item))
+  const approvedBaseLimit = num(sourceLine?.remaining_order_quantity ?? sourceLine?.approved_base_quantity)
+  const enteredBaseQuantity = num(form.quantity ?? line?.quantity) * conversion
+  const quantityExceedsApproval = Boolean(line && conversion > 0 && approvedBaseLimit >= 0 && enteredBaseQuantity > approvedBaseLimit + 0.000001)
   const currentApproval = order ? currentApprovalStep(order) : undefined
   const financeLine = lines.find((row: Row) => id(row.id) === id(form.financeLine))
   const canDecideFinance = role === 'financial manager' || role === 'system administrator'
@@ -491,6 +495,22 @@ function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel
     setForm({})
   }
   const chooseOrder = (value: string) => setForm({ order: value })
+  const safeQuantityForLine = (orderLine: Row, unitId: unknown = orderLine.unit) => {
+    const article = items.find((item: Row) => id(item.id) === id(orderLine.item))
+    const factor = conversionFactorFor(article, unitId, itemUnits)
+    if (factor <= 0) return num(orderLine.quantity)
+    const requisitionLine = data.requisitionItems.find((row: Row) => id(row.id) === id(orderLine.requisition_item))
+    const remainingBase = num(requisitionLine?.remaining_order_quantity ?? requisitionLine?.approved_base_quantity)
+    const targetBase = requisitionLine
+      ? Math.min(num(orderLine.base_quantity), remainingBase)
+      : num(orderLine.base_quantity)
+    return floorPurchaseQuantity(targetBase / factor)
+  }
+  const draftHasQuantityOverage = lines.some((orderLine: Row) => {
+    const requisitionLine = data.requisitionItems.find((row: Row) => id(row.id) === id(orderLine.requisition_item))
+    if (!requisitionLine) return false
+    return num(orderLine.base_quantity) > num(requisitionLine.remaining_order_quantity ?? requisitionLine.approved_base_quantity) + 0.000001
+  })
 
   return <Panel title="Local Purchase Orders" note="Work only from the queue assigned to your role. Source documents and commercial decisions remain linked for audit.">
     <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 11, marginBottom: 13, borderBottom: '1px solid var(--border)' }}>
@@ -515,12 +535,18 @@ function LpoPanel({ data, form, setForm, busy, run, requisitionLabel, orderLabel
       {!prepareOrders.length && <Hint>No draft or returned LPO needs Procurement action.</Hint>}
       {order && <LpoSummary order={order} lines={lines} names={names} />}
       {order && <>
-        <Field label="LPO item"><Select value={form.orderLine} onChange={(v) => { const found = lines.find((row: Row) => id(row.id) === v); setForm({ ...form, orderLine: v, quantity: found?.quantity, cost: found?.unit_cost, unit: found?.unit }) }} rows={lines} label={(row: Row) => names.items.get(id(row.item)) || id(row.item)} /></Field>
-        <Field label="Purchase unit"><Select value={form.unit} onChange={(v) => { const factor = conversionFactorFor(selectedItem, v, itemUnits); setForm({ ...form, unit: v, quantity: factor > 0 ? Number((num(line?.base_quantity) / factor).toFixed(4)) : form.quantity }) }} rows={availableUnits} /></Field>
+        <Field label="LPO item"><Select value={form.orderLine} onChange={(v) => { const found = lines.find((row: Row) => id(row.id) === v); setForm({ ...form, orderLine: v, quantity: found ? safeQuantityForLine(found) : '', cost: found?.unit_cost, unit: found?.unit }) }} rows={lines} label={(row: Row) => names.items.get(id(row.item)) || id(row.item)} /></Field>
+        <Field label="Purchase unit"><Select value={form.unit} onChange={(v) => setForm({ ...form, unit: v, quantity: line ? safeQuantityForLine(line, v) : form.quantity })} rows={availableUnits} /></Field>
         <Two><Field label={`Procurement quantity (${names.units.get(id(form.unit || line?.unit)) || selectedItem?.uom || 'unit'})`}><Input type="number" value={form.quantity ?? line?.quantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><Field label="Confirmed supplier price"><Input type="number" value={form.cost ?? line?.unit_cost} onChange={(v) => setForm({ ...form, cost: v })} /></Field></Two>
         {line && <UnitConversionNote quantity={num(form.quantity ?? line.quantity)} factor={conversion} selectedUnit={names.units.get(id(form.unit || line.unit)) || 'selected unit'} baseUnit={selectedItem?.uom || 'base units'} unitPrice={num(form.cost ?? line.unit_cost)} />}
-        <Action disabled={busy || !form.orderLine} onClick={() => run(() => updateBackendRecord('purchase-order-items', id(form.orderLine), { quantity: num(form.quantity), unit_cost: num(form.cost), unit: form.unit || null }), 'Procurement LPO line updated without changing the source requisition')}>Save LPO item</Action>
-        <Action tone="good" disabled={busy || !lines.length} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'submit-for-approval'), 'LPO sent to Financial Manager')}>Send to Financial Manager</Action>
+        {quantityExceedsApproval && <Hint>The converted quantity exceeds the approved {approvedBaseLimit} {selectedItem?.uom || 'base units'}. Use no more than {floorPurchaseQuantity(approvedBaseLimit / conversion)} {names.units.get(id(form.unit || line?.unit)) || 'selected units'}.</Hint>}
+        {draftHasQuantityOverage && !quantityExceedsApproval && <Hint>This draft was created with a rounded quantity above the requisition. Select the affected item and save the safe quantity before sending it to Finance.</Hint>}
+        <Action disabled={busy || !form.orderLine || conversion <= 0 || quantityExceedsApproval || num(form.quantity) <= 0} onClick={() => run(
+          () => updateBackendRecord('purchase-order-items', id(form.orderLine), { quantity: num(form.quantity), unit_cost: num(form.cost), unit: form.unit || null }),
+          'Procurement LPO line updated without changing the source requisition',
+          { ...form },
+        )}>Save LPO item</Action>
+        <Action tone="good" disabled={busy || !lines.length || draftHasQuantityOverage} onClick={() => run(() => runBackendAction('purchase-orders', id(form.order), 'submit-for-approval'), 'LPO sent to Financial Manager')}>Send to Financial Manager</Action>
       </>}
     </>}
 
@@ -1109,6 +1135,11 @@ function configuredUnitsForItem(item: Row | undefined, units: Row[], itemUnits: 
 function conversionFactorFor(item: Row | undefined, unitId: unknown, itemUnits: Row[]): number {
   if (!item || !unitId || id(unitId) === id(item.baseUnitId)) return 1
   return num(itemUnits.find((entry: Row) => id(entry.itemId) === id(item.id) && id(entry.unitId) === id(unitId) && id(entry.status) === 'Active')?.conversionFactor)
+}
+
+function floorPurchaseQuantity(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 0
+  return Math.floor((value + Number.EPSILON) * 100) / 100
 }
 
 function UnitConversionNote({ quantity, factor, selectedUnit, baseUnit, unitPrice }: { quantity: number; factor: number; selectedUnit: string; baseUnit: string; unitPrice: number }) {
