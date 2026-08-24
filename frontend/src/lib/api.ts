@@ -258,7 +258,9 @@ export async function fetchSupplierPriceHistory(id: string): Promise<Record<stri
 export async function downloadControlledPurchaseOrder(id: string): Promise<{ classification: string; printNumber: string }> {
   const response = await fetchWithTimeout(`${apiRoot()}/purchase-orders/${id}/controlled-document/`, {
     method: 'POST',
-    headers: { Accept: 'application/pdf', ...authHeaders() },
+    // The endpoint can return either the PDF or a JSON validation error.
+    // */* lets DRF negotiate the request before the action returns its binary response.
+    headers: { Accept: '*/*', ...authHeaders() },
   })
   if (!response.ok) {
     const body = await response.json().catch(() => ({})) as Record<string, unknown>
