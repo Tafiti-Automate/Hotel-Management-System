@@ -24,7 +24,7 @@ export default function StoresDashboard() {
         <div>
           <div style={{ color: 'var(--accent)', fontSize: 10, fontWeight: 750, letterSpacing: '.1em', textTransform: 'uppercase' }}>Store Keeper</div>
           <h1 style={{ margin: '3px 0 0', color: 'var(--text)', fontSize: 25, fontWeight: 650, letterSpacing: '-.03em' }}>Department requisition queue</h1>
-          <p style={{ margin: '5px 0 0', color: 'var(--text-muted)', fontSize: 13.5 }}>Confirm requested quantities and destination, then hand the linked requisition to Procurement.</p>
+          <p style={{ margin: '5px 0 0', color: 'var(--text-muted)', fontSize: 13.5 }}>Receive HOD-approved Department requests, confirm destination and quantities, then create the linked Store Requisition for Procurement.</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: syncTone }} /><span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{app.apiStatus === 'live' ? 'Live data' : app.apiStatus === 'loading' ? 'Refreshing' : 'Connection unavailable'}</span><button onClick={app.refreshData} title="Refresh" style={iconButton}><Icon name="refresh" size={18} /></button></div>
       </div>

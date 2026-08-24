@@ -187,7 +187,7 @@ export default function ProcurementWorkbench() {
     units: new Map(app.data.uoms.map((row) => [id(row.id), id(row.name)])),
   }), [app.data])
 
-  const requisitionLabel = (row: Row) => `${id(row.requisition_number) || `PR-${id(row.id).slice(0, 8).toUpperCase()}`} · ${id(row.procurement_source) === 'store_shortage' ? 'Store shortage' : 'Manual'} · ${id(row.reason)}`
+  const requisitionLabel = (row: Row) => `${id(row.requisition_number) || `PR-${id(row.id).slice(0, 8).toUpperCase()}`} · ${['store_requisition','store_shortage'].includes(id(row.procurement_source)) ? 'Store Requisition' : 'Manual'} · ${id(row.reason)}`
   const orderLabel = (row: Row) => `${id(row.po_number) || id(row.id).slice(0, 8)} · ${names.suppliers.get(id(row.supplier)) || 'Supplier'}`
   const receiptLabel = (row: Row) => id(row.grn_number) || `GRN-${id(row.id).slice(0, 8).toUpperCase()}`
 
@@ -206,7 +206,7 @@ export default function ProcurementWorkbench() {
   ] as Array<[Stage, string, string]>).filter(([key]) => can(stagePermissions[key].view) && (!allowedStages || allowedStages.includes(key)))
   const stageGuidance: Record<Stage, { actor: string; description: string; icon: string }> = {
     request: { actor: 'Requester', description: 'Add every required article, then submit the requisition.', icon: 'playlist_add' },
-    quote: { actor: 'Procurement', description: 'Record comparable supplier offers and select the winner.', icon: 'compare_arrows' },
+    quote: { actor: 'Procurement', description: 'Choose a vetted supplier quotation from the Cost Controller catalogue and confirm the current price.', icon: 'compare_arrows' },
     lpo: { actor: 'Buyer and LPO approvers', description: 'Prepare, independently approve, then issue the supplier order.', icon: 'receipt_long' },
     receipt: { actor: 'Receiving / stores', description: 'Record what the supplier delivered against the LPO.', icon: 'move_to_inbox' },
     inspect: { actor: 'Inspector', description: 'Accept or reject delivered quantities before stock posting.', icon: 'fact_check' },
@@ -287,7 +287,7 @@ function Metric({ label, value, icon, tone = 'accent' }: { label: string; value:
 }
 
 function RequestPanel({ data, form, setForm, requisitionLabel, items }: any) {
-  const incoming = data.requisitions.filter((row: Row) => id(row.procurement_source) === 'store_shortage')
+  const incoming = data.requisitions.filter((row: Row) => ['store_requisition','store_shortage'].includes(id(row.procurement_source)))
   const selected = incoming.find((row: Row) => id(row.id) === id(form.requisition))
   const lines = data.requisitionItems.filter((row: Row) => id(row.requisition) === id(form.requisition))
   return <Panel title="Incoming Store requisitions" note="Select the Store Keeper's requisition. Item, quantity and destination are inherited and are not re-entered here.">
@@ -307,7 +307,7 @@ function RequestPanel({ data, form, setForm, requisitionLabel, items }: any) {
 }
 
 function QuotePanel({ data, form, setForm, busy, run, requisitionLabel, names, suppliers, supplierItems, units, items, itemUnits }: any) {
-  const requisitions = data.requisitions.filter((row: Row) => id(row.procurement_source) === 'store_shortage')
+  const requisitions = data.requisitions.filter((row: Row) => ['store_requisition','store_shortage'].includes(id(row.procurement_source)))
   const reqLines = data.requisitionItems.filter((row: Row) => id(row.requisition) === id(form.requisition))
   const selectedReqLine = reqLines.find((row: Row) => id(row.id) === id(form.reqLine))
   const catalogue = supplierItems.filter((entry: Row) => !selectedReqLine || id(entry.articleId) === id(selectedReqLine.item))

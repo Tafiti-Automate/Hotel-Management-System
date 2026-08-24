@@ -3,6 +3,7 @@ import { useApp } from '../state/AppContext'
 import { HelpLabel } from './HelpLabel'
 import { Icon } from './Icon'
 import { cfg, getOptions, type Row } from '../lib/data'
+import { normalizeUgandaPhone, UGANDA_PHONE_HINT } from '../lib/ugandaPhone'
 
 function optionLabel(value: string): string {
   if (value === 'hotel_purchase') return 'Hotel purchase'
@@ -89,6 +90,7 @@ export default function FormDrawer() {
     if (isHotelPurchase && ['department', 'requester'].includes(fd.key)) return false
     if (locksStoreIdentity && ['department', 'requester', 'store'].includes(fd.key)) return false
     if (locksPurchaseIdentity && ['request_type', 'department', 'requester'].includes(fd.key)) return false
+    if (f.entity === 'employees' && !f.id && fd.key === 'status') return false
     return true
   })
   const wizard = visibleFields.length > 6
@@ -132,6 +134,15 @@ export default function FormDrawer() {
       const v = values[fd.key]
       out[fd.key] = fd.type === 'number' ? Number(v || 0) : v
     })
+    try {
+      if (f.entity === 'employees') out.contact = normalizeUgandaPhone(values.contact)
+      if (f.entity === 'suppliers') out.phone = normalizeUgandaPhone(values.phone, true)
+      if (f.entity === 'branches') out.contact = normalizeUgandaPhone(values.contact)
+    } catch {
+      app.showWorkflowAlert('Invalid Uganda phone number', UGANDA_PHONE_HINT)
+      return
+    }
+    if (f.entity === 'employees' && !f.id) out.status = 'Active'
     if (f.entity === 'requisitions') {
       out.request_type = 'department'
       out.procurement_source = values.procurement_source || 'manual'

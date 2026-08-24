@@ -51,11 +51,18 @@ const strictRoleRoutes: Record<string, Set<string>> = {
   'general manager': new Set(['dashboard', 'workflow-procure']),
   'receiving clerk': new Set(['dashboard', 'workflow-procure', 'grns']),
   'department head': new Set(['dashboard', 'workflow-stores']),
-  'staff': new Set(['dashboard', 'workflow-stores']),
-  'employee': new Set(['dashboard', 'workflow-stores']),
-  'department employee': new Set(['dashboard', 'workflow-stores']),
-  'unassigned': new Set(['dashboard', 'workflow-stores']),
   'requester': new Set(['dashboard', 'workflow-stores']),
+}
+
+
+const roleNavLabels: Record<string, Record<string, string>> = {
+  requester: { 'workflow-stores': 'My requisitions' },
+  'department head': { 'workflow-stores': 'Department approvals' },
+  'store keeper': { 'workflow-stores': 'Store Keeper queue' },
+  'procurement manager': { 'workflow-procure': 'Procurement workbench' },
+  'financial manager': { 'workflow-procure': 'LPO finance approvals' },
+  'general manager': { 'workflow-procure': 'Final LPO approvals' },
+  'receiving clerk': { 'workflow-procure': 'Receiving & GRN' },
 }
 
 const hrGroups: NavGroup[] = [
@@ -76,7 +83,7 @@ export default function Sidebar() {
   const storesManager = isStoresManager(app.user)
   const baseGroups = app.activeModule === 'hr' ? hrGroups : operationsGroups
   const role = String(app.user.role || '').toLowerCase()
-  const isRequester = ['requester', 'staff', 'unassigned', 'department employee', 'employee'].includes(role)
+  const isRequester = role === 'requester'
   const groups = baseGroups
     .map((group) => ({ ...group, items: group.items.filter((item) => {
       if (!canAccessRoute(app.user, item.route)) return false
@@ -84,7 +91,7 @@ export default function Sidebar() {
       if (allowedRoutes && !allowedRoutes.has(item.route)) return false
       if (isRequester && ['uoms', 'storeRequisitions'].includes(item.route)) return false
       return true
-    }) }))
+    }).map((item) => ({ ...item, label: roleNavLabels[role]?.[item.route] || item.label })) }))
     .filter((group) => group.items.length > 0)
   const departmentLabel = app.user.departmentName || app.user.role
   const moduleTitle = storesManager ? 'Stores & Inventory' : app.activeModule === 'hr' ? 'Human Resources' : departmentLabel

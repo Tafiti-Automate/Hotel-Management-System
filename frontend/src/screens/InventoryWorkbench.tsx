@@ -216,7 +216,7 @@ function RequestPanel({ app, data, form, setForm, busy, execute, stage }: any) {
     prepare: { title: 'New request', note: 'Choose each article, quantity, and note, then submit it to your Department Head.' },
     department: { title: 'Department approval', note: 'Review the request before releasing it to the Store Keeper.' },
     stores: { title: 'Department request hand-off', note: 'Select the department request, confirm the quantity and send the linked requisition to Procurement.' },
-    shortage: { title: 'Forward to Procurement', note: 'Forward a reviewed Department request to Procurement without creating or re-entering a new request.' },
+    shortage: { title: 'Create Store Requisition', note: 'Create the Store Keeper requisition from the HOD-approved Department request and forward it to Procurement.' },
     issue: { title: 'Pick and issue', note: 'Approved requests ready for issue.' },
   }
   const meta = stageMeta[stage as SupplyTask] || stageMeta.prepare
@@ -292,12 +292,12 @@ function RequestPanel({ app, data, form, setForm, busy, execute, stage }: any) {
     </>}
 
     {stage === 'shortage' && <>
-      <div style={{ marginBottom: 12, color: 'var(--text)', fontSize: 13, fontWeight: 800 }}>Forward Department request to Procurement</div>
-      <Field label="Reviewed Department request"><Select value={form.shortageRequest} change={(v) => setForm({ shortageRequest: v })} rows={data.requests.filter((r: Row) => id(r.status) === 'submitted')} label={(r) => `${id(r.requisition_no)} · ${departmentName(app, r.department)}`} /></Field>
-      {shortageRequest && <><RequestSummary request={shortageRequest} lines={shortageLines} data={data} app={app} /><Hint>This forwards the existing Department request. The Store Keeper does not create a new requisition, retype articles, select a supplier, or enter prices.</Hint></>}
+      <div style={{ marginBottom: 12, color: 'var(--text)', fontSize: 13, fontWeight: 800 }}>Create Store Requisition and forward to Procurement</div>
+      <Field label="Approved Department request"><Select value={form.shortageRequest} change={(v) => setForm({ shortageRequest: v })} rows={data.requests.filter((r: Row) => id(r.status) === 'submitted')} label={(r) => `${id(r.requisition_no)} · ${departmentName(app, r.department)}`} /></Field>
+      {shortageRequest && <><RequestSummary request={shortageRequest} lines={shortageLines} data={data} app={app} /><Hint>The system creates the Store Requisition from this approved Department request. Articles are inherited; the Store Keeper confirms destination and carried-forward quantities without seeing supplier or price data.</Hint></>}
       <Field label="Store Keeper note to Procurement"><Input value={form.shortageReason} change={(v) => setForm({ ...form, shortageReason: v })} /></Field>
-      <Action disabled={busy || !form.shortageRequest || !id(form.shortageReason).trim()} click={() => execute(() => runBackendAction('store-requisitions', id(form.shortageRequest), 'send-to-procurement', { reason: form.shortageReason || '' }), 'Department request forwarded to Procurement')}>Forward to Procurement</Action>
-      <Hint>Once forwarded, Procurement takes over supplier selection, current price and the LPO process. The original Department request remains the predecessor document.</Hint>
+      <Action disabled={busy || !form.shortageRequest || !id(form.shortageReason).trim()} click={() => execute(() => runBackendAction('store-requisitions', id(form.shortageRequest), 'send-to-procurement', { reason: form.shortageReason || '' }), 'Store Requisition created and forwarded to Procurement')}>Create Store Requisition & Forward</Action>
+      <Hint>The Department request remains unchanged for audit. Procurement receives the new linked Store Requisition, then selects a vetted supplier, confirms the current price and prepares the LPO.</Hint>
     </>}
   </Panel>
 }

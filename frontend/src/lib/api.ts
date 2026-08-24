@@ -138,6 +138,7 @@ export interface RoleRecord {
   name: string
   permission_ids: number[]
   user_count: number
+  system_role?: boolean
 }
 
 export interface PermissionRecord {
@@ -1300,7 +1301,7 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
       request_type: text(row.request_type, 'department'),
       procurement_source: text(row.procurement_source, 'manual'),
       sourceStoreRequestId: text(row.source_store_requisition),
-      sourceLabel: text(row.procurement_source) === 'store_shortage' ? 'Store shortage' : titleCaseStatus(row.procurement_source || 'manual'),
+      sourceLabel: ['store_requisition','store_shortage'].includes(text(row.procurement_source)) ? 'Store Requisition' : titleCaseStatus(row.procurement_source || 'manual'),
       branch: branchNames.get(text(row.branch)) || '',
       dept: departmentNames.get(text(row.department)) || titleCaseStatus(row.request_type),
       department: departmentNames.get(text(row.department)) || '',

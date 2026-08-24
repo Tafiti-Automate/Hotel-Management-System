@@ -153,7 +153,7 @@ export const cfg: Record<string, EntityConfig> = {
     fields: [
       { key: 'name', label: 'Supplier name', type: 'text' },
       { key: 'contact', label: 'Contact person', type: 'text' },
-      { key: 'phone', label: 'Phone', type: 'text' },
+      { key: 'phone', label: 'Phone', type: 'text', hint: 'Uganda format: 0701234567 or +256701234567' },
       { key: 'email', label: 'Email', type: 'text' },
       { key: 'address', label: 'Address', type: 'textarea' },
       { key: 'tinNumber', label: 'Tax identification number', type: 'text' },
@@ -227,7 +227,7 @@ export const cfg: Record<string, EntityConfig> = {
       { key: 'lastName', label: 'Last name', type: 'text' },
       { key: 'employeeCode', label: 'Employee ID (auto if blank)', type: 'text' },
       { key: 'email', label: 'Work email', type: 'text' },
-      { key: 'contact', label: 'Phone number', type: 'text' },
+      { key: 'contact', label: 'Phone number', type: 'text', hint: 'Uganda format: 0701234567 or +256701234567' },
       { key: 'branch', label: 'Branch', type: 'select', opts: 'branches' },
       { key: 'department', label: 'Department', type: 'select', opts: 'departments' },
       { key: 'designation', label: 'Job title', type: 'text' },

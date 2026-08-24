@@ -6,6 +6,7 @@ import {
   errorMessage, fetchAccounts, fetchPermissions, fetchRoles, saveAccount, saveRole,
   type AccountRecord, type PermissionRecord, type RoleRecord,
 } from '../lib/api'
+import { normalizeUgandaPhone, UGANDA_PHONE_HINT } from '../lib/ugandaPhone'
 
 type Tab = 'accounts' | 'roles'
 type AccountDraft = Partial<AccountRecord> & { password?: string; role?: string }
@@ -53,6 +54,8 @@ export default function AccessManagement() {
     setSaving(true)
     try {
       const payload = { ...accountDraft }
+      try { payload.phone = normalizeUgandaPhone(payload.phone) }
+      catch { throw new Error(UGANDA_PHONE_HINT) }
       if (!payload.password) delete payload.password
       await saveAccount(accountDraft.id || null, payload)
       setAccountDraft(null); await load(); app.showToast(accountDraft.id ? 'User account updated' : 'User account created')
@@ -95,12 +98,12 @@ export default function AccessManagement() {
     <div className="access-heading">
       <div>
         <h1>Roles & system access</h1>
-        <p>Employee accounts are created from Employee profiles. Standalone access is restricted to technical accounts.</p>
+        <p>Operational roles are predefined by the client workflow. Create employees, then assign the appropriate system role.</p>
       </div>
-      <button className="access-primary" onClick={() => tab === 'accounts' ? editAccount() : setRoleDraft({ name: '', permission_ids: [] })}>
-        <Icon name={tab === 'accounts' ? 'person_add' : 'add_moderator'} size={18} color="#fff" />
-        {tab === 'accounts' ? 'Add system account' : 'Create role'}
-      </button>
+      {tab === 'accounts' && <button className="access-primary" onClick={() => editAccount()}>
+        <Icon name="person_add" size={18} color="#fff" />
+        Add system account
+      </button>}
     </div>
 
     <div className="access-stats">
@@ -137,8 +140,8 @@ export default function AccessManagement() {
           <div className="access-person"><span className="access-role-icon"><Icon name="admin_panel_settings" size={20} /></span><span><b>{role.name}</b><small>Hotel access role</small></span></div>
           <span className="muted">{role.user_count} user{role.user_count === 1 ? '' : 's'}</span>
           <span className="muted">{role.permission_ids.length} permissions</span>
-          <span className="access-role"><Icon name="lock" size={15} />Configured</span>
-          <div className="access-row-actions"><button title="Edit role" onClick={(event) => { event.stopPropagation(); setRoleDraft(role) }}><Icon name="edit" size={17} /></button></div>
+          <span className="access-role"><Icon name="lock" size={15} />{role.system_role ? 'Predefined' : 'Configured'}</span>
+          <div className="access-row-actions"><button title="Adjust role permissions" onClick={(event) => { event.stopPropagation(); setRoleDraft({ ...role }) }}><Icon name="tune" size={17} /></button></div>
         </div>)}
         {!visibleRoles.length && <div className="access-empty">No roles match your search.</div>}
       </>}
@@ -199,13 +202,13 @@ function RoleEditor({ draft, permissions, saving, error, onDismissError, onChang
 
   return <div className="role-editor-page">
     <div className="role-editor-heading">
-      <div><h1>{draft.id ? 'Edit role' : 'Create role'}</h1><p>{draft.id ? 'Update role details and module access' : 'Create a new access role for your team'}</p></div>
+      <div><h1>Role permissions</h1><p>Default workflow permissions are preselected. Check or uncheck individual permissions only when this role needs an exception.</p></div>
       <button className="role-back" onClick={onCancel}><Icon name="arrow_back" size={17} />Back to roles</button>
     </div>
     {error && <div className="access-error"><Icon name="error" size={17} />{error}<button onClick={onDismissError}><Icon name="close" size={16} /></button></div>}
     <section className="role-editor-card">
       <div className="role-details-grid">
-        <Field label="Role name" required><input autoFocus value={draft.name || ''} onChange={(event) => onChange({ ...draft, name: event.target.value })} placeholder="e.g. Front Office Manager" /></Field>
+        <Field label="Role name" required><input value={draft.name || ''} disabled={Boolean(draft.system_role)} onChange={(event) => onChange({ ...draft, name: event.target.value })} /></Field>
         <div className="role-summary"><span><Icon name="verified_user" size={19} /></span><div><b>{selected.size} permissions selected</b><small>Across {modules.filter(([, rows]) => rows.some((row) => selected.has(row.id))).length} modules</small></div></div>
       </div>
 
@@ -238,7 +241,7 @@ function RoleEditor({ draft, permissions, saving, error, onDismissError, onChang
       {!modules.length && <div className="access-empty">Loading available modules…</div>}
       <div className="role-editor-actions">
         <button className="role-cancel" onClick={onCancel}>Cancel</button>
-        <button className="access-primary" disabled={saving || !draft.name?.trim()} onClick={onSave}><Icon name="check" size={17} color="#fff" />{saving ? 'Saving…' : draft.id ? 'Save role' : 'Create role'}</button>
+        <button className="access-primary" disabled={saving || !draft.name?.trim()} onClick={onSave}><Icon name="check" size={17} color="#fff" />{saving ? 'Saving…' : 'Save permissions'}</button>
       </div>
     </section>
   </div>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent } from 'react'
 import { Icon } from '../components/Icon'
 import { errorMessage, fetchHotels, saveHotel, type HotelInput, type HotelRecord } from '../lib/api'
+import { normalizeUgandaPhone } from '../lib/ugandaPhone'
 import { useApp } from '../state/AppContext'
 import { extractPaletteFromImage, type BrandPalette } from '../lib/brandTheme'
 
@@ -196,7 +197,7 @@ function HotelForm({ hotel, onClose, onSaved }: { hotel: HotelRecord | null; onC
     setSaving(true)
     setError(null)
     try {
-      const saved = await saveHotel(hotel?.id || null, { ...values, name: values.name.trim() }, logo)
+      const saved = await saveHotel(hotel?.id || null, { ...values, name: values.name.trim(), phone: normalizeUgandaPhone(values.phone), alternate_phone: normalizeUgandaPhone(values.alternate_phone) }, logo)
       try {
         localStorage.setItem('hms_hotel_brand_theme', JSON.stringify({ primary: saved.brand_primary_color, secondary: saved.brand_secondary_color, accent: saved.brand_accent_color, enabled: saved.use_logo_theme }))
         window.dispatchEvent(new CustomEvent('hotel-theme-updated', { detail: saved }))
