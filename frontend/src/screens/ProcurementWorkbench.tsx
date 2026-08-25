@@ -47,7 +47,7 @@ const pathViewPermissions: Record<keyof typeof paths, string> = {
 
 const stagePermissions: Record<Stage, { view: string; change: string }> = {
   request: { view: 'procurement.view_purchaserequisition', change: 'procurement.change_purchaserequisition' },
-  quote: { view: 'procurement.view_vendorquotation', change: 'procurement.change_vendorquotation' },
+  quote: { view: 'inventory.view_supplieritemprice', change: 'procurement.change_requisitionitem' },
   lpo: { view: 'procurement.view_purchaseorder', change: 'procurement.change_purchaseorder' },
   receipt: { view: 'procurement.view_goodsreceiptnote', change: 'procurement.change_goodsreceiptnote' },
   inspect: { view: 'procurement.view_goodsinspection', change: 'procurement.change_goodsinspection' },
@@ -121,7 +121,13 @@ export default function ProcurementWorkbench() {
 
   useEffect(() => { void load() }, [load])
   useEffect(() => { setForm({}); setMessage(''); setSelectedRecord(null) }, [stage])
-  useEffect(() => { setLpoQueue(defaultLpoQueue(role)) }, [role])
+  useEffect(() => {
+    setLpoQueue(defaultLpoQueue(role))
+    // Procurement's first responsibility after the Store Keeper hand-off is to
+    // review the new Store Requisition and allocate suppliers. Keep this as the
+    // landing stage when the authenticated operational role changes to Procurement.
+    if (['procurement manager', 'procurement officer'].includes(role)) setStage('quote')
+  }, [role])
   useEffect(() => {
     if (!app.procurementDraftId) return
     setStage('request')
