@@ -1458,7 +1458,7 @@ class StoreRequisition(BaseModel):
 
         from apps.notifications.services import notify_roles
         notify_roles(
-            ("Procurement Manager",),
+            ("Procurement Manager", "Procurement Officer"),
             title=f"{purchase.requisition_number} is ready for Procurement",
             message=(
                 f"Store Keeper forwarded {self.requisition_no} for {self.department}. "

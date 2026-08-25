@@ -269,7 +269,7 @@ export default function ProcurementWorkbench() {
     units: new Map(app.data.uoms.map((row) => [id(row.id), id(row.name)])),
   }), [app.data])
 
-  const requisitionLabel = (row: Row) => `${id(row.requisition_number) || `PR-${id(row.id).slice(0, 8).toUpperCase()}`} · ${['store_requisition','store_shortage'].includes(id(row.procurement_source)) ? 'Store Requisition' : 'Manual'} · ${id(row.reason)}`
+  const requisitionLabel = (row: Row) => `${id(row.source_store_requisition_no) || id(row.requisition_number) || `PR-${id(row.id).slice(0, 8).toUpperCase()}`} · ${['store_requisition','store_shortage'].includes(id(row.procurement_source)) ? 'Store Requisition' : 'Manual'} · ${id(row.reason)}`
   const orderLabel = (row: Row) => `${id(row.lpo_number) || id(row.po_number) || id(row.id).slice(0, 8)} · ${names.suppliers.get(id(row.supplier)) || 'Supplier'}`
   const receiptLabel = (row: Row) => id(row.grn_number) || `GRN-${id(row.id).slice(0, 8).toUpperCase()}`
 
@@ -371,7 +371,7 @@ export default function ProcurementWorkbench() {
       </div>
       {isProcurementRole ? <div style={{ ...card, padding: 8, marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 6 }}>
         {([
-          ['allocation', 'Supplier Allocation', procurementQueues.allocation],
+          ['allocation', 'New Store Requisitions', procurementQueues.allocation],
           ['prepare', 'Prepare LPO', procurementQueues.prepare],
           ['finance', 'Awaiting Finance', procurementQueues.finance],
           ['management', 'Awaiting GM', procurementQueues.management],
@@ -502,7 +502,7 @@ function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplier
     })
   }
 
-  if (!selectedRequisition) return <Panel title="Supplier Allocation" note="">
+  if (!selectedRequisition) return <Panel title="New Store Requisition" note="">
     <div style={{ padding: '34px 18px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12.5 }}>
       <Icon name="assignment" size={24} color="var(--text-faint)" />
       <div style={{ marginTop: 9, fontWeight: 700, color: 'var(--text)' }}>Select a Store Requisition</div>
@@ -510,7 +510,7 @@ function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplier
     </div>
   </Panel>
 
-  return <Panel title={`Supplier Allocation · ${id(selectedRequisition.requisition_number)}`} note="">
+  return <Panel title={`Store Requisition · ${id(selectedRequisition.source_store_requisition_no) || id(selectedRequisition.requisition_number)}`} note="">
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
       <div style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{reqLines.length} item{reqLines.length === 1 ? '' : 's'}</div>
       <span style={{ padding: '5px 8px', borderRadius: 999, background: allAllocated ? 'var(--good-soft)' : 'var(--warn-soft)', color: allAllocated ? 'var(--good)' : 'var(--warn)', fontSize: 10.5, fontWeight: 750 }}>{allocatedCount}/{reqLines.length} allocated</span>
@@ -636,7 +636,7 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, ite
   return <Panel title={panelTitle} note="">
     {lpoQueue === 'prepare' && selectedRequisition && canManage && <>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8, marginBottom: 13 }}>
-        <ReadOnlyValue label="Store Requisition" value={id(selectedRequisition.requisition_number)} />
+        <ReadOnlyValue label="Store Requisition" value={id(selectedRequisition.source_store_requisition_no) || id(selectedRequisition.requisition_number)} />
         <ReadOnlyValue label="Prepared by" value={userName} />
         <ReadOnlyValue label="Items" value={id(selectedRequisitionLines.length)} />
         <ReadOnlyValue label="Suppliers" value={id(supplierCount || 1)} />
@@ -827,19 +827,19 @@ function StageTable({ stage, lpoQueue, data, names, onSelect }: { stage: Stage; 
       return lines.some((line) => !line.procurement_supplier_price || num(line.procurement_quantity) <= 0 || num(line.procurement_unit_cost) <= 0)
     })
     return <div>
-      <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}><strong style={{ fontSize: 12.8 }}>Supplier Allocation</strong><span style={{ color: 'var(--text-faint)', fontSize: 10.5 }}>{requisitions.length} pending</span></div>
+      <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}><strong style={{ fontSize: 12.8 }}>New Store Requisitions</strong><span style={{ color: 'var(--text-faint)', fontSize: 10.5 }}>{requisitions.length} pending</span></div>
       {requisitions.map((requisition) => {
         const lines = data.requisitionItems.filter((line) => id(line.requisition) === id(requisition.id))
         const allocated = lines.filter((line) => line.procurement_supplier_price && num(line.procurement_quantity) > 0 && num(line.procurement_unit_cost) > 0).length
         const preview = lines.slice(0, 2).map((line) => names.items.get(id(line.item)) || id(line.item)).join(', ')
         return <button key={id(requisition.id)} type="button" onClick={() => onSelect(requisition)} style={{ width: '100%', display: 'grid', gridTemplateColumns: '1fr .65fr 1.2fr auto', alignItems: 'center', gap: 12, padding: '13px 16px', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
-          <span><strong style={{ display: 'block', color: 'var(--text)', fontSize: 12.2 }}>{id(requisition.requisition_number)}</strong><small style={{ color: 'var(--text-muted)' }}>{lines.length} item{lines.length === 1 ? '' : 's'}</small></span>
+          <span><strong style={{ display: 'block', color: 'var(--text)', fontSize: 12.2 }}>{id(requisition.source_store_requisition_no) || id(requisition.requisition_number)}</strong><small style={{ color: 'var(--text-muted)' }}>{names.departments.get(id(requisition.department)) || 'Department'} · {lines.length} item{lines.length === 1 ? '' : 's'}</small></span>
           <span style={{ color: allocated === lines.length ? 'var(--good)' : 'var(--warn)', fontSize: 10.8, fontWeight: 750 }}>{allocated}/{lines.length} allocated</span>
           <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: 11.2 }}>{preview}{lines.length > 2 ? ` +${lines.length - 2}` : ''}</span>
           <span style={{ color: 'var(--accent)', fontSize: 10.8, fontWeight: 800 }}>Review</span>
         </button>
       })}
-      {!requisitions.length && <div style={{ padding: 42, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>No Store Requisitions need supplier allocation.</div>}
+      {!requisitions.length && <div style={{ padding: 42, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>No new Store Requisitions are waiting for Procurement.</div>}
     </div>
   }
 
@@ -857,11 +857,11 @@ function StageTable({ stage, lpoQueue, data, names, onSelect }: { stage: Stage; 
       {readyRequisitions.map((requisition) => {
         const lines = data.requisitionItems.filter((line) => id(line.requisition) === id(requisition.id))
         const suppliers = new Set(lines.map((line) => id(line.procurement_supplier)).filter(Boolean)).size
-        return <button key={id(requisition.id)} type="button" onClick={() => onSelect({ ...requisition, __workspace_kind: 'ready_requisition' })} style={{ width: '100%', display: 'grid', gridTemplateColumns: '1fr .7fr .7fr auto', gap: 12, alignItems: 'center', padding: '12px 16px', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}><strong style={{ color: 'var(--text)', fontSize: 12 }}>{id(requisition.requisition_number)}</strong><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{lines.length} items</span><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{suppliers || 1} supplier{suppliers === 1 ? '' : 's'}</span><span style={{ color: 'var(--accent)', fontSize: 10.8, fontWeight: 800 }}>Prepare</span></button>
+        return <button key={id(requisition.id)} type="button" onClick={() => onSelect({ ...requisition, __workspace_kind: 'ready_requisition' })} style={{ width: '100%', display: 'grid', gridTemplateColumns: '1fr .7fr .7fr auto', gap: 12, alignItems: 'center', padding: '12px 16px', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}><strong style={{ color: 'var(--text)', fontSize: 12 }}>{id(requisition.source_store_requisition_no) || id(requisition.requisition_number)}</strong><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{lines.length} items</span><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{suppliers || 1} supplier{suppliers === 1 ? '' : 's'}</span><span style={{ color: 'var(--accent)', fontSize: 10.8, fontWeight: 800 }}>Prepare</span></button>
       })}
       {drafts.length > 0 && <div style={{ padding: '11px 16px 6px', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}>Draft LPOs</div>}
       {drafts.map((row) => <button type="button" key={id(row.id)} onClick={() => onSelect(row)} style={{ width: '100%', display: 'grid', gridTemplateColumns: '1fr 1.3fr .8fr auto', gap: 12, alignItems: 'center', padding: '12px 16px', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}><strong style={{ color: 'var(--text)', fontSize: 12 }}>LPO {id(row.lpo_number) || id(row.po_number)}</strong><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{names.suppliers.get(id(row.supplier)) || id(row.supplier)}</span><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{money(row.total_amount)}</span><span style={{ color: 'var(--accent)', fontSize: 10.8, fontWeight: 800 }}>Review</span></button>)}
-      {!readyRequisitions.length && !drafts.length && <div style={{ padding: 42, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>No LPO is waiting for preparation.</div>}
+      {!readyRequisitions.length && !drafts.length && <div style={{ padding: 42, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>No requisition is ready for LPO preparation. Complete supplier allocation under New Store Requisitions first.</div>}
     </div>
   }
 

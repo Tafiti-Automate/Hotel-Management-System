@@ -120,6 +120,7 @@ def user_has_role(user, *roles):
 COMMERCIAL_CONTROL_ROLES = (
     "System Administrator",
     "Procurement Manager",
+    "Procurement Officer",
     "Financial Manager",
     "General Manager",
 )
@@ -218,7 +219,7 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             )
             order_ids = orders.values_list("id", flat=True)
             if stage == "lpo" and user_has_role(
-                request.user, "System Administrator", "Procurement Manager"
+                request.user, "System Administrator", "Procurement Manager", "Procurement Officer"
             ):
                 # Procurement must see approved requisitions before an LPO exists;
                 # otherwise the LPO creation selector is an impossible empty state.
@@ -285,6 +286,7 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
                 "System Administrator",
                 "General Manager",
                 "Procurement Manager",
+                "Procurement Officer",
                 "Financial Manager",
             )
         ).exists():
@@ -398,8 +400,8 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"], url_path="allocate-line")
     def allocate_line(self, request, pk=None):
         requisition = self.get_object()
-        if not user_has_role(request.user, "System Administrator", "Procurement Manager"):
-            raise PermissionDenied("Only the Procurement Manager can allocate suppliers.")
+        if not user_has_role(request.user, "System Administrator", "Procurement Manager", "Procurement Officer"):
+            raise PermissionDenied("Only Procurement can allocate suppliers.")
         if requisition.status not in (PRStatus.APPROVED, PRStatus.PARTIALLY_ORDERED):
             raise ValidationError("Only an approved Store Requisition can be allocated to suppliers.")
         try:
@@ -413,8 +415,8 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"], url_path="create-allocated-lpos")
     def create_allocated_lpos(self, request, pk=None):
         requisition = self.get_object()
-        if not user_has_role(request.user, "System Administrator", "Procurement Manager"):
-            raise PermissionDenied("Only the Procurement Manager can prepare LPOs.")
+        if not user_has_role(request.user, "System Administrator", "Procurement Manager", "Procurement Officer"):
+            raise PermissionDenied("Only Procurement can prepare LPOs.")
         try:
             orders = requisition.create_allocated_purchase_orders(
                 ordered_by=getattr(request.user, "employee_profile", None),
@@ -433,8 +435,8 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"], url_path="allocate-and-create-lpos")
     def allocate_and_create_lpos(self, request, pk=None):
         requisition = self.get_object()
-        if not user_has_role(request.user, "System Administrator", "Procurement Manager"):
-            raise PermissionDenied("Only the Procurement Manager can allocate suppliers and prepare LPOs.")
+        if not user_has_role(request.user, "System Administrator", "Procurement Manager", "Procurement Officer"):
+            raise PermissionDenied("Only Procurement can allocate suppliers and prepare LPOs.")
         allocations = request.data.get("lines") or []
         if not isinstance(allocations, list) or not allocations:
             raise ValidationError({"lines": "Allocate at least one requisition line."})
@@ -460,8 +462,8 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"], url_path="create-purchase-order")
     def create_purchase_order(self, request, pk=None):
         requisition = self.get_object()
-        if not user_has_role(request.user, "System Administrator", "Procurement Manager"):
-            raise PermissionDenied("Only the Procurement Manager can prepare an LPO.")
+        if not user_has_role(request.user, "System Administrator", "Procurement Manager", "Procurement Officer"):
+            raise PermissionDenied("Only Procurement can prepare an LPO.")
         try:
             supplier = self._optional_object(Supplier, request.data.get("supplier"))
             ordered_by = self._optional_object(Employee, request.data.get("ordered_by"))
@@ -537,6 +539,7 @@ class RequisitionHistoryViewSet(ReadOnlyModelViewSet):
                 "System Administrator",
                 "General Manager",
                 "Procurement Manager",
+                "Procurement Officer",
                 "Financial Manager",
             )
         ).exists():
@@ -626,8 +629,8 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
         return scope_purchase_orders_for_user(super().get_queryset(), self.request.user)
 
     def _require_procurement_manager(self, request):
-        if not user_has_role(request.user, "System Administrator", "Procurement Manager"):
-            raise PermissionDenied("Only the Procurement Manager can perform this LPO action.")
+        if not user_has_role(request.user, "System Administrator", "Procurement Manager", "Procurement Officer"):
+            raise PermissionDenied("Only Procurement can perform this LPO action.")
 
     @action(detail=True, methods=["get"])
     def readiness(self, request, pk=None):

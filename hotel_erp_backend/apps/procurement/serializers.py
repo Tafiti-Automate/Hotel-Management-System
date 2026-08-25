@@ -67,6 +67,7 @@ class PurchaseRequisitionSerializer(serializers.ModelSerializer):
     estimated_total = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     approval_steps = serializers.SerializerMethodField()
     selected_supplier = serializers.SerializerMethodField()
+    source_store_requisition_no = serializers.CharField(source="source_store_requisition.requisition_no", read_only=True)
 
     class Meta:
         model = PurchaseRequisition
@@ -78,6 +79,7 @@ class PurchaseRequisitionSerializer(serializers.ModelSerializer):
             "request_type",
             "procurement_source",
             "source_store_requisition",
+            "source_store_requisition_no",
             "requester",
             "department",
             "preferred_supplier",
