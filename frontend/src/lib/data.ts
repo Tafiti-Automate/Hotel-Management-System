@@ -291,7 +291,7 @@ export const cfg: Record<string, EntityConfig> = {
     ],
   },
   storeRequisitions: {
-    title: 'Store Requests', sub: 'Department requests and fulfilment status', icon: 'assignment', add: 'New request', singular: 'Store Request', editable: true, detail: true,
+    title: 'Department Requisitions', sub: 'Create and track department requisitions', icon: 'assignment', add: 'New requisition', singular: 'Department Requisition', editable: true, detail: true,
     cols: [
       { key: 'id', label: 'Request', w: '1.05fr', kind: 'mono' },
       { key: 'date', label: 'Date', w: '100px', kind: 'text' },

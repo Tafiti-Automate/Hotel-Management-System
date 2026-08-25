@@ -176,18 +176,50 @@ export default function InventoryWorkbench() {
     setTab(key === 'issue' ? 'issues' : 'requests')
   }
   const common = { app, data: scopedData, form, setForm, busy, execute }
+  const requesterPreparing = role === 'requester' && tab === 'requests' && supplyPathActive === 'prepare'
+  const requesterEditingDraft = requesterPreparing && Boolean(form.request)
+  const selectInventoryRecord = (row: Row) => {
+    if (requesterPreparing && ['draft', 'rejected'].includes(id(row.status).trim().toLowerCase())) {
+      setForm({ request: id(row.id), purpose: row.purpose || '', requiredDate: row.required_date || '' })
+      return
+    }
+    setSelectedRecord(row)
+  }
+  const createRequesterRequisition = async () => {
+    if (operationRunning.current) return
+    operationRunning.current = true
+    setBusy(true); setError('')
+    try {
+      const saved = await createBackendRecord('store-requisitions', { purpose: '', required_date: null })
+      await load()
+      app.refreshData()
+      setForm({ request: id(saved.id || saved.apiId), purpose: '', requiredDate: '' })
+      app.showToast('New Department Requisition created')
+    } catch (reason) {
+      const detail = errorMessage(reason)
+      setError(detail)
+      app.showWorkflowAlert('Could not start requisition', detail)
+    } finally {
+      operationRunning.current = false
+      setBusy(false)
+    }
+  }
   return <div style={{ maxWidth: 1460, margin: '0 auto' }}>
-    <section className="workbench-hero" style={{ ...card, padding: 20, display: 'flex', alignItems: 'center', gap: 13, marginBottom: 15 }}><span style={hero}><Icon name="warehouse" size={24} color="#fff" /></span><div><div style={eyebrow}>Inventory</div><h1 style={{ margin: '3px 0', fontSize: 23 }}>{isDepartmentHead ? 'Department Request Approvals' : isStoresApprover ? 'Store Keeper Queue' : 'My Store Requests'}</h1><div style={muted}>{isDepartmentHead ? 'Approve your department’s requests before they reach Stores.' : role === 'store keeper' ? 'Receive approved department requests and forward the required quantities to Procurement.' : isStoresApprover ? 'Review inventory requests.' : 'Create and track your material requests.'}</div></div><button onClick={() => void load()} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button></section>
+    <section className="workbench-hero" style={{ ...card, padding: 20, display: 'flex', alignItems: 'center', gap: 13, marginBottom: 15 }}><span style={hero}><Icon name="warehouse" size={24} color="#fff" /></span><div><div style={eyebrow}>{role === 'requester' ? 'Requisitions' : 'Inventory'}</div><h1 style={{ margin: '3px 0', fontSize: 23 }}>{isDepartmentHead ? 'Department Request Approvals' : isStoresApprover ? 'Store Keeper Queue' : 'My Requisitions'}</h1><div style={muted}>{isDepartmentHead ? 'Approve your department’s requests before they reach Stores.' : role === 'store keeper' ? 'Receive approved department requests and forward the required quantities to Procurement.' : isStoresApprover ? 'Review inventory requests.' : 'Create and track your department requisitions.'}</div></div><button onClick={() => void load()} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button></section>
     {(can(tabPermissions.requests.view) || can(tabPermissions.issues.view)) && <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 15 }}>
-      {!isStoresApprover && !isDepartmentHead && <button onClick={() => selectSupplyStep('prepare')} style={{ ...tabButton, background: supplyPathActive === 'prepare' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'prepare' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'prepare' ? 'var(--accent)' : 'var(--border)' }}><Icon name="assignment" size={17} />My requests</button>}
+      {!isStoresApprover && !isDepartmentHead && <button onClick={() => selectSupplyStep('prepare')} style={{ ...tabButton, background: supplyPathActive === 'prepare' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'prepare' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'prepare' ? 'var(--accent)' : 'var(--border)' }}><Icon name="assignment" size={17} />My requisitions</button>}
       {isDepartmentHead && <button onClick={() => selectSupplyStep('department')} style={{ ...tabButton, background: supplyPathActive === 'department' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'department' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'department' ? 'var(--accent)' : 'var(--border)' }}><Icon name="approval" size={17} />Pending approvals ({scopedData.requests.filter((row: Row) => id(row.status) === 'pending_department_approval').length})</button>}
       {isStoresApprover && <><button onClick={() => selectSupplyStep('stores')} style={{ ...tabButton, background: supplyPathActive === 'stores' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'stores' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'stores' ? 'var(--accent)' : 'var(--border)' }}><Icon name="assignment" size={17} />Department requests ({scopedData.requests.filter((row: Row) => id(row.status) === 'submitted').length})</button><button onClick={() => selectSupplyStep('shortage')} style={{ ...tabButton, background: supplyPathActive === 'shortage' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'shortage' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'shortage' ? 'var(--accent)' : 'var(--border)' }}><Icon name="shopping_cart_checkout" size={17} />Forward to Procurement ({readyForProcurementCount})</button></>}
       {isStoresIssuer && <button onClick={() => selectSupplyStep('issue')} style={{ ...tabButton, background: supplyPathActive === 'issue' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'issue' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'issue' ? 'var(--accent)' : 'var(--border)' }}><Icon name="outbox" size={17} />Ready to issue ({scopedData.requests.filter((row: Row) => ['approved', 'partially_approved', 'partially_issued'].includes(id(row.status))).length})</button>}
     </div>}
     {otherTabs.length > 0 && <><div style={{ marginBottom: 10, color: 'var(--text-muted)', fontSize: 14, fontWeight: 600 }}>Inventory operations</div><div style={{ display: 'flex', gap: 5, marginBottom: 15, flexWrap: 'wrap' }}>{otherTabs.map(([key, icon, label]) => <button key={key} onClick={() => { setSupplyPathHint(''); setTab(key) }} style={{ ...tabButton, background: tab === key ? 'var(--accent-soft)' : 'var(--surface)', color: tab === key ? 'var(--accent)' : 'var(--text-muted)', borderColor: tab === key ? 'var(--accent)' : 'var(--border)' }}><Icon name={icon} size={17} />{label}</button>)}</div></>}
     {error && <div style={{ ...card, padding: 12, color: 'var(--bad)', fontSize: 12, marginBottom: 14 }}>{error}</div>}
-    {loading ? <div style={{ ...card, padding: 50, textAlign: 'center', color: 'var(--text-faint)' }}>Loading inventory controls…</div> : <div className="workbench-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) minmax(350px,.7fr)', gap: 16, alignItems: 'start' }}>
-      <Records tab={tab} data={scopedData} app={app} stage={supplyPathActive} onSelect={setSelectedRecord} />
+    {loading ? <div style={{ ...card, padding: 50, textAlign: 'center', color: 'var(--text-faint)' }}>Loading inventory controls…</div> : requesterEditingDraft ? (
+      <RequestPanel {...common} stage="prepare" />
+    ) : requesterPreparing ? (
+      <Records tab={tab} data={scopedData} app={app} stage={supplyPathActive} onSelect={selectInventoryRecord} onNewRequisition={() => void createRequesterRequisition()} />
+    ) : <div className="workbench-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) minmax(350px,.7fr)', gap: 16, alignItems: 'start' }}>
+      <Records tab={tab} data={scopedData} app={app} stage={supplyPathActive} onSelect={selectInventoryRecord} />
       <aside style={{ ...card, padding: 18 }}>
         {!canChangeTab && !['batches', 'consumption'].includes(tab) && <ReadOnlyPanel title="Read-only access" note="View only." />}
         {canChangeTab && tab === 'requests' && <RequestPanel {...common} stage={(supplyPathActive || requestRoleStage) as SupplyTask} />}
@@ -237,6 +269,21 @@ function RequestPanel({ app, data, form, setForm, busy, execute, stage }: any) {
     issue: { title: 'Pick and issue', note: 'Approved requests ready for issue.' },
   }
   const meta = stageMeta[stage as SupplyTask] || stageMeta.prepare
+
+  if (stage === 'prepare') {
+    return <RequesterDraftEditor
+      app={app}
+      data={data}
+      form={form}
+      setForm={setForm}
+      busy={busy}
+      execute={execute}
+      draftRequest={draftRequest}
+      draftLines={draftLines}
+      draftLine={draftLine}
+      requestBackendId={requestBackendId}
+    />
+  }
 
   return <Panel title={meta.title} note={meta.note}>
     {stage === 'prepare' && <>
@@ -323,6 +370,142 @@ function RequestPanel({ app, data, form, setForm, busy, execute, stage }: any) {
       <Hint>The Department request remains unchanged for audit. Procurement receives the new linked Store Requisition, then selects a vetted supplier, confirms the current price and prepares the LPO.</Hint>
     </>}
   </Panel>
+}
+
+
+function RequesterDraftEditor({ app, data, form, setForm, busy, execute, draftRequest, draftLines, draftLine, requestBackendId }: any) {
+  if (!draftRequest) {
+    return <section style={{ ...card, padding: 28 }}>
+      <button type="button" onClick={() => setForm({})} style={{ ...secondary, marginBottom: 18 }}><Icon name="arrow_back" size={17} />Back to my requisitions</button>
+      <div style={{ padding: 38, textAlign: 'center', border: '1px dashed var(--border)', borderRadius: 10, background: 'var(--surface-2)' }}>
+        <Icon name="description" size={32} color="var(--text-faint)" />
+        <div style={{ marginTop: 10, color: 'var(--text)', fontSize: 14, fontWeight: 800 }}>Draft not available</div>
+        <div style={{ marginTop: 5, color: 'var(--text-muted)', fontSize: 12 }}>Return to your requisitions and open an editable draft.</div>
+      </div>
+    </section>
+  }
+
+  const uomNames = new Map(app.data.uoms.map((row: Row) => [id(row.id), id(row.name)]))
+  const article = app.data.items.find((row: Row) => id(row.id) === id(form.item || draftLine?.item))
+  const selectedUom = uomNames.get(id(form.unit || draftLine?.unit || article?.baseUnitId)) || id(article?.uom) || 'Base unit'
+  const purposeValue = form.purpose ?? draftRequest.purpose ?? ''
+  const requiredDateValue = form.requiredDate ?? draftRequest.required_date ?? ''
+  const beginAddItem = () => setForm({ ...form, requestLine: '', item: '', unit: '', quantity: '', note: '' })
+  const editLine = (line: Row) => {
+    const lineArticle = app.data.items.find((row: Row) => id(row.id) === id(line.item))
+    setForm({
+      ...form,
+      requestLine: id(line.id),
+      item: line.item || '',
+      unit: line.unit || lineArticle?.baseUnitId || '',
+      quantity: line.quantity_requested || line.base_quantity_requested || '',
+      note: line.remarks || '',
+    })
+  }
+  const saveDetails = () => execute(
+    () => updateBackendRecord('store-requisitions', requestBackendId(draftRequest), {
+      purpose: id(purposeValue).trim(),
+      required_date: requiredDateValue || null,
+    }),
+    'Draft saved',
+    { ...form, purpose: purposeValue, requiredDate: requiredDateValue },
+  )
+
+  return <div className="requester-requisition-editor" style={{ display: 'grid', gap: 16 }}>
+    <section style={{ ...card, padding: '18px 20px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <button type="button" onClick={() => setForm({})} style={secondary}><Icon name="arrow_back" size={17} />My requisitions</button>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ color: 'var(--text-faint)', fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em' }}>Department Requisition</div>
+          <h2 style={{ margin: '3px 0 0', color: 'var(--text)', fontSize: 22, letterSpacing: '-.02em' }}>{id(draftRequest.requisition_no) || 'Draft requisition'}</h2>
+        </div>
+        <div style={{ marginLeft: 'auto' }}><StatusBadge value={id(draftRequest.status)} /></div>
+      </div>
+      <div className="requester-requisition-meta" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 10, marginTop: 18 }}>
+        <InfoBox label="Department" value={app.user.departmentName || departmentName(app, draftRequest.department) || 'Your department'} />
+        <InfoBox label="Requested by" value={app.user.name} />
+        <InfoBox label="Required date" value={requiredDateValue || 'Not specified'} />
+        <InfoBox label="Items" value={`${draftLines.length} item${draftLines.length === 1 ? '' : 's'}`} />
+      </div>
+    </section>
+
+    <section style={{ ...card, overflow: 'hidden' }}>
+      <div style={{ padding: '17px 18px', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ color: 'var(--text)', fontSize: 14, fontWeight: 800 }}>Requisition details</div>
+        <div style={{ marginTop: 4, color: 'var(--text-muted)', fontSize: 11.5 }}>State why these items are needed. Supplier and price information is intentionally not part of a Department Requisition.</div>
+      </div>
+      <div className="requester-requisition-details" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.5fr) minmax(220px,.6fr)', gap: 14, padding: 18 }}>
+        <Field label="Purpose / reason"><Input value={purposeValue} change={(value) => setForm({ ...form, purpose: value })} /></Field>
+        <Field label="Required date"><Input type="date" value={requiredDateValue} change={(value) => setForm({ ...form, requiredDate: value })} /></Field>
+      </div>
+      <div style={{ padding: '0 18px 18px', display: 'flex', justifyContent: 'flex-end' }}>
+        <button type="button" disabled={busy || !id(purposeValue).trim()} onClick={() => void saveDetails()} style={{ ...secondary, opacity: busy || !id(purposeValue).trim() ? .5 : 1 }}><Icon name="save" size={16} />Save draft details</button>
+      </div>
+    </section>
+
+    <section style={{ ...card, overflow: 'hidden' }}>
+      <div style={{ padding: '17px 18px', display: 'flex', alignItems: 'center', gap: 12, borderBottom: '1px solid var(--border)' }}>
+        <div>
+          <div style={{ color: 'var(--text)', fontSize: 14, fontWeight: 800 }}>Requested items</div>
+          <div style={{ marginTop: 3, color: 'var(--text-muted)', fontSize: 11.5 }}>Add every article required before submitting this requisition.</div>
+        </div>
+        <button type="button" onClick={beginAddItem} style={{ ...secondary, marginLeft: 'auto', color: 'var(--accent)', borderColor: 'var(--accent)' }}><Icon name="add" size={17} />Add another item</button>
+      </div>
+
+      <div className="requester-items-table requester-items-head" style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1.6fr) 110px 120px minmax(180px,1fr) 86px', gap: 12, padding: '10px 18px', background: 'var(--surface-2)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em' }}>
+        <span>Article</span><span>Quantity</span><span>UOM</span><span>Note</span><span>Actions</span>
+      </div>
+      {draftLines.map((line: Row) => {
+        const lineArticle = app.data.items.find((row: Row) => id(row.id) === id(line.item))
+        const uom = uomNames.get(id(line.unit || lineArticle?.baseUnitId)) || id(lineArticle?.uom) || 'Base unit'
+        return <div key={id(line.id)} className="requester-items-table" style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1.6fr) 110px 120px minmax(180px,1fr) 86px', gap: 12, padding: '13px 18px', alignItems: 'center', borderTop: '1px solid var(--border)', fontSize: 12 }}>
+          <span style={{ minWidth: 0, color: 'var(--text)', fontWeight: 750 }}>{itemName(app, line.item)}</span>
+          <span style={{ color: 'var(--text)', fontWeight: 700 }}>{id(line.quantity_requested || line.base_quantity_requested || 0)}</span>
+          <span style={{ color: 'var(--text-muted)' }}>{uom}</span>
+          <span style={{ minWidth: 0, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{id(line.remarks) || '—'}</span>
+          <span style={{ display: 'flex', gap: 6 }}>
+            <button type="button" onClick={() => editLine(line)} title="Edit item" style={lineAction}><Icon name="edit" size={15} /></button>
+            <button type="button" onClick={() => {
+              if (!window.confirm(`Remove ${itemName(app, line.item)} from this requisition?`)) return
+              void execute(() => deleteBackendPath('store-requisition-items', id(line.id)), 'Item removed', { request: form.request, purpose: purposeValue, requiredDate: requiredDateValue, requestLine: '', item: '', unit: '', quantity: '', note: '' })
+            }} title="Remove item" style={{ ...lineAction, color: 'var(--bad)' }}><Icon name="delete" size={15} /></button>
+          </span>
+        </div>
+      })}
+      {!draftLines.length && <div style={{ padding: 34, textAlign: 'center', borderTop: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+        <Icon name="playlist_add" size={29} color="var(--text-faint)" />
+        <div style={{ marginTop: 8, color: 'var(--text)', fontSize: 12.5, fontWeight: 800 }}>No items added yet</div>
+        <div style={{ marginTop: 4, fontSize: 11.5 }}>Use “Add another item” below to build this requisition.</div>
+      </div>}
+
+      <div style={{ padding: 18, borderTop: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+        <div style={{ marginBottom: 11, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ width: 28, height: 28, display: 'grid', placeItems: 'center', borderRadius: 7, background: 'var(--accent-soft)', color: 'var(--accent)' }}><Icon name={draftLine ? 'edit' : 'add'} size={16} /></span>
+          <div><div style={{ color: 'var(--text)', fontSize: 12.5, fontWeight: 800 }}>{draftLine ? 'Edit requested item' : 'Add requested item'}</div><div style={{ marginTop: 2, color: 'var(--text-muted)', fontSize: 10.5 }}>Choose the article, enter quantity and optionally add an item note.</div></div>
+          {draftLine && <button type="button" onClick={beginAddItem} style={{ ...secondary, marginLeft: 'auto', height: 32 }}>Cancel edit</button>}
+        </div>
+        <div className="requester-item-form" style={{ display: 'grid', gridTemplateColumns: 'minmax(250px,1.4fr) 120px 140px minmax(220px,1fr)', gap: 12, alignItems: 'end' }}>
+          <Field label="Article"><Select value={form.item} change={(value) => { const selected = app.data.items.find((row: Row) => id(row.id) === value); setForm({ ...form, item: value, unit: selected?.baseUnitId || '', quantity: form.quantity || '', note: form.note || '' }) }} rows={app.data.items} emptyLabel="Choose article" label={(row) => itemName(app, row.id)} /></Field>
+          <Field label="Quantity"><Input type="number" value={form.quantity} change={(value) => setForm({ ...form, quantity: value })} /></Field>
+          <div style={{ marginBottom: 10 }}><HelpLabel label="UOM" style={labelStyle} /><div style={{ ...control, display: 'flex', alignItems: 'center', background: 'var(--surface)' }}>{form.item ? selectedUom : 'Select article first'}</div></div>
+          <Field label="Item note"><Input value={form.note} change={(value) => setForm({ ...form, note: value })} /></Field>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 3 }}>
+          {draftLine ? <button type="button" disabled={busy || !form.item || num(form.quantity) <= 0} onClick={() => execute(() => updateBackendRecord('store-requisition-items', id(draftLine.id), { item: form.item, unit: form.unit || null, quantity_requested: num(form.quantity), remarks: id(form.note).trim() }), 'Item updated', { request: form.request, purpose: purposeValue, requiredDate: requiredDateValue, requestLine: '', item: '', unit: '', quantity: '', note: '' })} style={{ ...secondary, color: '#fff', background: 'var(--accent)', borderColor: 'var(--accent)', opacity: busy || !form.item || num(form.quantity) <= 0 ? .5 : 1 }}><Icon name="save" size={16} color="#fff" />Update item</button> : <button type="button" disabled={busy || !form.item || num(form.quantity) <= 0} onClick={() => execute(() => createBackendRecord('store-requisition-items', { requisition: form.request, item: form.item, unit: form.unit || null, quantity_requested: num(form.quantity), quantity_approved: 0, quantity_issued: 0, remarks: id(form.note).trim() }), 'Item added', { request: form.request, purpose: purposeValue, requiredDate: requiredDateValue, item: '', unit: '', quantity: '', note: '', requestLine: '' })} style={{ ...secondary, color: '#fff', background: 'var(--accent)', borderColor: 'var(--accent)', opacity: busy || !form.item || num(form.quantity) <= 0 ? .5 : 1 }}><Icon name="add" size={16} color="#fff" />Add item</button>}
+        </div>
+      </div>
+    </section>
+
+    <section className="requester-editor-actions" style={{ ...card, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+      <div style={{ color: 'var(--text-muted)', fontSize: 11.5 }}><b style={{ color: 'var(--text)' }}>{draftLines.length}</b> item{draftLines.length === 1 ? '' : 's'} in this requisition</div>
+      <button type="button" disabled={busy} onClick={() => {
+        if (!window.confirm(`Delete ${id(draftRequest.requisition_no)} and all its items? This cannot be undone.`)) return
+        void execute(() => deleteBackendPath('store-requisitions', requestBackendId(draftRequest)), 'Draft deleted', {})
+      }} style={{ ...secondary, marginLeft: 'auto', color: 'var(--bad)', borderColor: 'rgba(220,38,38,.3)' }}><Icon name="delete" size={16} color="var(--bad)" />Delete draft</button>
+      <button type="button" disabled={busy || !id(purposeValue).trim()} onClick={() => void saveDetails()} style={{ ...secondary, opacity: busy || !id(purposeValue).trim() ? .5 : 1 }}><Icon name="save" size={16} />Save draft</button>
+      <button type="button" disabled={busy || draftLines.length === 0 || !id(purposeValue).trim()} onClick={() => execute(() => runBackendAction('store-requisitions', id(form.request), 'submit'), 'Requisition sent to your Department Head', {})} style={{ ...secondary, color: '#fff', background: 'var(--good)', borderColor: 'var(--good)', opacity: busy || draftLines.length === 0 || !id(purposeValue).trim() ? .5 : 1 }}><Icon name="send" size={16} color="#fff" />Submit for HOD approval</button>
+    </section>
+  </div>
 }
 
 function RequestSummary({ request, lines, data, app, showAvailability = false, showOperationalContext = false, editable = false, onEditLine, onRemoveLine }: { request: Row; lines: Row[]; data: Record<string, Row[]>; app: any; showAvailability?: boolean; showOperationalContext?: boolean; editable?: boolean; onEditLine?: (line: Row) => void; onRemoveLine?: (line: Row) => void }) {
@@ -510,11 +693,12 @@ function ReadOnlyPanel({ title, note }: { title: string; note: string }) {
   return <Panel title={title} note={note}><div style={{ padding: 12, borderRadius: 6, color: 'var(--text-muted)', background: 'var(--surface-2)', fontSize: 11.5 }}>Select a record to view details.</div></Panel>
 }
 
-function Records({ tab, data, app, stage, onSelect }: { tab: Tab; data: Record<string, Row[]>; app: any; stage?: string; onSelect: (row: Row) => void }) {
+function Records({ tab, data, app, stage, onSelect, onNewRequisition }: { tab: Tab; data: Record<string, Row[]>; app: any; stage?: string; onSelect: (row: Row) => void; onNewRequisition?: () => void }) {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const requesterView = tab === 'requests' && stage === 'prepare' && id(app.user.role).trim().toLowerCase() === 'requester'
   const stageRows = tab !== 'requests' ? data[tab]
     : stage === 'department' ? data.requests.filter((row) => id(row.status) === 'pending_department_approval')
       : stage === 'stores' ? data.requests.filter((row) => id(row.status) === 'submitted')
@@ -542,20 +726,30 @@ function Records({ tab, data, app, stage, onSelect }: { tab: Tab; data: Record<s
   const titles: Record<Tab, string> = { requests: stage === 'department' ? 'Requests awaiting Department Head approval' : stage === 'stores' ? 'Requests awaiting Store Keeper action' : stage === 'shortage' ? 'Store Requisitions ready to forward' : stage === 'issue' ? 'Requests ready to issue' : 'My requests', issues: 'Issue vouchers', transfers: 'Inter-store transfers', adjustments: 'Stock adjustments', counts: 'Stock counts', returns: 'Department returns', reorder: 'Low-stock reorder queue', batches: 'Inventory batches and expiry', consumption: 'Department consumption' }
   const statuses = Array.from(new Set(stageRows.map((row) => id(row.status)).filter(Boolean)))
   return <section style={{ ...card, overflow: 'hidden' }}>
-    <div style={{ padding: '15px 17px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}><div style={{ fontSize: 13, fontWeight: 800 }}>{titles[tab]}</div><span style={{ marginLeft: 'auto', color: 'var(--text-faint)', fontSize: 11 }}>{rows.length} record{rows.length === 1 ? '' : 's'}</span></div>
+    <div style={{ padding: '15px 17px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div><div style={{ fontSize: 13, fontWeight: 800 }}>{requesterView ? 'My requisitions' : titles[tab]}</div>{requesterView && <div style={{ marginTop: 3, color: 'var(--text-muted)', fontSize: 11 }}>Create, continue and track your Department Requisitions.</div>}</div>
+      <span style={{ marginLeft: 'auto', color: 'var(--text-faint)', fontSize: 11 }}>{rows.length} record{rows.length === 1 ? '' : 's'}</span>
+      {requesterView && <button type="button" onClick={() => onNewRequisition?.()} style={{ ...secondary, color: '#fff', background: 'var(--accent)', borderColor: 'var(--accent)' }}><Icon name="add" size={17} color="#fff" />New requisition</button>}
+    </div>
     <div className="inventory-record-filters" style={{ display: 'grid', gridTemplateColumns: 'minmax(180px,1.5fr) minmax(130px,.8fr) minmax(130px,.8fr) minmax(130px,.8fr)', gap: 8, padding: 12, borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
       <input aria-label="Search records" placeholder="Search reference, purpose or item" value={query} onChange={(e) => setQuery(e.target.value)} style={control} />
       <select aria-label="Filter by status" value={status} onChange={(e) => setStatus(e.target.value)} style={control}><option value="">All statuses</option>{statuses.map((value) => <option key={value} value={value}>{statusLabel(value)}</option>)}</select>
       <input aria-label="From date" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={control} />
       <input aria-label="To date" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={control} />
     </div>
-    {rows.map((row) => tab === 'requests' ? <button type="button" onClick={() => onSelect(row)} className="procurement-record-row store-request-row" key={id(row.id)} style={{ ...recordRow, gridTemplateColumns: '1.05fr 1.15fr 1.25fr 1.25fr auto', width: '100%', alignItems: 'center', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
-      <span style={{ color: 'var(--text)', fontWeight: 750 }}>{id(row.requisition_no)}</span>
-      <span style={{ color: 'var(--text-muted)' }}>{id(row.purpose) || departmentName(app, row.department)}</span>
-      <span style={{ color: 'var(--text-muted)' }}>{data.requestItems.filter((line) => id(line.requisition) === id(row.id)).slice(0, 2).map((line) => `${itemName(app, line.item)} × ${id(line.base_quantity_requested || line.quantity_requested || line.quantity)}`).join(', ') || 'No items added'}</span>
-      <RequestProgress status={id(row.status)} />
-      <StatusBadge value={id(row.status)} />
-    </button> : <button type="button" onClick={() => onSelect(row)} className="procurement-record-row" key={id(row.id)} style={{ ...recordRow, width: '100%', alignItems: 'center', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>{cells(row).map((cell, index) => <span key={index} style={{ color: index ? 'var(--text-muted)' : 'var(--text)', fontWeight: index ? 500 : 700 }}>{cell || '—'}</span>)}</button>)}
+    {requesterView && rows.length > 0 && <div className="requester-list-head" style={{ display: 'grid', gridTemplateColumns: '110px minmax(170px,1fr) minmax(210px,1.25fr) minmax(180px,1fr) auto', gap: 14, padding: '9px 17px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em' }}><span>Requisition</span><span>Purpose</span><span>Items</span><span>Progress</span><span>Status</span></div>}
+    {rows.map((row) => tab === 'requests' ? (() => {
+      const requestLines = data.requestItems.filter((line) => id(line.requisition) === id(row.id))
+      const itemNames = requestLines.slice(0, 2).map((line) => itemName(app, line.item))
+      const itemPreview = itemNames.length ? `${itemNames.join(', ')}${requestLines.length > 2 ? ` +${requestLines.length - 2} more` : ''}` : 'No items added'
+      return <button type="button" onClick={() => onSelect(row)} className="procurement-record-row store-request-row" key={id(row.id)} style={{ ...recordRow, gridTemplateColumns: requesterView ? '110px minmax(170px,1fr) minmax(210px,1.25fr) minmax(180px,1fr) auto' : '1.05fr 1.15fr 1.25fr 1.25fr auto', width: '100%', alignItems: 'center', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
+        <span style={{ color: 'var(--text)', fontWeight: 800 }}>{id(row.requisition_no)}</span>
+        <span style={{ color: 'var(--text-muted)' }}>{id(row.purpose) || departmentName(app, row.department)}</span>
+        <span style={{ minWidth: 0 }}><b style={{ display: 'block', color: 'var(--text)', fontSize: 11.5 }}>{requestLines.length} item{requestLines.length === 1 ? '' : 's'}</b><small style={{ display: 'block', marginTop: 3, color: 'var(--text-muted)', fontSize: 10.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{itemPreview}</small></span>
+        <RequestProgress status={id(row.status)} />
+        <StatusBadge value={id(row.status)} />
+      </button>
+    })() : <button type="button" onClick={() => onSelect(row)} className="procurement-record-row" key={id(row.id)} style={{ ...recordRow, width: '100%', alignItems: 'center', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>{cells(row).map((cell, index) => <span key={index} style={{ color: index ? 'var(--text-muted)' : 'var(--text)', fontWeight: index ? 500 : 700 }}>{cell || '—'}</span>)}</button>)}
     {!rows.length && <div style={{ padding: 45, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}><Icon name="inbox" size={28} color="var(--text-faint)" /><div style={{ marginTop: 8, color: 'var(--text)', fontWeight: 700 }}>No records found</div><div style={{ marginTop: 4 }}>No records match the current filters.</div></div>}
   </section>
 }
@@ -677,8 +871,8 @@ function StatusBadge({ value }: { value: string }) {
 }
 function RequestProgress({ status }: { status: string }) {
   const normalized = id(status).trim().toLowerCase().replace(/\s+/g, '_')
-  const stages = ['Created', 'Department Approval', 'Store Keeper Action', 'Issue', 'Completed']
-  const indexMap: Record<string, number> = { draft: 0, pending_department_approval: 1, submitted: 2, awaiting_procurement: 2, approved: 3, partially_approved: 3, partially_issued: 3, issued: 4, completed: 4, rejected: 1, cancelled: 0 }
+  const stages = ['Created', 'HOD Approval', 'Store Keeper', 'Procurement', 'Issue', 'Completed']
+  const indexMap: Record<string, number> = { draft: 0, pending_department_approval: 1, submitted: 2, awaiting_procurement: 3, approved: 4, partially_approved: 4, partially_issued: 4, issued: 5, completed: 5, rejected: 1, cancelled: 0 }
   const current = indexMap[normalized] ?? 0
   return <div aria-label={`Request progress: ${stages[current]}`} style={{ minWidth: 150 }}>
     <div style={{ display: 'flex', gap: 3, marginBottom: 4 }}>{stages.map((stage, index) => <span key={stage} title={stage} style={{ height: 5, flex: 1, borderRadius: 5, background: index <= current ? (normalized === 'rejected' ? 'var(--bad)' : normalized === 'cancelled' ? 'var(--text-faint)' : index === current ? 'var(--accent)' : 'var(--good)') : 'var(--border)' }} />)}</div>
@@ -696,7 +890,7 @@ function RequestTimeline({ row, app }: { row: Row; app: any }) {
 }
 function InfoBox({ label, value }: { label: string; value: unknown }) { return <div style={{ padding: '9px 10px', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface-2)' }}><div style={{ color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 750, textTransform: 'uppercase' }}>{label}</div><div style={{ marginTop: 3, color: 'var(--text)', fontSize: 13, fontWeight: 750 }}>{id(value)}</div></div> }
 function SectionLabel({ children }: { children: ReactNode }) { return <div style={{ margin: '4px 0 10px', color: 'var(--text)', fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em' }}>{children}</div> }
-const statusLabel = (value: string) => ({ draft: 'Draft', pending_department_approval: 'Pending Department Approval', submitted: 'Pending Store Keeper Action', approved: 'Approved', partially_approved: 'Partially Approved', awaiting_procurement: 'Awaiting Procurement', partially_issued: 'Partially Issued', issued: 'Issued', completed: 'Completed', rejected: 'Rejected', cancelled: 'Cancelled' } as Record<string,string>)[value] || value.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase())
+const statusLabel = (value: string) => ({ draft: 'Draft', pending_department_approval: 'Pending HOD Approval', submitted: 'Pending Store Keeper Action', approved: 'Approved', partially_approved: 'Partially Approved', awaiting_procurement: 'Awaiting Procurement', partially_issued: 'Partially Issued', issued: 'Issued', completed: 'Completed', rejected: 'Rejected', cancelled: 'Cancelled' } as Record<string,string>)[value] || value.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase())
 const formatDateTime = (value: string) => value ? new Date(value).toLocaleString() : ''
 function Field({ label, children }: { label: string; children: ReactNode }) { return <label style={{ display: 'block', marginBottom: 10 }}><HelpLabel label={label} style={labelStyle} />{children}</label> }
 function Input({ value, change, type = 'text' }: { value: unknown; change: (value: string) => void; type?: string }) { return <input type={type} value={id(value)} onChange={(e) => change(e.target.value)} style={control} /> }
