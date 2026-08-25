@@ -520,14 +520,22 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
                 "id": str(step.id),
                 "stage": step.stage,
                 "stage_name": step.stage_name,
-                "approver": str(step.approver_id),
-                "approver_name": step.approver.user.get_full_name()
-                or step.approver.user.username,
+                "approver": str(step.approver_id or ""),
+                "approver_role": str(step.approver_role_id or ""),
+                "approver_name": (
+                    (step.decided_by.get_full_name() or step.decided_by.username)
+                    if step.decided_by_id
+                    else (
+                        step.approver.user.get_full_name() or step.approver.user.username
+                        if step.approver_id
+                        else (step.approver_role.name if step.approver_role_id else "Unassigned")
+                    )
+                ),
                 "status": step.status,
                 "comments": step.comments,
                 "decided_at": step.decided_at,
             }
-            for step in order.approval_workflow.select_related("approver__user").all()
+            for step in order.approval_workflow.select_related("approver__user", "approver_role", "decided_by").all()
         ]
 
     def get_print_count(self, order):

@@ -40,7 +40,7 @@ from apps.procurement.models import (
     VendorQuotationItem,
 )
 from apps.vendors.models import Supplier
-from core.constants.choices import POStatus, PRStatus
+from core.constants.choices import ApprovalStatus, POStatus, PRStatus
 from apps.procurement.serializers import (
     GoodsInspectionItemSerializer,
     GoodsInspectionSerializer,
@@ -130,7 +130,11 @@ RECEIVING_ROLES = ("Receiving Clerk",)
 def scope_purchase_orders_for_user(queryset, user):
     """Apply the same LPO visibility rules to lists and the combined workspace."""
     employee = getattr(user, "employee_profile", None)
-    if user_has_role(user, *COMMERCIAL_CONTROL_ROLES):
+    if user.is_superuser or user_has_role(user, "System Administrator"):
+        return queryset
+    if user_has_role(user, "Procurement Manager", "Procurement Officer", "Financial Manager", "General Manager"):
+        if employee and employee.branch_id:
+            return queryset.filter(requisition__branch=employee.branch)
         return queryset
     if user_has_role(user, *RECEIVING_ROLES):
         queryset = queryset.filter(
@@ -214,7 +218,7 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             orders = scope_purchase_orders_for_user(
                 PurchaseOrder.objects.select_related(
                     "requisition", "supplier", "ordered_by", "store", "sent_by", "approved_by"
-                ).prefetch_related("approval_workflow__approver__user"),
+                ).prefetch_related("approval_workflow__approver__user", "approval_workflow__approver_role", "approval_workflow__decided_by"),
                 request.user,
             )
             order_ids = orders.values_list("id", flat=True)
@@ -250,6 +254,24 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
                 PurchaseOrderItem.objects.filter(purchase_order_id__in=order_ids),
                 many=True, context={"request": request},
             ).data
+            # Approval queues are authoritative server-side role queues.  Do not
+            # make Finance/GM reconstruct their inbox from serialized status text.
+            approval_role = None
+            if user_has_role(request.user, "Financial Manager"):
+                approval_role = "Financial Manager"
+            elif user_has_role(request.user, "General Manager"):
+                approval_role = "General Manager"
+            if stage == "lpo" and approval_role:
+                approval_queue_orders = orders.filter(
+                    status=POStatus.PENDING_APPROVAL,
+                    approval_workflow__status=ApprovalStatus.PENDING,
+                    approval_workflow__approver_role__name=approval_role,
+                ).distinct()
+                payload["approvalQueueOrders"] = PurchaseOrderSerializer(
+                    approval_queue_orders,
+                    many=True,
+                    context={"request": request},
+                ).data
         if stage in {"receipt", "inspect", "return"}:
             receipts = GoodsReceiptNote.objects.filter(purchase_order_id__in=order_ids)
             if user_has_role(request.user, *RECEIVING_ROLES) and not user_has_role(
@@ -612,7 +634,7 @@ class VendorQuotationViewSet(CreatedByModelMixin, ModelViewSet):
 class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = PurchaseOrder.objects.select_related(
         "requisition", "supplier", "ordered_by", "store", "sent_by", "approved_by"
-    ).prefetch_related("approval_workflow__approver__user")
+    ).prefetch_related("approval_workflow__approver__user", "approval_workflow__approver_role")
     serializer_class = PurchaseOrderSerializer
     filterset_fields = ("status", "requisition", "supplier", "ordered_by", "store")
     search_fields = (
@@ -659,12 +681,25 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
         ).order_by("stage").first()
         if not step:
             raise ValidationError("This LPO has no pending approval stage.")
+        if request.user.is_superuser:
+            return step
         employee = getattr(request.user, "employee_profile", None)
-        if not request.user.is_superuser and step.approver_id != getattr(employee, "id", None):
-            raise PermissionDenied(
-                f"This stage is assigned to {step.approver}."
-            )
-        return step
+        if not employee or not employee.is_active or not request.user.is_active:
+            raise PermissionDenied("An active employee profile is required to approve this LPO.")
+        order_branch_id = getattr(order.requisition, "branch_id", None)
+        if order_branch_id and employee.branch_id != order_branch_id:
+            raise PermissionDenied("This LPO belongs to a different branch.")
+        if step.approver_id:
+            if step.approver_id != employee.id:
+                raise PermissionDenied(f"This stage is assigned to {step.approver}.")
+            return step
+        if step.approver_role_id:
+            if not request.user.groups.filter(pk=step.approver_role_id).exists():
+                raise PermissionDenied(
+                    f"This stage requires the {step.approver_role.name} role."
+                )
+            return step
+        raise PermissionDenied("This approval stage has no assigned role or employee.")
 
     @action(detail=True, methods=["post"], url_path="approve")
     def approve_order(self, request, pk=None):

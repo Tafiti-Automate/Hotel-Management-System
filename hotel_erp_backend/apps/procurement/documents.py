@@ -281,11 +281,19 @@ def build_purchase_order_pdf(
         Paragraph("Department / Info", small),
         Paragraph("Time", small),
     ]]
-    for approval in order.approval_workflow.select_related("approver__user").all():
+    for approval in order.approval_workflow.select_related("approver__user", "approver_role", "decided_by").all():
+        if approval.decided_by_id:
+            approval_user = approval.decided_by.get_full_name() or approval.decided_by.username
+        elif approval.approver_id:
+            approval_user = approval.approver.user.get_full_name() or approval.approver.user.username
+        elif approval.approver_role_id:
+            approval_user = approval.approver_role.name
+        else:
+            approval_user = "Pending assignment"
         approval_rows.append([
             Paragraph(f"Level {approval.stage}", small),
             Paragraph("OK" if approval.status == "approved" else _text(approval.get_status_display()), small),
-            Paragraph(_text(approval.approver.user.get_full_name() or approval.approver.user.username), small),
+            Paragraph(_text(approval_user), small),
             Paragraph(_text(approval.stage_name), small),
             Paragraph(_datetime(approval.decided_at), small),
         ])

@@ -1414,34 +1414,36 @@ class PurchaseOrder(BaseModel):
             )
         return order
 
-    def _fixed_role_approver(self, role_name):
+    def _fixed_role_group(self, role_name):
+        from django.contrib.auth.models import Group
         from apps.employees.models import Employee
 
-        queryset = Employee.objects.filter(
+        group = Group.objects.filter(name=role_name).first()
+        if not group:
+            raise ValidationError(f"The predefined {role_name} role is not configured.")
+        candidates = Employee.objects.filter(
             is_active=True,
             user__is_active=True,
-            user__groups__name=role_name,
-        ).select_related("user", "branch").distinct()
+            user__groups=group,
+        )
         branch_id = getattr(self.requisition, "branch_id", None)
         if branch_id:
-            branch_queryset = queryset.filter(branch_id=branch_id)
-            if branch_queryset.exists():
-                queryset = branch_queryset
-        candidates = list(queryset[:2])
-        if len(candidates) != 1:
-            if not candidates:
-                raise ValidationError(f"Assign one active {role_name} before submitting an LPO.")
-            raise ValidationError(f"More than one active {role_name} matches this LPO. Keep one role holder for this branch.")
-        return candidates[0]
+            candidates = candidates.filter(branch_id=branch_id)
+        if not candidates.exists():
+            location = " for this branch" if branch_id else ""
+            raise ValidationError(f"Assign at least one active {role_name}{location} before submitting an LPO.")
+        return group
 
     def fixed_approval_route(self):
-        finance = self._fixed_role_approver("Financial Manager")
-        management = self._fixed_role_approver("General Manager")
-        if finance.pk == management.pk:
-            raise ValidationError("Financial Manager and General Manager must be different employees.")
+        """Return the client's fixed LPO route as role queues, not named employees.
+
+        This keeps the workflow stable when a branch has more than one active
+        employee carrying a management role. The first eligible role holder to
+        decide completes that stage, and the actual decision-maker is recorded.
+        """
         return (
-            (1, "Financial Manager Review", finance),
-            (2, "General Manager Final Approval", management),
+            (1, "Financial Manager Review", self._fixed_role_group("Financial Manager")),
+            (2, "General Manager Final Approval", self._fixed_role_group("General Manager")),
         )
 
     def approval_readiness(self):
@@ -1487,13 +1489,14 @@ class PurchaseOrder(BaseModel):
             PurchaseOrderApprovalWorkflow.objects.bulk_create([
                 PurchaseOrderApprovalWorkflow(
                     purchase_order=order,
-                    approver=approver,
+                    approver=None,
+                    approver_role=approver_role,
                     stage=stage,
                     stage_name=stage_name,
                     matrix_rule=None,
                     created_by=order.created_by,
                 )
-                for stage, stage_name, approver in route
+                for stage, stage_name, approver_role in route
             ])
             previous_status = order.status
             order.status = POStatus.PENDING_APPROVAL
@@ -1514,6 +1517,18 @@ class PurchaseOrder(BaseModel):
                 new_status=POStatus.PENDING_APPROVAL,
                 metadata={"revision": order.revision, "route": ["Financial Manager", "General Manager"]},
             )
+            try:
+                from apps.notifications.services import notify_roles
+                notify_roles(
+                    ["Financial Manager"],
+                    branch=order.requisition.branch,
+                    title=f"LPO {order.lpo_number} requires financial approval",
+                    message="Review the LPO quantities and value, then approve, reduce or reject it.",
+                    created_by=order.ordered_by.user if order.ordered_by_id else None,
+                )
+            except Exception:
+                # Notification delivery must never cancel a valid LPO submission.
+                pass
             self.status = order.status
             self.revision = order.revision
             self.submitted_for_approval_at = order.submitted_for_approval_at

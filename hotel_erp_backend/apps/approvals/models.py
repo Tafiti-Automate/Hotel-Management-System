@@ -427,6 +427,15 @@ class PurchaseOrderApprovalWorkflow(BaseModel):
         "employees.Employee",
         on_delete=models.PROTECT,
         related_name="purchase_order_approval_steps",
+        null=True,
+        blank=True,
+    )
+    approver_role = models.ForeignKey(
+        Group,
+        on_delete=models.PROTECT,
+        related_name="purchase_order_approval_steps",
+        null=True,
+        blank=True,
     )
     stage = models.PositiveIntegerField()
     stage_name = models.CharField(max_length=100, blank=True)
@@ -495,7 +504,11 @@ class PurchaseOrderApprovalWorkflow(BaseModel):
         self.status = ApprovalStatus.APPROVED
         self.comments = comments
         self.decided_at = timezone.now()
-        self.decided_by = decided_by or self.approver.user
+        if decided_by is None and self.approver_id:
+            decided_by = self.approver.user
+        if decided_by is None:
+            raise ValidationError("An authenticated approver is required for this LPO decision.")
+        self.decided_by = decided_by
         self.save(
             update_fields=(
                 "status",
@@ -508,10 +521,26 @@ class PurchaseOrderApprovalWorkflow(BaseModel):
         remaining = PurchaseOrderApprovalWorkflow.objects.filter(
             purchase_order=self.purchase_order,
         ).exclude(status__in=(ApprovalStatus.APPROVED, ApprovalStatus.SKIPPED))
+        if remaining.exists():
+            next_step = remaining.order_by("stage").first()
+            if next_step and next_step.approver_role_id:
+                try:
+                    from apps.notifications.services import notify_roles
+                    notify_roles(
+                        [next_step.approver_role.name],
+                        branch=self.purchase_order.requisition.branch,
+                        title=f"LPO {self.purchase_order.lpo_number} requires {next_step.approver_role.name} approval",
+                        message=f"{next_step.stage_name} is ready for your decision.",
+                        created_by=self.decided_by,
+                    )
+                except Exception:
+                    pass
         if not remaining.exists():
             self.purchase_order.status = POStatus.APPROVED
             self.purchase_order.approved_at = timezone.now()
-            self.purchase_order.approved_by = self.approver
+            from apps.employees.models import Employee
+            decision_employee = Employee.objects.filter(user=self.decided_by).first()
+            self.purchase_order.approved_by = decision_employee or self.approver
             self.purchase_order.rejected_at = None
             self.purchase_order.save(
                 update_fields=(
@@ -543,7 +572,12 @@ class PurchaseOrderApprovalWorkflow(BaseModel):
             metadata={
                 "stage": self.stage,
                 "stage_name": self.stage_name,
-                "approver": str(self.approver),
+                "approver": (
+                    (self.decided_by.get_full_name() or self.decided_by.username)
+                    if self.decided_by_id
+                    else str(self.approver or self.approver_role or "")
+                ),
+                "assigned_role": self.approver_role.name if self.approver_role_id else "",
             },
         )
 
@@ -557,7 +591,11 @@ class PurchaseOrderApprovalWorkflow(BaseModel):
         self.status = ApprovalStatus.REJECTED
         self.comments = comments
         self.decided_at = timezone.now()
-        self.decided_by = decided_by or self.approver.user
+        if decided_by is None and self.approver_id:
+            decided_by = self.approver.user
+        if decided_by is None:
+            raise ValidationError("An authenticated approver is required for this LPO decision.")
+        self.decided_by = decided_by
         self.save(
             update_fields=(
                 "status",
@@ -591,6 +629,11 @@ class PurchaseOrderApprovalWorkflow(BaseModel):
             metadata={
                 "stage": self.stage,
                 "stage_name": self.stage_name,
-                "approver": str(self.approver),
+                "approver": (
+                    (self.decided_by.get_full_name() or self.decided_by.username)
+                    if self.decided_by_id
+                    else str(self.approver or self.approver_role or "")
+                ),
+                "assigned_role": self.approver_role.name if self.approver_role_id else "",
             },
         )

@@ -857,6 +857,18 @@ def test_lpo_requires_independent_value_routed_approval_before_issue():
     general_group, _ = Group.objects.get_or_create(name="General Manager")
     approver_user.groups.add(finance_group)
     manager_user.groups.add(general_group)
+    second_finance_user = get_user_model().objects.create_user(
+        username="lpo-second-finance",
+        employee_code="EMP-LPO-APR-2",
+        password="test-pass-123",
+    )
+    Employee.objects.create(
+        user=second_finance_user,
+        department=department,
+        branch=branch,
+        designation="Financial Manager",
+    )
+    second_finance_user.groups.add(finance_group)
 
     with pytest.raises(ValidationError, match="approved LPO"):
         order.issue(sent_by=employee)
@@ -865,13 +877,25 @@ def test_lpo_requires_independent_value_routed_approval_before_issue():
     order.refresh_from_db()
     assert order.status == POStatus.PENDING_APPROVAL
     steps = list(order.approval_workflow.all())
-    assert [step.approver for step in steps] == [approver, manager]
+    assert [step.approver for step in steps] == [None, None]
+    assert [step.approver_role for step in steps] == [finance_group, general_group]
 
-    steps[0].approve(decided_by=approver_user)
+    finance_client = APIClient()
+    finance_client.force_authenticate(second_finance_user)
+    finance_response = finance_client.post(f"/api/v1/purchase-orders/{order.pk}/approve/", {"comments": "Finance approved"}, format="json")
+    assert finance_response.status_code == 200
     order.refresh_from_db()
     assert order.status == POStatus.PENDING_APPROVAL
 
-    steps[1].approve(decided_by=manager_user)
+    first_finance_client = APIClient()
+    first_finance_client.force_authenticate(approver_user)
+    duplicate_response = first_finance_client.post(f"/api/v1/purchase-orders/{order.pk}/approve/", {}, format="json")
+    assert duplicate_response.status_code == 403
+
+    management_client = APIClient()
+    management_client.force_authenticate(manager_user)
+    management_response = management_client.post(f"/api/v1/purchase-orders/{order.pk}/approve/", {"comments": "Final approval"}, format="json")
+    assert management_response.status_code == 200
     order.refresh_from_db()
     assert order.status == POStatus.APPROVED
     assert order.approved_by == manager

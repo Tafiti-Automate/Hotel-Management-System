@@ -39,6 +39,7 @@ class ApprovalWorkflowAdmin(CreatedByAdminMixin, admin.ModelAdmin):
         "stage",
         "stage_name",
         "approver",
+        "approver_role",
         "status",
         "decided_by",
         "decided_at",
@@ -86,16 +87,18 @@ class PurchaseOrderApprovalWorkflowAdmin(CreatedByAdminMixin, admin.ModelAdmin):
         "stage",
         "stage_name",
         "approver",
+        "approver_role",
         "status",
         "decided_by",
         "decided_at",
     )
     list_filter = ("status", "stage")
-    list_select_related = ("purchase_order", "approver", "decided_by")
-    autocomplete_fields = ("purchase_order", "approver")
+    list_select_related = ("purchase_order", "approver", "approver_role", "decided_by")
+    autocomplete_fields = ("purchase_order", "approver", "approver_role")
     search_fields = (
         "purchase_order__po_number",
         "approver__user__employee_code",
+        "approver_role__name",
         "comments",
     )
     readonly_fields = ("status", "decided_by", "decided_at")

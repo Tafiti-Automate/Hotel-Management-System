@@ -323,6 +323,18 @@ export default function ProcurementWorkbench() {
     }
   }, [scopedData])
 
+  const roleApprovalQueueOrders = useMemo(() => {
+    const serverQueue = scopedData.approvalQueueOrders
+    if (Array.isArray(serverQueue)) return serverQueue
+    if (role === 'financial manager') {
+      return scopedData.orders.filter((row) => id(row.status) === 'pending_approval' && isFinanceApproval(row))
+    }
+    if (role === 'general manager') {
+      return scopedData.orders.filter((row) => id(row.status) === 'pending_approval' && isManagementApproval(row))
+    }
+    return []
+  }, [role, scopedData])
+
   const procurementQueues = useMemo(() => {
     const storeRequisitions = scopedData.requisitions.filter((row) =>
       ['store_requisition', 'store_shortage'].includes(id(row.procurement_source)) &&
@@ -392,13 +404,13 @@ export default function ProcurementWorkbench() {
         })}
       </div> : <div className="workbench-metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(150px,1fr))', gap: 10, marginBottom: 16 }}>
         {role === 'financial manager' ? <>
-          <Metric label="Awaiting Finance" value={id(scopedData.orders.filter((row) => id(row.status) === 'pending_approval' && isFinanceApproval(row)).length)} icon="approval" tone="warn" />
+          <Metric label="Awaiting Finance" value={id(roleApprovalQueueOrders.length)} icon="approval" tone="warn" />
           <Metric label="Visible LPO value" value={money(scopedData.orders.reduce((total,row)=>total+num(row.total_amount),0))} icon="account_balance_wallet" />
           <Metric label="Approved LPOs" value={id(scopedData.orders.filter((row)=>['approved','issued','partially_received','received'].includes(id(row.status))).length)} icon="check_circle" tone="good" />
           <Metric label="Rejected LPOs" value={id(scopedData.orders.filter((row)=>id(row.status)==='rejected').length)} icon="cancel" />
         </> : role === 'general manager' ? <>
-          <Metric label="Awaiting Final Approval" value={id(scopedData.orders.filter((row) => id(row.status) === 'pending_approval' && isManagementApproval(row)).length)} icon="verified_user" tone="warn" />
-          <Metric label="Pending LPO Value" value={money(scopedData.orders.filter((row)=>id(row.status)==='pending_approval'&&isManagementApproval(row)).reduce((total,row)=>total+num(row.total_amount),0))} icon="receipt_long" />
+          <Metric label="Awaiting Final Approval" value={id(roleApprovalQueueOrders.length)} icon="verified_user" tone="warn" />
+          <Metric label="Pending LPO Value" value={money(roleApprovalQueueOrders.reduce((total,row)=>total+num(row.total_amount),0))} icon="receipt_long" />
           <Metric label="Finally Approved" value={id(scopedData.orders.filter((row)=>['approved','issued','partially_received','received'].includes(id(row.status))).length)} icon="check_circle" tone="good" />
           <Metric label="Rejected" value={id(scopedData.orders.filter((row)=>id(row.status)==='rejected').length)} icon="cancel" />
         </> : <>
@@ -875,8 +887,8 @@ function StageTable({ stage, lpoQueue, data, names, onSelect }: { stage: Stage; 
   let title = ''
   if (stage === 'request') { rows = data.requisitionItems; title = 'Requisition lines' }
   if (stage === 'lpo') {
-    if (lpoQueue === 'finance') { rows = data.orders.filter((row) => id(row.status) === 'pending_approval' && isFinanceApproval(row)); title = 'Awaiting Finance' }
-    if (lpoQueue === 'management') { rows = data.orders.filter((row) => id(row.status) === 'pending_approval' && isManagementApproval(row)); title = 'Awaiting General Manager' }
+    if (lpoQueue === 'finance') { rows = Array.isArray(data.approvalQueueOrders) ? data.approvalQueueOrders : data.orders.filter((row) => id(row.status) === 'pending_approval' && isFinanceApproval(row)); title = 'Awaiting Finance' }
+    if (lpoQueue === 'management') { rows = Array.isArray(data.approvalQueueOrders) ? data.approvalQueueOrders : data.orders.filter((row) => id(row.status) === 'pending_approval' && isManagementApproval(row)); title = 'Awaiting General Manager' }
     if (lpoQueue === 'approved') { rows = data.orders.filter((row) => id(row.status) === 'approved'); title = 'Approved to Send' }
     if (lpoQueue === 'history') { rows = data.orders.filter((row) => ['issued', 'partially_received', 'received', 'rejected', 'cancelled'].includes(id(row.status))); title = 'LPO History' }
   }
