@@ -37,7 +37,6 @@ ROLE_SPECS = {
         # select the destination store and record carried-forward quantities, but
         # supplier/price permissions are deliberately absent.
         "change": {"inventory": ["storerequisition", "storerequisitionitem"]},
-        "crud": {"inventory": ["stockissue", "stockissueitem"]},
         "view": {
             "departments": ["department", "branch"],
             "employees": ["employee"],

@@ -174,7 +174,6 @@ export default function InventoryWorkbench() {
   const isAdministrator = app.user.isSuperuser || role === 'system administrator'
   const isDepartmentHead = role === 'department head'
   const isStoresApprover = isAdministrator || role === 'store keeper'
-  const isStoresIssuer = isAdministrator || role === 'store keeper'
   const otherTabs = role === 'store keeper' || isDepartmentHead || role === 'requester' ? [] : tabs.filter(([key]) => !['requests', 'issues'].includes(key))
   const requestRoleStage: SupplyTask = isStoresApprover ? 'stores' : isDepartmentHead ? 'department' : 'prepare'
   const supplyPathActive = supplyPathHint || (tab === 'issues' ? 'issue' : tab === 'requests' ? requestRoleStage : '')
@@ -217,12 +216,11 @@ export default function InventoryWorkbench() {
     }
   }
   return <div style={{ maxWidth: 1460, margin: '0 auto' }}>
-    <section className="workbench-hero" style={{ ...card, padding: 20, display: 'flex', alignItems: 'center', gap: 13, marginBottom: 15 }}><span style={hero}><Icon name={isDepartmentHead ? 'approval' : role === 'requester' ? 'assignment' : 'warehouse'} size={24} color="#fff" /></span><div><div style={eyebrow}>{isDepartmentHead ? 'Approvals' : role === 'requester' ? 'Requisitions' : 'Inventory'}</div><h1 style={{ margin: '3px 0', fontSize: 23 }}>{isDepartmentHead ? 'Department Approvals' : isStoresApprover ? 'Store Keeper Queue' : 'My Requisitions'}</h1><div style={muted}>{isDepartmentHead ? `${scopedData.requests.filter((row: Row) => id(row.status) === 'pending_department_approval').length} request${scopedData.requests.filter((row: Row) => id(row.status) === 'pending_department_approval').length === 1 ? '' : 's'} need your attention.` : role === 'store keeper' ? 'Receive approved department requests and forward the required quantities to Procurement.' : isStoresApprover ? 'Review inventory requests.' : 'Create and track your department requisitions.'}</div></div><button onClick={() => void load()} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button></section>
+    <section className="workbench-hero" style={{ ...card, padding: 20, display: 'flex', alignItems: 'center', gap: 13, marginBottom: 15 }}><span style={hero}><Icon name={isDepartmentHead ? 'approval' : role === 'requester' ? 'assignment' : 'warehouse'} size={24} color="#fff" /></span><div><div style={eyebrow}>{isDepartmentHead ? 'Approvals' : role === 'requester' ? 'Requisitions' : 'Inventory'}</div><h1 style={{ margin: '3px 0', fontSize: 23 }}>{isDepartmentHead ? 'Department Approvals' : isStoresApprover ? 'Store Keeper Queue' : 'My Requisitions'}</h1><div style={muted}>{isDepartmentHead ? `${scopedData.requests.filter((row: Row) => id(row.status) === 'pending_department_approval').length} request${scopedData.requests.filter((row: Row) => id(row.status) === 'pending_department_approval').length === 1 ? '' : 's'} need your attention.` : role === 'store keeper' ? 'Review HOD-approved requisitions, choose the destination store, confirm quantities and forward them to Procurement.' : isStoresApprover ? 'Review inventory requests.' : 'Create and track your department requisitions.'}</div></div><button onClick={() => void load()} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button></section>
     {(can(tabPermissions.requests.view) || can(tabPermissions.issues.view)) && <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 15 }}>
       {!isStoresApprover && !isDepartmentHead && role !== 'requester' && <button onClick={() => selectSupplyStep('prepare')} style={{ ...tabButton, background: supplyPathActive === 'prepare' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'prepare' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'prepare' ? 'var(--accent)' : 'var(--border)' }}><Icon name="assignment" size={17} />My requisitions</button>}
       {isStoresApprover && <button onClick={() => selectSupplyStep('stores')} style={{ ...tabButton, background: supplyPathActive === 'stores' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'stores' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'stores' ? 'var(--accent)' : 'var(--border)' }}><Icon name="assignment" size={17} />Department requests ({scopedData.requests.filter((row: Row) => id(row.status) === 'submitted').length})</button>}
       {isAdministrator && <button onClick={() => selectSupplyStep('shortage')} style={{ ...tabButton, background: supplyPathActive === 'shortage' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'shortage' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'shortage' ? 'var(--accent)' : 'var(--border)' }}><Icon name="shopping_cart_checkout" size={17} />Forward to Procurement ({readyForProcurementCount})</button>}
-      {isStoresIssuer && <button onClick={() => selectSupplyStep('issue')} style={{ ...tabButton, background: supplyPathActive === 'issue' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'issue' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'issue' ? 'var(--accent)' : 'var(--border)' }}><Icon name="outbox" size={17} />Ready to issue ({scopedData.requests.filter((row: Row) => ['approved', 'partially_approved', 'partially_issued'].includes(id(row.status))).length})</button>}
     </div>}
     {otherTabs.length > 0 && <><div style={{ marginBottom: 10, color: 'var(--text-muted)', fontSize: 14, fontWeight: 600 }}>Inventory operations</div><div style={{ display: 'flex', gap: 5, marginBottom: 15, flexWrap: 'wrap' }}>{otherTabs.map(([key, icon, label]) => <button key={key} onClick={() => { setSupplyPathHint(''); setTab(key) }} style={{ ...tabButton, background: tab === key ? 'var(--accent-soft)' : 'var(--surface)', color: tab === key ? 'var(--accent)' : 'var(--text-muted)', borderColor: tab === key ? 'var(--accent)' : 'var(--border)' }}><Icon name={icon} size={17} />{label}</button>)}</div></>}
     {error && <div style={{ ...card, padding: 12, color: 'var(--bad)', fontSize: 12, marginBottom: 14 }}>{error}</div>}
@@ -416,8 +414,7 @@ function StoreKeeperRequestWorkspace({ app, data, busy, execute, selected, onSel
 
   if (selected) {
     const lines = linesFor(selected)
-    const returningFromProcurement = id(selected.status) === 'submitted' && Boolean(selected.procurement_requisition)
-    const active = id(selected.status) === 'submitted' && !returningFromProcurement
+    const active = id(selected.status) === 'submitted'
     const valid = Boolean(destinationStore) && lines.length > 0 && lines.every((line: Row) => {
       const limit = num(line.hod_approved_quantity ?? line.base_quantity_requested ?? line.quantity_requested)
       const value = num(lineValues[id(line.id)]?.quantity)
@@ -436,14 +433,6 @@ function StoreKeeperRequestWorkspace({ app, data, busy, execute, selected, onSel
       }, `Requisition ${id(selected.requisition_no)} forwarded to Procurement`)
       if (ok) onSelect(null)
     }
-    const prepareForIssue = async () => {
-      if (!returningFromProcurement || busy) return
-      const ok = await execute(
-        () => runBackendAction('store-requisitions', id(selected.id), 'approve', { comments: '' }),
-        `Requisition ${id(selected.requisition_no)} is ready to issue`,
-      )
-      if (ok) onSelect(null)
-    }
     return <div style={{ display: 'grid', gap: 14 }}>
       <div><button type="button" onClick={() => onSelect(null)} style={{ ...secondary, width: 'fit-content' }}><Icon name="arrow_back" size={16} />Back to Store Keeper queue</button></div>
       <section style={{ ...card, overflow: 'hidden' }}>
@@ -451,7 +440,6 @@ function StoreKeeperRequestWorkspace({ app, data, busy, execute, selected, onSel
         <div style={{ padding: 20 }}>
           <div className="storekeeper-request-meta" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 10, marginBottom: 18 }}><InfoBox label="Requested by" value={employeeName(app, selected.requested_by) || 'Requester'} /><InfoBox label="Department" value={departmentName(app, selected.department)} /><InfoBox label="Date" value={formatDate(selected.created_at)} /></div>
           <div style={{ maxWidth: 460, marginBottom: 18 }}><label style={labelStyle}>Destination store</label>{active ? <select value={destinationStore} onChange={(event) => setDestinationStore(event.target.value)} style={control}><option value="">Select destination store</option>{app.data.locations.map((store: Row) => <option key={id(store.id)} value={id(store.id)}>{storeName(app, store.id)}</option>)}</select> : <div style={{ ...control, display: 'flex', alignItems: 'center', background: 'var(--surface-2)' }}>{storeName(app, selected.store) || '—'}</div>}</div>
-          {returningFromProcurement && <div style={{ margin: '-8px 0 16px', padding: '10px 12px', borderRadius: 8, background: 'var(--good-soft)', color: 'var(--good)', fontSize: 11.5, fontWeight: 650 }}>The procurement quantity has been received into this store. Confirm the request for issue to the department.</div>}
           <div style={{ marginBottom: 9, display: 'flex', alignItems: 'baseline', gap: 8 }}><h3 style={{ margin: 0, fontSize: 14 }}>Items</h3><span style={{ color: 'var(--text-faint)', fontSize: 11 }}>{lines.length} item{lines.length === 1 ? '' : 's'}</span></div>
           <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
             <div className="storekeeper-items-head" style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1.5fr) 110px 120px 150px 110px minmax(180px,1fr)', gap: 12, padding: '9px 13px', background: 'var(--surface-2)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}><span>Article</span><span>Requested</span><span>HOD approved</span><span>Forward to Procurement</span><span>UOM</span><span>Note</span></div>
@@ -462,7 +450,6 @@ function StoreKeeperRequestWorkspace({ app, data, busy, execute, selected, onSel
           </div>
         </div>
         {active && <footer style={{ padding: '14px 20px', display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--border)', background: 'var(--surface-2)' }}><button type="button" disabled={busy || !valid} onClick={() => void forward()} style={{ ...secondary, color: '#fff', background: 'var(--accent)', borderColor: 'var(--accent)', opacity: busy || !valid ? .5 : 1 }}><Icon name="send" size={16} color="#fff" />Forward to Procurement</button></footer>}
-        {returningFromProcurement && <footer style={{ padding: '14px 20px', display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--border)', background: 'var(--surface-2)' }}><button type="button" disabled={busy} onClick={() => void prepareForIssue()} style={{ ...secondary, color: '#fff', background: 'var(--accent)', borderColor: 'var(--accent)' }}><Icon name="check" size={16} color="#fff" />Prepare for department issue</button></footer>}
       </section>
     </div>
   }
