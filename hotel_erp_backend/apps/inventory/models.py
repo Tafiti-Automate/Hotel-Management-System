@@ -1280,15 +1280,20 @@ class StoreRequisition(BaseModel):
                     raise ValidationError(
                         f"Department Head quantity for {line.item} must be between 0 and {line.base_quantity_requested}."
                     )
+                # HOD approval changes only the HOD decision fields. Do not route this
+                # through StoreRequisitionItem.save(), because that method recalculates
+                # article/UOM base quantities and can make an otherwise valid approval
+                # fail because of unrelated master-data changes. The requester's
+                # original quantity remains immutable.
                 line.hod_approved_quantity = quantity
                 line.quantity_approved = Decimal("0.00")
                 line.storekeeper_comment = ""
-                line.save(update_fields=[
-                    "hod_approved_quantity",
-                    "quantity_approved",
-                    "storekeeper_comment",
-                    "updated_at",
-                ])
+                type(line).objects.filter(pk=line.pk).update(
+                    hod_approved_quantity=quantity,
+                    quantity_approved=Decimal("0.00"),
+                    storekeeper_comment="",
+                    updated_at=timezone.now(),
+                )
                 positive = positive or quantity > 0
 
             if not positive:
@@ -1306,14 +1311,24 @@ class StoreRequisition(BaseModel):
                 "updated_at",
             ])
 
-        self._notify_stores(
-            title=f"{self.requisition_no} needs Store Keeper action",
-            message=(
-                f"The Department Head approved {self.department}'s request. "
-                "Confirm the destination store and the quantities to forward to Procurement."
-            ),
-            created_by=approved_by.user,
-        )
+        # The approval is the business transaction; notification delivery is
+        # secondary. A notification/storage problem must never turn a committed
+        # approval into an HTTP 500 for the Department Head.
+        try:
+            self._notify_stores(
+                title=f"{self.requisition_no} needs Store Keeper action",
+                message=(
+                    f"The Department Head approved {self.department}'s request. "
+                    "Confirm the destination store and the quantities to forward to Procurement."
+                ),
+                created_by=approved_by.user,
+            )
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                "Store Keeper notification failed after approving requisition %s",
+                self.pk,
+            )
 
     def create_procurement_requisition(self, created_by=None, reason=""):
         """Create the Store Keeper predecessor document sent to Procurement.

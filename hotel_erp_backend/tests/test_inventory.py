@@ -768,3 +768,68 @@ def test_department_requisition_reference_uses_r_prefix():
     assert requisition.requisition_no.startswith("R-")
     assert requisition.requisition_no[2:].isdigit()
     assert len(requisition.requisition_no[2:]) >= 5
+
+@pytest.mark.django_db
+def test_department_head_approval_is_not_failed_by_notification_error(monkeypatch):
+    branch = Branch.objects.create(name="HOD Notification Hotel")
+    department = Department.objects.create(name="HOD Notification Housekeeping")
+    category = Category.objects.create(name="HOD Notification Supplies")
+    item = Item.objects.create(
+        category=category,
+        name="HOD Notification Item",
+        unit="piece",
+        reorder_level=Decimal("1"),
+    )
+
+    requester_user = get_user_model().objects.create_user(
+        username="hod-notify-requester", employee_code="HOD-NOTIFY-REQ"
+    )
+    requester = Employee.objects.create(
+        user=requester_user,
+        department=department,
+        branch=branch,
+        designation="Requester",
+    )
+    requester_user.groups.add(Group.objects.get_or_create(name="Requester")[0])
+
+    head_user = get_user_model().objects.create_user(
+        username="hod-notify-head", employee_code="HOD-NOTIFY-HOD"
+    )
+    head = Employee.objects.create(
+        user=head_user,
+        department=department,
+        branch=branch,
+        designation="Department Head",
+    )
+    head_user.groups.add(Group.objects.get_or_create(name="Department Head")[0])
+
+    requisition = StoreRequisition.objects.create(
+        department=department,
+        requested_by=requester,
+    )
+    line = StoreRequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity_requested=Decimal("6.00"),
+    )
+    requisition.submit(actor=requester_user)
+
+    def broken_notification(*args, **kwargs):
+        raise RuntimeError("notification backend unavailable")
+
+    monkeypatch.setattr(StoreRequisition, "_notify_stores", broken_notification)
+
+    client = APIClient()
+    client.force_authenticate(head_user)
+    response = client.post(
+        f"/api/v1/store-requisitions/{requisition.pk}/department-approve/",
+        {"items": [{"id": str(line.pk), "approved_quantity": "6.00"}]},
+        format="json",
+    )
+
+    assert response.status_code == 200
+    requisition.refresh_from_db()
+    line.refresh_from_db()
+    assert requisition.status == StoreRequisitionStatus.SUBMITTED
+    assert requisition.department_approved_by == head
+    assert line.hod_approved_quantity == Decimal("6.00")

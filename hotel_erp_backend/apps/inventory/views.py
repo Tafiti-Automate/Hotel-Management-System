@@ -650,6 +650,7 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             )
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
+        requisition.refresh_from_db()
         return Response(self.get_serializer(requisition).data)
 
     @action(detail=True, methods=["post"], url_path="assign-store")
