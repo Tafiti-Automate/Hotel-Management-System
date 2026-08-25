@@ -1436,3 +1436,65 @@ def test_procurement_allocations_split_one_store_requisition_into_supplier_lpos(
     assert all(order.po_number == order.lpo_number for order in orders)
     assert all(order.lpo_number.isdigit() and len(order.lpo_number) == 6 for order in orders)
     assert sorted(order.items.count() for order in orders) == [1, 1]
+
+
+@pytest.mark.django_db
+def test_role_approval_inbox_advances_from_finance_to_general_manager():
+    employee, department, supplier, item = create_procurement_context()
+    branch = Branch.objects.create(name="Approval Inbox Branch")
+    employee.branch = branch
+    employee.save(update_fields=("branch", "updated_at"))
+    store = StoreLocation.objects.create(branch=branch, name="Approval Inbox Store")
+
+    finance_group, _ = Group.objects.get_or_create(name="Financial Manager")
+    general_group, _ = Group.objects.get_or_create(name="General Manager")
+    finance_user = get_user_model().objects.create_user(
+        username="approval-inbox-finance", employee_code="EMP-INBOX-FIN", password="test-pass-123"
+    )
+    finance_user.groups.add(finance_group)
+    Employee.objects.create(
+        user=finance_user, department=department, branch=branch, designation="Financial Manager"
+    )
+    gm_user = get_user_model().objects.create_user(
+        username="approval-inbox-gm", employee_code="EMP-INBOX-GM", password="test-pass-123"
+    )
+    gm_user.groups.add(general_group)
+    Employee.objects.create(
+        user=gm_user, department=department, branch=branch, designation="General Manager"
+    )
+
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee, department=department, branch=branch, reason="Inbox handoff", status=PRStatus.APPROVED
+    )
+    req_line = RequisitionItem.objects.create(
+        requisition=requisition, item=item, quantity=Decimal("4.00"), approved_quantity=Decimal("4.00"), destination_store=store
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition, supplier=supplier, ordered_by=employee, store=store
+    )
+    PurchaseOrderItem.objects.create(
+        purchase_order=order, requisition_item=req_line, item=item, quantity=Decimal("4.00"), unit_cost=Decimal("1000.00"), destination_store=store
+    )
+    order.submit_for_approval()
+
+    finance_client = APIClient()
+    finance_client.force_authenticate(finance_user)
+    gm_client = APIClient()
+    gm_client.force_authenticate(gm_user)
+
+    finance_before = finance_client.get("/api/v1/purchase-orders/approval-inbox/")
+    gm_before = gm_client.get("/api/v1/purchase-orders/approval-inbox/")
+    assert finance_before.status_code == 200
+    assert gm_before.status_code == 200
+    assert [row["id"] for row in finance_before.json()] == [str(order.id)]
+    assert gm_before.json() == []
+
+    approved = finance_client.post(
+        f"/api/v1/purchase-orders/{order.pk}/approve/", {"comments": "Finance approved"}, format="json"
+    )
+    assert approved.status_code == 200
+
+    finance_after = finance_client.get("/api/v1/purchase-orders/approval-inbox/")
+    gm_after = gm_client.get("/api/v1/purchase-orders/approval-inbox/")
+    assert finance_after.json() == []
+    assert [row["id"] for row in gm_after.json()] == [str(order.id)]

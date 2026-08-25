@@ -68,6 +68,14 @@ function isFinanceApproval(order: Row): boolean {
 function isManagementApproval(order: Row): boolean {
   return /(general manager|management)/i.test(id(currentApprovalStep(order)?.stage_name))
 }
+function managementApprovalStep(order: Row): Row | undefined {
+  const steps = Array.isArray(order.approval_steps) ? order.approval_steps as Row[] : []
+  return steps.find((step) => /(general manager|management)/i.test(id(step.stage_name)))
+}
+function hasManagementDecision(order: Row): boolean {
+  const status = id(managementApprovalStep(order)?.status)
+  return status === 'approved' || status === 'rejected'
+}
 function defaultLpoQueue(role: string): LpoQueue {
   if (role === 'financial manager') return 'finance'
   if (role === 'general manager') return 'management'
@@ -111,13 +119,16 @@ export default function ProcurementWorkbench() {
     setMessage('')
     try {
       const payload = await readBackendPayload(`requisitions/workspace?stage=${stage}`)
+      if (stage === 'lpo' && ['financial manager', 'general manager'].includes(role)) {
+        payload.approvalQueueOrders = await readBackendRecords('purchase-orders/approval-inbox')
+      }
       setData((current) => ({ ...current, ...payload }))
     } catch (error) {
       setMessage(errorMessage(error))
     } finally {
       setLoading(false)
     }
-  }, [stage])
+  }, [role, stage])
 
   useEffect(() => { void load() }, [load])
   useEffect(() => { setForm({}); setMessage(''); setSelectedRecord(null) }, [stage])
@@ -246,6 +257,12 @@ export default function ProcurementWorkbench() {
       return
     }
     const status = id(row.status)
+    if (role === 'general manager' && hasManagementDecision(row)) {
+      setSelectedRecord(null)
+      setLpoQueue('history')
+      setForm({ order: id(row.id) })
+      return
+    }
     if (['issued', 'partially_received', 'received', 'rejected', 'cancelled'].includes(status)) {
       setSelectedRecord(null)
       setLpoQueue('history')
@@ -335,6 +352,11 @@ export default function ProcurementWorkbench() {
     return []
   }, [role, scopedData])
 
+  const managementHistoryOrders = useMemo(
+    () => scopedData.orders.filter((row) => hasManagementDecision(row)),
+    [scopedData.orders],
+  )
+
   const procurementQueues = useMemo(() => {
     const storeRequisitions = scopedData.requisitions.filter((row) =>
       ['store_requisition', 'store_shortage'].includes(id(row.procurement_source)) &&
@@ -381,8 +403,8 @@ export default function ProcurementWorkbench() {
           <span style={heroIcon}><Icon name="shopping_cart_checkout" size={24} color="#fff" /></span>
           <div>
             <div style={eyebrow}>{role === 'financial manager' ? 'Financial control' : role === 'general manager' ? 'Executive control' : role === 'receiving clerk' ? 'Goods receiving' : 'Procurement'}</div>
-            <h1 style={{ margin: '3px 0', fontSize: 23, color: 'var(--text)' }}>{role === 'financial manager' ? 'LPO Financial Approval' : role === 'general manager' ? 'Final LPO Approval' : role === 'receiving clerk' ? 'Receiving & GRN' : 'Procurement Queue'}</h1>
-            <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{role === 'financial manager' ? 'Review the commercial commitment, preserve Procurement quantity history, then approve, reduce or reject.' : role === 'general manager' ? 'Make the final approve-or-reject decision. Approved LPOs return to Procurement for controlled issue.' : role === 'receiving clerk' ? 'Receive only against issued LPOs. Ordered quantities stay read-only while actual received quantities are recorded separately.' : 'Review Store Requisitions, select suppliers, prepare LPOs and send approved orders to suppliers.'}</div>
+            <h1 style={{ margin: '3px 0', fontSize: 23, color: 'var(--text)' }}>{role === 'financial manager' ? 'LPO Financial Approval' : role === 'general manager' ? 'Final LPO Approvals' : role === 'receiving clerk' ? 'Receiving & GRN' : 'Procurement Queue'}</h1>
+            <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{role === 'financial manager' ? 'Review the commercial commitment, preserve Procurement quantity history, then approve, reduce or reject.' : role === 'general manager' ? 'Review Finance-approved LPOs and make the final approve-or-reject decision.' : role === 'receiving clerk' ? 'Receive only against issued LPOs. Ordered quantities stay read-only while actual received quantities are recorded separately.' : 'Review Store Requisitions, select suppliers, prepare LPOs and send approved orders to suppliers.'}</div>
           </div>
           <button onClick={() => void load()} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button>
         </div>
@@ -402,17 +424,19 @@ export default function ProcurementWorkbench() {
             <div style={{ marginTop: 3, fontSize: 17, fontWeight: 850, color: active ? 'var(--accent)' : 'var(--text)' }}>{count}</div>
           </button>
         })}
+      </div> : role === 'general manager' ? <div style={{ ...card, padding: 8, marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(2,minmax(150px,220px))', gap: 7 }}>
+        <button type="button" onClick={() => { setLpoQueue('management'); setForm({}); setSelectedRecord(null) }} style={{ padding: '11px 13px', border: `1px solid ${lpoQueue === 'management' ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 8, background: lpoQueue === 'management' ? 'var(--accent-soft)' : 'var(--surface)', color: lpoQueue === 'management' ? 'var(--accent)' : 'var(--text)', font: 'inherit', cursor: 'pointer', textAlign: 'left' }}>
+          <strong style={{ display: 'block', fontSize: 11.5 }}>Pending</strong><span style={{ display: 'block', marginTop: 3, fontSize: 17, fontWeight: 850 }}>{roleApprovalQueueOrders.length}</span>
+        </button>
+        <button type="button" onClick={() => { setLpoQueue('history'); setForm({}); setSelectedRecord(null) }} style={{ padding: '11px 13px', border: `1px solid ${lpoQueue === 'history' ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 8, background: lpoQueue === 'history' ? 'var(--accent-soft)' : 'var(--surface)', color: lpoQueue === 'history' ? 'var(--accent)' : 'var(--text)', font: 'inherit', cursor: 'pointer', textAlign: 'left' }}>
+          <strong style={{ display: 'block', fontSize: 11.5 }}>History</strong><span style={{ display: 'block', marginTop: 3, fontSize: 17, fontWeight: 850 }}>{managementHistoryOrders.length}</span>
+        </button>
       </div> : <div className="workbench-metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(150px,1fr))', gap: 10, marginBottom: 16 }}>
         {role === 'financial manager' ? <>
           <Metric label="Awaiting Finance" value={id(roleApprovalQueueOrders.length)} icon="approval" tone="warn" />
           <Metric label="Visible LPO value" value={money(scopedData.orders.reduce((total,row)=>total+num(row.total_amount),0))} icon="account_balance_wallet" />
           <Metric label="Approved LPOs" value={id(scopedData.orders.filter((row)=>['approved','issued','partially_received','received'].includes(id(row.status))).length)} icon="check_circle" tone="good" />
           <Metric label="Rejected LPOs" value={id(scopedData.orders.filter((row)=>id(row.status)==='rejected').length)} icon="cancel" />
-        </> : role === 'general manager' ? <>
-          <Metric label="Awaiting Final Approval" value={id(roleApprovalQueueOrders.length)} icon="verified_user" tone="warn" />
-          <Metric label="Pending LPO Value" value={money(roleApprovalQueueOrders.reduce((total,row)=>total+num(row.total_amount),0))} icon="receipt_long" />
-          <Metric label="Finally Approved" value={id(scopedData.orders.filter((row)=>['approved','issued','partially_received','received'].includes(id(row.status))).length)} icon="check_circle" tone="good" />
-          <Metric label="Rejected" value={id(scopedData.orders.filter((row)=>id(row.status)==='rejected').length)} icon="cancel" />
         </> : <>
           <Metric label="Ready for Receiving" value={id(scopedData.orders.filter((row)=>id(row.status)==='issued').length)} icon="move_to_inbox" tone="warn" />
           <Metric label="Partial Deliveries" value={id(scopedData.orders.filter((row)=>id(row.status)==='partially_received').length)} icon="pending_actions" tone="warn" />
@@ -432,11 +456,11 @@ export default function ProcurementWorkbench() {
 
       {message && <div style={{ ...card, padding: 13, marginBottom: 14, borderColor: 'rgba(220,38,38,.3)', color: 'var(--bad)', fontSize: 12.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}><span>{message}</span><button type="button" onClick={() => void load()} style={secondary}>Retry</button></div>}
       {loading ? <div style={{ ...card, padding: 50, textAlign: 'center', color: 'var(--text-faint)' }}>Loading procurement records from the backend…</div> : (
-        <div className="workbench-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.45fr) minmax(340px,.75fr)', gap: 16, alignItems: 'start' }}>
+        <div className="workbench-grid" style={{ display: 'grid', gridTemplateColumns: role === 'general manager' && !form.order ? '1fr' : 'minmax(0,1.45fr) minmax(340px,.75fr)', gap: 16, alignItems: 'start' }}>
           <section style={{ ...card, overflow: 'hidden' }}>
-            <StageTable stage={stage} lpoQueue={lpoQueue} data={scopedData} names={names} onSelect={selectWorkspaceRecord} />
+            <StageTable stage={stage} lpoQueue={lpoQueue} data={scopedData} names={names} role={role} onSelect={selectWorkspaceRecord} />
           </section>
-          <aside style={{ ...card, padding: 18 }}>
+          {!(role === 'general manager' && !form.order) && <aside style={{ ...card, padding: 18 }}>
             {!canChangeStage && stage !== 'lpo' && <ReadOnlyStage />}
             {canChangeStage && stage === 'request' && <RequestPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel }} items={app.data.items} stores={app.data.locations} departments={app.data.departments} />}
             {canChangeStage && stage === 'quote' && <QuotePanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, names }} suppliers={app.data.suppliers} supplierItems={app.data.supplierItems} items={app.data.items} itemUnits={app.data.itemUnits} onContinueToLpo={(requisitionId: string) => { setStage('lpo'); setLpoQueue('prepare'); setForm({ requisition: requisitionId }) }} />}
@@ -444,7 +468,7 @@ export default function ProcurementWorkbench() {
             {canChangeStage && stage === 'receipt' && <ReceiptPanel {...{ data: scopedData, form, setForm, busy, run, orderLabel, receiptLabel, names }} employees={app.data.employees} stores={app.data.locations} />}
             {canChangeStage && stage === 'inspect' && <InspectionPanel {...{ data: scopedData, form, setForm, busy, run, receiptLabel, names }} employees={app.data.employees} />}
             {canChangeStage && stage === 'return' && <ReturnPanel {...{ data: scopedData, form, setForm, busy, run, receiptLabel, names }} employees={app.data.employees} stores={app.data.locations} />}
-          </aside>
+          </aside>}
         </div>
       )}
       {selectedRecord && <ProcurementRecordDrawer stage={stage} row={selectedRecord} data={scopedData} names={names} canAttach={can('procurement.add_procurementattachment')} onChanged={load} onClose={() => setSelectedRecord(null)} />}
@@ -698,6 +722,14 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, ite
     </>}
 
     {lpoQueue === 'management' && order && <>
+      {(() => {
+        const sourceRequisition = data.requisitions.find((row: Row) => id(row.id) === id(order.requisition))
+        const financeStep = (Array.isArray(order.approval_steps) ? order.approval_steps as Row[] : []).find((step: Row) => /finance/i.test(id(step.stage_name)))
+        return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8, marginBottom: 12 }}>
+          <ReadOnlyValue label="Source requisition" value={id(sourceRequisition?.source_store_requisition_no) || id(sourceRequisition?.requisition_number) || '—'} />
+          <ReadOnlyValue label="Finance decision" value={id(financeStep?.status) === 'approved' ? `Approved by ${id(financeStep?.approver_name) || 'Financial Manager'}` : 'Finance review completed'} />
+        </div>
+      })()}
       <LpoSummary order={order} lines={lines} names={names} />
       {!canDecideManagement && <div style={{ padding: '10px 11px', borderRadius: 7, background: 'var(--warn-soft)', color: 'var(--warn)', fontSize: 11.3, fontWeight: 700 }}>Awaiting General Manager decision</div>}
       {canDecideManagement && <>
@@ -833,7 +865,7 @@ function ReturnPanel({ data, form, setForm, busy, run, receiptLabel, names, empl
   </Panel>
 }
 
-function StageTable({ stage, lpoQueue, data, names, onSelect }: { stage: Stage; lpoQueue: LpoQueue; data: Datasets; names: Record<string, Map<string, string>>; onSelect: (row: Row) => void }) {
+function StageTable({ stage, lpoQueue, data, names, role, onSelect }: { stage: Stage; lpoQueue: LpoQueue; data: Datasets; names: Record<string, Map<string, string>>; role: string; onSelect: (row: Row) => void }) {
   const requisitionNumber = (requisitionId: string) =>
     id(data.requisitions.find((record) => id(record.id) === requisitionId)?.requisition_number)
     || `R-${requisitionId.slice(0, 5).toUpperCase()}`
@@ -890,7 +922,7 @@ function StageTable({ stage, lpoQueue, data, names, onSelect }: { stage: Stage; 
     if (lpoQueue === 'finance') { rows = Array.isArray(data.approvalQueueOrders) ? data.approvalQueueOrders : data.orders.filter((row) => id(row.status) === 'pending_approval' && isFinanceApproval(row)); title = 'Awaiting Finance' }
     if (lpoQueue === 'management') { rows = Array.isArray(data.approvalQueueOrders) ? data.approvalQueueOrders : data.orders.filter((row) => id(row.status) === 'pending_approval' && isManagementApproval(row)); title = 'Awaiting General Manager' }
     if (lpoQueue === 'approved') { rows = data.orders.filter((row) => id(row.status) === 'approved'); title = 'Approved to Send' }
-    if (lpoQueue === 'history') { rows = data.orders.filter((row) => ['issued', 'partially_received', 'received', 'rejected', 'cancelled'].includes(id(row.status))); title = 'LPO History' }
+    if (lpoQueue === 'history') { rows = role === 'general manager' ? data.orders.filter((row) => hasManagementDecision(row)) : data.orders.filter((row) => ['issued', 'partially_received', 'received', 'rejected', 'cancelled'].includes(id(row.status))); title = role === 'general manager' ? 'Decision History' : 'LPO History' }
   }
   if (stage === 'receipt') { rows = data.receipts; title = 'Goods receipt notes' }
   if (stage === 'inspect') { rows = data.inspections; title = 'Inspection records' }
@@ -905,7 +937,7 @@ function StageTable({ stage, lpoQueue, data, names, onSelect }: { stage: Stage; 
   }
   return <><div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', gap: 10 }}><strong style={{ fontSize: 12.8 }}>{title}</strong><span style={{ color: 'var(--text-faint)', fontSize: 10.5 }}>{rows.length} record{rows.length === 1 ? '' : 's'}</span></div>
     {rows.map((row) => <button type="button" key={id(row.id)} onClick={() => onSelect(row)} className="procurement-record-row" style={{ width: '100%', display: 'grid', gridTemplateColumns: '1.2fr 1.5fr 1fr .9fr 24px', alignItems: 'center', gap: 12, padding: '12px 16px', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit', fontSize: 12 }}>{cells(row).map((cell, i) => <span key={i} style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: i === 0 ? 'var(--text)' : 'var(--text-muted)', fontWeight: i === 0 ? 750 : 500 }}>{cell || '—'}</span>)}<Icon name="chevron_right" size={17} color="var(--text-faint)" /></button>)}
-    {!rows.length && <div style={{ padding: 42, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>No records in this queue.</div>}
+    {!rows.length && <div style={{ padding: 42, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}><div style={{ color: 'var(--text)', fontWeight: 750 }}>{role === 'general manager' && lpoQueue === 'management' ? 'No LPOs need your decision' : 'No records in this queue.'}</div>{role === 'general manager' && lpoQueue === 'management' && <div style={{ marginTop: 5 }}>Finance-approved LPOs will appear here automatically.</div>}</div>}
   </>
 }
 

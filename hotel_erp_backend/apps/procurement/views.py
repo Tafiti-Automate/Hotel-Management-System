@@ -19,7 +19,7 @@ from rest_framework import status
 from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
 
 from apps.employees.models import Employee
-from apps.approvals.models import ApprovalWorkflow
+from apps.approvals.models import ApprovalWorkflow, PurchaseOrderApprovalWorkflow
 from apps.approvals.serializers import ApprovalWorkflowSerializer
 from apps.procurement.documents import build_purchase_order_pdf
 from apps.procurement.models import (
@@ -161,6 +161,37 @@ def scope_purchase_orders_for_user(queryset, user):
     return queryset.filter(requisition__requester=employee)
 
 
+def current_lpo_approval_queue(queryset, user, role_name):
+    """Return LPOs whose *first unfinished* approval stage belongs to this user/role.
+
+    Both Finance and General Manager workflow rows exist from submission time.  A
+    simple ``approval_workflow__status=pending`` filter therefore exposes future
+    stages too early and can also miss legacy employee-assigned stages.  The first
+    pending stage is the authoritative queue owner.
+    """
+    pending_steps = PurchaseOrderApprovalWorkflow.objects.filter(
+        purchase_order_id=models.OuterRef("pk"),
+        status=ApprovalStatus.PENDING,
+    ).order_by("stage")
+    queue = queryset.filter(status=POStatus.PENDING_APPROVAL).annotate(
+        current_approval_role_id=models.Subquery(
+            pending_steps.values("approver_role_id")[:1]
+        ),
+        current_approval_employee_id=models.Subquery(
+            pending_steps.values("approver_id")[:1]
+        ),
+    )
+    if user.is_superuser:
+        return queue
+    employee = getattr(user, "employee_profile", None)
+    role_ids = user.groups.filter(name=role_name).values_list("id", flat=True)
+    ownership = models.Q(current_approval_role_id__in=role_ids)
+    # Compatibility for an old pending workflow that has not yet been migrated.
+    if employee:
+        ownership |= models.Q(current_approval_employee_id=employee.pk)
+    return queue.filter(ownership)
+
+
 class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = PurchaseRequisition.objects.select_related(
         "hotel",
@@ -262,10 +293,8 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             elif user_has_role(request.user, "General Manager"):
                 approval_role = "General Manager"
             if stage == "lpo" and approval_role:
-                approval_queue_orders = orders.filter(
-                    status=POStatus.PENDING_APPROVAL,
-                    approval_workflow__status=ApprovalStatus.PENDING,
-                    approval_workflow__approver_role__name=approval_role,
+                approval_queue_orders = current_lpo_approval_queue(
+                    orders, request.user, approval_role
                 ).distinct()
                 payload["approvalQueueOrders"] = PurchaseOrderSerializer(
                     approval_queue_orders,
@@ -649,6 +678,30 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
 
     def get_queryset(self):
         return scope_purchase_orders_for_user(super().get_queryset(), self.request.user)
+
+    @action(detail=False, methods=["get"], url_path="approval-inbox")
+    def approval_inbox(self, request):
+        """Return the authenticated Finance/GM user's current LPO approval inbox."""
+        if user_has_role(request.user, "Financial Manager"):
+            role_name = "Financial Manager"
+        elif user_has_role(request.user, "General Manager"):
+            role_name = "General Manager"
+        elif request.user.is_superuser:
+            role_name = str(request.query_params.get("role", "General Manager")).strip()
+            if role_name not in {"Financial Manager", "General Manager"}:
+                raise ValidationError({"role": "Choose Financial Manager or General Manager."})
+        else:
+            raise PermissionDenied("Only Finance or General Manager can view this approval inbox.")
+
+        queue = current_lpo_approval_queue(self.get_queryset(), request.user, role_name)
+        queue = queue.select_related(
+            "requisition", "supplier", "ordered_by", "store", "sent_by", "approved_by"
+        ).prefetch_related(
+            "approval_workflow__approver__user",
+            "approval_workflow__approver_role",
+            "approval_workflow__decided_by",
+        ).order_by("submitted_for_approval_at", "created_at")
+        return Response(self.get_serializer(queue, many=True).data)
 
     def _require_procurement_manager(self, request):
         if not user_has_role(request.user, "System Administrator", "Procurement Manager", "Procurement Officer"):
