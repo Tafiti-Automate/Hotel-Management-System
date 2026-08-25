@@ -39,7 +39,6 @@ class ApprovalWorkflowAdmin(CreatedByAdminMixin, admin.ModelAdmin):
         "stage",
         "stage_name",
         "approver",
-        "approver_role",
         "status",
         "decided_by",
         "decided_at",
