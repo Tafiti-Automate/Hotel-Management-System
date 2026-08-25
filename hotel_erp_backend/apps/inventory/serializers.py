@@ -644,7 +644,7 @@ class StoreRequisitionItemSerializer(serializers.ModelSerializer):
         return max(Decimal("0.00"), remaining - available)
 
     def get_line_status(self, obj):
-        requested = obj.base_quantity_requested or Decimal("0.00")
+        requested = obj.department_approved_limit or Decimal("0.00")
         approved = obj.quantity_approved or Decimal("0.00")
         issued = obj.quantity_issued or Decimal("0.00")
         request_status = obj.requisition.status
@@ -670,6 +670,7 @@ class StoreRequisitionItemSerializer(serializers.ModelSerializer):
         read_only_fields = (
             "id",
             "base_quantity_requested",
+            "hod_approved_quantity",
             "outstanding_quantity",
             "created_at",
             "updated_at",
@@ -689,8 +690,14 @@ class StoreRequisitionItemSerializer(serializers.ModelSerializer):
             disallowed = set(attrs) - {"quantity_approved", "storekeeper_comment"}
             if disallowed:
                 raise serializers.ValidationError(
-                    "Only the approved quantity and decision comment can change during approval."
+                    "Only the Store Keeper quantity and note can change at this stage."
                 )
+            if "quantity_approved" in attrs:
+                hod_limit = self.instance.department_approved_limit
+                if attrs["quantity_approved"] > hod_limit:
+                    raise serializers.ValidationError({
+                        "quantity_approved": f"Quantity cannot exceed the HOD-approved quantity ({hod_limit})."
+                    })
         elif requisition.status not in (
             StoreRequisitionStatus.DRAFT,
             StoreRequisitionStatus.REJECTED,

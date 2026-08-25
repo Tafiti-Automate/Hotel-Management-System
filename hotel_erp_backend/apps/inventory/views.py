@@ -646,6 +646,7 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             requisition.approve_department(
                 approved_by=request.user.employee_profile,
                 comments=request.data.get("comments", ""),
+                item_quantities=request.data.get("items"),
             )
         except DjangoValidationError as error:
             raise_drf_validation_error(error)

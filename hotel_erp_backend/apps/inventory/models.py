@@ -1184,9 +1184,8 @@ class StoreRequisition(BaseModel):
         if not self.requisition_no:
             from apps.procurement.models import ProcurementDocumentSequence
 
-            self.requisition_no = ProcurementDocumentSequence.next_number(
-                "store_requisition"
-            )
+            sequence_value = ProcurementDocumentSequence.next_number("store_requisition")
+            self.requisition_no = f"R-{int(sequence_value):05d}"
         super().save(*args, **kwargs)
 
     def submit(self, actor=None):
@@ -1214,6 +1213,7 @@ class StoreRequisition(BaseModel):
             "updated_at",
         ])
         self.items.update(
+            hod_approved_quantity=None,
             quantity_approved=Decimal("0.00"),
             storekeeper_comment="",
         )
@@ -1232,7 +1232,7 @@ class StoreRequisition(BaseModel):
             exclude_employee=self.requested_by,
         )
 
-    def approve_department(self, approved_by, comments=""):
+    def approve_department(self, approved_by, comments="", item_quantities=None):
         if self.status != StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL:
             raise ValidationError(
                 "Only requests awaiting Department Head approval can be approved here."
@@ -1249,22 +1249,68 @@ class StoreRequisition(BaseModel):
         if approved_by.pk == self.requested_by_id:
             raise ValidationError("A requester cannot approve their own store request.")
 
-        self.status = StoreRequisitionStatus.SUBMITTED
-        self.department_approved_by = approved_by
-        self.department_approved_at = timezone.now()
-        self.department_approval_comments = comments
-        self.save(update_fields=[
-            "status",
-            "department_approved_by",
-            "department_approved_at",
-            "department_approval_comments",
-            "updated_at",
-        ])
+        with transaction.atomic():
+            lines = list(self.items.select_for_update().select_related("item", "unit"))
+            if not lines:
+                raise ValidationError("The requisition has no items to approve.")
+
+            supplied = item_quantities is not None
+            quantity_map = {}
+            if supplied:
+                if not isinstance(item_quantities, (list, tuple)):
+                    raise ValidationError("Item quantities must be supplied as a list.")
+                for decision in item_quantities:
+                    if not isinstance(decision, dict) or not decision.get("id"):
+                        raise ValidationError("Each item decision must include the requisition item id.")
+                    try:
+                        quantity_map[str(decision["id"])] = Decimal(str(decision.get("approved_quantity", "0")))
+                    except Exception as exc:
+                        raise ValidationError("Department Head quantities must be valid numbers.") from exc
+
+            positive = False
+            for line in lines:
+                if supplied:
+                    if str(line.pk) not in quantity_map:
+                        raise ValidationError(f"Confirm the approved quantity for {line.item}.")
+                    quantity = quantity_map[str(line.pk)]
+                else:
+                    # Backward-compatible default for older clients/tests.
+                    quantity = line.base_quantity_requested
+                if quantity < 0 or quantity > line.base_quantity_requested:
+                    raise ValidationError(
+                        f"Department Head quantity for {line.item} must be between 0 and {line.base_quantity_requested}."
+                    )
+                line.hod_approved_quantity = quantity
+                line.quantity_approved = Decimal("0.00")
+                line.storekeeper_comment = ""
+                line.save(update_fields=[
+                    "hod_approved_quantity",
+                    "quantity_approved",
+                    "storekeeper_comment",
+                    "updated_at",
+                ])
+                positive = positive or quantity > 0
+
+            if not positive:
+                raise ValidationError("Approve at least one item quantity, or reject the requisition instead.")
+
+            self.status = StoreRequisitionStatus.SUBMITTED
+            self.department_approved_by = approved_by
+            self.department_approved_at = timezone.now()
+            self.department_approval_comments = comments
+            self.save(update_fields=[
+                "status",
+                "department_approved_by",
+                "department_approved_at",
+                "department_approval_comments",
+                "updated_at",
+            ])
+
         self._notify_stores(
             title=f"{self.requisition_no} needs Store Keeper action",
             message=(
                 f"The Department Head approved {self.department}'s request. "
-                "Confirm the destination store and quantities to forward to Procurement."
+                "Confirm the destination store and the quantities to forward to Procurement."
             ),
             created_by=approved_by.user,
         )
@@ -1292,13 +1338,14 @@ class StoreRequisition(BaseModel):
         decided_lines = []
         for line in self.items.select_related("item", "unit"):
             quantity = line.quantity_approved or Decimal("0.00")
-            if quantity < 0 or quantity > line.base_quantity_requested:
+            hod_limit = line.department_approved_limit
+            if quantity < 0 or quantity > hod_limit:
                 raise ValidationError(
-                    f"Store Keeper quantity for {line.item} must be between 0 and {line.base_quantity_requested}."
+                    f"Store Keeper quantity for {line.item} must be between 0 and the HOD-approved quantity {hod_limit}."
                 )
-            if quantity == 0 and not (line.storekeeper_comment or "").strip():
+            if hod_limit > 0 and quantity == 0 and not (line.storekeeper_comment or "").strip():
                 raise ValidationError(
-                    f"Confirm a quantity for {line.item}, or enter a comment explaining why none is forwarded."
+                    f"Enter a note if none of the HOD-approved quantity for {line.item} will be forwarded."
                 )
             if quantity > 0:
                 decided_lines.append((line, quantity))
@@ -1330,6 +1377,7 @@ class StoreRequisition(BaseModel):
                 estimated_unit_cost=Decimal("0.00"),
                 description=(
                     f"Department requested {line.base_quantity_requested}; "
+                    f"HOD approved {line.department_approved_limit}; "
                     f"Store Keeper forwarded {quantity}. "
                     f"{line.storekeeper_comment or ''}"
                 ).strip(),
@@ -1431,7 +1479,7 @@ class StoreRequisition(BaseModel):
             self.approved_at = timezone.now()
             self.approval_comments = comments
             fully_approved = all(
-                line.quantity_approved == line.base_quantity_requested for line in items
+                line.quantity_approved == line.department_approved_limit for line in items
             )
             self.status = (
                 StoreRequisitionStatus.APPROVED
@@ -1578,6 +1626,14 @@ class StoreRequisitionItem(BaseModel):
         decimal_places=2,
         default=Decimal("0.00"),
     )
+    hod_approved_quantity = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[validate_non_negative_decimal],
+        help_text="Quantity approved by the Department Head; requester quantity remains unchanged.",
+    )
     quantity_approved = models.DecimalField(
         max_digits=12,
         decimal_places=2,
@@ -1606,13 +1662,25 @@ class StoreRequisitionItem(BaseModel):
     def outstanding_quantity(self):
         return max(Decimal("0.00"), self.quantity_approved - self.quantity_issued)
 
+    @property
+    def department_approved_limit(self):
+        """Maximum quantity Stores may carry forward after the HOD decision."""
+        if self.hod_approved_quantity is None:
+            return self.base_quantity_requested
+        return self.hod_approved_quantity
+
     def save(self, *args, **kwargs):
         self.base_quantity_requested = self.item.quantity_in_base_units(
             self.quantity_requested,
             self.unit,
         )
-        if self.quantity_approved > self.base_quantity_requested:
-            raise ValidationError("Approved quantity cannot exceed requested quantity.")
+        if (
+            self.hod_approved_quantity is not None
+            and self.hod_approved_quantity > self.base_quantity_requested
+        ):
+            raise ValidationError("Department Head quantity cannot exceed the requester quantity.")
+        if self.quantity_approved > self.department_approved_limit:
+            raise ValidationError("Store Keeper quantity cannot exceed the Department Head approved quantity.")
         if self.quantity_issued > self.quantity_approved:
             raise ValidationError("Issued quantity cannot exceed approved quantity.")
         super().save(*args, **kwargs)

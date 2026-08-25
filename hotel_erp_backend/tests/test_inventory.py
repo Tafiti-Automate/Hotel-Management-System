@@ -687,3 +687,84 @@ def test_employee_store_request_resolves_default_store_from_authenticated_branch
     assert request.requested_by == employee
     assert request.department == department
     assert request.store is None
+
+@pytest.mark.django_db
+def test_department_head_can_reduce_quantity_without_overwriting_requester_quantity():
+    branch = Branch.objects.create(name="HOD Quantity Hotel")
+    department = Department.objects.create(name="HOD Quantity Housekeeping")
+    store = StoreLocation.objects.create(branch=branch, name="HOD Quantity Store")
+    category = Category.objects.create(name="HOD Quantity Supplies")
+    item = Item.objects.create(category=category, name="HOD Quantity Paper", unit="ream", reorder_level=Decimal("1"))
+
+    requester_user = get_user_model().objects.create_user(username="hod-qty-requester", employee_code="HOD-QTY-REQ")
+    requester = Employee.objects.create(user=requester_user, department=department, branch=branch, designation="Requester")
+    requester_user.groups.add(Group.objects.get_or_create(name="Requester")[0])
+
+    head_user = get_user_model().objects.create_user(username="hod-qty-head", employee_code="HOD-QTY-HOD")
+    head = Employee.objects.create(user=head_user, department=department, branch=branch, designation="Department Head")
+    head_user.groups.add(Group.objects.get_or_create(name="Department Head")[0])
+
+    keeper_user = get_user_model().objects.create_user(username="hod-qty-keeper", employee_code="HOD-QTY-SK")
+    keeper = Employee.objects.create(user=keeper_user, department=department, branch=branch, designation="Store Keeper")
+    keeper_user.groups.add(Group.objects.get_or_create(name="Store Keeper")[0])
+    StoreKeeperAssignment.objects.create(store=store, employee=keeper)
+
+    requisition = StoreRequisition.objects.create(department=department, requested_by=requester)
+    line = StoreRequisitionItem.objects.create(requisition=requisition, item=item, quantity_requested=Decimal("10.00"))
+    requisition.submit(actor=requester_user)
+
+    head_client = APIClient()
+    head_client.force_authenticate(head_user)
+    response = head_client.post(
+        f"/api/v1/store-requisitions/{requisition.pk}/department-approve/",
+        {"items": [{"id": str(line.pk), "approved_quantity": "7.00"}]},
+        format="json",
+    )
+    assert response.status_code == 200
+
+    line.refresh_from_db()
+    requisition.refresh_from_db()
+    assert line.base_quantity_requested == Decimal("10.00")
+    assert line.hod_approved_quantity == Decimal("7.00")
+    assert line.quantity_approved == Decimal("0.00")
+    assert requisition.status == StoreRequisitionStatus.SUBMITTED
+    assert requisition.department_approved_by == head
+
+    keeper_client = APIClient()
+    keeper_client.force_authenticate(keeper_user)
+    assign = keeper_client.post(
+        f"/api/v1/store-requisitions/{requisition.pk}/assign-store/",
+        {"store": str(store.pk)},
+        format="json",
+    )
+    assert assign.status_code == 200
+
+    too_high = keeper_client.patch(
+        f"/api/v1/store-requisition-items/{line.pk}/",
+        {"quantity_approved": "8.00", "storekeeper_comment": ""},
+        format="json",
+    )
+    assert too_high.status_code == 400
+
+    accepted = keeper_client.patch(
+        f"/api/v1/store-requisition-items/{line.pk}/",
+        {"quantity_approved": "6.00", "storekeeper_comment": "Forward six"},
+        format="json",
+    )
+    assert accepted.status_code == 200
+    line.refresh_from_db()
+    assert line.quantity_approved == Decimal("6.00")
+    assert line.base_quantity_requested == Decimal("10.00")
+    assert line.hod_approved_quantity == Decimal("7.00")
+
+
+@pytest.mark.django_db
+def test_department_requisition_reference_uses_r_prefix():
+    branch = Branch.objects.create(name="Reference Hotel")
+    department = Department.objects.create(name="Reference Department")
+    user = get_user_model().objects.create_user(username="reference-requester", employee_code="REF-REQ")
+    employee = Employee.objects.create(user=user, department=department, branch=branch, designation="Requester")
+    requisition = StoreRequisition.objects.create(department=department, requested_by=employee)
+    assert requisition.requisition_no.startswith("R-")
+    assert requisition.requisition_no[2:].isdigit()
+    assert len(requisition.requisition_no[2:]) >= 5
