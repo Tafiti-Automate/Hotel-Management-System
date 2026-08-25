@@ -1363,7 +1363,7 @@ class PurchaseOrder(BaseModel):
             order = PurchaseOrder.objects.select_for_update().get(pk=self.pk)
             lines = {
                 str(line.pk): line
-                for line in order.items.select_for_update().select_related("item", "unit")
+                for line in order.items.select_for_update().order_by("pk")
             }
             activity_lines = []
             for reduction in reductions:

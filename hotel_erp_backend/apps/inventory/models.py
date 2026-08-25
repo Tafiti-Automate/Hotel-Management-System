@@ -1250,7 +1250,7 @@ class StoreRequisition(BaseModel):
             raise ValidationError("A requester cannot approve their own store request.")
 
         with transaction.atomic():
-            lines = list(self.items.select_for_update().select_related("item", "unit"))
+            lines = list(self.items.select_for_update().order_by("pk"))
             if not lines:
                 raise ValidationError("The requisition has no items to approve.")
 

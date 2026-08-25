@@ -344,9 +344,9 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
         ).first()
         if not line:
             raise ValidationError({"line_id": "Select an Article from this Store Requisition."})
-        price = SupplierItemPrice.objects.select_for_update().select_related(
-            "supplier", "item", "unit"
-        ).filter(pk=payload.get("supplier_price"), is_active=True).first()
+        price = SupplierItemPrice.objects.select_for_update().filter(
+            pk=payload.get("supplier_price"), is_active=True
+        ).order_by("pk").first()
         if not price or price.item_id != line.item_id:
             raise ValidationError({"supplier_price": f"Choose an active vetted supplier quotation for {line.item}."})
         quantity = Decimal(str(payload.get("quantity") or "0"))

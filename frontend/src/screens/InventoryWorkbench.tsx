@@ -153,7 +153,7 @@ export default function InventoryWorkbench() {
     catch (reason) {
       const detail = errorMessage(reason)
       setError(detail)
-      app.showWorkflowAlert('Inventory operation blocked', detail)
+      app.showWorkflowAlert('Action could not be completed', detail)
       return false
     }
     finally { operationRunning.current = false; setBusy(false) }
