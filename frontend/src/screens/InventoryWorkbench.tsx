@@ -139,11 +139,23 @@ export default function InventoryWorkbench() {
     return next
   }, [app.currentBranch, app.data.locations, app.user.role, data])
   const execute = async (operation: () => Promise<unknown>, success: string, nextForm: Row = {}) => {
-    if (operationRunning.current) return
+    if (operationRunning.current) return false
     operationRunning.current = true
     setBusy(true); setError('')
-    try { await operation(); await load(); app.refreshData(); setForm(nextForm); app.showToast(success) }
-    catch (reason) { const detail = errorMessage(reason); setError(detail); app.showWorkflowAlert('Inventory operation blocked', detail) }
+    try {
+      await operation()
+      await load()
+      app.refreshData()
+      setForm(nextForm)
+      app.showToast(success)
+      return true
+    }
+    catch (reason) {
+      const detail = errorMessage(reason)
+      setError(detail)
+      app.showWorkflowAlert('Inventory operation blocked', detail)
+      return false
+    }
     finally { operationRunning.current = false; setBusy(false) }
   }
   const tabs: Array<[Tab, string, string]> = ([
@@ -163,7 +175,7 @@ export default function InventoryWorkbench() {
   const isDepartmentHead = role === 'department head'
   const isStoresApprover = isAdministrator || role === 'store keeper'
   const isStoresIssuer = isAdministrator || role === 'store keeper'
-  const otherTabs = role === 'store keeper' ? [] : tabs.filter(([key]) => !['requests', 'issues'].includes(key))
+  const otherTabs = role === 'store keeper' || isDepartmentHead || role === 'requester' ? [] : tabs.filter(([key]) => !['requests', 'issues'].includes(key))
   const requestRoleStage: SupplyTask = isStoresApprover ? 'stores' : isDepartmentHead ? 'department' : 'prepare'
   const supplyPathActive = supplyPathHint || (tab === 'issues' ? 'issue' : tab === 'requests' ? requestRoleStage : '')
   const readyForProcurementCount = scopedData.requests.filter(
@@ -205,16 +217,17 @@ export default function InventoryWorkbench() {
     }
   }
   return <div style={{ maxWidth: 1460, margin: '0 auto' }}>
-    <section className="workbench-hero" style={{ ...card, padding: 20, display: 'flex', alignItems: 'center', gap: 13, marginBottom: 15 }}><span style={hero}><Icon name={role === 'requester' ? 'assignment' : 'warehouse'} size={24} color="#fff" /></span><div><div style={eyebrow}>{role === 'requester' ? 'Requisitions' : 'Inventory'}</div><h1 style={{ margin: '3px 0', fontSize: 23 }}>{isDepartmentHead ? 'Department Request Approvals' : isStoresApprover ? 'Store Keeper Queue' : 'My Requisitions'}</h1><div style={muted}>{isDepartmentHead ? 'Approve your department’s requests before they reach Stores.' : role === 'store keeper' ? 'Receive approved department requests and forward the required quantities to Procurement.' : isStoresApprover ? 'Review inventory requests.' : 'Create and track your department requisitions.'}</div></div><button onClick={() => void load()} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button></section>
+    <section className="workbench-hero" style={{ ...card, padding: 20, display: 'flex', alignItems: 'center', gap: 13, marginBottom: 15 }}><span style={hero}><Icon name={isDepartmentHead ? 'approval' : role === 'requester' ? 'assignment' : 'warehouse'} size={24} color="#fff" /></span><div><div style={eyebrow}>{isDepartmentHead ? 'Approvals' : role === 'requester' ? 'Requisitions' : 'Inventory'}</div><h1 style={{ margin: '3px 0', fontSize: 23 }}>{isDepartmentHead ? 'Department Approvals' : isStoresApprover ? 'Store Keeper Queue' : 'My Requisitions'}</h1><div style={muted}>{isDepartmentHead ? `${scopedData.requests.filter((row: Row) => id(row.status) === 'pending_department_approval').length} request${scopedData.requests.filter((row: Row) => id(row.status) === 'pending_department_approval').length === 1 ? '' : 's'} need your attention.` : role === 'store keeper' ? 'Receive approved department requests and forward the required quantities to Procurement.' : isStoresApprover ? 'Review inventory requests.' : 'Create and track your department requisitions.'}</div></div><button onClick={() => void load()} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button></section>
     {(can(tabPermissions.requests.view) || can(tabPermissions.issues.view)) && <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 15 }}>
       {!isStoresApprover && !isDepartmentHead && role !== 'requester' && <button onClick={() => selectSupplyStep('prepare')} style={{ ...tabButton, background: supplyPathActive === 'prepare' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'prepare' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'prepare' ? 'var(--accent)' : 'var(--border)' }}><Icon name="assignment" size={17} />My requisitions</button>}
-      {isDepartmentHead && <button onClick={() => selectSupplyStep('department')} style={{ ...tabButton, background: supplyPathActive === 'department' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'department' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'department' ? 'var(--accent)' : 'var(--border)' }}><Icon name="approval" size={17} />Pending approvals ({scopedData.requests.filter((row: Row) => id(row.status) === 'pending_department_approval').length})</button>}
       {isStoresApprover && <><button onClick={() => selectSupplyStep('stores')} style={{ ...tabButton, background: supplyPathActive === 'stores' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'stores' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'stores' ? 'var(--accent)' : 'var(--border)' }}><Icon name="assignment" size={17} />Department requests ({scopedData.requests.filter((row: Row) => id(row.status) === 'submitted').length})</button><button onClick={() => selectSupplyStep('shortage')} style={{ ...tabButton, background: supplyPathActive === 'shortage' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'shortage' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'shortage' ? 'var(--accent)' : 'var(--border)' }}><Icon name="shopping_cart_checkout" size={17} />Forward to Procurement ({readyForProcurementCount})</button></>}
       {isStoresIssuer && <button onClick={() => selectSupplyStep('issue')} style={{ ...tabButton, background: supplyPathActive === 'issue' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'issue' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'issue' ? 'var(--accent)' : 'var(--border)' }}><Icon name="outbox" size={17} />Ready to issue ({scopedData.requests.filter((row: Row) => ['approved', 'partially_approved', 'partially_issued'].includes(id(row.status))).length})</button>}
     </div>}
     {otherTabs.length > 0 && <><div style={{ marginBottom: 10, color: 'var(--text-muted)', fontSize: 14, fontWeight: 600 }}>Inventory operations</div><div style={{ display: 'flex', gap: 5, marginBottom: 15, flexWrap: 'wrap' }}>{otherTabs.map(([key, icon, label]) => <button key={key} onClick={() => { setSupplyPathHint(''); setTab(key) }} style={{ ...tabButton, background: tab === key ? 'var(--accent-soft)' : 'var(--surface)', color: tab === key ? 'var(--accent)' : 'var(--text-muted)', borderColor: tab === key ? 'var(--accent)' : 'var(--border)' }}><Icon name={icon} size={17} />{label}</button>)}</div></>}
     {error && <div style={{ ...card, padding: 12, color: 'var(--bad)', fontSize: 12, marginBottom: 14 }}>{error}</div>}
-    {loading ? <div style={{ ...card, padding: 50, textAlign: 'center', color: 'var(--text-faint)' }}>Loading inventory controls…</div> : requesterEditingDraft ? (
+    {loading ? <div style={{ ...card, padding: 50, textAlign: 'center', color: 'var(--text-faint)' }}>Loading inventory controls…</div> : isDepartmentHead ? (
+      <DepartmentApprovalWorkspace app={app} data={scopedData} busy={busy} execute={execute} selected={selectedRecord} onSelect={setSelectedRecord} />
+    ) : requesterEditingDraft ? (
       <RequestPanel {...common} stage="prepare" />
     ) : requesterPreparing ? (
       <Records tab={tab} data={scopedData} app={app} stage={supplyPathActive} onSelect={selectInventoryRecord} onNewRequisition={() => void createRequesterRequisition()} />
@@ -233,8 +246,131 @@ export default function InventoryWorkbench() {
         {tab === 'consumption' && <ReadOnlyPanel title="Department consumption" note="Department usage and cost records." />}
       </aside>
     </div>}
-    {selectedRecord && <InventoryRecordDrawer tab={tab} row={selectedRecord} data={scopedData} app={app} close={() => setSelectedRecord(null)} />}
+    {selectedRecord && !isDepartmentHead && <InventoryRecordDrawer tab={tab} row={selectedRecord} data={scopedData} app={app} close={() => setSelectedRecord(null)} />}
   </div>
+}
+
+
+function DepartmentApprovalWorkspace({ app, data, busy, execute, selected, onSelect }: {
+  app: any
+  data: Record<string, Row[]>
+  busy: boolean
+  execute: (operation: () => Promise<unknown>, success: string, nextForm?: Row) => Promise<boolean>
+  selected: Row | null
+  onSelect: (row: Row | null) => void
+}) {
+  const [query, setQuery] = useState('')
+  const [date, setDate] = useState('')
+  const [decision, setDecision] = useState<'approve' | 'reject' | null>(null)
+  const [reason, setReason] = useState('')
+  const pending = data.requests.filter((row: Row) => id(row.status) === 'pending_department_approval')
+  const unitNames = new Map<string, string>(app.data.uoms.map((row: Row): [string, string] => [id(row.id), id(row.name)]))
+  const formatDate = (value: unknown) => {
+    if (!value) return '—'
+    const parsed = new Date(id(value))
+    if (Number.isNaN(parsed.getTime())) return id(value)
+    return parsed.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  }
+  const requester = (row: Row) => employeeName(app, row.requested_by) || 'Requester'
+  const linesFor = (row: Row) => data.requestItems.filter((line: Row) => id(line.requisition) === id(row.id))
+  const visible = pending.filter((row: Row) => {
+    const lines = linesFor(row)
+    const haystack = [id(row.requisition_no), requester(row), ...lines.map((line) => itemName(app, line.item))].join(' ').toLowerCase()
+    const rowDate = id(row.created_at || row.request_date).slice(0, 10)
+    return (!query || haystack.includes(query.toLowerCase())) && (!date || rowDate === date)
+  })
+
+  const closeDecision = () => { setDecision(null); setReason('') }
+  const approve = async () => {
+    if (!selected || busy) return
+    const ok = await execute(
+      () => runBackendAction('store-requisitions', id(selected.id), 'department-approve', { comments: '' }),
+      `Requisition ${id(selected.requisition_no)} approved and sent to the Store Keeper`,
+    )
+    if (ok) { closeDecision(); onSelect(null) }
+  }
+  const reject = async () => {
+    if (!selected || busy || !reason.trim()) return
+    const ok = await execute(
+      () => runBackendAction('store-requisitions', id(selected.id), 'reject', { reason: reason.trim() }),
+      `Requisition ${id(selected.requisition_no)} rejected`,
+    )
+    if (ok) { closeDecision(); onSelect(null) }
+  }
+
+  if (selected) {
+    const lines = linesFor(selected)
+    return <div style={{ display: 'grid', gap: 14 }}>
+      <div>
+        <button type="button" onClick={() => { closeDecision(); onSelect(null) }} style={{ ...secondary, width: 'fit-content' }}><Icon name="arrow_back" size={16} />Back to approvals</button>
+      </div>
+      <section style={{ ...card, overflow: 'hidden' }}>
+        <header style={{ padding: '18px 20px', display: 'flex', gap: 14, alignItems: 'flex-start', borderBottom: '1px solid var(--border)' }}>
+          <span style={{ width: 42, height: 42, display: 'grid', placeItems: 'center', borderRadius: 9, background: 'var(--accent-soft)', color: 'var(--accent)' }}><Icon name="assignment" size={21} /></span>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ color: 'var(--text-faint)', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em' }}>Requisition</div>
+            <h2 style={{ margin: '3px 0 0', color: 'var(--text)', fontSize: 22 }}>{id(selected.requisition_no)}</h2>
+          </div>
+          <span style={{ marginLeft: 'auto', padding: '6px 10px', borderRadius: 999, color: 'var(--warn)', background: 'var(--warn-soft)', fontSize: 10.5, fontWeight: 800 }}>Pending Approval</span>
+        </header>
+        <div style={{ padding: 20 }}>
+          <div className="hod-request-meta" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 10, marginBottom: 20 }}>
+            <InfoBox label="Requested by" value={requester(selected)} />
+            <InfoBox label="Department" value={departmentName(app, selected.department)} />
+            <InfoBox label="Date" value={formatDate(selected.created_at || selected.request_date)} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 }}><h3 style={{ margin: 0, fontSize: 14 }}>Requested items</h3><span style={{ color: 'var(--text-faint)', fontSize: 11 }}>{lines.length} item{lines.length === 1 ? '' : 's'}</span></div>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+            <div className="hod-items-head" style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1.5fr) 120px 130px minmax(180px,1fr)', gap: 12, padding: '9px 13px', background: 'var(--surface-2)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em' }}><span>Article</span><span>Quantity</span><span>UOM</span><span>Note</span></div>
+            {lines.map((line: Row) => {
+              const article = app.data.items.find((item: Row) => id(item.id) === id(line.item))
+              const uom = unitNames.get(id(line.unit || article?.baseUnitId)) || id(article?.uom) || '—'
+              return <div key={id(line.id)} className="hod-items-row" style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1.5fr) 120px 130px minmax(180px,1fr)', gap: 12, padding: '13px', borderTop: '1px solid var(--border)', alignItems: 'center', fontSize: 12 }}>
+                <span style={{ color: 'var(--text)', fontWeight: 750 }}>{itemName(app, line.item)}</span>
+                <span style={{ color: 'var(--text)', fontWeight: 700 }}>{id(line.base_quantity_requested || line.quantity_requested || line.quantity)}</span>
+                <span style={{ color: 'var(--text-muted)' }}>{uom}</span>
+                <span style={{ color: 'var(--text-muted)' }}>{id(line.remarks) || '—'}</span>
+              </div>
+            })}
+            {!lines.length && <div style={{ padding: 30, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>This requisition has no items.</div>}
+          </div>
+        </div>
+        <footer style={{ padding: '14px 20px', display: 'flex', justifyContent: 'flex-end', gap: 9, borderTop: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+          <button type="button" disabled={busy} onClick={() => setDecision('reject')} style={{ ...secondary, color: 'var(--bad)', borderColor: 'rgba(220,38,38,.35)' }}>Reject</button>
+          <button type="button" disabled={busy || !lines.length} onClick={() => setDecision('approve')} style={{ ...secondary, minWidth: 120, justifyContent: 'center', color: '#fff', background: 'var(--accent)', borderColor: 'var(--accent)', opacity: busy || !lines.length ? .5 : 1 }}><Icon name="check" size={17} color="#fff" />Approve</button>
+        </footer>
+      </section>
+      {decision && <><div onClick={closeDecision} style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(15,23,42,.38)' }} /><section role="dialog" aria-modal="true" style={{ position: 'fixed', zIndex: 91, left: '50%', top: '50%', width: 460, maxWidth: 'calc(100vw - 32px)', transform: 'translate(-50%,-50%)', ...card, padding: 20 }}>
+        <h3 style={{ margin: 0, fontSize: 17 }}>{decision === 'approve' ? `Approve requisition ${id(selected.requisition_no)}?` : `Reject requisition ${id(selected.requisition_no)}`}</h3>
+        {decision === 'approve' ? <p style={{ ...muted, margin: '8px 0 18px', fontSize: 12.5 }}>This requisition contains {lines.length} item{lines.length === 1 ? '' : 's'}.</p> : <div style={{ margin: '14px 0' }}><label style={labelStyle}>Reason for rejection *</label><textarea autoFocus value={reason} onChange={(event) => setReason(event.target.value)} rows={4} placeholder="Enter the reason" style={{ ...control, height: 96, padding: 10, resize: 'vertical' }} /></div>}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}><button type="button" onClick={closeDecision} disabled={busy} style={secondary}>Cancel</button>{decision === 'approve' ? <button type="button" onClick={() => void approve()} disabled={busy} style={{ ...secondary, color: '#fff', background: 'var(--accent)', borderColor: 'var(--accent)' }}>Approve</button> : <button type="button" onClick={() => void reject()} disabled={busy || !reason.trim()} style={{ ...secondary, color: '#fff', background: 'var(--bad)', borderColor: 'var(--bad)', opacity: busy || !reason.trim() ? .5 : 1 }}>Reject requisition</button>}</div>
+      </section></>}
+    </div>
+  }
+
+  return <section style={{ ...card, overflow: 'hidden' }}>
+    <div style={{ padding: '15px 17px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div><div style={{ fontSize: 13, fontWeight: 800 }}>Awaiting your approval</div><div style={{ marginTop: 3, color: 'var(--text-muted)', fontSize: 11 }}>{pending.length ? `${pending.length} request${pending.length === 1 ? '' : 's'} waiting` : 'No requests are waiting'}</div></div>
+    </div>
+    <div className="hod-approval-filters" style={{ display: 'grid', gridTemplateColumns: 'minmax(240px,1fr) 180px', gap: 8, padding: 12, borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+      <input aria-label="Search approvals" placeholder="Search requisition, requester or item..." value={query} onChange={(event) => setQuery(event.target.value)} style={control} />
+      <input aria-label="Filter by date" type="date" value={date} onChange={(event) => setDate(event.target.value)} style={control} />
+    </div>
+    {visible.length > 0 && <div className="hod-approval-head" style={{ display: 'grid', gridTemplateColumns: '120px minmax(180px,1fr) 150px minmax(240px,1.25fr) 100px', gap: 14, padding: '9px 17px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em' }}><span>Requisition</span><span>Requested by</span><span>Date</span><span>Items</span><span></span></div>}
+    {visible.map((row: Row) => {
+      const lines = linesFor(row)
+      const names = lines.slice(0, 2).map((line) => itemName(app, line.item))
+      const preview = names.length ? `${names.join(', ')}${lines.length > 2 ? ` +${lines.length - 2} more` : ''}` : 'No items'
+      return <div className="hod-approval-row" key={id(row.id)} style={{ display: 'grid', gridTemplateColumns: '120px minmax(180px,1fr) 150px minmax(240px,1.25fr) 100px', gap: 14, padding: '13px 17px', alignItems: 'center', borderBottom: '1px solid var(--border)' }}>
+        <button type="button" onClick={() => onSelect(row)} style={{ padding: 0, border: 0, background: 'transparent', color: 'var(--accent)', font: 'inherit', fontSize: 12, fontWeight: 800, cursor: 'pointer', textAlign: 'left' }}>{id(row.requisition_no)}</button>
+        <span style={{ color: 'var(--text)', fontSize: 12, fontWeight: 700 }}>{requester(row)}</span>
+        <span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{formatDate(row.created_at || row.request_date)}</span>
+        <span style={{ minWidth: 0 }}><b style={{ display: 'block', color: 'var(--text)', fontSize: 11.5 }}>{lines.length} item{lines.length === 1 ? '' : 's'}</b><small style={{ display: 'block', marginTop: 3, color: 'var(--text-muted)', fontSize: 10.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview}</small></span>
+        <button type="button" onClick={() => onSelect(row)} style={{ ...secondary, height: 32, justifyContent: 'center', color: 'var(--accent)', borderColor: 'var(--accent)' }}>Review</button>
+      </div>
+    })}
+    {!visible.length && <div style={{ padding: 48, textAlign: 'center' }}><Icon name="check_circle" size={30} color="var(--good)" /><div style={{ marginTop: 9, color: 'var(--text)', fontSize: 13, fontWeight: 800 }}>{pending.length ? 'No matching requests' : "You're all caught up"}</div><div style={{ marginTop: 4, color: 'var(--text-muted)', fontSize: 11.5 }}>{pending.length ? 'Try changing the search or date filter.' : 'No department requests currently need your approval.'}</div></div>}
+  </section>
 }
 
 function RequestPanel({ app, data, form, setForm, busy, execute, stage }: any) {

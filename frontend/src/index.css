@@ -1751,3 +1751,34 @@ html:not([data-theme="dark"]) .form-drawer {
     margin-left: 0 !important;
   }
 }
+
+/* Department Head approval workspace */
+@media (max-width: 900px) {
+  .hod-approval-filters {
+    grid-template-columns: 1fr !important;
+  }
+  .hod-approval-head {
+    display: none !important;
+  }
+  .hod-approval-row {
+    grid-template-columns: 1fr auto !important;
+  }
+  .hod-approval-row > :nth-child(2),
+  .hod-approval-row > :nth-child(3),
+  .hod-approval-row > :nth-child(4) {
+    grid-column: 1 / -1;
+  }
+  .hod-request-meta {
+    grid-template-columns: 1fr !important;
+  }
+  .hod-items-head {
+    display: none !important;
+  }
+  .hod-items-row {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .hod-items-row > :first-child,
+  .hod-items-row > :last-child {
+    grid-column: 1 / -1;
+  }
+}
