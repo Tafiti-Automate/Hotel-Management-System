@@ -650,8 +650,41 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             )
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
-        requisition.refresh_from_db()
-        return Response(self.get_serializer(requisition).data)
+        except Exception as error:
+            # Record the full traceback in server logs and return a JSON error
+            # with a request id.  This avoids the unhelpful generic HTML 500 that
+            # previously reached the frontend and makes any remaining production-
+            # database issue traceable without exposing database details.
+            import logging
+            request_id = getattr(request, "request_id", "")
+            logging.getLogger(__name__).exception(
+                "Unexpected HOD approval failure requisition=%s user=%s request_id=%s",
+                requisition.pk,
+                request.user.pk,
+                request_id,
+            )
+            return Response(
+                {
+                    "detail": (
+                        f"Department approval could not be saved ({type(error).__name__}). "
+                        f"Reference: {request_id or requisition.pk}."
+                    ),
+                    "code": "hod_approval_failed",
+                    "request_id": request_id,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        # The frontend refreshes its queue after a successful action.  Returning
+        # the entire requisition here is unnecessary and used to make approval
+        # success depend on a second serialization/query path.
+        return Response({
+            "id": str(requisition.pk),
+            "requisition_no": requisition.requisition_no,
+            "status": StoreRequisitionStatus.SUBMITTED,
+            "department_approved_at": requisition.department_approved_at,
+            "department_approved_by": str(request.user.employee_profile.pk),
+        })
 
     @action(detail=True, methods=["post"], url_path="assign-store")
     def assign_store(self, request, pk=None):

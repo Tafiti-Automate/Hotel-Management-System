@@ -1299,21 +1299,60 @@ class StoreRequisition(BaseModel):
             if not positive:
                 raise ValidationError("Approve at least one item quantity, or reject the requisition instead.")
 
+            approved_at = timezone.now()
+            # Use a direct UPDATE for the requisition decision as well.  The normal
+            # model save path emits document-wide post_save audit signals.  Those
+            # signals are useful, but they are secondary to the HOD decision and
+            # must never be able to roll back a valid approval in production.
+            updated = type(self).objects.filter(
+                pk=self.pk,
+                status=StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL,
+            ).update(
+                status=StoreRequisitionStatus.SUBMITTED,
+                department_approved_by_id=approved_by.pk,
+                department_approved_at=approved_at,
+                department_approval_comments=comments or "",
+                updated_at=approved_at,
+            )
+            if updated != 1:
+                raise ValidationError(
+                    "This requisition is no longer awaiting Department Head approval. Refresh and try again."
+                )
+
             self.status = StoreRequisitionStatus.SUBMITTED
             self.department_approved_by = approved_by
-            self.department_approved_at = timezone.now()
-            self.department_approval_comments = comments
-            self.save(update_fields=[
-                "status",
-                "department_approved_by",
-                "department_approved_at",
-                "department_approval_comments",
-                "updated_at",
-            ])
+            self.department_approved_at = approved_at
+            self.department_approval_comments = comments or ""
+            self.updated_at = approved_at
 
-        # The approval is the business transaction; notification delivery is
-        # secondary. A notification/storage problem must never turn a committed
-        # approval into an HTTP 500 for the Department Head.
+        # Audit and notifications are deliberately best-effort side effects.
+        # They execute only after the approval transaction has committed and can
+        # never change the success/failure of the business decision.
+        try:
+            from apps.audit_logs.models import AuditLog
+
+            AuditLog.objects.create(
+                actor=approved_by.user,
+                action="department_requisition_hod_approved",
+                entity_type="inventory.StoreRequisition",
+                entity_id=self.pk,
+                metadata={
+                    "requisition_no": self.requisition_no,
+                    "approved_by": str(approved_by.pk),
+                    "item_quantities": {
+                        str(line.pk): str(line.hod_approved_quantity) for line in lines
+                    },
+                    "comments": comments or "",
+                },
+                created_by=approved_by.user,
+            )
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                "Audit logging failed after HOD approval for requisition %s",
+                self.pk,
+            )
+
         try:
             self._notify_stores(
                 title=f"{self.requisition_no} needs Store Keeper action",
