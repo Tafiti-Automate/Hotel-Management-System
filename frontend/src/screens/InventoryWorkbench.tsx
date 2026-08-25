@@ -373,7 +373,7 @@ function RequestPanel({ app, data, form, setForm, busy, execute, stage }: any) {
 }
 
 
-function RequesterDraftEditor({ app, data, form, setForm, busy, execute, draftRequest, draftLines, draftLine, requestBackendId }: any) {
+function RequesterDraftEditor({ app, form, setForm, busy, execute, draftRequest, draftLines, draftLine, requestBackendId }: any) {
   if (!draftRequest) {
     return <section style={{ ...card, padding: 28 }}>
       <button type="button" onClick={() => setForm({})} style={{ ...secondary, marginBottom: 18 }}><Icon name="arrow_back" size={17} />Back to my requisitions</button>
@@ -385,7 +385,7 @@ function RequesterDraftEditor({ app, data, form, setForm, busy, execute, draftRe
     </section>
   }
 
-  const uomNames = new Map(app.data.uoms.map((row: Row) => [id(row.id), id(row.name)]))
+  const uomNames = new Map<string, string>(app.data.uoms.map((row: Row): [string, string] => [id(row.id), id(row.name)]))
   const article = app.data.items.find((row: Row) => id(row.id) === id(form.item || draftLine?.item))
   const selectedUom = uomNames.get(id(form.unit || draftLine?.unit || article?.baseUnitId)) || id(article?.uom) || 'Base unit'
   const purposeValue = form.purpose ?? draftRequest.purpose ?? ''
