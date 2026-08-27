@@ -407,7 +407,9 @@ class SupplierItemPriceViewSet(CostControllerAuthorityMixin, CreatedByModelMixin
             "lead_time_days": normalized.get("lead_time_days") or 0,
             "quotation_reference": str(normalized.get("quotation_reference") or "").strip(),
             "quotation_valid_until": normalized.get("quotation_valid_until") or None,
-            "is_preferred": str(normalized.get("is_preferred") or "").strip().lower() in {"yes", "true", "1"},
+            # Supplier quotations are alternatives for Procurement comparison.
+            # There is no single preferred-supplier rule in the client workflow.
+            "is_preferred": False,
             "is_active": str(normalized.get("is_active") or "yes").strip().lower() not in {"no", "false", "0", "inactive"},
         }
         existing = SupplierItemPrice.objects.filter(supplier=supplier, item=item).first()

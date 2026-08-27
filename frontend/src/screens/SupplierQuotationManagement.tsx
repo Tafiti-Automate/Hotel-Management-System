@@ -26,7 +26,7 @@ export default function SupplierQuotationManagement() {
       <div>
         <div style={{ color:'var(--accent)', fontSize:11.5, fontWeight:750 }}>Cost Controller · Quotation catalogue</div>
         <h1 style={{ margin:'3px 0 5px', color:'var(--text)', fontSize:29, fontWeight:750 }}>Supplier Quotations</h1>
-        <p style={{ margin:0, color:'var(--text-muted)', fontSize:13 }}>Maintain the quotation-backed supplier price for each article and purchase unit.</p>
+        <p style={{ margin:0, color:'var(--text-muted)', fontSize:13 }}>Maintain supplier quotations by article and purchase unit. The same article may be supplied by more than one supplier.</p>
       </div>
       <button type="button" onClick={() => app.openCreate('supplierItems', 'Add supplier quotation')} style={primary}><Icon name="add" size={17} />Add supplier quotation</button>
     </header>

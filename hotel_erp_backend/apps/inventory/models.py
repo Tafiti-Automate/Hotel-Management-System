@@ -497,13 +497,8 @@ class SupplierItemPrice(BaseModel):
                 fields=("supplier", "item"),
                 name="unique_supplier_item_price",
             ),
-            models.UniqueConstraint(
-                fields=("item",),
-                condition=models.Q(is_preferred=True, is_active=True),
-                name="unique_preferred_supplier_per_item",
-            ),
         ]
-        ordering = ("item__name", "-is_preferred", "supplier__name")
+        ordering = ("item__name", "supplier__name")
 
     def __str__(self):
         return f"{self.supplier} - {self.item}: {self.unit_price}"

@@ -163,7 +163,7 @@ export const cfg: Record<string, EntityConfig> = {
     ],
   },
   supplierItems: {
-    title: 'Supplier Catalogue', sub: 'Articles, prices and purchasing terms offered by suppliers', icon: 'contract', add: 'Attach article', singular: 'Supplier Article', editable: true,
+    title: 'Supplier Catalogue', sub: 'Multiple suppliers can quote the same article; Procurement compares their current offers', icon: 'contract', add: 'Add quotation', singular: 'Supplier Quotation', editable: true,
     cols: [
       { key: 'supplier', label: 'Supplier', w: 'minmax(0,1.4fr)', kind: 'bold' },
       { key: 'article', label: 'Article', w: 'minmax(0,1.5fr)', kind: 'text' },
@@ -176,7 +176,6 @@ export const cfg: Record<string, EntityConfig> = {
       { key: 'pricePosition', label: 'Comparison', w: '95px', kind: 'status' },
       { key: 'minimumOrder', label: 'Minimum', w: '85px', kind: 'num', align: 'right' },
       { key: 'leadTime', label: 'Lead Days', w: '85px', kind: 'num', align: 'right' },
-      { key: 'preferred', label: 'Preference', w: '105px', kind: 'status', align: 'right' },
       { key: 'historyCount', label: 'Price changes', w: '90px', kind: 'num', align: 'right' },
       { key: 'status', label: 'Status', w: '90px', kind: 'status', align: 'right' },
     ],
@@ -193,7 +192,6 @@ export const cfg: Record<string, EntityConfig> = {
       { key: 'minimumOrder', label: 'Minimum order quantity', type: 'number' },
       { key: 'leadTime', label: 'Lead time in days', type: 'number' },
       { key: 'lastQuoted', label: 'Last quoted date', type: 'date' },
-      { key: 'preferred', label: 'Preferred supplier', type: 'select', opts: 'yesNo' },
       { key: 'status', label: 'Status', type: 'select', opts: 'genStatus' },
     ],
   },

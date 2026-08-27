@@ -761,7 +761,7 @@ function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey
       last_quoted_at: text(values.lastQuoted) || null,
       quotation_reference: text(values.quotationReference),
       quotation_valid_until: text(values.quotationValidUntil) || null,
-      is_preferred: text(values.preferred, 'No') === 'Yes',
+      is_preferred: false,
       is_active: text(values.status, 'Active') !== 'Inactive',
     }
   }
@@ -1116,7 +1116,6 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
       lastQuoted: text(row.last_quoted_at),
       quotationReference: text(row.quotation_reference),
       quotationValidUntil: text(row.quotation_valid_until),
-      preferred: bool(row.is_preferred) ? 'Preferred' : 'Alternative',
       pricePosition: bool(row.is_lowest) ? 'Lowest' : 'Higher',
       historyCount: num(row.history_count),
       status: activeStatus(row.is_active),

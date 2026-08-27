@@ -878,3 +878,48 @@ def test_department_head_approval_is_not_failed_by_notification_error(monkeypatc
     assert requisition.status == StoreRequisitionStatus.SUBMITTED
     assert requisition.department_approved_by == head
     assert line.hod_approved_quantity == Decimal("6.00")
+
+@pytest.mark.django_db
+def test_one_article_can_have_multiple_active_suppliers():
+    category = Category.objects.create(name="Office Supplies Multi Supplier")
+    item = Item.objects.create(
+        category=category,
+        name="A4 Printing Paper Multi Supplier",
+        sku="A4-MULTI-001",
+        unit="ream",
+        reorder_level=Decimal("5.00"),
+    )
+    supplier_a = Supplier.objects.create(
+        name="Paper Supplier A",
+        email="paper-a@example.com",
+        phone="+256700001001",
+        address="Kampala",
+        tin_number="TIN-MULTI-A",
+        registration_number="REG-MULTI-A",
+    )
+    supplier_b = Supplier.objects.create(
+        name="Paper Supplier B",
+        email="paper-b@example.com",
+        phone="+256700001002",
+        address="Kampala",
+        tin_number="TIN-MULTI-B",
+        registration_number="REG-MULTI-B",
+    )
+
+    first = SupplierItemPrice.objects.create(
+        supplier=supplier_a,
+        item=item,
+        unit_price=Decimal("19500.00"),
+        is_active=True,
+        is_preferred=True,
+    )
+    second = SupplierItemPrice.objects.create(
+        supplier=supplier_b,
+        item=item,
+        unit_price=Decimal("20250.00"),
+        is_active=True,
+        is_preferred=True,
+    )
+
+    assert first.item_id == second.item_id
+    assert SupplierItemPrice.objects.filter(item=item, is_active=True).count() == 2

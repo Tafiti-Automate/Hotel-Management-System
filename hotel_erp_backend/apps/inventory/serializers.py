@@ -448,21 +448,16 @@ class SupplierItemPriceSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
+        supplier = attrs.get("supplier", getattr(self.instance, "supplier", None))
         item = attrs.get("item", getattr(self.instance, "item", None))
-        is_preferred = attrs.get(
-            "is_preferred", getattr(self.instance, "is_preferred", False)
-        )
-        is_active = attrs.get("is_active", getattr(self.instance, "is_active", True))
-        if item and is_preferred and is_active:
-            preferred = SupplierItemPrice.objects.filter(
-                item=item, is_preferred=True, is_active=True
-            )
+        if supplier and item:
+            duplicate = SupplierItemPrice.objects.filter(supplier=supplier, item=item)
             if self.instance:
-                preferred = preferred.exclude(pk=self.instance.pk)
-            if preferred.exists():
-                raise serializers.ValidationError(
-                    {"is_preferred": "This article already has an active preferred supplier."}
-                )
+                duplicate = duplicate.exclude(pk=self.instance.pk)
+            if duplicate.exists():
+                raise serializers.ValidationError({
+                    "item": "This supplier already has a quotation for this article. Edit the existing quotation instead."
+                })
         instance = self.instance or SupplierItemPrice(**attrs)
         for field, value in attrs.items():
             setattr(instance, field, value)
