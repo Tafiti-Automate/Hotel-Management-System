@@ -186,7 +186,13 @@ export default function ProcurementWorkbench() {
     next.orders = data.orders.filter((row) => requisitions.has(id(row.requisition)))
     const orders = new Set(next.orders.map((row) => id(row.id)))
     next.orderItems = data.orderItems.filter((row) => orders.has(id(row.purchase_order)))
-    next.receipts = data.receipts.filter((row) => orders.has(id(row.purchase_order)))
+    // A Receiving Clerk's order payload intentionally contains only LPOs that
+    // are still ready to receive. A fully received LPO therefore disappears
+    // from `orders`, but its GRN must remain in the clerk's history. Scope those
+    // receipts by their serialized branch instead of by the ready-LPO IDs.
+    next.receipts = role === 'receiving clerk'
+      ? data.receipts.filter((row) => !row.branch_id || id(row.branch_id) === selectedBranchId)
+      : data.receipts.filter((row) => orders.has(id(row.purchase_order)))
     const receipts = new Set(next.receipts.map((row) => id(row.id)))
     next.receiptItems = data.receiptItems.filter((row) => receipts.has(id(row.goods_receipt)))
     next.inspections = data.inspections.filter((row) => receipts.has(id(row.goods_receipt)))
@@ -196,7 +202,7 @@ export default function ProcurementWorkbench() {
     const returns = new Set(next.returns.map((row) => id(row.id)))
     next.returnItems = data.returnItems.filter((row) => returns.has(id(row.supplier_return)))
     return next
-  }, [app.currentBranch, app.data.branches, app.user.branchId, data])
+  }, [app.currentBranch, app.data.branches, app.user.branchId, data, role])
   useEffect(() => {
     if (stage !== 'lpo' || loading || !['procurement manager', 'procurement officer'].includes(role)) return
     const approvedOrders = scopedData.orders.filter((row) => id(row.status) === 'approved')
@@ -617,8 +623,13 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
         </div>
 
         <div style={{ padding: 20 }}>
+          <div className="receiving-document-fields" style={{ marginBottom: 14, padding: 12, border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface-2)', display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12 }}>
+            <ReadOnlyValue label="Selected LPO" value={id(selectedOrder.lpo_number || selectedOrder.po_number)} />
+            <ReadOnlyValue label="Supplier (set by the LPO)" value={supplier} />
+          </div>
+
           <div className="receiving-document-fields" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12, marginBottom: 18 }}>
-            <Field label="Supplier invoice number *"><Input value={invoiceNumber} onChange={setInvoiceNumber} placeholder="Invoice number" /></Field>
+            <Field label="2. Enter supplier invoice number *"><Input value={invoiceNumber} onChange={setInvoiceNumber} placeholder="Number printed on the supplier invoice" /></Field>
             <Field label="Received date"><Input type="date" value={receivedDate} onChange={setReceivedDate} /></Field>
           </div>
 
@@ -708,7 +719,7 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
       <div>
         <div style={eyebrow}>Receiving Clerk</div>
         <h1 style={{ margin: '3px 0', fontSize: 24, color: 'var(--text)' }}>Receive Supplier Delivery</h1>
-        <div style={{ color: 'var(--text-muted)', fontSize: 12.5 }}>Find the LPO shown on the supplier invoice, confirm what arrived and generate the GRN.</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: 12.5 }}>First select the issued LPO for the delivery. The supplier comes from the LPO; enter the invoice number after opening it.</div>
       </div>
       <button type="button" onClick={() => void onRefresh()} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button>
     </div>
@@ -720,8 +731,8 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
 
     <section style={{ ...card, overflow: 'hidden' }}>
       <div className="receiving-search-grid" style={{ padding: 14, display: 'grid', gridTemplateColumns: view === 'ready' ? 'minmax(260px,1fr) minmax(210px,.45fr)' : '1fr', gap: 10, borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
-        <Input value={query} onChange={setQuery} placeholder={view === 'ready' ? 'Enter LPO number from invoice or supplier name...' : 'Search GRN, LPO, supplier or invoice...'} />
-        {view === 'ready' && <select value={supplierFilter} onChange={(event) => setSupplierFilter(event.target.value)} style={control}><option value="">All suppliers</option>{supplierRows.map((row) => <option key={id(row.id)} value={id(row.id)}>{id(row.name)}</option>)}</select>}
+        <Field label={view === 'ready' ? '1. Find the LPO' : 'Search saved GRNs'}><Input value={query} onChange={setQuery} placeholder={view === 'ready' ? 'Type the LPO number (not the invoice number)' : 'GRN, LPO, supplier or invoice number'} /></Field>
+        {view === 'ready' && <Field label="Optional: filter by supplier"><select value={supplierFilter} onChange={(event) => setSupplierFilter(event.target.value)} style={control}><option value="">All suppliers</option>{supplierRows.map((row) => <option key={id(row.id)} value={id(row.id)}>{id(row.name)}</option>)}</select></Field>}
       </div>
 
       {view === 'ready' ? <>
@@ -731,7 +742,7 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
       </> : <>
         <div style={{ display: 'grid', gridTemplateColumns: '.7fr .7fr 1.4fr .8fr .7fr auto', gap: 12, padding: '10px 16px', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}><span>GRN</span><span>LPO</span><span>Supplier</span><span>Invoice</span><span>Date</span><span></span></div>
         {historyRows.map((receipt) => <button key={id(receipt.id)} type="button" onClick={() => setSelectedReceiptId(id(receipt.id))} style={{ width: '100%', display: 'grid', gridTemplateColumns: '.7fr .7fr 1.4fr .8fr .7fr auto', gap: 12, alignItems: 'center', padding: '13px 16px', border: 0, borderTop: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}><strong style={{ color: 'var(--text)', fontSize: 12 }}>{id(receipt.grn_number)}</strong><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>LPO {id(receipt.lpo_number)}</span><span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{id(receipt.supplier_name)}</span><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{id(receipt.supplier_invoice_no) || '—'}</span><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{id(receipt.received_date)}</span><span style={{ color: 'var(--accent)', fontSize: 10.8, fontWeight: 800 }}>View</span></button>)}
-        {!historyRows.length && <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)', fontSize: 11.5 }}>No GRNs match your search.</div>}
+        {!historyRows.length && <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)', fontSize: 11.5 }}>{data.receipts.length ? 'No GRNs match your search.' : 'No GRNs have been generated by you yet.'}</div>}
       </>}
     </section>
   </div>

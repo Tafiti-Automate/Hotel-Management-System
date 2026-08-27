@@ -677,6 +677,7 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
 class GoodsReceiptNoteSerializer(serializers.ModelSerializer):
     lpo_number = serializers.CharField(source="purchase_order.lpo_number", read_only=True)
     supplier_name = serializers.CharField(source="purchase_order.supplier.name", read_only=True)
+    branch_id = serializers.UUIDField(source="purchase_order.requisition.branch_id", read_only=True)
 
     class Meta:
         model = GoodsReceiptNote
@@ -686,6 +687,7 @@ class GoodsReceiptNoteSerializer(serializers.ModelSerializer):
             "purchase_order",
             "lpo_number",
             "supplier_name",
+            "branch_id",
             "received_by",
             "received_date",
             "status",

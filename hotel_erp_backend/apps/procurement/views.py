@@ -314,11 +314,11 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
                 # fully received and therefore drops out of the ready-LPO list.
                 receipts = GoodsReceiptNote.objects.filter(
                     received_by=getattr(request.user, "employee_profile", None)
-                ).select_related("purchase_order__supplier")
+                ).select_related("purchase_order__supplier", "purchase_order__requisition")
             else:
                 receipts = GoodsReceiptNote.objects.filter(
                     purchase_order_id__in=order_ids
-                ).select_related("purchase_order__supplier")
+                ).select_related("purchase_order__supplier", "purchase_order__requisition")
             receipt_ids = receipts.values_list("id", flat=True)
             payload["receipts"] = GoodsReceiptNoteSerializer(receipts, many=True, context={"request": request}).data
             payload["receiptItems"] = GoodsReceiptItemSerializer(
@@ -1199,7 +1199,9 @@ class PurchaseOrderItemViewSet(CreatedByModelMixin, ModelViewSet):
 
 
 class GoodsReceiptNoteViewSet(CreatedByModelMixin, ModelViewSet):
-    queryset = GoodsReceiptNote.objects.select_related("purchase_order", "received_by")
+    queryset = GoodsReceiptNote.objects.select_related(
+        "purchase_order__supplier", "purchase_order__requisition", "received_by"
+    )
     serializer_class = GoodsReceiptNoteSerializer
     filterset_fields = ("purchase_order", "received_by", "received_date")
     search_fields = ("purchase_order__po_number", "received_by__user__employee_code")

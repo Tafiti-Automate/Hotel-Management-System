@@ -1284,6 +1284,75 @@ def test_receiving_clerk_can_generate_posted_grn_directly_from_issued_lpo():
 
 
 @pytest.mark.django_db
+def test_receiving_clerk_workspace_keeps_grn_after_lpo_is_fully_received():
+    employee, department, supplier, item = create_procurement_context()
+    branch = Branch.objects.create(name="Completed GRN History Branch")
+    store = StoreLocation.objects.create(branch=branch, name="Completed GRN Store")
+    employee.branch = branch
+    employee.save(update_fields=("branch", "updated_at"))
+    receiving, _ = Group.objects.get_or_create(name="Receiving Clerk")
+    receiving.permissions.add(Permission.objects.get(codename="view_goodsreceiptnote"))
+    employee.user.groups.add(receiving)
+
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        branch=branch,
+        reason="Completed delivery history",
+        status=PRStatus.APPROVED,
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity=Decimal("2.00"),
+        approved_quantity=Decimal("2.00"),
+        destination_store=store,
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition,
+        supplier=supplier,
+        ordered_by=employee,
+        store=store,
+        po_number="991002",
+    )
+    order_line = PurchaseOrderItem.objects.create(
+        purchase_order=order,
+        item=item,
+        unit=item.base_unit,
+        quantity=Decimal("2.00"),
+        unit_cost=Decimal("5000.00"),
+    )
+    authorize_order_for_test(order)
+    order.issue(sent_by=employee, sent_to_email=supplier.email)
+
+    client = APIClient()
+    client.force_authenticate(employee.user)
+    generated = client.post(
+        f"/api/v1/purchase-orders/{order.pk}/receive-delivery/",
+        {
+            "supplier_invoice_no": "INV-FULL-1002",
+            "received_date": "2026-08-27",
+            "lines": [{
+                "purchase_order_item": str(order_line.pk),
+                "quantity_received": "2.00",
+            }],
+        },
+        format="json",
+    )
+
+    assert generated.status_code == 201, generated.data
+    order.refresh_from_db()
+    assert order.status == POStatus.RECEIVED
+
+    workspace = client.get("/api/v1/requisitions/workspace/?stage=receipt")
+
+    assert workspace.status_code == 200, workspace.data
+    assert workspace.data["orders"] == []
+    assert [row["id"] for row in workspace.data["receipts"]] == [generated.data["id"]]
+    assert workspace.data["receipts"][0]["branch_id"] == str(branch.pk)
+
+
+@pytest.mark.django_db
 def test_rejected_delivery_quantity_is_available_for_replacement_receipt():
     employee, department, supplier, item = create_procurement_context()
     branch = Branch.objects.create(name="Replacement Receipt Branch")
