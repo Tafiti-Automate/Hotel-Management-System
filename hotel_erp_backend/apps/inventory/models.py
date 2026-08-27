@@ -1487,32 +1487,46 @@ class StoreRequisition(BaseModel):
         """Backward-compatible alias for older API/tests."""
         return self.create_procurement_requisition(created_by=created_by, reason=reason)
 
-    def resume_after_procurement(self, actor=None):
+    def complete_after_procurement_receipt(self, actor=None):
+        """Close the Department requisition after Procurement has fully delivered it.
+
+        The Store Keeper's client-facing responsibility ends after forwarding the
+        HOD-approved quantities to Procurement.  A posted GRN must therefore never
+        reopen the same request as another Store Keeper decision.
+        """
+        if self.status == StoreRequisitionStatus.COMPLETED:
+            return
         if self.status != StoreRequisitionStatus.AWAITING_PROCUREMENT:
-            raise ValidationError("Only requests awaiting Procurement can be resumed.")
-        shortages = []
-        for line in self.items.select_related("item"):
-            balance = InventoryBalance.objects.filter(item=line.item, store=self.store).first()
-            available = balance.available_quantity if balance else Decimal("0.00")
-            required = line.quantity_approved if line.quantity_approved > Decimal("0.00") else line.base_quantity_requested
-            if available < required:
-                shortages.append(
-                    f"{line.item}: {available} available, {required} required from the Store Keeper decision"
-                )
-        if shortages:
-            raise ValidationError(
-                "Purchased stock has not yet been posted to the issuing store: " + "; ".join(shortages)
-            )
-        self.status = StoreRequisitionStatus.SUBMITTED
+            raise ValidationError("Only requests awaiting Procurement can be completed from receiving.")
+        if not self.procurement_requisition_id:
+            raise ValidationError("This Department requisition is not linked to a Procurement requisition.")
+
+        from core.constants.choices import PRStatus
+
+        self.procurement_requisition.refresh_from_db(fields=["status", "updated_at"])
+        if self.procurement_requisition.status != PRStatus.FULFILLED:
+            raise ValidationError("The linked Procurement requisition has not been fully received yet.")
+
+        self.status = StoreRequisitionStatus.COMPLETED
         self.save(update_fields=["status", "updated_at"])
         self._notify_stores(
-            title=f"{self.requisition_no} is ready for a stock decision",
+            title=f"{self.requisition_no} has been received into {self.store}",
             message=(
-                "Purchased stock is now available in the issuing store. "
-                "Review and reserve the request quantities."
+                "The supplier delivery has been received and the GRN posted. "
+                "No further Store Keeper action is required for this requisition."
             ),
             created_by=actor,
         )
+
+    def resume_after_procurement(self, actor=None):
+        """Backward-compatible alias retained for older API clients.
+
+        Historically this method reopened the requisition for a second Stores
+        decision.  The confirmed client workflow does not contain that step, so it
+        now closes the requisition only after the linked Procurement requisition is
+        fully received.
+        """
+        return self.complete_after_procurement_receipt(actor=actor)
 
     def approve(self, approved_by=None, comments=""):
         if self.status not in (StoreRequisitionStatus.SUBMITTED, StoreRequisitionStatus.PARTIALLY_APPROVED):

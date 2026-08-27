@@ -35,7 +35,7 @@ from apps.inventory.models import (
 )
 from apps.procurement.models import PurchaseRequisition
 from apps.vendors.models import Supplier
-from core.constants.choices import RequisitionType, StockCountStatus, StoreRequisitionStatus
+from core.constants.choices import PRStatus, RequisitionType, StockCountStatus, StoreRequisitionStatus
 from apps.inventory.serializers import (
     CategorySerializer,
     ItemSerializer,
@@ -506,14 +506,14 @@ def test_store_request_requires_department_head_before_store_keeper_review():
     assert purchase.requester == employee
     assert purchase.department == department
     assert purchase.items.get().quantity == Decimal("2")
-    with pytest.raises(ValidationError, match="not yet been posted"):
+    with pytest.raises(ValidationError, match="not been fully received"):
         employee_request.resume_after_procurement()
 
-    InventoryBalance.objects.create(
-        item=item, store=store, quantity_in_stock=Decimal("2")
-    )
+    purchase.status = PRStatus.FULFILLED
+    purchase.save(update_fields=["status", "updated_at"])
     employee_request.resume_after_procurement()
-    assert employee_request.status == StoreRequisitionStatus.SUBMITTED
+    employee_request.refresh_from_db()
+    assert employee_request.status == StoreRequisitionStatus.COMPLETED
 
     head_request = StoreRequisition.objects.create(
         department=department, store=store, requested_by=head

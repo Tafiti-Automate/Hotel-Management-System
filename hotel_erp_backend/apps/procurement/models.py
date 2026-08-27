@@ -1963,18 +1963,18 @@ class GoodsReceiptNote(BaseModel):
             self.status = GoodsReceiptStatus.POSTED
             self.save(update_fields=["status", "posted_at", "posted_by", "updated_at"])
 
-            # Complete the business loop: when this GRN replenishes the Store
-            # Keeper's destination, automatically return the originating Department
-            # request to the Store Keeper once all forwarded quantities are available.
+            # Complete the originating Department requisition only after the
+            # linked Procurement requisition is fully received. A GRN must never
+            # reopen the request for another Store Keeper decision.
             source_request = getattr(self.purchase_order.requisition, "source_store_requisition", None)
             if source_request and source_request.status == "awaiting_procurement":
                 try:
-                    source_request.resume_after_procurement(
+                    source_request.complete_after_procurement_receipt(
                         actor=posted_by.user if posted_by and getattr(posted_by, "user_id", None) else None
                     )
                 except ValidationError:
-                    # Partial deliveries legitimately leave the request awaiting the
-                    # remaining supplier balance; the next GRN will re-evaluate it.
+                    # Partial deliveries legitimately leave the Department request
+                    # awaiting Procurement until every approved quantity is received.
                     pass
 
     def cancel(self):

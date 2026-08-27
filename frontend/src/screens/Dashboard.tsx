@@ -129,7 +129,7 @@ function dashboardFor(role: string, data: any): DashboardView {
     const completed = requests.filter((r:any)=>['issued','completed'].includes(statusKey(r.statusCode || r.status)))
     return base({
       subtitle: 'Request what your department needs and track each requisition to completion.',
-      tasks: [task('Drafts', drafts, 'Continue before submitting', 'edit_note', 'workflow-stores', 'My requisitions'), task('Pending HOD', pending, 'Waiting for department approval', 'approval', 'workflow-stores', 'My requisitions', 'warning'), task('In progress', progressing, 'With Stores or Procurement', 'hourglass_top', 'workflow-stores', 'My requisitions'), task('Completed', completed, 'Fully issued requests', 'task_alt', 'workflow-stores', 'My requisitions', 'good')],
+      tasks: [task('Drafts', drafts, 'Continue before submitting', 'edit_note', 'workflow-stores', 'My requisitions'), task('Pending HOD', pending, 'Waiting for department approval', 'approval', 'workflow-stores', 'My requisitions', 'warning'), task('In progress', progressing, 'With Stores or Procurement', 'hourglass_top', 'workflow-stores', 'My requisitions'), task('Completed', completed, 'Completed requisitions', 'task_alt', 'workflow-stores', 'My requisitions', 'good')],
       activities: activity(requests, r=>`Requisition ${ref(r)}`, r=>`${r.itemSummary || r.purpose || 'Department request'}`, 'workflow-stores', 'My requisitions'),
       queueTitle: 'My requisitions', queueHint: 'Your latest department requests', queueRoute: 'workflow-stores', queueRouteLabel: 'My requisitions',
       responsibility: 'Create department requisitions using only article, quantity and a reason or note, then submit them for HOD approval.',

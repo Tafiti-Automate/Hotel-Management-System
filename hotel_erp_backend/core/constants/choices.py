@@ -87,6 +87,7 @@ class StoreRequisitionStatus(models.TextChoices):
     PENDING_DEPARTMENT_APPROVAL = "pending_department_approval", "Pending Department Approval"
     SUBMITTED = "submitted", "Submitted"
     AWAITING_PROCUREMENT = "awaiting_procurement", "Awaiting Procurement"
+    COMPLETED = "completed", "Completed"
     APPROVED = "approved", "Approved"
     PARTIALLY_APPROVED = "partially_approved", "Partially Approved"
     REJECTED = "rejected", "Rejected"
