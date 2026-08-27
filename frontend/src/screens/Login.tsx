@@ -171,9 +171,11 @@ export default function Login() {
         <div className="auth-card">
           <header>
             <span className="auth-avatar" aria-hidden="true">
-              <AuthIcon name="user" size={30} />
+              <AuthIcon name="user" size={37} />
             </span>
-            <h1 id="login-title">Welcome back</h1>
+            <p className="auth-eyebrow">Hotel Operations ERP</p>
+            <h1 id="login-title">Staff login</h1>
+            <p className="auth-intro">Welcome back. Sign in to continue to your workspace.</p>
           </header>
 
           {authMessage && (
@@ -292,7 +294,7 @@ export default function Login() {
                 </>
               ) : (
                 <>
-                  Sign in
+                  Login
                   <AuthIcon name="arrow" size={18} />
                 </>
               )}
