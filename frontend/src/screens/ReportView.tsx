@@ -124,7 +124,7 @@ export default function ReportView() {
   }
   const exportPdf = () => {
     const popup = window.open('', '_blank', 'width=1000,height=700')
-    if (!popup) { app.showWorkflowAlert('PDF export blocked', 'Allow pop-ups for this site, then try again.'); return }
+    if (!popup) { app.showWorkflowAlert('PDF export blocked', 'Allow pop-ups for this site, then try again.', 'warning'); return }
     const escapeHtml = (value: unknown) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
     const head = report.columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join('')
     const body = report.rows.map((row) => `<tr>${row.cells.map((cell) => `<td>${escapeHtml(cell.text)}</td>`).join('')}</tr>`).join('')

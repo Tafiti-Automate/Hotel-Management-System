@@ -42,7 +42,7 @@ export default function DetailView() {
   const blockers = prerequisites.filter((item) => !item.met)
   const guardedApprove = () => {
     if (blockers.length) {
-      app.showWorkflowAlert('Approval prerequisites are incomplete', blockers.map((item) => item.label).join('. '))
+      app.showWorkflowAlert('Approval prerequisites are incomplete', blockers.map((item) => item.label).join('. '), 'warning')
       return
     }
     app.approveReq(decisionComment)
@@ -52,6 +52,7 @@ export default function DetailView() {
       app.showWorkflowAlert(
         decision === 'reject' ? 'Rejection reason required' : 'Correction instructions required',
         'Add a clear comment so the requester knows why the requisition cannot continue.',
+        'warning',
       )
       return
     }

@@ -125,11 +125,12 @@ export default function FormDrawer() {
       app.showWorkflowAlert(
         'Invalid unit conversion',
         'The selected unit must contain more than one base stock unit. Example: 1 carton = 12 pieces.',
+        'warning',
       )
       return
     }
     if (f.entity === 'itemUnits' && values.role === 'Base unit' && Number(values.conversionFactor || 0) !== 1) {
-      app.showWorkflowAlert('Invalid base-unit conversion', 'The Article base stock unit must always have a conversion factor of 1.')
+      app.showWorkflowAlert('Invalid base-unit conversion', 'The Article base stock unit must always have a conversion factor of 1.', 'warning')
       return
     }
     // Coerce numeric fields one more time on save (mirrors prototype).
@@ -143,7 +144,7 @@ export default function FormDrawer() {
       if (f.entity === 'suppliers') out.phone = normalizeUgandaPhone(values.phone, true)
       if (f.entity === 'branches') out.contact = normalizeUgandaPhone(values.contact)
     } catch {
-      app.showWorkflowAlert('Invalid Uganda phone number', UGANDA_PHONE_HINT)
+      app.showWorkflowAlert('Invalid Uganda phone number', UGANDA_PHONE_HINT, 'warning')
       return
     }
     if (f.entity === 'employees' && !f.id) out.status = 'Active'
@@ -152,7 +153,7 @@ export default function FormDrawer() {
       out.procurement_source = values.procurement_source || 'manual'
     }
     if (f.entity === 'storeRequisitions' && !String(values.purpose || '').trim()) {
-      app.showWorkflowAlert('Purpose required', 'Enter the reason for this store request before continuing.')
+      app.showWorkflowAlert('Purpose required', 'Enter the reason for this store request before continuing.', 'warning')
       return
     }
     await app.saveForm(out)

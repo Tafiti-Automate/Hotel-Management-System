@@ -29,7 +29,8 @@ export interface User { name: string; role: string; id: string; employeeId: stri
 interface FormTarget { entity: EntityKey; id: string | null }
 interface ConfirmTarget { entity: EntityKey; id: string; name: string }
 interface DetailTarget { entity: EntityKey; id: string; from: string }
-interface WorkflowAlert { title: string; message: string }
+type WorkflowAlertTone = 'failure' | 'warning'
+interface WorkflowAlert { title: string; message: string; tone: WorkflowAlertTone }
 interface ItemCategoryFilter { id: string; name: string }
 
 interface AppState {
@@ -109,7 +110,8 @@ export interface AppContextValue extends AppState {
   backFromReport: () => void
   // toast
   showToast: (msg: string) => void
-  showWorkflowAlert: (title: string, message: string) => void
+  closeToast: () => void
+  showWorkflowAlert: (title: string, message: string, tone?: WorkflowAlertTone) => void
   closeWorkflowAlert: () => void
 }
 
@@ -207,7 +209,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const dataRef = useRef<Record<EntityKey, Row[]>>(emptyData())
   const [dataVersion, forceTick] = useState(0)
   const bumpData = useCallback(() => forceTick((n) => n + 1), [])
-  const toastTimer = useRef<ReturnType<typeof setTimeout>>()
   const didInitialSync = useRef(false)
   const logoutRequest = useRef<Promise<void> | null>(null)
   const saveFormRequest = useRef<Promise<void> | null>(null)
@@ -252,13 +253,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const patch = useCallback((p: Partial<AppState>) => setState((s) => ({ ...s, ...p })), [])
 
   const showToast = useCallback((msg: string) => {
-    patch({ toast: msg })
-    clearTimeout(toastTimer.current)
-    toastTimer.current = setTimeout(() => patch({ toast: null }), 2200)
+    patch({ toast: msg, workflowAlert: null })
   }, [patch])
 
-  const showWorkflowAlert = useCallback((title: string, message: string) => {
-    patch({ workflowAlert: { title, message } })
+  const showWorkflowAlert = useCallback((title: string, message: string, tone: WorkflowAlertTone = 'failure') => {
+    patch({ workflowAlert: { title, message, tone }, toast: null })
   }, [patch])
 
   const endSession = useCallback((authMessage: string | null = null) => {
@@ -271,7 +270,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setUser(GUEST)
     didInitialSync.current = false
     dataRef.current = emptyData()
-    clearTimeout(toastTimer.current)
     setState((current) => ({
       ...current,
       screen: 'login',
@@ -286,6 +284,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       detail: null,
       reportId: null,
       toast: null,
+      workflowAlert: null,
       apiStatus: 'idle',
       apiMessage: null,
       authMessage,
@@ -419,9 +418,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dataRef.current = emptyData()
       bumpData()
       patch({ apiStatus: 'offline', apiMessage: message, currentBranch: '' })
-      if (!silent) showToast('Backend unavailable')
+      if (!silent) showWorkflowAlert('Backend unavailable', message)
     }
-  }, [applyBackendData, bumpData, endSession, patch, showToast])
+  }, [applyBackendData, bumpData, endSession, patch, showToast, showWorkflowAlert])
 
   useEffect(() => {
     if (state.screen === 'app' && !didInitialSync.current) {
@@ -593,6 +592,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         crumb: landing.crumb,
         branchOpen: false,
         settingsOpen: false,
+        toast: null,
+        workflowAlert: null,
         authMessage: null,
       })
     },
@@ -608,7 +609,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     enterHR: () => {
       if (!canAccessModule(user, 'hr')) {
-        showWorkflowAlert('Access restricted', `Human Resources is not part of the ${user.role} role.`)
+        showWorkflowAlert('Access restricted', `Human Resources is not part of the ${user.role} role.`, 'warning')
         return
       }
       patch({ screen: 'app', activeModule: 'hr', route: 'hr-dashboard', navActive: 'hr-dashboard', crumb: 'People overview' })
@@ -624,7 +625,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     navTo: (route, label) => {
       if (!canAccessRoute(user, route)) {
-        showWorkflowAlert('Access restricted', `${label || 'This area'} is not available to the ${user.role} role.`)
+        showWorkflowAlert('Access restricted', `${label || 'This area'} is not available to the ${user.role} role.`, 'warning')
         return
       }
       patch({ route, navActive: route, crumb: label || '', searchTerm: '', itemCategoryFilter: null, detail: null })
@@ -680,6 +681,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     openReport: (reportId) => patch({ route: 'reportview', reportId }),
     backFromReport: () => patch({ route: 'reports', reportId: null }),
     showToast,
+    closeToast: () => patch({ toast: null }),
     showWorkflowAlert,
     closeWorkflowAlert: () => patch({ workflowAlert: null }),
   }), [state, user, scopedData, refreshData, patch, endSession, saveForm, requestDelete, doDelete, approveReq, rejectReq, returnReq, showToast, showWorkflowAlert])
