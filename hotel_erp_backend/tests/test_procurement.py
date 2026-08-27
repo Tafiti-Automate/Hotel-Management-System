@@ -1499,6 +1499,18 @@ def test_role_approval_inbox_advances_from_finance_to_general_manager():
     assert finance_after.json() == []
     assert [row["id"] for row in gm_after.json()] == [str(order.id)]
 
+    final_approval = gm_client.post(
+        f"/api/v1/purchase-orders/{order.pk}/approve/", {"comments": "Final approval"}, format="json"
+    )
+    assert final_approval.status_code == 200
+    gm_history = gm_client.get("/api/v1/purchase-orders/decision-history/")
+    assert gm_history.status_code == 200
+    assert [row["id"] for row in gm_history.json()] == [str(order.id)]
+    gm_step = next(step for step in gm_history.json()[0]["approval_steps"] if step["stage"] == 2)
+    assert gm_step["status"] == "approved"
+    expected_gm_name = gm_user.get_full_name() or gm_user.username
+    assert gm_step["approver_name"] == expected_gm_name
+
 @pytest.mark.django_db
 def test_supplier_pack_quote_keeps_lpo_quantity_in_article_base_uom():
     employee, department, supplier, _ = create_procurement_context()

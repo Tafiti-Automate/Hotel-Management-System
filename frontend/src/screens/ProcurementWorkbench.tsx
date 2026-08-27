@@ -81,6 +81,13 @@ function defaultLpoQueue(role: string): LpoQueue {
   if (role === 'general manager') return 'management'
   return 'prepare'
 }
+function formatDateTime(value: unknown) {
+  const raw = id(value).trim()
+  if (!raw) return '—'
+  const parsed = new Date(raw)
+  if (Number.isNaN(parsed.getTime())) return raw
+  return parsed.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
 function fileSize(value: unknown) {
   const bytes = num(value)
   if (bytes < 1024) return `${bytes} B`
@@ -121,6 +128,9 @@ export default function ProcurementWorkbench() {
       const payload = await readBackendPayload(`requisitions/workspace?stage=${stage}`)
       if (stage === 'lpo' && ['financial manager', 'general manager'].includes(role)) {
         payload.approvalQueueOrders = await readBackendRecords('purchase-orders/approval-inbox')
+        if (role === 'general manager') {
+          payload.decisionHistoryOrders = await readBackendRecords('purchase-orders/decision-history')
+        }
       }
       setData((current) => ({ ...current, ...payload }))
     } catch (error) {
@@ -378,10 +388,10 @@ export default function ProcurementWorkbench() {
     }
   }, [stage, loading, role, roleApprovalQueueOrders, form.order])
 
-  const managementHistoryOrders = useMemo(
-    () => scopedData.orders.filter((row) => hasManagementDecision(row)),
-    [scopedData.orders],
-  )
+  const managementHistoryOrders = useMemo(() => {
+    if (Array.isArray(scopedData.decisionHistoryOrders)) return scopedData.decisionHistoryOrders
+    return scopedData.orders.filter((row) => hasManagementDecision(row))
+  }, [scopedData.decisionHistoryOrders, scopedData.orders])
 
   const procurementQueues = useMemo(() => {
     const storeRequisitions = scopedData.requisitions.filter((row) =>
@@ -482,7 +492,7 @@ export default function ProcurementWorkbench() {
 
       {message && <div style={{ ...card, padding: 13, marginBottom: 14, borderColor: 'rgba(220,38,38,.3)', color: 'var(--bad)', fontSize: 12.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}><span>{message}</span><button type="button" onClick={() => void load()} style={secondary}>Retry</button></div>}
       {loading ? <div style={{ ...card, padding: 50, textAlign: 'center', color: 'var(--text-faint)' }}>Loading procurement records from the backend…</div> : (
-        <div className="workbench-grid" style={{ display: 'grid', gridTemplateColumns: role === 'general manager' && !form.order ? '1fr' : 'minmax(0,1.45fr) minmax(340px,.75fr)', gap: 16, alignItems: 'start' }}>
+        <div className="workbench-grid" style={{ display: 'grid', gridTemplateColumns: role === 'general manager' && !form.order ? '1fr' : stage === 'lpo' && form.order ? 'minmax(0,.9fr) minmax(460px,1.1fr)' : 'minmax(0,1.45fr) minmax(340px,.75fr)', gap: 16, alignItems: 'start' }}>
           <section style={{ ...card, overflow: 'hidden' }}>
             <StageTable stage={stage} lpoQueue={lpoQueue} data={scopedData} names={names} role={role} onSelect={selectWorkspaceRecord} />
           </section>
@@ -641,7 +651,7 @@ function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplier
   </Panel>
 }
 
-function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, items, itemUnits, canManage, role, userName, lpoQueue }: any) {
+function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, items, itemUnits, canManage, role, userName, lpoQueue, setLpoQueue }: any) {
   const activeOrderRequisitions = new Set(
     data.orders.filter((row: Row) => id(row.status) !== 'cancelled').map((row: Row) => id(row.requisition)),
   )
@@ -686,10 +696,10 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, ite
     return floorPurchaseQuantity(targetBase / factor)
   }
   const panelTitle = lpoQueue === 'prepare' ? 'LPO Preparation'
-    : lpoQueue === 'finance' ? 'Awaiting Finance'
-      : lpoQueue === 'management' ? 'Awaiting General Manager'
+    : lpoQueue === 'finance' ? 'Financial Review'
+      : lpoQueue === 'management' ? 'Final Approval'
         : lpoQueue === 'approved' ? 'Approved LPO'
-          : 'LPO History'
+          : order ? `LPO ${id(order.lpo_number) || id(order.po_number)}` : 'LPO History'
 
   if (lpoQueue === 'prepare' && !selectedRequisition && !order) return <Panel title={panelTitle} note="">
     <div style={{ padding: '34px 18px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12.5 }}>
@@ -766,8 +776,8 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, ite
       <LpoSummary order={order} lines={lines} names={names} />
       {!canDecideManagement && <div style={{ padding: '10px 11px', borderRadius: 7, background: 'var(--warn-soft)', color: 'var(--warn)', fontSize: 11.3, fontWeight: 700 }}>Awaiting General Manager decision</div>}
       {canDecideManagement && <>
-        <Action tone="good" disabled={busy || !currentApproval} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'approve', { comments: '' }), 'Final LPO approval recorded')}>Approve LPO</Action>
-        {!form.showReject ? <Action tone="danger" disabled={busy} onClick={() => setForm({ ...form, showReject: true })}>Reject LPO</Action> : <><Field label="Rejection reason *"><Input value={form.approvalComments || ''} onChange={(v) => setForm({ ...form, approvalComments: v })} /></Field><Action tone="danger" disabled={busy || !id(form.approvalComments).trim()} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'reject', { comments: form.approvalComments }), 'LPO rejected')}>Confirm rejection</Action></>}
+        <Action tone="good" disabled={busy || !currentApproval} onClick={() => run(async () => { const result = await runBackendAction('purchase-orders', id(order.id), 'approve', { comments: '' }); setLpoQueue('history'); return result }, 'Final LPO approval recorded', (result: unknown) => ({ order: id((result as Row).id) }))}>Approve LPO</Action>
+        {!form.showReject ? <Action tone="danger" disabled={busy} onClick={() => setForm({ ...form, showReject: true })}>Reject LPO</Action> : <><Field label="Rejection reason *"><Input value={form.approvalComments || ''} onChange={(v) => setForm({ ...form, approvalComments: v })} /></Field><Action tone="danger" disabled={busy || !id(form.approvalComments).trim()} onClick={() => run(async () => { const result = await runBackendAction('purchase-orders', id(order.id), 'reject', { comments: form.approvalComments }); setLpoQueue('history'); return result }, 'LPO rejected', (result: unknown) => ({ order: id((result as Row).id) }))}>Confirm rejection</Action></>}
       </>}
     </>}
 
@@ -775,17 +785,34 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, ite
       <LpoSummary order={order} lines={lines} names={names} />
       <Action disabled={busy} onClick={() => run(() => downloadControlledPurchaseOrder(id(order.id)), `${id(order.next_print_classification) || 'Controlled'} LPO downloaded`, { ...form })}>Download {id(order.next_print_classification) || 'controlled'} LPO</Action>
       <ReadOnlyValue label="Supplier email" value={registeredSupplierEmail || 'No supplier email registered'} />
-      <Action tone="good" disabled={busy || !registeredSupplierEmail} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'issue'), 'LPO emailed to supplier and lead time started')}>Email LPO to Supplier</Action>
+      <Action tone="good" disabled={busy || !registeredSupplierEmail} onClick={() => run(async () => { const result = await runBackendAction('purchase-orders', id(order.id), 'issue'); setLpoQueue('history'); return result }, 'LPO emailed to supplier and lead time started', (result: unknown) => ({ order: id((result as Row).id) }))}>Email LPO to Supplier</Action>
     </>}
 
     {lpoQueue === 'history' && order && <>
+      {canManage && ['approved', 'issued', 'partially_received', 'received'].includes(id(order.status)) && <div style={{ marginBottom: 10, padding: '11px 12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface-2)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ color: 'var(--text)', fontWeight: 800, fontSize: 11.5 }}>{num(order.print_count) > 0 ? 'Controlled LPO copy available' : 'Original LPO still available'}</div>
+            <div style={{ marginTop: 3, color: 'var(--text-muted)', fontSize: 10.5 }}>{num(order.print_count) > 0 ? `${id(order.print_count)} controlled print${num(order.print_count) === 1 ? '' : 's'} recorded.` : 'The supplier email did not consume the controlled ORIGINAL print.'}</div>
+          </div>
+          <Action disabled={busy} onClick={() => run(() => downloadControlledPurchaseOrder(id(order.id)), `${id(order.next_print_classification) || 'Controlled'} LPO downloaded`, { ...form })}>Download {id(order.next_print_classification) || 'controlled'} LPO</Action>
+        </div>
+      </div>}
       <LpoSummary order={order} lines={lines} names={names} />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8 }}>
+      {role === 'general manager' ? (() => {
+        const decision = managementApprovalStep(order)
+        return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8 }}>
+          <ReadOnlyValue label="Final decision" value={id(decision?.status) ? id(decision?.status).replace(/_/g, ' ') : '—'} />
+          <ReadOnlyValue label="Decided by" value={id(decision?.approver_name) || '—'} />
+          <ReadOnlyValue label="Decision date" value={formatDateTime(decision?.decided_at)} />
+          {id(decision?.comments) && <ReadOnlyValue label="Decision reason" value={id(decision?.comments)} />}
+        </div>
+      })() : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8 }}>
         <ReadOnlyValue label="Supplier email" value={id(order.sent_to_email) || registeredSupplierEmail || '—'} />
-        <ReadOnlyValue label="Sent at" value={id(order.issued_at || order.sent_at) || '—'} />
+        <ReadOnlyValue label="Sent at" value={formatDateTime(order.issued_at || order.sent_at)} />
         <ReadOnlyValue label="Expected delivery" value={id(order.expected_date) || '—'} />
         <ReadOnlyValue label="Status" value={friendlyLpoStatus(id(order.status), Array.isArray(order.approval_steps) ? order.approval_steps as Row[] : [])} />
-      </div>
+      </div>}
     </>}
   </Panel>
 }
@@ -964,7 +991,7 @@ function StageTable({ stage, lpoQueue, data, names, role, onSelect }: { stage: S
     if (lpoQueue === 'finance') { rows = Array.isArray(data.approvalQueueOrders) ? data.approvalQueueOrders : data.orders.filter((row) => id(row.status) === 'pending_approval' && isFinanceApproval(row)); title = 'Awaiting Finance' }
     if (lpoQueue === 'management') { rows = Array.isArray(data.approvalQueueOrders) ? data.approvalQueueOrders : data.orders.filter((row) => id(row.status) === 'pending_approval' && isManagementApproval(row)); title = 'Awaiting General Manager' }
     if (lpoQueue === 'approved') { rows = data.orders.filter((row) => id(row.status) === 'approved'); title = 'Approved to Send' }
-    if (lpoQueue === 'history') { rows = role === 'general manager' ? data.orders.filter((row) => hasManagementDecision(row)) : data.orders.filter((row) => ['issued', 'partially_received', 'received', 'rejected', 'cancelled'].includes(id(row.status))); title = role === 'general manager' ? 'Decision History' : 'LPO History' }
+    if (lpoQueue === 'history') { rows = role === 'general manager' ? (Array.isArray(data.decisionHistoryOrders) ? data.decisionHistoryOrders : data.orders.filter((row) => hasManagementDecision(row))) : data.orders.filter((row) => ['issued', 'partially_received', 'received', 'rejected', 'cancelled'].includes(id(row.status))); title = role === 'general manager' ? 'Decision History' : 'LPO History' }
   }
   if (stage === 'receipt') { rows = data.receipts; title = 'Goods receipt notes' }
   if (stage === 'inspect') { rows = data.inspections; title = 'Inspection records' }
@@ -972,7 +999,11 @@ function StageTable({ stage, lpoQueue, data, names, role, onSelect }: { stage: S
 
   const cells = (row: Row): string[] => {
     if (stage === 'request') return [requisitionNumber(id(row.requisition)), names.items.get(id(row.item)) || id(row.item), id(row.quantity), money(row.estimated_total)]
-    if (stage === 'lpo') return [`LPO ${id(row.lpo_number) || id(row.po_number)}`, names.suppliers.get(id(row.supplier)) || id(row.supplier), money(row.total_amount), friendlyLpoStatus(id(row.status), Array.isArray(row.approval_steps) ? row.approval_steps as Row[] : [])]
+    if (stage === 'lpo') {
+      const finalDecision = role === 'general manager' && lpoQueue === 'history' ? managementApprovalStep(row) : undefined
+      const decisionLabel = finalDecision ? `Final ${id(finalDecision.status).replace(/_/g, ' ')}` : friendlyLpoStatus(id(row.status), Array.isArray(row.approval_steps) ? row.approval_steps as Row[] : [])
+      return [`LPO ${id(row.lpo_number) || id(row.po_number)}`, names.suppliers.get(id(row.supplier)) || id(row.supplier), money(row.total_amount), decisionLabel]
+    }
     if (stage === 'receipt') return [id(row.grn_number) || `GRN-${id(row.id).slice(0, 8)}`, id(row.received_date), names.employees.get(id(row.received_by)) || id(row.received_by), `${data.receiptItems.filter((line) => id(line.goods_receipt) === id(row.id)).length} lines`]
     if (stage === 'inspect') return [`INS-${id(row.id).slice(0, 8)}`, `GRN-${id(row.goods_receipt).slice(0, 8)}`, names.employees.get(id(row.inspected_by)) || id(row.inspected_by), id(row.status)]
     return [id(row.return_no), names.suppliers.get(id(row.supplier)) || id(row.supplier), id(row.return_date), id(row.status)]

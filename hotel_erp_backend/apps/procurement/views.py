@@ -714,6 +714,23 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
         ).order_by("submitted_for_approval_at", "created_at")
         return Response(self.get_serializer(queue, many=True).data)
 
+    @action(detail=False, methods=["get"], url_path="decision-history")
+    def decision_history(self, request):
+        """Return final General Manager LPO decisions for the user's branch."""
+        if not (request.user.is_superuser or user_has_role(request.user, "General Manager")):
+            raise PermissionDenied("Only the General Manager can view final LPO decision history.")
+        history = self.get_queryset().filter(
+            approval_workflow__stage=2,
+            approval_workflow__status__in=(ApprovalStatus.APPROVED, ApprovalStatus.REJECTED),
+        ).select_related(
+            "requisition", "supplier", "ordered_by", "store", "sent_by", "approved_by"
+        ).prefetch_related(
+            "approval_workflow__approver__user",
+            "approval_workflow__approver_role",
+            "approval_workflow__decided_by",
+        ).distinct().order_by("-updated_at")
+        return Response(self.get_serializer(history, many=True).data)
+
     def _require_procurement_manager(self, request):
         if not user_has_role(request.user, "System Administrator", "Procurement Manager", "Procurement Officer"):
             raise PermissionDenied("Only Procurement can perform this LPO action.")
