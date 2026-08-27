@@ -38,10 +38,55 @@ from apps.vendors.models import Supplier
 from core.constants.choices import RequisitionType, StockCountStatus, StoreRequisitionStatus
 from apps.inventory.serializers import (
     CategorySerializer,
+    ItemSerializer,
     ItemUnitPriceSerializer,
     StockTransferItemSerializer,
     StoreLocationSerializer,
 )
+
+
+@pytest.mark.django_db
+def test_item_base_unit_lock_is_exposed_and_preserves_operational_history():
+    category = Category.objects.create(name="Lock-tested beverages")
+    piece = UnitOfMeasure.objects.create(name="Lock-tested piece", abbreviation="pc")
+    crate = UnitOfMeasure.objects.create(name="Lock-tested crate", abbreviation="crt")
+    item = Item.objects.create(
+        category=category,
+        name="Lock-tested beer",
+        sku="LOCK-BEER-001",
+        unit="pc",
+        base_unit=piece,
+        reorder_level=Decimal("10.00"),
+    )
+
+    unlocked = ItemSerializer(item)
+    assert unlocked.data["base_unit_locked"] is False
+
+    change_before_usage = ItemSerializer(item, data={"base_unit": crate.pk}, partial=True)
+    assert change_before_usage.is_valid(), change_before_usage.errors
+
+    InventoryBalance.objects.create(
+        item=item,
+        store=StoreLocation.objects.create(
+            branch=Branch.objects.create(name="Base unit lock branch"),
+            name="Base unit lock store",
+        ),
+        quantity_in_stock=Decimal("0.00"),
+    )
+
+    locked = ItemSerializer(item)
+    assert locked.data["base_unit_locked"] is True
+
+    unchanged = ItemSerializer(
+        item,
+        data={"name": "Renamed lock-tested beer", "base_unit": piece.pk},
+        partial=True,
+    )
+    assert unchanged.is_valid(), unchanged.errors
+
+    changed = ItemSerializer(item, data={"base_unit": crate.pk}, partial=True)
+    assert not changed.is_valid()
+    assert "Article Unit Conversions" in str(changed.errors["base_unit"][0])
 
 
 @pytest.mark.django_db

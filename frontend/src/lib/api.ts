@@ -1137,6 +1137,7 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
       businessType: fromBackendBusinessType(row.business_type),
       uom: unitNames.get(text(row.base_unit)) || text(row.unit),
       baseUnitId: text(row.base_unit),
+      baseUnitLocked: bool(row.base_unit_locked),
       store: storeNames.get(text(balance?.store)) || '',
       onHand,
       reorder,

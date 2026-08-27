@@ -98,6 +98,10 @@ export default function FormDrawer() {
   const pageCount = wizard ? Math.ceil(visibleFields.length / pageSize) : 1
   const pageFields = wizard ? visibleFields.slice(step * pageSize, (step + 1) * pageSize) : visibleFields
   const title = (f.id ? 'Edit ' : 'Add ') + (conf.singular || '')
+  const editingRecord = f.id
+    ? app.data[f.entity].find((record) => record.id === f.id)
+    : null
+  const baseUnitLocked = f.entity === 'items' && Boolean(editingRecord?.baseUnitLocked)
   const editingCategoryName = f.entity === 'categories' && f.id
     ? String(app.data.categories.find((category) => category.id === f.id)?.name || '')
     : ''
@@ -189,6 +193,7 @@ export default function FormDrawer() {
               options = Array.from(new Set([String(article?.uom || ''), ...configured].filter(Boolean)))
             }
             const identityLocked = false
+            const fieldLocked = baseUnitLocked && fd.key === 'uom'
             return (
               <div key={fd.key}>
                 <label><HelpLabel label={fd.label} style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 7 }} /></label>
@@ -200,11 +205,11 @@ export default function FormDrawer() {
                   </div>
                 ) : isSelect ? (
                   <div style={{ position: 'relative' }}>
-                    <select value={values[fd.key] ?? ''} onChange={(e) => setVal(fd.key, e.target.value, false)} style={{ width: '100%', height: 42, border: '1px solid var(--border)', background: 'var(--surface-2)', borderRadius: 10, padding: '0 34px 0 12px', fontSize: 13.5, color: 'var(--text)', outline: 'none', cursor: 'pointer' }}>
+                    <select disabled={fieldLocked} value={values[fd.key] ?? ''} onChange={(e) => setVal(fd.key, e.target.value, false)} style={{ width: '100%', height: 42, border: '1px solid var(--border)', background: fieldLocked ? 'var(--surface-3)' : 'var(--surface-2)', borderRadius: 10, padding: '0 34px 0 12px', fontSize: 13.5, color: fieldLocked ? 'var(--text-muted)' : 'var(--text)', outline: 'none', cursor: fieldLocked ? 'not-allowed' : 'pointer', opacity: fieldLocked ? .82 : 1 }}>
                       <option value="">Select an option</option>
                       {options.map((opt) => <option key={opt} value={opt}>{optionLabel(opt)}</option>)}
                     </select>
-                    <Icon name="expand_more" size={19} color="var(--text-faint)" style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+                    <Icon name={fieldLocked ? 'lock' : 'expand_more'} size={fieldLocked ? 16 : 19} color="var(--text-faint)" style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
                   </div>
                 ) : fd.type === 'textarea' ? (
                   <textarea
@@ -221,6 +226,26 @@ export default function FormDrawer() {
                     placeholder={fd.placeholder || fd.label}
                     style={{ width: '100%', height: 42, border: '1px solid var(--border)', background: 'var(--surface-2)', borderRadius: 10, padding: '0 12px', fontSize: 13.5, color: 'var(--text)', outline: 'none' }}
                   />
+                )}
+                {fieldLocked && (
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginTop: 7, color: 'var(--text-faint)', fontSize: 11.5, lineHeight: 1.45 }}>
+                    <Icon name="info" size={15} color="var(--text-faint)" style={{ marginTop: 1 }} />
+                    <div>
+                      <span>
+                        Locked because this article already has conversions, stock, or transactions. Keep {String(editingRecord?.uom || 'the current unit')} as the base unit and add larger units under Article Unit Conversions.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          app.closeForm()
+                          app.navTo('itemUnits', 'UOM conversions')
+                        }}
+                        style={{ display: 'block', marginTop: 5, padding: 0, border: 0, background: 'transparent', color: 'var(--accent)', font: 'inherit', fontSize: 11.5, fontWeight: 650, cursor: 'pointer' }}
+                      >
+                        Open unit conversions
+                      </button>
+                    </div>
+                  </div>
                 )}
                 {fd.hint && <div style={{ marginTop: 6, color: 'var(--text-faint)', fontSize: 11.5, lineHeight: 1.45 }}>{fd.hint}</div>}
               </div>

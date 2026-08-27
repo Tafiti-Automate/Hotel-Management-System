@@ -157,6 +157,7 @@ class UnitOfMeasureSerializer(serializers.ModelSerializer):
 
 class ItemSerializer(serializers.ModelSerializer):
     base_unit_name = serializers.CharField(source="base_unit.name", read_only=True)
+    base_unit_locked = serializers.SerializerMethodField()
 
     class Meta:
         model = Item
@@ -171,6 +172,7 @@ class ItemSerializer(serializers.ModelSerializer):
             "unit",
             "base_unit",
             "base_unit_name",
+            "base_unit_locked",
             "reorder_level",
             "maximum_level",
             "batch_tracking",
@@ -181,7 +183,16 @@ class ItemSerializer(serializers.ModelSerializer):
             "updated_at",
             "created_by",
         )
-        read_only_fields = ("id", "created_at", "updated_at", "created_by")
+        read_only_fields = (
+            "id",
+            "base_unit_locked",
+            "created_at",
+            "updated_at",
+            "created_by",
+        )
+
+    def get_base_unit_locked(self, instance):
+        return instance.has_base_unit_usage()
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
@@ -191,15 +202,14 @@ class ItemSerializer(serializers.ModelSerializer):
                 {"base_unit": "Base unit is required."}
             )
         if self.instance and self.instance.base_unit_id and base_unit.pk != self.instance.base_unit_id:
-            has_usage = (
-                self.instance.unit_prices.exists()
-                or self.instance.inventory_balances.exists()
-                or self.instance.requisition_items.exists()
-                or self.instance.store_requisition_items.exists()
-            )
-            if has_usage:
+            if self.instance.has_base_unit_usage():
                 raise serializers.ValidationError(
-                    {"base_unit": "The base stock unit cannot change after conversions, stock, or transactions exist."}
+                    {
+                        "base_unit": (
+                            "The base stock unit cannot change after conversions, stock, or transactions exist. "
+                            "Configure a purchase, issue, or alternate unit under Article Unit Conversions instead."
+                        )
+                    }
                 )
         attrs["unit"] = base_unit.abbreviation or base_unit.name
         return attrs

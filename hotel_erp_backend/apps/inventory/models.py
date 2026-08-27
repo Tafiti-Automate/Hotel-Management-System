@@ -172,6 +172,25 @@ class Item(BaseModel):
                 {"maximum_level": "Maximum level cannot be lower than the reorder level."}
             )
 
+    def has_base_unit_usage(self):
+        """Return whether changing the counting unit would rewrite operational history."""
+        if not self.pk:
+            return False
+        annotation_names = (
+            "_has_unit_price_usage",
+            "_has_inventory_balance_usage",
+            "_has_purchase_requisition_usage",
+            "_has_store_requisition_usage",
+        )
+        if all(hasattr(self, name) for name in annotation_names):
+            return any(getattr(self, name) for name in annotation_names)
+        return (
+            self.unit_prices.exists()
+            or self.inventory_balances.exists()
+            or self.requisition_items.exists()
+            or self.store_requisition_items.exists()
+        )
+
     def conversion_factor_for_unit(self, unit):
         """Return an explicit, active conversion into this article's base stock unit."""
         if unit is None:

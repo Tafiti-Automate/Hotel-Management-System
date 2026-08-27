@@ -5,7 +5,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -66,6 +66,7 @@ from apps.inventory.serializers import (
     SupplierItemPriceSerializer,
     UnitOfMeasureSerializer,
 )
+from apps.procurement.models import RequisitionItem
 from core.mixins.viewsets import CreatedByModelMixin
 from core.constants.choices import StoreRequisitionStatus
 
@@ -181,7 +182,20 @@ class UnitOfMeasureViewSet(CostControllerAuthorityMixin, CreatedByModelMixin, Mo
 
 
 class ItemViewSet(CostControllerAuthorityMixin, CreatedByModelMixin, ModelViewSet):
-    queryset = Item.objects.select_related("category", "base_unit")
+    queryset = Item.objects.select_related("category", "base_unit").annotate(
+        _has_unit_price_usage=Exists(
+            ItemUnitPrice.objects.filter(item_id=OuterRef("pk"))
+        ),
+        _has_inventory_balance_usage=Exists(
+            InventoryBalance.objects.filter(item_id=OuterRef("pk"))
+        ),
+        _has_purchase_requisition_usage=Exists(
+            RequisitionItem.objects.filter(item_id=OuterRef("pk"))
+        ),
+        _has_store_requisition_usage=Exists(
+            StoreRequisitionItem.objects.filter(item_id=OuterRef("pk"))
+        ),
+    )
     serializer_class = ItemSerializer
     filterset_fields = ("category", "unit", "base_unit", "is_active")
     search_fields = ("name", "sku", "barcode", "brand", "category__name")

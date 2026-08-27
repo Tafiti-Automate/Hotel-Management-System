@@ -2,6 +2,7 @@ from io import StringIO
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.management import call_command
 from django.core.management.base import CommandError
 
@@ -9,7 +10,14 @@ from apps.customers.models import Customer
 from apps.departments.models import Branch, Department
 from apps.employees.models import Employee
 from apps.finance.models import Expense, SupplierInvoice
-from apps.inventory.models import InventoryBalance, Item, StockIssue, StockTransfer
+from apps.inventory.models import (
+    InventoryBalance,
+    Item,
+    ItemUnitPrice,
+    StockIssue,
+    StockTransfer,
+    SupplierItemPrice,
+)
 from apps.notifications.models import Notification
 from apps.organization.models import Hotel
 from apps.procurement.models import (
@@ -20,6 +28,78 @@ from apps.procurement.models import (
 )
 from apps.sales.models import Sale
 from apps.vendors.models import Supplier
+
+
+@pytest.mark.django_db(transaction=True)
+def test_operational_reseed_preserves_accounts_and_builds_supplier_catalogue():
+    user_model = get_user_model()
+    call_command("setup_hotel_roles", verbosity=0)
+    admin = user_model.objects.create_superuser(
+        username="preserved-admin",
+        employee_code="PRES-ADMIN",
+        email="admin@example.com",
+        password="Preserved-Admin-Password-01!",
+    )
+    requester = user_model.objects.create_user(
+        username="preserved-requester",
+        employee_code="PRES-REQ",
+        email="requester@example.com",
+        password="Preserved-Requester-Password-02!",
+    )
+    requester.groups.add(Group.objects.get(name="Requester"))
+    old_hotel = Hotel.objects.create(name="Old production hotel", created_by=admin)
+    old_branch = Branch.objects.create(
+        hotel=old_hotel,
+        name="Old branch",
+        created_by=admin,
+    )
+    old_department = Department.objects.create(name="Old department", created_by=admin)
+    Employee.objects.create(
+        user=requester,
+        branch=old_branch,
+        department=old_department,
+        designation="Requester",
+        created_by=admin,
+    )
+    Supplier.objects.create(
+        name="Old supplier",
+        email="old-supplier@example.com",
+        phone="+256700000000",
+        address="Old address",
+        tin_number="OLD-TIN-001",
+        registration_number="OLD-REG-001",
+        created_by=admin,
+    )
+
+    call_command(
+        "reseed_operational_data",
+        hotel_name="Clean Test Hotel",
+        execute=True,
+        confirm="RESEED-OPERATIONAL-DATA",
+        allow_non_production=True,
+        skip_backup=True,
+        verbosity=0,
+    )
+
+    assert user_model.objects.count() == 2
+    assert user_model.objects.get(username="preserved-admin").check_password(
+        "Preserved-Admin-Password-01!"
+    )
+    preserved_requester = user_model.objects.get(username="preserved-requester")
+    assert preserved_requester.check_password("Preserved-Requester-Password-02!")
+    assert list(preserved_requester.groups.values_list("name", flat=True)) == ["Requester"]
+    assert preserved_requester.employee_profile.branch.name == "Clean Test Hotel Main Property"
+    assert not Supplier.objects.filter(email="old-supplier@example.com").exists()
+    assert set(Supplier.objects.values_list("email", flat=True)) == {
+        "mugishawarid@gmail.com",
+        "kjapher32@gmail.com",
+        "wmugisha@kcca.go.ug",
+    }
+    assert Item.objects.count() == 9
+    assert ItemUnitPrice.objects.count() == 9
+    assert SupplierItemPrice.objects.count() == 11
+    assert Item.objects.get(sku="KGH-RICE-25").supplier_prices.count() == 2
+    assert Item.objects.get(sku="KGH-WATER-500").supplier_prices.count() == 2
 
 
 @pytest.mark.django_db
