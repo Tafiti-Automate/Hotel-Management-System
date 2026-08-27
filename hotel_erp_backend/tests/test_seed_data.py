@@ -14,6 +14,7 @@ from apps.inventory.models import (
     InventoryBalance,
     Item,
     ItemUnitPrice,
+    StoreLocation,
     StockIssue,
     StockTransfer,
     SupplierItemPrice,
@@ -53,12 +54,17 @@ def test_operational_reseed_preserves_accounts_and_builds_supplier_catalogue():
         name="Old branch",
         created_by=admin,
     )
-    old_department = Department.objects.create(name="Old department", created_by=admin)
+    old_department = Department.objects.create(
+        name="Housekeeping",
+        description="Existing requester work context",
+        created_by=admin,
+    )
     Employee.objects.create(
         user=requester,
         branch=old_branch,
         department=old_department,
         designation="Requester",
+        contact="+256700111222",
         created_by=admin,
     )
     Supplier.objects.create(
@@ -71,9 +77,11 @@ def test_operational_reseed_preserves_accounts_and_builds_supplier_catalogue():
         created_by=admin,
     )
 
+    original_admin_hash = admin.password
+    original_requester_hash = requester.password
+
     call_command(
         "reseed_operational_data",
-        hotel_name="Clean Test Hotel",
         execute=True,
         confirm="RESEED-OPERATIONAL-DATA",
         allow_non_production=True,
@@ -82,24 +90,41 @@ def test_operational_reseed_preserves_accounts_and_builds_supplier_catalogue():
     )
 
     assert user_model.objects.count() == 2
-    assert user_model.objects.get(username="preserved-admin").check_password(
-        "Preserved-Admin-Password-01!"
-    )
-    preserved_requester = user_model.objects.get(username="preserved-requester")
-    assert preserved_requester.check_password("Preserved-Requester-Password-02!")
-    assert list(preserved_requester.groups.values_list("name", flat=True)) == ["Requester"]
-    assert preserved_requester.employee_profile.branch.name == "Clean Test Hotel Main Property"
+    restored_admin = user_model.objects.get(username="preserved-admin")
+    restored_requester = user_model.objects.get(username="preserved-requester")
+    assert restored_admin.password == original_admin_hash
+    assert restored_requester.password == original_requester_hash
+    assert restored_admin.check_password("Preserved-Admin-Password-01!")
+    assert restored_requester.check_password("Preserved-Requester-Password-02!")
+    assert list(restored_requester.groups.values_list("name", flat=True)) == ["Requester"]
+    assert restored_requester.employee_profile.branch.name == "Main Branch"
+    assert restored_requester.employee_profile.department.name == "Housekeeping"
+    assert restored_requester.employee_profile.contact == "+256700111222"
+
+    assert Hotel.objects.count() == 1
+    assert Hotel.objects.get().name == "Tafiti Hotel"
+    assert Branch.objects.count() == 1
+    assert Branch.objects.get().name == "Main Branch"
+    assert StoreLocation.objects.count() == 1
+    assert StoreLocation.objects.get().name == "Main Store"
     assert not Supplier.objects.filter(email="old-supplier@example.com").exists()
+    assert Supplier.objects.count() == 5
+    assert list(Supplier.objects.filter(email="mugishawarid@gmail.com").values_list("name", flat=True))
+    assert Supplier.objects.filter(email="mugishawarid@gmail.com").count() == 2
     assert set(Supplier.objects.values_list("email", flat=True)) == {
         "mugishawarid@gmail.com",
-        "kjapher32@gmail.com",
+        "kjapher38@gmail.com",
         "wmugisha@kcca.go.ug",
+        "watumwaizaac32@gmail.com",
     }
-    assert Item.objects.count() == 9
-    assert ItemUnitPrice.objects.count() == 9
-    assert SupplierItemPrice.objects.count() == 11
-    assert Item.objects.get(sku="KGH-RICE-25").supplier_prices.count() == 2
-    assert Item.objects.get(sku="KGH-WATER-500").supplier_prices.count() == 2
+    assert Item.objects.count() == 4
+    assert ItemUnitPrice.objects.count() == 4
+    assert SupplierItemPrice.objects.count() == 10
+    assert InventoryBalance.objects.count() == 4
+    assert not InventoryBalance.objects.exclude(quantity_in_stock=0).exists()
+
+    for sku in ("TAF-RICE-25", "TAF-WATER-500", "TAF-SOAP-5L", "TAF-PAPER-A4"):
+        assert Item.objects.get(sku=sku).supplier_prices.count() >= 2
 
 
 @pytest.mark.django_db

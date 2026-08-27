@@ -6,7 +6,7 @@ from core.mixins.models import BaseModel
 class Supplier(BaseModel):
     name = models.CharField(max_length=200)
     supplier_code = models.CharField(max_length=50, unique=True, blank=True, null=True)
-    email = models.EmailField(unique=True)
+    email = models.EmailField()
     phone = models.CharField(max_length=30)
     address = models.TextField()
     contact_person = models.CharField(max_length=100, blank=True)
