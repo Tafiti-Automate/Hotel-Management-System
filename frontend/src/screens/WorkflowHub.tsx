@@ -16,7 +16,7 @@ interface Step {
 const card: CSSProperties = {
   background: 'var(--surface)',
   border: '1px solid var(--border)',
-  borderRadius: 16,
+  borderRadius: 8,
   boxShadow: 'var(--shadow-sm)',
 }
 
@@ -40,14 +40,14 @@ function QueueRow({
   onClick: () => void
 }) {
   return (
-    <button onClick={onClick} className="hover-surface2" style={{ width: '100%', border: 0, borderTop: '1px solid var(--border)', padding: '12px 16px', background: 'transparent', cursor: 'pointer', display: 'grid', gridTemplateColumns: 'minmax(130px,1.5fr) minmax(120px,1fr) auto auto', gap: 12, alignItems: 'center', textAlign: 'left', font: 'inherit' }}>
+    <button onClick={onClick} className="workflow-queue-row">
       <span style={{ minWidth: 0 }}>
-        <span style={{ display: 'block', fontSize: 12.5, fontWeight: 800, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
+        <span style={{ display: 'block', fontSize: 12.5, fontWeight: 650, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
         <span style={{ display: 'block', marginTop: 3, fontSize: 10.5, color: 'var(--text-faint)', fontFamily: 'monospace' }}>{id.slice(0, 14)}</span>
       </span>
       <span style={{ fontSize: 11.5, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{meta}</span>
-      {amount != null && <span style={{ fontSize: 12, fontWeight: 750, color: 'var(--text)' }}>{money(amount)}</span>}
-      <span style={{ textTransform: 'capitalize', fontSize: 10.5, fontWeight: 800, color: 'var(--accent)', background: 'var(--accent-soft)', padding: '4px 8px', borderRadius: 20, whiteSpace: 'nowrap' }}>{status}</span>
+      {amount != null && <span style={{ fontSize: 12, fontWeight: 650, color: 'var(--text)' }}>{money(amount)}</span>}
+      <span style={{ textTransform: 'capitalize', fontSize: 10.5, fontWeight: 650, color: 'var(--accent)', background: 'var(--accent-soft)', padding: '4px 8px', borderRadius: 20, whiteSpace: 'nowrap' }}>{status}</span>
     </button>
   )
 }
@@ -58,9 +58,9 @@ export default function WorkflowHub({ kind }: { kind: WorkflowKind }) {
 
   const definitions: Record<WorkflowKind, { eyebrow: string; title: string; summary: string; icon: string; steps: Step[] }> = {
     procure: {
-      eyebrow: 'Procure to stock',
-      title: 'Procurement control centre',
-      summary: 'Take demand from an approved request through sourcing, LPO, inspection and accepted stock.',
+      eyebrow: 'Procurement',
+      title: 'Procure to stock',
+      summary: 'Approved demand, sourcing, purchase orders, receiving and stock posting.',
       icon: 'shopping_cart_checkout',
       steps: [
         { label: 'Request', route: 'requisitions', icon: 'request_quote', description: 'Capture demand and estimated value', count: data.requisitions.length },
@@ -72,9 +72,9 @@ export default function WorkflowHub({ kind }: { kind: WorkflowKind }) {
       ],
     },
     stores: {
-      eyebrow: 'INVENTORY CONTROL',
-      title: 'Stores movement centre',
-      summary: 'Receive, reserve, transfer, issue, return, adjust and count with a permanent stock trail.',
+      eyebrow: 'Stores',
+      title: 'Inventory movement',
+      summary: 'Balances, batches, transfers, issues, returns and stock counts.',
       icon: 'warehouse',
       steps: [
         { label: 'Balances', route: 'balances', icon: 'equalizer', description: 'Live stock by article and store', count: data.balances.length },
@@ -86,9 +86,9 @@ export default function WorkflowHub({ kind }: { kind: WorkflowKind }) {
       ],
     },
     consume: {
-      eyebrow: 'STOCK TO CONSUMPTION',
-      title: 'Department supply centre',
-      summary: 'Turn department demand into reserved, issued and acknowledged consumption by cost centre.',
+      eyebrow: 'Department supply',
+      title: 'Stock to consumption',
+      summary: 'Department requests, reservations, issues, receipt confirmation and cost allocation.',
       icon: 'room_service',
       steps: [
         { label: 'Request', route: 'storeRequisitions', icon: 'assignment', description: 'Department requests articles', count: data.storeRequisitions.length },
@@ -100,9 +100,9 @@ export default function WorkflowHub({ kind }: { kind: WorkflowKind }) {
       ],
     },
     pay: {
-      eyebrow: 'Procure to pay',
-      title: 'Finance matching centre',
-      summary: 'Match supplier invoices to LPOs and accepted receipts before approval and payment.',
+      eyebrow: 'Finance',
+      title: 'Procure to pay',
+      summary: 'Supplier invoices, three-way matching, approvals and settlement.',
       icon: 'payments',
       steps: [
         { label: 'Accepted GRN', route: 'grns', icon: 'verified', description: 'Confirm liability quantity', count: data.grns.length },
@@ -114,9 +114,9 @@ export default function WorkflowHub({ kind }: { kind: WorkflowKind }) {
       ],
     },
     configure: {
-      eyebrow: 'CONTROLLED MASTER DATA',
-      title: 'ERP configuration',
-      summary: 'Maintain shared organization, article, supplier and approval definitions used by every workflow.',
+      eyebrow: 'Configuration',
+      title: 'Master data',
+      summary: 'Organization, article, supplier and approval settings shared across operations.',
       icon: 'tune',
       steps: [
         { label: 'Organization', route: 'hotel-profile', icon: 'domain', description: 'Hotels, branches and departments' },
@@ -143,43 +143,42 @@ export default function WorkflowHub({ kind }: { kind: WorkflowKind }) {
   }
 
   return (
-    <div style={{ maxWidth: 1440, margin: '0 auto' }}>
-      <section style={{ ...card, padding: 22, background: 'linear-gradient(135deg,var(--surface),var(--accent-soft))', overflow: 'hidden', position: 'relative' }}>
-        <div style={{ position: 'absolute', width: 220, height: 220, borderRadius: '50%', background: 'var(--accent-soft)', right: -50, top: -90 }} />
-        <div style={{ position: 'relative', display: 'flex', gap: 16, alignItems: 'center' }}>
-          <div style={{ width: 50, height: 50, borderRadius: 14, background: 'var(--accent)', display: 'grid', placeItems: 'center', boxShadow: 'var(--shadow)' }}>
+    <div className="workflow-hub">
+      <section className="workflow-hub-header" style={{ ...card }}>
+        <div className="workflow-hub-header-inner">
+          <div className="workflow-hub-icon">
             <Icon name={flow.icon} color="#fff" size={26} />
           </div>
           <div>
-            <div style={{ fontSize: 10, fontWeight: 850, letterSpacing: '.12em', color: 'var(--accent)' }}>{flow.eyebrow}</div>
-            <h1 style={{ fontSize: 24, margin: '4px 0', letterSpacing: '-.025em', color: 'var(--text)' }}>{flow.title}</h1>
-            <p style={{ margin: 0, fontSize: 12.5, color: 'var(--text-muted)', maxWidth: 720 }}>{flow.summary}</p>
+            <div className="workflow-hub-kicker">{flow.eyebrow}</div>
+            <h1>{flow.title}</h1>
+            <p>{flow.summary}</p>
           </div>
         </div>
       </section>
 
-      <section className="workflow-steps" style={{ display: 'grid', gridTemplateColumns: `repeat(${flow.steps.length},minmax(130px,1fr))`, gap: 0, margin: '18px 0' }}>
+      <section className="workflow-steps" style={{ gridTemplateColumns: `repeat(${flow.steps.length},minmax(130px,1fr))` }}>
         {flow.steps.map((step, index) => (
-          <button key={`${kind}-${step.label}`} onClick={() => app.navTo(step.route, step.label)} className="hover-card workflow-step" style={{ ...card, minHeight: 142, borderRadius: index === 0 ? '16px 0 0 16px' : index === flow.steps.length - 1 ? '0 16px 16px 0' : 0, marginLeft: index ? -1 : 0, padding: 16, cursor: 'pointer', textAlign: 'left', font: 'inherit', transition: 'transform .15s ease, box-shadow .15s ease', position: 'relative' }}>
-            {index < flow.steps.length - 1 && <span style={{ position: 'absolute', zIndex: 2, right: -11, top: 28, width: 22, height: 22, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'var(--surface)', border: '1px solid var(--border)' }}><Icon name="chevron_right" size={16} color="var(--text-faint)" /></span>}
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-              <span style={{ width: 34, height: 34, borderRadius: 10, display: 'grid', placeItems: 'center', background: 'var(--accent-soft)' }}><Icon name={step.icon} size={19} color="var(--accent)" /></span>
-              {step.count != null && <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)' }}>{step.count}</span>}
+          <button key={`${kind}-${step.label}`} onClick={() => app.navTo(step.route, step.label)} className="workflow-step" style={{ ...card, marginLeft: index ? -1 : 0 }}>
+            {index < flow.steps.length - 1 && <span className="workflow-step-arrow"><Icon name="chevron_right" size={16} color="var(--text-faint)" /></span>}
+            <div className="workflow-step-top">
+              <span className="workflow-step-icon"><Icon name={step.icon} size={19} color="var(--accent)" /></span>
+              {step.count != null && <span className="workflow-step-count">{step.count}</span>}
             </div>
-            <div style={{ marginTop: 12, fontSize: 12.5, fontWeight: 800, color: 'var(--text)' }}>{index + 1}. {step.label}</div>
-            <div style={{ marginTop: 4, fontSize: 10.5, lineHeight: 1.45, color: 'var(--text-faint)' }}>{step.description}</div>
+            <div className="workflow-step-label">{index + 1}. {step.label}</div>
+            <div className="workflow-step-description">{step.description}</div>
           </button>
         ))}
       </section>
 
-      <div className="workflow-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.7fr) minmax(270px,.7fr)', gap: 18 }}>
-        <section style={{ ...card, overflow: 'hidden' }}>
-          <div style={{ padding: '15px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div className="workflow-grid">
+        <section className="workflow-queue-panel" style={{ ...card }}>
+          <div className="workflow-panel-header">
             <div>
-              <div style={{ fontSize: 13, fontWeight: 850, color: 'var(--text)' }}>My work queue</div>
-              <div style={{ marginTop: 2, fontSize: 10.5, color: 'var(--text-faint)' }}>Documents requiring attention in this workflow</div>
+              <h3>Work queue</h3>
+              <span>Recent records in this workflow</span>
             </div>
-            <button onClick={() => app.refreshData()} style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid var(--border)', background: 'var(--surface)', cursor: 'pointer' }}><Icon name="refresh" size={17} color="var(--text-muted)" /></button>
+            <button onClick={() => app.refreshData()} className="workflow-refresh" title="Refresh"><Icon name="refresh" size={17} color="var(--text-muted)" /></button>
           </div>
           {queue.length ? queue.map((row) => (
             <QueueRow
@@ -192,21 +191,21 @@ export default function WorkflowHub({ kind }: { kind: WorkflowKind }) {
               onClick={() => openQueueRow(row)}
             />
           )) : (
-            <div style={{ borderTop: '1px solid var(--border)', padding: 32, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>No documents are waiting in this queue.</div>
+            <div className="workflow-empty">No records in this queue.</div>
           )}
         </section>
 
-        <aside style={{ ...card, padding: 17 }}>
-          <div style={{ fontSize: 13, fontWeight: 850, color: 'var(--text)' }}>Control checks</div>
+        <aside className="workflow-control-panel" style={{ ...card }}>
+          <div className="workflow-control-heading">Controls</div>
           {[
             ['verified_user', 'Approval sequence', 'No stage can be bypassed'],
             ['inventory', 'Stock integrity', 'No negative stock posting'],
             ['history', 'Audit evidence', 'Actions and decisions are timestamped'],
             ['difference', 'Exception visibility', 'Tolerance breaches remain visible'],
           ].map(([icon, title, desc]) => (
-            <div key={title} style={{ display: 'flex', gap: 10, paddingTop: 14 }}>
-              <span style={{ width: 30, height: 30, borderRadius: 9, flex: 'none', display: 'grid', placeItems: 'center', background: 'var(--good-soft)' }}><Icon name={icon} size={17} color="var(--good)" /></span>
-              <span><span style={{ display: 'block', fontSize: 11.5, fontWeight: 800, color: 'var(--text)' }}>{title}</span><span style={{ display: 'block', marginTop: 2, fontSize: 10.5, color: 'var(--text-faint)' }}>{desc}</span></span>
+            <div key={title} className="workflow-control-row">
+              <span className="workflow-control-icon"><Icon name={icon} size={17} color="var(--good)" /></span>
+              <span><strong>{title}</strong><small>{desc}</small></span>
             </div>
           ))}
         </aside>

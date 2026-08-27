@@ -133,7 +133,7 @@ export default function FormDrawer() {
       app.showWorkflowAlert('Invalid base-unit conversion', 'The Article base stock unit must always have a conversion factor of 1.', 'warning')
       return
     }
-    // Coerce numeric fields one more time on save (mirrors prototype).
+    // Normalize numeric fields before saving.
     const out: Row = {}
     visibleFields.forEach((fd) => {
       const v = values[fd.key]

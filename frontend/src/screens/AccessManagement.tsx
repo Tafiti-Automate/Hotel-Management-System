@@ -73,7 +73,7 @@ export default function AccessManagement() {
     <div className="access-heading">
       <div>
         <h1>Roles & system access</h1>
-        <p>Operational roles are predefined by the client workflow. Create employees, then assign the appropriate system role.</p>
+        <p>Manage user accounts, role assignments and access status.</p>
       </div>
       {tab === 'accounts' && <button className="access-primary" onClick={() => editAccount()}>
         <Icon name="person_add" size={18} color="#fff" />
@@ -83,7 +83,7 @@ export default function AccessManagement() {
 
     <div className="access-stats">
       <Stat icon="group" label="Total accounts" value={accounts.length} note={`${activeCount} currently active`} />
-      <Stat icon="verified_user" label="Workflow roles" value={roles.length} note="Permissions are predefined" />
+      <Stat icon="verified_user" label="Workflow roles" value={roles.length} note="Configured access profiles" />
       <Stat icon="shield_person" label="Administrators" value={accounts.filter((account) => account.role_name === 'System Administrator').length} note="Full system access" />
     </div>
 
@@ -115,8 +115,8 @@ export default function AccessManagement() {
           <div className="access-person"><span className="access-role-icon"><Icon name="admin_panel_settings" size={20} /></span><span><b>{role.name}</b><small>Hotel access role</small></span></div>
           <span className="muted">{role.user_count} user{role.user_count === 1 ? '' : 's'}</span>
           <span className="muted">{role.permission_ids.length} permissions</span>
-          <span className="access-role"><Icon name="lock" size={15} />Fixed workflow role</span>
-          <div className="access-row-actions"><span title="Permissions are controlled by the client workflow"><Icon name="lock" size={17} /></span></div>
+          <span className="access-role"><Icon name="lock" size={15} />Configured role</span>
+          <div className="access-row-actions"><span title="Role permissions are centrally managed"><Icon name="lock" size={17} /></span></div>
         </div>)}
         {!visibleRoles.length && <div className="access-empty">No roles match your search.</div>}
       </>}
@@ -124,7 +124,7 @@ export default function AccessManagement() {
 
     {selectedAccessRecord && <RecordDetailDrawer title={selectedAccessRecord.title} subtitle={selectedAccessRecord.subtitle} record={selectedAccessRecord.record} onClose={() => setSelectedAccessRecord(null)} />}
 
-    {accountDraft && <Modal title={accountDraft.id ? 'Edit account' : 'Add system account'} subtitle={accountDraft.id ? 'Sign-in status and role assignment' : 'Standalone accounts are only for system administration and technical support'} onClose={() => setAccountDraft(null)}>
+    {accountDraft && <Modal title={accountDraft.id ? 'Edit account' : 'Add system account'} subtitle={accountDraft.id ? 'Sign-in status and role assignment' : 'Create an account and assign the required access role'} onClose={() => setAccountDraft(null)}>
       <div className="access-form-grid">
         <Field label="First name"><input value={accountDraft.first_name || ''} onChange={(e) => setAccountDraft({ ...accountDraft, first_name: e.target.value })} /></Field>
         <Field label="Last name"><input value={accountDraft.last_name || ''} onChange={(e) => setAccountDraft({ ...accountDraft, last_name: e.target.value })} /></Field>

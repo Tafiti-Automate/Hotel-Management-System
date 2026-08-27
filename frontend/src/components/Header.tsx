@@ -20,6 +20,7 @@ export default function Header() {
   const [notificationsLoading, setNotificationsLoading] = useState(true)
   const [notificationsError, setNotificationsError] = useState('')
   const storesManager = isStoresManager(app.user)
+  const role = String(app.user.role || '').trim().toLowerCase()
   const departmentLabel = app.user.departmentName || app.user.role
   const moduleName = storesManager ? 'Stores & Inventory' : app.activeModule === 'hr' ? 'Human Resources' : departmentLabel
   const initials = app.user.name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()
@@ -37,6 +38,46 @@ export default function Header() {
       setNotificationsLoading(false)
     }
   }, [app.user.id])
+
+  const primary = (() => {
+    if (app.activeModule === 'hr' && canAccessRoute(app.user, 'employees')) {
+      return { label: 'Employee directory', icon: 'groups', action: () => app.navTo('employees', 'Employees') }
+    }
+    if (role === 'requester' && canAccessRoute(app.user, 'workflow-stores')) {
+      return { label: 'My requisitions', icon: 'assignment', action: () => app.navTo('workflow-stores', 'My requisitions') }
+    }
+    if (role === 'department head' && canAccessRoute(app.user, 'workflow-stores')) {
+      return { label: 'Review approvals', icon: 'approval', action: () => app.navTo('workflow-stores', 'Department approvals') }
+    }
+    if (role === 'store keeper' && canAccessRoute(app.user, 'workflow-stores')) {
+      return { label: 'Store queue', icon: 'warehouse', action: () => app.navTo('workflow-stores', 'Store Keeper queue') }
+    }
+    if (role === 'cost controller' && canAccessRoute(app.user, 'suppliers')) {
+      return { label: 'Supplier master', icon: 'local_shipping', action: () => app.navTo('suppliers', 'Suppliers') }
+    }
+    if (role === 'financial manager' && canAccessRoute(app.user, 'workflow-procure')) {
+      return { label: 'LPO approvals', icon: 'account_balance_wallet', action: () => app.navTo('workflow-procure', 'LPO approvals') }
+    }
+    if (role === 'general manager' && canAccessRoute(app.user, 'workflow-procure')) {
+      return { label: 'Final approvals', icon: 'verified_user', action: () => app.navTo('workflow-procure', 'Final LPO approvals') }
+    }
+    if (role === 'receiving clerk' && canAccessRoute(app.user, 'workflow-procure')) {
+      return { label: 'Receiving', icon: 'move_to_inbox', action: () => app.navTo('workflow-procure', 'Receiving & GRN') }
+    }
+    if (canAccessRoute(app.user, 'workflow-procure')) {
+      return { label: 'Procurement', icon: 'shopping_cart_checkout', action: () => app.navTo('workflow-procure', 'Procurement workflow') }
+    }
+    if (canAccessRoute(app.user, 'workflow-pay')) {
+      return { label: 'Finance', icon: 'account_balance', action: () => app.navTo('workflow-pay', 'Supplier invoices & payment') }
+    }
+    if (canAccessRoute(app.user, 'workflow-stores')) {
+      return { label: 'Stores', icon: 'warehouse', action: () => app.navTo('workflow-stores', 'Store requests') }
+    }
+    if (hasPermission('approvals.change_approvalworkflow')) {
+      return { label: 'Approvals', icon: 'approval', action: () => app.navTo('approvals', 'Approvals') }
+    }
+    return null
+  })()
 
   useEffect(() => {
     void loadNotifications()
@@ -83,22 +124,6 @@ export default function Header() {
     }
   }
 
-  const primary = (() => {
-    if (canAccessRoute(app.user, 'workflow-stores')) {
-      return { label: 'Open store requests', icon: 'warehouse', action: () => app.navTo('workflow-stores', 'Store Requests') }
-    }
-    if (canAccessRoute(app.user, 'workflow-pay')) {
-      return { label: 'Continue invoice to payment', icon: 'account_balance', action: () => app.navTo('workflow-pay', 'Supplier invoices & payment') }
-    }
-    if (canAccessRoute(app.user, 'workflow-procure')) {
-      return { label: 'Continue procurement', icon: 'move_to_inbox', action: () => app.navTo('workflow-procure', 'Procurement to receiving') }
-    }
-    if (hasPermission('approvals.change_approvalworkflow')) {
-      return { label: 'Review approvals', icon: 'approval', action: () => app.navTo('approvals', 'Approvals') }
-    }
-    return null
-  })()
-
   useEffect(() => {
     const openSearch = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); setSearchOpen(true) }
@@ -109,23 +134,22 @@ export default function Header() {
 
   return (
     <header className="app-header" style={{ height: 96, flex: 'none', background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
-      <div style={{ height: 58, display: 'flex', alignItems: 'center', gap: 18, padding: '0 24px' }}>
+      <div className="app-header-top" style={{ height: 58, display: 'flex', alignItems: 'center', gap: 18, padding: '0 24px' }}>
         <button className="global-search-trigger" onClick={() => setSearchOpen(true)} aria-label="Open global search">
           <Icon name="search" size={19} />
           <span>{storesManager ? 'Search stock, requests and receipts' : 'Search the ERP'}</span>
           <kbd>Ctrl K</kbd>
         </button>
 
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 3 }}>
-          <button onClick={primary?.action} className="header-text-action hover-surface2" style={textAction}><Icon name="task_alt" size={18} />Tasks</button>
-          <button className="header-text-action hover-surface2" style={textAction}><Icon name="help" size={18} />Help</button>
+        <div className="header-actions" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5 }}>
+          <span className={`header-live-state ${app.apiStatus === 'live' ? 'is-live' : app.apiStatus === 'offline' ? 'is-offline' : ''}`}><i />{app.apiStatus === 'live' ? 'Live' : app.apiStatus === 'loading' ? 'Syncing' : app.apiStatus === 'offline' ? 'Offline' : 'Connecting'}</span>
           <div style={{ position: 'relative' }}>
             <button
               onClick={openNotifications}
               title="Notifications"
               aria-label={`Notifications${notificationCount ? `, ${notificationCount} unread` : ''}`}
               aria-expanded={notificationsOpen}
-              className="hover-surface2"
+              className="header-notification-trigger hover-surface2"
               style={{ ...iconAction, position: 'relative' }}
             >
               <Icon name={notificationCount ? 'notifications_active' : 'notifications'} size={20} />
@@ -146,7 +170,7 @@ export default function Header() {
                 <div className="notification-list">
                   {notificationsLoading && <NotificationState icon="progress_activity" text="Loading your notifications…" />}
                   {!notificationsLoading && notificationsError && <NotificationState icon="error" text="Notifications could not be loaded." detail={notificationsError} action={() => void loadNotifications()} />}
-                  {!notificationsLoading && !notificationsError && notifications.length === 0 && <NotificationState icon="notifications_none" text="No notifications yet" detail={app.user.isSuperuser ? "Operational alerts are sent to the employee account assigned to each workflow task. Use the relevant role account to test recipient notifications." : "New tasks assigned to your employee account will appear here."} />}
+                  {!notificationsLoading && !notificationsError && notifications.length === 0 && <NotificationState icon="notifications_none" text="No notifications yet" detail="Workflow updates and assigned tasks will appear here." />}
                   {!notificationsLoading && !notificationsError && notifications.map((notification) => (
                     <button
                       key={notification.id}
@@ -176,8 +200,8 @@ export default function Header() {
 
           <div style={{ width: 1, height: 28, background: 'var(--border)', margin: '0 8px' }} />
           <div style={{ position: 'relative' }}>
-            <button onClick={() => setProfileOpen((open) => !open)} style={{ height: 40, display: 'flex', alignItems: 'center', gap: 9, border: 0, background: 'transparent', borderRadius: 7, padding: '0 4px 0 7px', cursor: 'pointer', font: 'inherit' }} className="hover-surface2">
-              <span style={{ width: 31, height: 31, borderRadius: 7, display: 'grid', placeItems: 'center', background: '#E8EEF9', color: '#1D4ED8', fontSize: 11, fontWeight: 700 }}>{initials}</span>
+            <button onClick={() => setProfileOpen((open) => !open)} style={{ height: 40, display: 'flex', alignItems: 'center', gap: 9, border: 0, background: 'transparent', borderRadius: 7, padding: '0 4px 0 7px', cursor: 'pointer', font: 'inherit' }} className="header-profile-trigger hover-surface2">
+              <span className="header-avatar" style={{ width: 31, height: 31, borderRadius: 7, display: 'grid', placeItems: 'center', background: '#E8EEF9', color: '#1D4ED8', fontSize: 11, fontWeight: 700 }}>{initials}</span>
               <span className="header-user-copy" style={{ textAlign: 'left' }}><span style={{ display: 'block', color: 'var(--text)', fontSize: 12.5, fontWeight: 600 }}>{app.user.name}</span><span style={{ display: 'block', color: 'var(--text-faint)', fontSize: 10.5, marginTop: 1 }}>{departmentLabel}</span></span>
               <Icon name="expand_more" size={17} color="var(--text-faint)" />
             </button>
@@ -193,7 +217,7 @@ export default function Header() {
         </div>
       </div>
 
-      <div style={{ height: 38, display: 'flex', alignItems: 'center', gap: 8, padding: '0 24px', borderTop: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+      <div className="app-header-breadcrumbs" style={{ height: 38, display: 'flex', alignItems: 'center', gap: 8, padding: '0 24px', borderTop: '1px solid var(--border)', background: 'var(--surface-2)' }}>
         <span style={{ color: 'var(--text-faint)', fontSize: 12 }}>{moduleName}</span>
         <Icon name="chevron_right" size={15} color="var(--text-faint)" />
         <span style={{ color: 'var(--text)', fontSize: 12, fontWeight: 600 }}>{app.crumb}</span>
@@ -235,11 +259,6 @@ const smallIconAction: CSSProperties = {
   display: 'grid', placeItems: 'center', color: 'var(--text-muted)', cursor: 'pointer',
 }
 
-const textAction: CSSProperties = {
-  height: 38, border: 0, borderRadius: 6, background: 'transparent', padding: '0 9px',
-  display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)', font: 'inherit',
-  fontSize: 12, fontWeight: 500, cursor: 'pointer',
-}
 
 const menuAction: CSSProperties = {
   width: '100%', height: 36, border: 0, borderRadius: 5, background: 'transparent',

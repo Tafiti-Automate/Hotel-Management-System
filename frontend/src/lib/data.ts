@@ -356,14 +356,14 @@ export const cfg: Record<string, EntityConfig> = {
         key: 'reason',
         label: 'Why is this purchase needed?',
         type: 'textarea',
-        placeholder: 'Example: Replace the damaged reception computer so staff can check in guests.',
+        placeholder: 'e.g. Replace damaged reception computer',
         hint: 'Briefly explain what is needed and how it will help the hotel.',
       },
       {
         key: 'control_notes',
         label: 'Additional notes (optional)',
         type: 'textarea',
-        placeholder: 'Add any other information the purchasing team should know.',
+        placeholder: 'Additional purchasing notes',
         hint: 'You can leave this blank if there is nothing else to add.',
       },
       {

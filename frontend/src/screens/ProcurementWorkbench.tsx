@@ -349,14 +349,14 @@ export default function ProcurementWorkbench() {
   ] as Array<[Stage, string, string]>).filter(([key]) => can(stagePermissions[key].view) && (!allowedStages || allowedStages.includes(key)))
   const stageGuidance: Record<Stage, { actor: string; description: string; icon: string }> = {
     request: { actor: 'Requester', description: 'Add every required article, then submit the requisition.', icon: 'playlist_add' },
-    quote: { actor: 'Procurement', description: 'Allocate a vetted supplier and current price to each requisition item.', icon: 'compare_arrows' },
+    quote: { actor: 'Procurement', description: 'Assign a supplier and current price to each requisition item.', icon: 'compare_arrows' },
     lpo: role === 'financial manager'
       ? { actor: 'Financial Manager', description: 'Review price and quantities, then approve or return the LPO.', icon: 'receipt_long' }
       : role === 'general manager'
         ? { actor: 'General Manager', description: 'Make the independent final approval decision.', icon: 'receipt_long' }
         : { actor: 'Procurement and approvers', description: 'Prepare the LPO, follow its approvals, then print and send it.', icon: 'receipt_long' },
     receipt: { actor: 'Receiving / stores', description: 'Record what the supplier delivered against the LPO.', icon: 'move_to_inbox' },
-    inspect: { actor: 'Receiving Clerk', description: 'Confirm accepted or rejected delivered quantities before posting the GRN.', icon: 'fact_check' },
+    inspect: { actor: 'Receiving Clerk', description: 'Confirm delivered quantities before posting the GRN.', icon: 'fact_check' },
     return: { actor: 'Stores / procurement', description: 'If needed, send rejected or damaged goods back to the supplier.', icon: 'assignment_return' },
   }
   useEffect(() => {
@@ -463,7 +463,7 @@ export default function ProcurementWorkbench() {
           <div>
             <div style={eyebrow}>{role === 'financial manager' ? 'Financial control' : role === 'general manager' ? 'Executive control' : role === 'receiving clerk' ? 'Goods receiving' : 'Procurement'}</div>
             <h1 style={{ margin: '3px 0', fontSize: 23, color: 'var(--text)' }}>{role === 'financial manager' ? 'LPO Financial Approval' : role === 'general manager' ? 'Final LPO Approvals' : role === 'receiving clerk' ? 'Receiving & GRN' : 'Procurement Queue'}</h1>
-            <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{role === 'financial manager' ? 'Review the commercial commitment, preserve Procurement quantity history, then approve, reduce or reject.' : role === 'general manager' ? 'Review Finance-approved LPOs and make the final approve-or-reject decision.' : role === 'receiving clerk' ? 'Receive only against issued LPOs. Ordered quantities stay read-only while actual received quantities are recorded separately.' : 'Review Store Requisitions, select suppliers, prepare LPOs and send approved orders to suppliers.'}</div>
+            <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{role === 'financial manager' ? 'Review LPO value and quantities before approval.' : role === 'general manager' ? 'Review Finance-approved LPOs for final authorization.' : role === 'receiving clerk' ? 'Record deliveries against issued LPOs and post GRNs.' : 'Manage supplier allocation, LPO preparation and supplier issue.'}</div>
           </div>
           <button onClick={() => void load()} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button>
         </div>
@@ -507,7 +507,7 @@ export default function ProcurementWorkbench() {
 
       {!isProcurementRole && tabs.length > 1 && <WorkflowPath
         title={role === 'receiving clerk' ? 'Receiving workflow' : 'Procurement workflow'}
-        summary={role === 'receiving clerk' ? 'Receive the delivery, then confirm accepted quantities and post the GRN.' : 'Allocate suppliers, prepare the LPO and control supplier issue.'}
+        summary={role === 'receiving clerk' ? 'Record the delivery and post the GRN.' : 'Allocate suppliers, prepare the LPO and control supplier issue.'}
         activeKey={stage}
         onSelect={(key) => setStage(key as Stage)}
         steps={tabs.map(([key, , label]) => ({ key, label, ...stageGuidance[key] }))}

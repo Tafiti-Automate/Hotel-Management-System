@@ -1,4 +1,4 @@
-// Theme + formatting helpers ported from the prototype (DCLogic).
+// Shared theme and formatting helpers.
 
 export type Mode = 'light' | 'dark'
 export type AccentName = 'Violet' | 'Blue' | 'Emerald' | 'Brass' | 'Rose' | 'Slate'
@@ -43,7 +43,7 @@ const DARK: Record<string, string> = {
   '--shadow-sm': '0 1px 2px rgba(0,0,0,.4)',
 }
 
-// Static status colors (constant across light/dark in the prototype).
+// Shared status colors across light and dark modes.
 const STATUS_VARS: Record<string, string> = {
   '--good': '#16A34A',
   '--good-soft': 'rgba(22,163,74,.12)',

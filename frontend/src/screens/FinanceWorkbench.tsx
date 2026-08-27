@@ -81,12 +81,12 @@ export default function FinanceWorkbench() {
   return <div style={{ maxWidth: 1440, margin: '0 auto' }}>
     <section className="workbench-hero" style={{ ...card, padding: 20, marginBottom: 15, display: 'flex', alignItems: 'center', gap: 13 }}>
       <span style={hero}><Icon name="account_balance" size={24} color="#fff" /></span>
-      <div><div style={eyebrow}>Procure to pay</div><h1 style={{ margin: '3px 0', fontSize: 23 }}>Finance control centre</h1><div style={subtle}>Register liabilities, match accepted goods, approve invoices and post supplier settlements.</div></div>
+      <div><div style={eyebrow}>Procure to pay</div><h1 style={{ margin: '3px 0', fontSize: 23 }}>Finance control centre</h1><div style={subtle}>Supplier invoices, matching, payment approval and settlement.</div></div>
       <button onClick={() => void load()} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button>
     </section>
     <WorkflowPath
       title="Supplier invoice to payment"
-      summary="Manage invoices, matching, payments and expenses."
+      summary="Invoices, matching, payments and expenses."
       activeKey={paymentPathActive}
       onSelect={openPaymentStep}
       steps={[

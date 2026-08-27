@@ -20,7 +20,7 @@ interface WorkflowPathProps {
   badge?: string
 }
 
-export function WorkflowPath({ title, summary, steps, activeKey, onSelect, badge = 'Follow in order' }: WorkflowPathProps) {
+export function WorkflowPath({ title, summary, steps, activeKey, onSelect, badge = 'Workflow' }: WorkflowPathProps) {
   return (
     <section className="workflow-path" style={container} aria-label={title}>
       <div className="workflow-path-header">

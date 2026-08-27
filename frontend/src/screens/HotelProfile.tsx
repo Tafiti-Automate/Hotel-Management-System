@@ -268,7 +268,7 @@ function HotelForm({ hotel, onClose, onSaved }: { hotel: HotelRecord | null; onC
                 {[values.brand_primary_color, values.brand_secondary_color, values.brand_accent_color].map((color, index) => <span key={index} style={{ width: 46, height: 28, borderRadius: 7, background: color, border: '1px solid rgba(0,0,0,.12)' }} />)}
                 {preview && <button type="button" disabled={extractingTheme} onClick={() => void applyExtractedPalette(preview)} className="hover-surface2" style={{ marginLeft: 'auto', height: 36, padding: '0 12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)', color: 'var(--text)', font: 'inherit', fontSize: 12, fontWeight: 700, cursor: extractingTheme ? 'wait' : 'pointer' }}>{extractingTheme ? 'Generating…' : 'Regenerate from logo'}</button>}
               </div>
-              <div style={{ marginTop: 11, fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.5 }}>The system creates accessible light and dark palettes. You can adjust the generated colors before saving.</div>
+              <div style={{ marginTop: 11, fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.5 }}>Preview the brand palette in light and dark modes before saving.</div>
             </div>
           </section>
 

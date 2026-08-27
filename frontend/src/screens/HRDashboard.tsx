@@ -20,12 +20,12 @@ export default function HRDashboard() {
   ]
 
   return (
-    <div style={{ maxWidth: 1380, margin: '0 auto' }}>
+    <div className="hr-dashboard" style={{ maxWidth: 1380, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
         <div>
           <div style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600, letterSpacing: '.02em' }}>Human resources</div>
-          <h1 style={{ fontSize: 25, margin: '5px 0', color: 'var(--text)', letterSpacing: '-.025em' }}>People overview</h1>
-          <p style={{ fontSize: 12.5, color: 'var(--text-muted)', margin: 0 }}>Manage the hotel team, department assignments and employee records.</p>
+          <h1 style={{ fontSize: 25, margin: '5px 0', color: 'var(--text)', letterSpacing: '-.025em' }}>People & departments</h1>
+          <p style={{ fontSize: 12.5, color: 'var(--text-muted)', margin: 0 }}>Employee records, departments and workforce status.</p>
         </div>
         <button onClick={() => app.openCreate('employees', 'Employees')} className="hover-accent" style={{ height: 42, display: 'flex', alignItems: 'center', gap: 8, border: 0, borderRadius: 11, padding: '0 16px', background: 'var(--accent)', color: '#fff', cursor: 'pointer', font: 'inherit', fontSize: 12.5, fontWeight: 800 }}>
           <Icon name="person_add" size={19} color="#fff" />Register employee
@@ -45,7 +45,7 @@ export default function HRDashboard() {
       <div className="hr-main-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.5fr) minmax(280px,.7fr)', gap: 16, marginTop: 16 }}>
         <section style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 15, boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
           <div style={{ padding: '16px 17px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div><div style={{ fontSize: 13, fontWeight: 850, color: 'var(--text)' }}>Employee directory</div><div style={{ fontSize: 10.5, color: 'var(--text-faint)', marginTop: 2 }}>Recently joined team members</div></div>
+            <div><div style={{ fontSize: 13, fontWeight: 850, color: 'var(--text)' }}>Employee directory</div><div style={{ fontSize: 10.5, color: 'var(--text-faint)', marginTop: 2 }}>Recent employee records</div></div>
             <button onClick={() => app.navTo('employees', 'Employees')} style={{ border: 0, background: 'transparent', color: 'var(--accent)', cursor: 'pointer', font: 'inherit', fontSize: 11.5, fontWeight: 800 }}>View all</button>
           </div>
           {(datedEmployees.length ? datedEmployees : employees.slice(0, 6)).map((employee) => (
@@ -62,9 +62,9 @@ export default function HRDashboard() {
         <aside style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 15, boxShadow: 'var(--shadow-sm)', padding: 17 }}>
           <div style={{ fontSize: 13, fontWeight: 850, color: 'var(--text)' }}>Quick actions</div>
           {[
-            ['person_add', 'Register employee', 'Create employee and login profile', () => app.openCreate('employees', 'Employees')],
-            ['account_tree', 'Add department', 'Create an operating cost centre', () => app.openCreate('departments', 'Departments')],
-            ['badge', 'Employee directory', 'Search and update employee records', () => app.navTo('employees', 'Employees')],
+            ['person_add', 'Register employee', 'Add an employee record', () => app.openCreate('employees', 'Employees')],
+            ['account_tree', 'Add department', 'Add a department', () => app.openCreate('departments', 'Departments')],
+            ['badge', 'Employee directory', 'Browse employee records', () => app.navTo('employees', 'Employees')],
           ].map(([icon, title, description, action]) => (
             <button key={String(title)} onClick={action as () => void} className="hover-surface2" style={{ width: '100%', display: 'flex', gap: 10, alignItems: 'center', border: 0, background: 'transparent', borderRadius: 10, padding: '11px 8px', marginTop: 5, cursor: 'pointer', textAlign: 'left', font: 'inherit' }}>
               <span style={{ width: 34, height: 34, borderRadius: 10, display: 'grid', placeItems: 'center', background: 'var(--accent-soft)' }}><Icon name={String(icon)} size={18} color="var(--accent)" /></span>
