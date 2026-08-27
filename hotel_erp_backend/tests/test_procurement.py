@@ -1498,3 +1498,76 @@ def test_role_approval_inbox_advances_from_finance_to_general_manager():
     gm_after = gm_client.get("/api/v1/purchase-orders/approval-inbox/")
     assert finance_after.json() == []
     assert [row["id"] for row in gm_after.json()] == [str(order.id)]
+
+@pytest.mark.django_db
+def test_supplier_pack_quote_keeps_lpo_quantity_in_article_base_uom():
+    employee, department, supplier, _ = create_procurement_context()
+    procurement_group, _ = Group.objects.get_or_create(name="Procurement Manager")
+    employee.user.groups.add(procurement_group)
+
+    category = Category.objects.create(name="Office Supplies - LPO UOM")
+    ream = UnitOfMeasure.objects.create(name="Ream - LPO UOM", abbreviation="ream")
+    carton = UnitOfMeasure.objects.create(name="Carton - LPO UOM", abbreviation="ctn")
+    paper = Item.objects.create(
+        category=category,
+        name="A4 Printing Paper - LPO UOM",
+        sku="A4-LPO-UOM",
+        unit="ream",
+        base_unit=ream,
+    )
+    ItemUnitPrice.objects.create(
+        item=paper,
+        unit=carton,
+        conversion_factor=Decimal("5.00"),
+        role="purchase",
+        is_active=True,
+    )
+    quote = SupplierItemPrice.objects.create(
+        supplier=supplier,
+        item=paper,
+        unit=carton,
+        unit_price=Decimal("97500.00"),
+        lead_time_days=2,
+    )
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        reason="One ream should stay one ream on the LPO",
+        status=PRStatus.APPROVED,
+        procurement_source="store_requisition",
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition,
+        item=paper,
+        unit=ream,
+        quantity=Decimal("1.00"),
+        approved_quantity=Decimal("1.00"),
+    )
+
+    client = APIClient()
+    client.force_authenticate(employee.user)
+    allocation = client.post(
+        f"/api/v1/requisitions/{requisition.pk}/allocate-line/",
+        {
+            "line_id": str(requisition.items.get().pk),
+            "supplier_price": str(quote.pk),
+            "quantity": "1.00",
+            "unit_price": "97500.00",
+        },
+        format="json",
+    )
+    assert allocation.status_code == 200, allocation.data
+    allocated = requisition.items.get()
+    assert allocated.procurement_quantity == Decimal("1.00")
+    assert allocated.procurement_unit_id == ream.id
+    assert allocated.procurement_unit_cost == Decimal("19500.00")
+
+    orders = requisition.create_allocated_purchase_orders(
+        ordered_by=employee,
+        created_by=employee.user,
+    )
+    lpo_line = orders[0].items.get()
+    assert lpo_line.quantity == Decimal("1.00")
+    assert lpo_line.unit_id == ream.id
+    assert lpo_line.unit_cost == Decimal("19500.00")
+    assert lpo_line.line_total == Decimal("19500.0000")

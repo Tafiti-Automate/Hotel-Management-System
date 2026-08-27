@@ -402,16 +402,27 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
         ).order_by("pk").first()
         if not price or price.item_id != line.item_id:
             raise ValidationError({"supplier_price": f"Choose an active vetted supplier quotation for {line.item}."})
+        # Client-facing procurement quantities remain in the Article base/request UOM.
+        # A supplier quotation may be expressed in a larger purchase pack (for
+        # example a carton of 5 reams), but that must never turn a request for
+        # 1 ream into an LPO quantity of 0.20 carton.  Keep the requested
+        # quantity intact and convert only the supplier's quoted price to the
+        # base UOM used on the LPO.
         quantity = Decimal(str(payload.get("quantity") or "0"))
-        unit = price.unit or line.item.base_unit
-        base_quantity = line.item.quantity_in_base_units(quantity, unit)
-        if quantity <= 0 or base_quantity > line.remaining_order_quantity:
+        if quantity <= 0 or quantity > line.remaining_order_quantity:
             raise ValidationError({
-                "quantity": f"Procurement quantity for {line.item} must be positive and cannot exceed {line.remaining_order_quantity} base units."
+                "quantity": f"Procurement quantity for {line.item} must be positive and cannot exceed {line.remaining_order_quantity}."
+            })
+        quote_unit = price.unit or line.item.base_unit
+        conversion_factor = line.item.conversion_factor_for_unit(quote_unit)
+        if conversion_factor <= 0:
+            raise ValidationError({
+                "supplier_price": f"The supplier quotation UOM for {line.item} has no valid conversion."
             })
         confirmed_price = Decimal(str(payload.get("unit_price") or price.unit_price))
         if confirmed_price <= 0:
             raise ValidationError({"unit_price": f"Enter a valid current supplier price for {line.item}."})
+        base_unit_price = (confirmed_price / conversion_factor).quantize(Decimal("0.01"))
         if confirmed_price != price.unit_price:
             SupplierItemPriceHistory.objects.create(
                 supplier_item_price=price, supplier=price.supplier, item=price.item,
@@ -434,9 +445,9 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             ])
         line.procurement_supplier = price.supplier
         line.procurement_supplier_price = price
-        line.procurement_unit = unit
+        line.procurement_unit = line.item.base_unit
         line.procurement_quantity = quantity
-        line.procurement_unit_cost = confirmed_price
+        line.procurement_unit_cost = base_unit_price
         line.procurement_note = str(payload.get("note") or "").strip()
         line.procurement_allocated_at = timezone.now()
         line.procurement_allocated_by = request.user

@@ -257,6 +257,21 @@ export default function ProcurementWorkbench() {
       return
     }
     const status = id(row.status)
+    // Finance and General Manager records come from the backend's authoritative
+    // approval inbox. Do not infer their queue again from a possibly stale or
+    // partially serialized approval timeline when they click the record.
+    if (role === 'financial manager' && status === 'pending_approval') {
+      setSelectedRecord(null)
+      setLpoQueue('finance')
+      setForm({ order: id(row.id) })
+      return
+    }
+    if (role === 'general manager' && status === 'pending_approval') {
+      setSelectedRecord(null)
+      setLpoQueue('management')
+      setForm({ order: id(row.id) })
+      return
+    }
     if (role === 'general manager' && hasManagementDecision(row)) {
       setSelectedRecord(null)
       setLpoQueue('history')
@@ -351,6 +366,17 @@ export default function ProcurementWorkbench() {
     }
     return []
   }, [role, scopedData])
+
+  useEffect(() => {
+    if (stage !== 'lpo' || loading || form.order || !roleApprovalQueueOrders.length) return
+    if (role === 'financial manager') {
+      setLpoQueue('finance')
+      setForm({ order: id(roleApprovalQueueOrders[0].id) })
+    } else if (role === 'general manager') {
+      setLpoQueue('management')
+      setForm({ order: id(roleApprovalQueueOrders[0].id) })
+    }
+  }, [stage, loading, role, roleApprovalQueueOrders, form.order])
 
   const managementHistoryOrders = useMemo(
     () => scopedData.orders.filter((row) => hasManagementDecision(row)),
@@ -515,13 +541,16 @@ function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplier
   const selectedItem = items.find((item: Row) => id(item.id) === id(selectedReqLine?.item))
   const requestedBase = num(selectedReqLine?.remaining_order_quantity ?? selectedReqLine?.approved_base_quantity ?? selectedReqLine?.approved_quantity ?? selectedReqLine?.quantity)
   const selectedFactor = selectedCatalogue ? conversionFactorFor(selectedItem, selectedCatalogue.unitId, itemUnits) : 1
-  const maxPurchaseQuantity = selectedCatalogue && selectedFactor > 0 ? floorPurchaseQuantity(requestedBase / selectedFactor) : 0
-  const enteredPurchaseQuantity = num(form.quantity || maxPurchaseQuantity)
-  const enteredBaseQuantity = enteredPurchaseQuantity * selectedFactor
+  // The client approves quantities in the Article/request UOM. Supplier prices
+  // may be quoted by carton/sack/jerrycan, but the LPO quantity must remain the
+  // approved Article quantity (for example 1 ream, never 0.20 carton).
+  const maxOrderQuantity = requestedBase
+  const enteredOrderQuantity = num(form.quantity || maxOrderQuantity)
   const confirmedPrice = num(form.price ?? selectedCatalogue?.price)
   const quotedPrice = num(selectedCatalogue?.price)
+  const confirmedBasePrice = selectedFactor > 0 ? confirmedPrice / selectedFactor : 0
   const priceChanged = Boolean(selectedCatalogue && Math.abs(confirmedPrice - quotedPrice) > 0.000001)
-  const allocationExceedsRequest = Boolean(selectedCatalogue) && (selectedFactor <= 0 || enteredBaseQuantity > requestedBase + 0.000001)
+  const allocationExceedsRequest = Boolean(selectedCatalogue) && (selectedFactor <= 0 || enteredOrderQuantity > requestedBase + 0.000001)
   const allocatedCount = reqLines.filter((line: Row) => line.procurement_supplier_price && num(line.procurement_quantity) > 0 && num(line.procurement_unit_cost) > 0).length
   const allAllocated = Boolean(reqLines.length) && allocatedCount === reqLines.length
 
@@ -533,13 +562,15 @@ function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplier
     const existing = offers.find((entry: Row) => id(entry.id) === id(line?.procurement_supplier_price))
     const baseLimit = num(line?.remaining_order_quantity ?? line?.approved_base_quantity ?? line?.approved_quantity ?? line?.quantity)
     const factor = existing ? conversionFactorFor(article, existing.unitId, itemUnits) : 1
-    const suggestedQuantity = existing && factor > 0 ? floorPurchaseQuantity(baseLimit / factor) : 0
+    const existingQuotePrice = existing && factor > 0 && line?.procurement_unit_cost
+      ? num(line.procurement_unit_cost) * factor
+      : existing?.price
     setForm({
       requisition: form.requisition,
       reqLine: value,
       cataloguePrice: id(existing?.id),
-      quantity: (line?.procurement_quantity ?? suggestedQuantity) || '',
-      price: line?.procurement_unit_cost ?? existing?.price ?? '',
+      quantity: (line?.procurement_quantity ?? baseLimit) || '',
+      price: existingQuotePrice ?? '',
       procurementNote: line?.procurement_note || '',
     })
   }
@@ -579,10 +610,9 @@ function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplier
           const selected = id(entry.id) === id(selectedCatalogue?.id)
           const supplierName = names.suppliers.get(id(entry.supplierId)) || id(entry.supplier) || 'Supplier'
           return <button key={id(entry.id)} type="button" onClick={() => {
-            const factor = conversionFactorFor(selectedItem, entry.unitId, itemUnits)
-            setForm({ ...form, cataloguePrice: id(entry.id), price: entry.price, quantity: factor > 0 ? floorPurchaseQuantity(requestedBase / factor) : 0 })
+            setForm({ ...form, cataloguePrice: id(entry.id), price: entry.price, quantity: requestedBase })
           }} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.3fr) .75fr .65fr auto', alignItems: 'center', gap: 8, padding: '9px 10px', border: `1px solid ${selected ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 7, background: selected ? 'var(--accent-soft)' : 'var(--surface)', color: 'var(--text)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
-            <span style={{ minWidth: 0 }}><strong style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.3 }}>{supplierName}</strong><small style={{ color: 'var(--text-muted)' }}>{id(entry.quotationReference) || 'Quotation'}</small></span>
+            <span style={{ minWidth: 0 }}><strong style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.3 }}>{supplierName}</strong><small style={{ color: 'var(--text-muted)' }}>{id(entry.quotationReference) || 'Quotation'} · {id(entry.unit) || id(selectedItem?.uom) || 'unit'}</small></span>
             <strong style={{ fontSize: 11.3 }}>{money(entry.price)}</strong>
             <span style={{ color: 'var(--text-muted)', fontSize: 10.3 }}>{id(entry.leadTime || 0)} days</span>
             <span style={{ color: selected ? 'var(--accent)' : 'var(--text-faint)', fontSize: 10.3, fontWeight: 750 }}>{selected ? 'Selected' : 'Select'}</span>
@@ -593,12 +623,12 @@ function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplier
 
     {selectedCatalogue && <>
       <ReadOnlyValue label="Supplier" value={selectedSupplier?.name || names.suppliers.get(id(selectedCatalogue.supplierId)) || id(selectedCatalogue.supplier)} />
-      <Two><Field label="Order quantity"><Input type="number" value={form.quantity || maxPurchaseQuantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><Field label="Confirmed unit price"><Input type="number" value={form.price ?? selectedCatalogue.price} onChange={(v) => setForm({ ...form, price: v })} /></Field></Two>
+      <Two><Field label={`Quantity to order (${id(selectedItem?.uom) || 'item unit'})`}><Input type="number" value={form.quantity || maxOrderQuantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><Field label={`Supplier price per ${id(selectedCatalogue.unit) || 'quoted unit'}`}><Input type="number" value={form.price ?? selectedCatalogue.price} onChange={(v) => setForm({ ...form, price: v })} /></Field></Two>
       <Field label={priceChanged ? 'Reason for price change *' : 'Note'}><Input value={form.procurementNote || ''} onChange={(v) => setForm({ ...form, procurementNote: v })} placeholder={priceChanged ? 'Reason for the revised price' : 'Optional'} /></Field>
-      {selectedCatalogue && <UnitConversionNote quantity={enteredPurchaseQuantity} factor={selectedFactor} selectedUnit={id(selectedCatalogue.unit) || 'purchase unit'} baseUnit={id(selectedItem?.uom) || 'base units'} unitPrice={num(form.price ?? selectedCatalogue.price)} />}
-      {allocationExceedsRequest && <Hint>Quantity exceeds the Store Keeper quantity. Maximum for this supplier unit is {maxPurchaseQuantity} {id(selectedCatalogue.unit) || 'units'}.</Hint>}
-      <Action tone="good" disabled={busy || !form.reqLine || !form.cataloguePrice || enteredPurchaseQuantity <= 0 || allocationExceedsRequest || confirmedPrice <= 0 || (priceChanged && !id(form.procurementNote).trim())} onClick={() => run(
-        () => runBackendAction('requisitions', id(form.requisition), 'allocate-line', { line_id: form.reqLine, supplier_price: form.cataloguePrice, quantity: enteredPurchaseQuantity, unit_price: num(form.price ?? selectedCatalogue.price), note: form.procurementNote || '' }),
+      {selectedCatalogue && <QuoteConversionNote orderQuantity={enteredOrderQuantity} factor={selectedFactor} quotedUnit={id(selectedCatalogue.unit) || 'quoted unit'} baseUnit={id(selectedItem?.uom) || 'item unit'} quotedPrice={confirmedPrice} basePrice={confirmedBasePrice} />}
+      {allocationExceedsRequest && <Hint>Quantity exceeds the Store Keeper quantity. Maximum is {maxOrderQuantity} {id(selectedItem?.uom) || 'units'}.</Hint>}
+      <Action tone="good" disabled={busy || !form.reqLine || !form.cataloguePrice || enteredOrderQuantity <= 0 || allocationExceedsRequest || confirmedPrice <= 0 || (priceChanged && !id(form.procurementNote).trim())} onClick={() => run(
+        () => runBackendAction('requisitions', id(form.requisition), 'allocate-line', { line_id: form.reqLine, supplier_price: form.cataloguePrice, quantity: enteredOrderQuantity, unit_price: num(form.price ?? selectedCatalogue.price), note: form.procurementNote || '' }),
         'Supplier allocation saved',
         { requisition: form.requisition },
       )}>Save item</Action>
@@ -636,7 +666,9 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, ite
   const enteredBaseQuantity = num(form.quantity ?? line?.quantity) * conversion
   const quantityExceedsApproval = Boolean(line && conversion > 0 && approvedBaseLimit >= 0 && enteredBaseQuantity > approvedBaseLimit + 0.000001)
   const currentApproval = order ? currentApprovalStep(order) : undefined
-  const financeLine = lines.find((row: Row) => id(row.id) === id(form.financeLine))
+  const financeLineId = id(form.financeLine || (lpoQueue === 'finance' ? lines[0]?.id : ''))
+  const financeLine = lines.find((row: Row) => id(row.id) === financeLineId)
+  const financeQuantityValue = form.financeQuantity ?? financeLine?.approved_quantity ?? financeLine?.quantity ?? ''
   const canDecideFinance = role === 'financial manager' || role === 'system administrator'
   const canDecideManagement = role === 'general manager' || role === 'system administrator'
   const draftHasQuantityOverage = lines.some((orderLine: Row) => {
@@ -713,9 +745,10 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, ite
       {!canDecideFinance && <div style={{ padding: '10px 11px', borderRadius: 7, background: 'var(--warn-soft)', color: 'var(--warn)', fontSize: 11.3, fontWeight: 700 }}>Awaiting Financial Manager decision</div>}
       {canDecideFinance && <>
         <SectionLabel>Quantity review</SectionLabel>
-        <Field label="LPO item"><Select value={form.financeLine} onChange={(v) => { const selected = lines.find((row: Row) => id(row.id) === v); setForm({ ...form, financeLine: v, financeQuantity: selected?.approved_quantity ?? selected?.quantity ?? '', financeReason: selected?.finance_reduction_reason || '' }) }} rows={lines} label={(row: Row) => `${names.items.get(id(row.item)) || id(row.item)} · ${row.procurement_quantity ?? row.quantity}`} /></Field>
-        <Two><Field label="Approved quantity"><Input type="number" value={form.financeQuantity} onChange={(v) => setForm({ ...form, financeQuantity: v })} /></Field><Field label="Reason if reduced"><Input value={form.financeReason} onChange={(v) => setForm({ ...form, financeReason: v })} placeholder="Required only when reduced" /></Field></Two>
-        <Action disabled={busy || !financeLine || num(form.financeQuantity) < 0 || num(form.financeQuantity) > num(financeLine.procurement_quantity ?? financeLine.quantity) || (num(form.financeQuantity) < num(financeLine.procurement_quantity ?? financeLine.quantity) && !id(form.financeReason).trim())} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'finance-reduce-quantities', { comments: '', lines: [{ id: id(financeLine.id), approved_quantity: num(form.financeQuantity), reason: form.financeReason || '' }] }), 'Finance quantity saved')}>Save quantity</Action>
+        <Field label="LPO item"><Select value={financeLineId} onChange={(v) => { const selected = lines.find((row: Row) => id(row.id) === v); setForm({ ...form, financeLine: v, financeQuantity: selected?.approved_quantity ?? selected?.quantity ?? '', financeReason: selected?.finance_reduction_reason || '' }) }} rows={lines} label={(row: Row) => `${names.items.get(id(row.item)) || id(row.item)} · Procurement ${row.procurement_quantity ?? row.quantity}`} /></Field>
+        <Two><Field label="Finance approved quantity"><Input type="number" value={financeQuantityValue} onChange={(v) => setForm({ ...form, financeLine: financeLineId, financeQuantity: v })} /></Field><Field label="Reason if reduced"><Input value={form.financeReason || ''} onChange={(v) => setForm({ ...form, financeLine: financeLineId, financeReason: v })} placeholder="Required only when quantity is reduced" /></Field></Two>
+        {financeLine && <Hint>Procurement quantity: {id(financeLine.procurement_quantity ?? financeLine.quantity)}. Finance may keep or reduce it, but cannot increase it.</Hint>}
+        <Action disabled={busy || !financeLine || num(financeQuantityValue) < 0 || num(financeQuantityValue) > num(financeLine.procurement_quantity ?? financeLine.quantity) || (num(financeQuantityValue) < num(financeLine.procurement_quantity ?? financeLine.quantity) && !id(form.financeReason).trim())} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'finance-reduce-quantities', { comments: '', lines: [{ id: id(financeLine.id), approved_quantity: num(financeQuantityValue), reason: form.financeReason || '' }] }), 'Finance quantity saved')}>Save quantity decision</Action>
         <Action tone="good" disabled={busy || !currentApproval} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'approve', { comments: '' }), 'LPO approved and sent to General Manager')}>Approve LPO</Action>
         {!form.showReject ? <Action tone="danger" disabled={busy} onClick={() => setForm({ ...form, showReject: true })}>Reject LPO</Action> : <><Field label="Rejection reason *"><Input value={form.approvalComments || ''} onChange={(v) => setForm({ ...form, approvalComments: v })} /></Field><Action tone="danger" disabled={busy || !id(form.approvalComments).trim()} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'reject', { comments: form.approvalComments }), 'LPO rejected')}>Confirm rejection</Action></>}
       </>}
@@ -768,7 +801,16 @@ function LpoSummary({ order, lines, names }: { order: Row; lines: Row[]; names: 
       <ReadOnlyValue label="Status" value={friendlyLpoStatus(id(order.status), approvalSteps)} />
       <ReadOnlyValue label="LPO total" value={money(order.total_amount)} />
     </div>
-    {approvalSteps.length > 0 && <div style={{ padding: '10px 11px', borderTop: '1px solid var(--border)' }}><div style={{ marginBottom: 7, color:'var(--text-faint)', fontSize:9.5, fontWeight:750, textTransform:'uppercase' }}>Approval timeline</div><div style={{ display:'flex', gap:7, flexWrap:'wrap' }}>{approvalSteps.map((step) => <span key={`${id(step.stage_name)}-${id(step.stage)}`} style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'5px 8px', borderRadius:999, background:id(step.status)==='approved'?'var(--good-soft)':id(step.status)==='rejected'?'var(--bad-soft)':'var(--warn-soft)', color:id(step.status)==='approved'?'var(--good)':id(step.status)==='rejected'?'var(--bad)':'var(--warn)', fontSize:10, fontWeight:700 }}><Icon name={id(step.status)==='approved'?'check_circle':id(step.status)==='rejected'?'cancel':'schedule'} size={13} />{id(step.stage_name)} · {id(step.status).replace(/_/g,' ')}</span>)}</div></div>}
+    {approvalSteps.length > 0 && (() => {
+      const firstPending = approvalSteps.findIndex((step) => id(step.status) === 'pending')
+      return <div style={{ padding: '10px 11px', borderTop: '1px solid var(--border)' }}><div style={{ marginBottom: 7, color:'var(--text-faint)', fontSize:9.5, fontWeight:750, textTransform:'uppercase' }}>Approval timeline</div><div style={{ display:'flex', gap:7, flexWrap:'wrap' }}>{approvalSteps.map((step, index) => {
+        const rawStatus = id(step.status)
+        const waiting = rawStatus === 'pending' && firstPending >= 0 && index > firstPending
+        const displayStatus = waiting ? 'waiting' : rawStatus
+        const tone = rawStatus === 'approved' ? 'good' : rawStatus === 'rejected' ? 'bad' : waiting ? 'muted' : 'warn'
+        return <span key={`${id(step.stage_name)}-${id(step.stage)}`} style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'5px 8px', borderRadius:999, background:tone==='good'?'var(--good-soft)':tone==='bad'?'var(--bad-soft)':tone==='warn'?'var(--warn-soft)':'var(--surface-2)', color:tone==='good'?'var(--good)':tone==='bad'?'var(--bad)':tone==='warn'?'var(--warn)':'var(--text-muted)', fontSize:10, fontWeight:700 }}><Icon name={rawStatus==='approved'?'check_circle':rawStatus==='rejected'?'cancel':waiting?'hourglass_empty':'schedule'} size={13} />{id(step.stage_name)} · {displayStatus.replace(/_/g,' ')}</span>
+      })}</div></div>
+    })()}
     <div style={{ padding: '8px 11px', display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) .6fr .7fr .8fr', gap: 8, borderTop: '1px solid var(--border)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}><span>Article</span><span>Quantity</span><span>Unit price</span><span>Total</span></div>
     {lines.map((row) => <div key={id(row.id)} style={{ padding: '9px 11px', display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) .6fr .7fr .8fr', gap: 8, borderTop: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 10.8 }}><strong style={{ color: 'var(--text)' }}>{names.items.get(id(row.item)) || id(row.item)}</strong><span>{id(row.approved_quantity ?? row.quantity)}</span><span>{money(row.unit_cost)}</span><span>{money(num(row.approved_quantity ?? row.quantity) * num(row.unit_cost))}</span></div>)}
     {!lines.length && <div style={{ padding: 13, borderTop: '1px solid var(--border)', color: 'var(--text-faint)', fontSize: 10.5 }}>No LPO items are available.</div>}
@@ -1313,13 +1355,12 @@ function floorPurchaseQuantity(value: number): number {
   return Math.floor((value + Number.EPSILON) * 100) / 100
 }
 
-function UnitConversionNote({ quantity, factor, selectedUnit, baseUnit, unitPrice }: { quantity: number; factor: number; selectedUnit: string; baseUnit: string; unitPrice: number }) {
-  if (factor <= 0) return <Hint>This unit has no active conversion for the selected Article. Configure it before continuing.</Hint>
-  const baseQuantity = quantity * factor
-  const baseCost = factor ? unitPrice / factor : 0
+function QuoteConversionNote({ orderQuantity, factor, quotedUnit, baseUnit, quotedPrice, basePrice }: { orderQuantity: number; factor: number; quotedUnit: string; baseUnit: string; quotedPrice: number; basePrice: number }) {
+  if (factor <= 0) return <Hint>This supplier quotation UOM has no active conversion for the selected Article.</Hint>
   return <div style={{ marginBottom: 11, padding: 10, border: '1px solid var(--accent)', borderRadius: 6, color: 'var(--text)', background: 'var(--accent-soft)', fontSize: 10.5, lineHeight: 1.55 }}>
-    <strong>Conversion check:</strong> {quantity || 0} {selectedUnit} × {factor} = <strong>{Number(baseQuantity.toFixed(4))} {baseUnit}</strong>.
-    {unitPrice > 0 && <> Price per {selectedUnit}: <strong>{money(unitPrice)}</strong>; inventory cost per {baseUnit}: <strong>{money(baseCost)}</strong>.</>}
+    <strong>LPO quantity:</strong> {orderQuantity || 0} {baseUnit}.
+    {factor !== 1 && <> Supplier quotation basis: 1 {quotedUnit} = {factor} {baseUnit}. </>}
+    {quotedPrice > 0 && <>Quoted price: <strong>{money(quotedPrice)} per {quotedUnit}</strong>{factor !== 1 && <> = <strong>{money(basePrice)} per {baseUnit}</strong></>}.</>}
   </div>
 }
 
