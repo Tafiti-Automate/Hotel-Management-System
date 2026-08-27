@@ -65,7 +65,7 @@ interface AppState {
 export interface AppContextValue extends AppState {
   user: User
   data: Record<EntityKey, Row[]>
-  refreshData: () => void
+  refreshData: () => Promise<void>
   consumeProcurementDraft: () => void
   consumeInventoryDraft: () => void
   // auth
@@ -408,7 +408,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const rowsLoaded = Object.values(result.data).reduce((sum, rows) => sum + (rows?.length || 0), 0)
       const operationalWarning = result.warnings.find((warning) => !/\b(401|403)\b/.test(warning))
       patch({ apiStatus: 'live', apiMessage: operationalWarning || `Backend connected; ${rowsLoaded} accessible records loaded` })
-      if (!silent) showToast('Backend synced')
     } catch (error) {
       const message = errorMessage(error)
       if (/\b401\b|session is no longer valid/i.test(message)) {
@@ -420,7 +419,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       patch({ apiStatus: 'offline', apiMessage: message, currentBranch: '' })
       if (!silent) showWorkflowAlert('Backend unavailable', message)
     }
-  }, [applyBackendData, bumpData, endSession, patch, showToast, showWorkflowAlert])
+  }, [applyBackendData, bumpData, endSession, patch, showWorkflowAlert])
 
   useEffect(() => {
     if (state.screen === 'app' && !didInitialSync.current) {
@@ -437,6 +436,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ? dataRef.current[target.entity].find((record) => record.id === target.id)
       : null
     const backendId = target.id ? String(row?.apiId || target.id) : null
+    const recordName = cfg[target.entity].singular || 'Record'
     patch({ formSaving: true })
     let request: Promise<void>
     request = saveBackendRecord(target.entity, backendId, values, dataRef.current)
@@ -470,10 +470,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         } else {
           patch({ form: null })
         }
-        showToast(target.id ? 'Changes saved to the backend' : `${cfg[target.entity].singular || 'Record'} created`)
+        showToast(target.id ? `${recordName} updated successfully` : `${recordName} created successfully`)
       })
       .catch((error) => {
-        showWorkflowAlert('Cannot save this record', errorMessage(error))
+        showWorkflowAlert(
+          target.id ? `${recordName} update failed` : `${recordName} creation failed`,
+          errorMessage(error),
+        )
       })
       .finally(() => {
         if (saveFormRequest.current === request) saveFormRequest.current = null
@@ -488,14 +491,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!target) return
     const row = dataRef.current[target.entity].find((record) => record.id === target.id)
     const backendId = String(row?.apiId || target.id)
+    const recordName = cfg[target.entity].singular || 'Record'
     patch({ confirm: null })
     void deleteBackendRecord(target.entity, backendId)
       .then(async () => {
         await refreshData(true)
-        showToast('Backend record removed')
+        showToast(`${recordName} removed successfully`)
       })
       .catch((error) => {
-        showWorkflowAlert('Cannot remove this record', errorMessage(error))
+        showWorkflowAlert(`${recordName} removal failed`, errorMessage(error))
       })
   }, [patch, refreshData, showToast, showWorkflowAlert, state.confirm])
 
@@ -575,7 +579,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ...state,
     user,
     data: scopedData,
-    refreshData: () => { void refreshData() },
+    refreshData: () => refreshData(),
     login: async (username: string, password: string, remember = true) => {
       if (logoutRequest.current) await logoutRequest.current
       const authed = await apiLogin(username, password, remember)

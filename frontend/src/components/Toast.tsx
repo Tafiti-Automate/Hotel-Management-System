@@ -5,5 +5,10 @@ export default function Toast() {
   const app = useApp()
   if (!app.toast) return null
 
-  return <FeedbackDialog tone="success" message={app.toast} onClose={app.closeToast} />
+  return <FeedbackDialog
+    tone="success"
+    title={app.toast}
+    message="The action was completed and saved successfully."
+    onClose={app.closeToast}
+  />
 }
