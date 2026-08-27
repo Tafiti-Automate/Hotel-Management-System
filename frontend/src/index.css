@@ -1810,3 +1810,20 @@ html:not([data-theme="dark"]) .form-drawer {
     grid-column: 1 / -1;
   }
 }
+
+/* Receiving Clerk workspace */
+@media (max-width: 900px) {
+  .receiving-document-fields,
+  .receiving-search-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .receiving-ready-header {
+    display: none !important;
+  }
+  .receiving-line-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .receiving-line-grid > :first-child {
+    grid-column: 1 / -1;
+  }
+}

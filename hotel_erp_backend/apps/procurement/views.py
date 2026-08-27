@@ -40,7 +40,12 @@ from apps.procurement.models import (
     VendorQuotationItem,
 )
 from apps.vendors.models import Supplier
-from core.constants.choices import ApprovalStatus, POStatus, PRStatus
+from core.constants.choices import (
+    ApprovalStatus,
+    GoodsInspectionStatus,
+    POStatus,
+    PRStatus,
+)
 from apps.procurement.serializers import (
     GoodsInspectionItemSerializer,
     GoodsInspectionSerializer,
@@ -302,11 +307,18 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
                     context={"request": request},
                 ).data
         if stage in {"receipt", "inspect", "return"}:
-            receipts = GoodsReceiptNote.objects.filter(purchase_order_id__in=order_ids)
             if user_has_role(request.user, *RECEIVING_ROLES) and not user_has_role(
                 request.user, *COMMERCIAL_CONTROL_ROLES
             ):
-                receipts = receipts.filter(received_by=getattr(request.user, "employee_profile", None))
+                # Receiving history must remain visible after an LPO becomes
+                # fully received and therefore drops out of the ready-LPO list.
+                receipts = GoodsReceiptNote.objects.filter(
+                    received_by=getattr(request.user, "employee_profile", None)
+                ).select_related("purchase_order__supplier")
+            else:
+                receipts = GoodsReceiptNote.objects.filter(
+                    purchase_order_id__in=order_ids
+                ).select_related("purchase_order__supplier")
             receipt_ids = receipts.values_list("id", flat=True)
             payload["receipts"] = GoodsReceiptNoteSerializer(receipts, many=True, context={"request": request}).data
             payload["receiptItems"] = GoodsReceiptItemSerializer(
@@ -683,7 +695,7 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
     ordering_fields = ("po_number", "status", "created_at")
 
     def get_permissions(self):
-        if self.action in ("approve_order", "reject_order"):
+        if self.action in ("approve_order", "reject_order", "receive_delivery"):
             return [IsAuthenticated()]
         return super().get_permissions()
 
@@ -734,6 +746,127 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
     def _require_procurement_manager(self, request):
         if not user_has_role(request.user, "System Administrator", "Procurement Manager", "Procurement Officer"):
             raise PermissionDenied("Only Procurement can perform this LPO action.")
+
+    def _require_receiving_clerk(self, request):
+        if user_has_role(request.user, "System Administrator"):
+            return getattr(request.user, "employee_profile", None)
+        if not user_has_role(request.user, *RECEIVING_ROLES):
+            raise PermissionDenied("Only the Receiving Clerk can receive supplier deliveries.")
+        employee = getattr(request.user, "employee_profile", None)
+        if not employee or not employee.is_active:
+            raise PermissionDenied("An active Receiving Clerk employee profile is required.")
+        return employee
+
+    @action(detail=True, methods=["post"], url_path="receive-delivery")
+    def receive_delivery(self, request, pk=None):
+        """Receive an issued LPO and generate/post one GRN in a single clerk action.
+
+        The clerk records only the supplier paperwork and physical quantity that
+        arrived.  The LPO quantity and commercial values remain unchanged.  An
+        accepted inspection record is created internally so the existing stock
+        posting controls and audit trail remain intact without exposing a second
+        technical workflow to the Receiving Clerk.
+        """
+        employee = self._require_receiving_clerk(request)
+        supplier_invoice_no = str(request.data.get("supplier_invoice_no") or "").strip()
+        delivery_note_no = str(request.data.get("delivery_note_no") or "").strip()
+        received_date = request.data.get("received_date") or timezone.localdate()
+        payload_lines = request.data.get("lines") or []
+
+        if not supplier_invoice_no:
+            raise ValidationError({"supplier_invoice_no": "Enter the supplier invoice number."})
+        if not isinstance(payload_lines, list) or not payload_lines:
+            raise ValidationError({"lines": "Enter the quantity received for at least one LPO item."})
+
+        try:
+            with transaction.atomic():
+                order = PurchaseOrder.objects.select_for_update().get(pk=self.get_object().pk)
+                if order.status not in (POStatus.ISSUED, POStatus.PARTIALLY_RECEIVED):
+                    raise ValidationError("Only an issued or partially received LPO can be received.")
+
+                order_branch_id = getattr(order.requisition, "branch_id", None)
+                if employee and order_branch_id and employee.branch_id != order_branch_id:
+                    raise PermissionDenied("This LPO belongs to a different branch.")
+
+                order_lines = {
+                    str(line.pk): line
+                    for line in PurchaseOrderItem.objects.select_for_update().filter(
+                        purchase_order=order
+                    )
+                }
+                normalized = []
+                seen = set()
+                for entry in payload_lines:
+                    line_id = str(entry.get("purchase_order_item") or entry.get("id") or "").strip()
+                    if not line_id or line_id in seen:
+                        continue
+                    seen.add(line_id)
+                    line = order_lines.get(line_id)
+                    if not line:
+                        raise ValidationError({"lines": "One of the selected items does not belong to this LPO."})
+                    try:
+                        quantity = Decimal(str(entry.get("quantity_received") or "0"))
+                    except Exception as error:
+                        raise ValidationError({"lines": "Received quantities must be valid numbers."}) from error
+                    if quantity <= Decimal("0.00"):
+                        continue
+                    normalized.append((line, quantity))
+
+                if not normalized:
+                    raise ValidationError({"lines": "Enter a received quantity greater than zero."})
+
+                receipt = GoodsReceiptNote(
+                    purchase_order=order,
+                    received_by=employee,
+                    received_date=received_date,
+                    delivery_note_no=delivery_note_no,
+                    supplier_invoice_no=supplier_invoice_no,
+                    note="",
+                    created_by=request.user if request.user.is_authenticated else None,
+                )
+                receipt.full_clean()
+                receipt.save()
+
+                receipt_items = []
+                for order_line, quantity in normalized:
+                    receipt_item = GoodsReceiptItem(
+                        goods_receipt=receipt,
+                        purchase_order_item=order_line,
+                        quantity_received=quantity,
+                        created_by=request.user if request.user.is_authenticated else None,
+                    )
+                    receipt_item.save()
+                    receipt_items.append(receipt_item)
+
+                inspection = GoodsInspection.objects.create(
+                    goods_receipt=receipt,
+                    inspected_by=employee,
+                    inspection_date=received_date,
+                    status=GoodsInspectionStatus.PENDING,
+                    delivery_note_no=delivery_note_no,
+                    remarks="Receiving Clerk confirmed delivered quantities against the issued LPO.",
+                    created_by=request.user if request.user.is_authenticated else None,
+                )
+                for receipt_item in receipt_items:
+                    GoodsInspectionItem.objects.create(
+                        inspection=inspection,
+                        goods_receipt_item=receipt_item,
+                        quantity_received=receipt_item.base_quantity,
+                        quantity_accepted=receipt_item.base_quantity,
+                        quantity_rejected=Decimal("0.00"),
+                        rejection_reason="",
+                        created_by=request.user if request.user.is_authenticated else None,
+                    )
+
+                receipt.post_to_inventory(posted_by=employee)
+                receipt.refresh_from_db()
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+
+        return Response(
+            GoodsReceiptNoteSerializer(receipt, context=self.get_serializer_context()).data,
+            status=status.HTTP_201_CREATED,
+        )
 
     @action(detail=True, methods=["get"])
     def readiness(self, request, pk=None):

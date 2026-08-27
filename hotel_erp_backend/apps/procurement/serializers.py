@@ -603,6 +603,8 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
     )
     approved_quantity = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     approved_base_quantity = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    previously_received_quantity = serializers.SerializerMethodField()
+    outstanding_quantity = serializers.SerializerMethodField()
 
     class Meta:
         model = PurchaseOrderItem
@@ -627,6 +629,21 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
             "approved_quantity",
             "approved_base_quantity",
         )
+
+    def get_previously_received_quantity(self, instance):
+        received = sum(
+            (
+                receipt_item.committed_purchase_quantity
+                for receipt_item in instance.receipt_items.exclude(goods_receipt__status="cancelled")
+            ),
+            Decimal("0.00"),
+        )
+        return f"{received:.2f}"
+
+    def get_outstanding_quantity(self, instance):
+        approved = instance.approved_quantity or Decimal("0.00")
+        received = Decimal(self.get_previously_received_quantity(instance))
+        return f"{max(approved - received, Decimal('0.00')):.2f}"
 
     def validate(self, attrs):
         order = attrs.get("purchase_order") or getattr(self.instance, "purchase_order", None)
@@ -658,12 +675,17 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
 
 
 class GoodsReceiptNoteSerializer(serializers.ModelSerializer):
+    lpo_number = serializers.CharField(source="purchase_order.lpo_number", read_only=True)
+    supplier_name = serializers.CharField(source="purchase_order.supplier.name", read_only=True)
+
     class Meta:
         model = GoodsReceiptNote
         fields = (
             "id",
             "grn_number",
             "purchase_order",
+            "lpo_number",
+            "supplier_name",
             "received_by",
             "received_date",
             "status",

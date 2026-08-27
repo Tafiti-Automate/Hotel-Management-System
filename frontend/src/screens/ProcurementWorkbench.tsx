@@ -88,6 +88,13 @@ function formatDateTime(value: unknown) {
   if (Number.isNaN(parsed.getTime())) return raw
   return parsed.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
+function formatDateOnly(value: unknown) {
+  const raw = id(value).trim()
+  if (!raw) return '—'
+  const parsed = new Date(`${raw.slice(0, 10)}T00:00:00`)
+  if (Number.isNaN(parsed.getTime())) return raw
+  return parsed.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+}
 function fileSize(value: unknown) {
   const bytes = num(value)
   if (bytes < 1024) return `${bytes} B`
@@ -326,7 +333,7 @@ export default function ProcurementWorkbench() {
     'procurement officer': ['quote', 'lpo'],
     'financial manager': ['lpo'],
     'general manager': ['lpo'],
-    'receiving clerk': ['receipt', 'inspect'],
+    'receiving clerk': ['receipt'],
   }
   const allowedStages = app.user.isSuperuser || role === 'system administrator' ? null : roleStages[role]
   const tabs: Array<[Stage, string, string]> = ([
@@ -431,6 +438,16 @@ export default function ProcurementWorkbench() {
     setLpoQueue(key)
   }
 
+  if (role === 'receiving clerk') {
+    return <ReceivingClerkWorkspace
+      data={scopedData}
+      names={names}
+      busy={busy}
+      run={run}
+      onRefresh={load}
+    />
+  }
+
 
   return (
     <div style={{ maxWidth: 1480, margin: '0 auto' }}>
@@ -515,6 +532,209 @@ export default function ProcurementWorkbench() {
 function Metric({ label, value, icon, tone = 'accent' }: { label: string; value: string; icon: string; tone?: 'accent' | 'good' | 'warn' }) {
   const color = tone === 'good' ? 'var(--good)' : tone === 'warn' ? 'var(--warn)' : 'var(--accent)'
   return <div style={{ ...card, padding: '13px 15px', display: 'flex', alignItems: 'center', gap: 11 }}><span style={{ width: 34, height: 34, display: 'grid', placeItems: 'center', borderRadius: 7, color, background: tone === 'good' ? 'var(--good-soft)' : tone === 'warn' ? 'var(--warn-soft)' : 'var(--accent-soft)' }}><Icon name={icon} size={18} /></span><div><div style={{ color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase' }}>{label}</div><div style={{ marginTop: 3, color: 'var(--text)', fontSize: 15, fontWeight: 750 }}>{value}</div></div></div>
+}
+
+function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
+  data: Datasets
+  names: Record<string, Map<string, string>>
+  busy: boolean
+  run: (operation: () => Promise<unknown>, success: string, nextForm?: Row | ((result: unknown) => Row)) => Promise<void>
+  onRefresh: () => Promise<void>
+}) {
+  const [view, setView] = useState<'ready' | 'history'>('ready')
+  const [query, setQuery] = useState('')
+  const [supplierFilter, setSupplierFilter] = useState('')
+  const [selectedOrderId, setSelectedOrderId] = useState('')
+  const [selectedReceiptId, setSelectedReceiptId] = useState('')
+  const [invoiceNumber, setInvoiceNumber] = useState('')
+  const [receivedDate, setReceivedDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [quantities, setQuantities] = useState<Record<string, string>>({})
+
+  const readyOrders = useMemo(
+    () => data.orders.filter((row) => ['issued', 'partially_received'].includes(id(row.status))),
+    [data.orders],
+  )
+  const supplierRows = useMemo(() => {
+    const ids = Array.from(new Set(readyOrders.map((row) => id(row.supplier)).filter(Boolean)))
+    return ids.map((supplierId) => ({ id: supplierId, name: names.suppliers.get(supplierId) || 'Supplier' }))
+  }, [names.suppliers, readyOrders])
+  const normalizedQuery = query.trim().toLowerCase()
+  const filteredOrders = readyOrders.filter((order) => {
+    if (supplierFilter && id(order.supplier) !== supplierFilter) return false
+    if (!normalizedQuery) return true
+    const lpo = id(order.lpo_number || order.po_number).toLowerCase()
+    const supplier = (names.suppliers.get(id(order.supplier)) || '').toLowerCase()
+    return lpo.includes(normalizedQuery) || supplier.includes(normalizedQuery)
+  })
+
+  const selectedOrder = readyOrders.find((row) => id(row.id) === selectedOrderId)
+  const orderLines = selectedOrder
+    ? data.orderItems.filter((line) => id(line.purchase_order) === id(selectedOrder.id))
+    : []
+  const positiveLines = orderLines
+    .map((line) => ({
+      purchase_order_item: id(line.id),
+      quantity_received: num(quantities[id(line.id)]),
+    }))
+    .filter((line) => line.quantity_received > 0)
+  const lineInvalid = orderLines.some((line) => {
+    const entered = num(quantities[id(line.id)])
+    const outstanding = num(line.outstanding_quantity ?? line.approved_quantity ?? line.quantity)
+    return entered < 0 || entered > outstanding
+  })
+
+  const selectedReceipt = data.receipts.find((row) => id(row.id) === selectedReceiptId)
+  const receiptLines = selectedReceipt
+    ? data.receiptItems.filter((line) => id(line.goods_receipt) === id(selectedReceipt.id))
+    : []
+
+  const historyRows = data.receipts.filter((receipt) => {
+    if (!normalizedQuery) return true
+    return [receipt.grn_number, receipt.lpo_number, receipt.supplier_name, receipt.supplier_invoice_no]
+      .some((value) => id(value).toLowerCase().includes(normalizedQuery))
+  })
+
+  const clearSelection = () => {
+    setSelectedOrderId('')
+    setSelectedReceiptId('')
+    setInvoiceNumber('')
+    setReceivedDate(new Date().toISOString().slice(0, 10))
+    setQuantities({})
+  }
+
+  if (selectedOrder) {
+    const supplier = names.suppliers.get(id(selectedOrder.supplier)) || 'Supplier'
+    return <div style={{ maxWidth: 1280, margin: '0 auto' }}>
+      <button type="button" onClick={() => setSelectedOrderId('')} style={{ ...secondary, marginBottom: 14 }}><Icon name="arrow_back" size={16} />Back to Ready LPOs</button>
+      <section style={{ ...card, overflow: 'hidden' }}>
+        <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'flex-start', gap: 14, justifyContent: 'space-between' }}>
+          <div>
+            <div style={eyebrow}>Supplier delivery</div>
+            <h1 style={{ margin: '4px 0 3px', fontSize: 24, color: 'var(--text)' }}>Receive LPO {id(selectedOrder.lpo_number || selectedOrder.po_number)}</h1>
+            <div style={{ color: 'var(--text-muted)', fontSize: 12.5 }}>{supplier}</div>
+          </div>
+          <span style={{ padding: '6px 10px', borderRadius: 999, background: id(selectedOrder.status) === 'partially_received' ? 'var(--warn-soft)' : 'var(--accent-soft)', color: id(selectedOrder.status) === 'partially_received' ? 'var(--warn)' : 'var(--accent)', fontSize: 10.5, fontWeight: 800 }}>{id(selectedOrder.status) === 'partially_received' ? 'Partial delivery' : 'Ready to receive'}</span>
+        </div>
+
+        <div style={{ padding: 20 }}>
+          <div className="receiving-document-fields" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12, marginBottom: 18 }}>
+            <Field label="Supplier invoice number *"><Input value={invoiceNumber} onChange={setInvoiceNumber} placeholder="Invoice number" /></Field>
+            <Field label="Received date"><Input type="date" value={receivedDate} onChange={setReceivedDate} /></Field>
+          </div>
+
+          <div style={{ marginBottom: 8, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+            <h2 style={{ margin: 0, fontSize: 16, color: 'var(--text)' }}>Delivered items</h2>
+            <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>{orderLines.length} item{orderLines.length === 1 ? '' : 's'} on LPO</span>
+          </div>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+            <div className="receiving-line-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1.5fr) .65fr .8fr .8fr .85fr .6fr', gap: 10, padding: '10px 12px', background: 'var(--surface-2)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}>
+              <span>Article</span><span>LPO Qty</span><span>Previously received</span><span>Outstanding</span><span>Receive now</span><span>UOM</span>
+            </div>
+            {orderLines.map((line) => {
+              const lineId = id(line.id)
+              const ordered = num(line.approved_quantity ?? line.quantity)
+              const previous = num(line.previously_received_quantity)
+              const outstanding = num(line.outstanding_quantity ?? Math.max(0, ordered - previous))
+              const entered = num(quantities[lineId])
+              const invalid = entered > outstanding
+              return <div key={lineId} className="receiving-line-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1.5fr) .65fr .8fr .8fr .85fr .6fr', gap: 10, alignItems: 'center', padding: '12px', borderTop: '1px solid var(--border)', fontSize: 11.5 }}>
+                <strong style={{ color: 'var(--text)' }}>{names.items.get(id(line.item)) || id(line.item)}</strong>
+                <span style={{ color: 'var(--text-muted)' }}>{ordered}</span>
+                <span style={{ color: 'var(--text-muted)' }}>{previous}</span>
+                <strong style={{ color: outstanding > 0 ? 'var(--text)' : 'var(--good)' }}>{outstanding}</strong>
+                <div>
+                  <Input type="number" value={quantities[lineId] || ''} onChange={(value) => setQuantities((current) => ({ ...current, [lineId]: value }))} placeholder="0" />
+                  {invalid && <div style={{ marginTop: 4, color: 'var(--bad)', fontSize: 9.5 }}>Maximum {outstanding}</div>}
+                </div>
+                <span style={{ color: 'var(--text-muted)' }}>{names.units.get(id(line.unit)) || 'Unit'}</span>
+              </div>
+            })}
+          </div>
+
+          <div style={{ marginTop: 18, display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            <button type="button" onClick={() => setSelectedOrderId('')} style={secondary}>Cancel</button>
+            <button
+              type="button"
+              disabled={busy || !invoiceNumber.trim() || !positiveLines.length || lineInvalid}
+              onClick={() => void run(
+                () => runBackendAction('purchase-orders', id(selectedOrder.id), 'receive-delivery', {
+                  supplier_invoice_no: invoiceNumber.trim(),
+                  delivery_note_no: '',
+                  received_date: receivedDate,
+                  lines: positiveLines,
+                }).then((result) => {
+                  clearSelection()
+                  setView('history')
+                  setSelectedReceiptId(id(result.id))
+                  return result
+                }),
+                'GRN generated successfully',
+              )}
+              style={{ ...action, width: 'auto', minWidth: 150, marginTop: 0, padding: '0 18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, background: 'var(--good)', opacity: busy || !invoiceNumber.trim() || !positiveLines.length || lineInvalid ? .5 : 1 }}
+            ><Icon name="receipt_long" size={17} color="#fff" />Generate GRN</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  }
+
+  if (selectedReceipt) {
+    return <div style={{ maxWidth: 1120, margin: '0 auto' }}>
+      <button type="button" onClick={() => setSelectedReceiptId('')} style={{ ...secondary, marginBottom: 14 }}><Icon name="arrow_back" size={16} />Back to GRN History</button>
+      <section style={{ ...card, overflow: 'hidden' }}>
+        <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--border)' }}>
+          <div style={eyebrow}>Goods received note</div>
+          <h1 style={{ margin: '4px 0 2px', fontSize: 24, color: 'var(--text)' }}>GRN {id(selectedReceipt.grn_number)}</h1>
+          <div style={{ color: 'var(--text-muted)', fontSize: 12.5 }}>LPO {id(selectedReceipt.lpo_number)} · {id(selectedReceipt.supplier_name)}</div>
+        </div>
+        <div style={{ padding: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 10, marginBottom: 18 }}>
+            <ReadOnlyValue label="Supplier invoice" value={id(selectedReceipt.supplier_invoice_no) || '—'} />
+            <ReadOnlyValue label="Delivery note" value={id(selectedReceipt.delivery_note_no) || '—'} />
+            <ReadOnlyValue label="Received date" value={formatDateTime(selectedReceipt.received_date).split(',')[0]} />
+          </div>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1.5fr) .7fr .6fr', gap: 10, padding: '10px 12px', background: 'var(--surface-2)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}><span>Article</span><span>Quantity received</span><span>Status</span></div>
+            {receiptLines.map((line) => <div key={id(line.id)} style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1.5fr) .7fr .6fr', gap: 10, padding: '12px', borderTop: '1px solid var(--border)', fontSize: 11.5 }}><strong style={{ color: 'var(--text)' }}>{names.items.get(id(line.item)) || id(line.item)}</strong><span style={{ color: 'var(--text-muted)' }}>{id(line.quantity_received)}</span><span style={{ color: line.inventory_changes_applied ? 'var(--good)' : 'var(--warn)', fontWeight: 750 }}>{line.inventory_changes_applied ? 'Posted' : 'Pending'}</span></div>)}
+          </div>
+        </div>
+      </section>
+    </div>
+  }
+
+  return <div style={{ maxWidth: 1320, margin: '0 auto' }}>
+    <div style={{ ...card, padding: 20, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 13 }}>
+      <span style={heroIcon}><Icon name="move_to_inbox" size={24} color="#fff" /></span>
+      <div>
+        <div style={eyebrow}>Receiving Clerk</div>
+        <h1 style={{ margin: '3px 0', fontSize: 24, color: 'var(--text)' }}>Receive Supplier Delivery</h1>
+        <div style={{ color: 'var(--text-muted)', fontSize: 12.5 }}>Find the LPO shown on the supplier invoice, confirm what arrived and generate the GRN.</div>
+      </div>
+      <button type="button" onClick={() => void onRefresh()} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button>
+    </div>
+
+    <div style={{ ...card, padding: 8, marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(2,minmax(150px,220px))', gap: 7 }}>
+      <button type="button" onClick={() => { setView('ready'); setSelectedReceiptId('') }} style={{ padding: '11px 13px', border: `1px solid ${view === 'ready' ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 8, background: view === 'ready' ? 'var(--accent-soft)' : 'var(--surface)', color: view === 'ready' ? 'var(--accent)' : 'var(--text)', font: 'inherit', cursor: 'pointer', textAlign: 'left' }}><strong style={{ display: 'block', fontSize: 11.5 }}>Ready LPOs</strong><span style={{ display: 'block', marginTop: 3, fontSize: 17, fontWeight: 850 }}>{readyOrders.length}</span></button>
+      <button type="button" onClick={() => { setView('history'); setSelectedOrderId('') }} style={{ padding: '11px 13px', border: `1px solid ${view === 'history' ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 8, background: view === 'history' ? 'var(--accent-soft)' : 'var(--surface)', color: view === 'history' ? 'var(--accent)' : 'var(--text)', font: 'inherit', cursor: 'pointer', textAlign: 'left' }}><strong style={{ display: 'block', fontSize: 11.5 }}>GRN History</strong><span style={{ display: 'block', marginTop: 3, fontSize: 17, fontWeight: 850 }}>{data.receipts.length}</span></button>
+    </div>
+
+    <section style={{ ...card, overflow: 'hidden' }}>
+      <div className="receiving-search-grid" style={{ padding: 14, display: 'grid', gridTemplateColumns: view === 'ready' ? 'minmax(260px,1fr) minmax(210px,.45fr)' : '1fr', gap: 10, borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+        <Input value={query} onChange={setQuery} placeholder={view === 'ready' ? 'Enter LPO number from invoice or supplier name...' : 'Search GRN, LPO, supplier or invoice...'} />
+        {view === 'ready' && <select value={supplierFilter} onChange={(event) => setSupplierFilter(event.target.value)} style={control}><option value="">All suppliers</option>{supplierRows.map((row) => <option key={id(row.id)} value={id(row.id)}>{id(row.name)}</option>)}</select>}
+      </div>
+
+      {view === 'ready' ? <>
+        <div className="receiving-ready-header" style={{ display: 'grid', gridTemplateColumns: '.7fr 1.5fr .8fr .8fr auto', gap: 12, padding: '10px 16px', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}><span>LPO</span><span>Supplier</span><span>Expected</span><span>Status</span><span></span></div>
+        {filteredOrders.map((order) => <button key={id(order.id)} type="button" onClick={() => { setSelectedOrderId(id(order.id)); setQuantities({}); setInvoiceNumber('') }} style={{ width: '100%', display: 'grid', gridTemplateColumns: '.7fr 1.5fr .8fr .8fr auto', gap: 12, alignItems: 'center', padding: '13px 16px', border: 0, borderTop: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}><strong style={{ color: 'var(--text)', fontSize: 12 }}>LPO {id(order.lpo_number || order.po_number)}</strong><span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{names.suppliers.get(id(order.supplier)) || 'Supplier'}</span><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{formatDateOnly(order.expected_date)}</span><span style={{ color: id(order.status) === 'partially_received' ? 'var(--warn)' : 'var(--good)', fontSize: 10.8, fontWeight: 750 }}>{id(order.status) === 'partially_received' ? 'Partial' : 'Ready'}</span><span style={{ color: 'var(--accent)', fontSize: 10.8, fontWeight: 800 }}>Receive</span></button>)}
+        {!filteredOrders.length && <div style={{ padding: 48, textAlign: 'center' }}><Icon name="inventory_2" size={25} color="var(--text-faint)" /><div style={{ marginTop: 8, color: 'var(--text)', fontWeight: 750 }}>No matching LPOs</div><div style={{ marginTop: 4, color: 'var(--text-muted)', fontSize: 11.5 }}>{readyOrders.length ? 'Try another LPO number or supplier.' : 'No supplier deliveries are currently ready for receiving.'}</div></div>}
+      </> : <>
+        <div style={{ display: 'grid', gridTemplateColumns: '.7fr .7fr 1.4fr .8fr .7fr auto', gap: 12, padding: '10px 16px', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}><span>GRN</span><span>LPO</span><span>Supplier</span><span>Invoice</span><span>Date</span><span></span></div>
+        {historyRows.map((receipt) => <button key={id(receipt.id)} type="button" onClick={() => setSelectedReceiptId(id(receipt.id))} style={{ width: '100%', display: 'grid', gridTemplateColumns: '.7fr .7fr 1.4fr .8fr .7fr auto', gap: 12, alignItems: 'center', padding: '13px 16px', border: 0, borderTop: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}><strong style={{ color: 'var(--text)', fontSize: 12 }}>{id(receipt.grn_number)}</strong><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>LPO {id(receipt.lpo_number)}</span><span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{id(receipt.supplier_name)}</span><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{id(receipt.supplier_invoice_no) || '—'}</span><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{id(receipt.received_date)}</span><span style={{ color: 'var(--accent)', fontSize: 10.8, fontWeight: 800 }}>View</span></button>)}
+        {!historyRows.length && <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)', fontSize: 11.5 }}>No GRNs match your search.</div>}
+      </>}
+    </section>
+  </div>
 }
 
 function RequestPanel({ data, form, setForm, requisitionLabel, items }: any) {
