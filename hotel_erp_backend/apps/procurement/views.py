@@ -314,15 +314,27 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
                 # fully received and therefore drops out of the ready-LPO list.
                 receipts = GoodsReceiptNote.objects.filter(
                     received_by=getattr(request.user, "employee_profile", None)
-                ).select_related("purchase_order__supplier", "purchase_order__requisition")
+                ).select_related(
+                    "received_by__user",
+                    "purchase_order__supplier",
+                    "purchase_order__store",
+                    "purchase_order__requisition__branch",
+                )
             else:
                 receipts = GoodsReceiptNote.objects.filter(
                     purchase_order_id__in=order_ids
-                ).select_related("purchase_order__supplier", "purchase_order__requisition")
+                ).select_related(
+                    "received_by__user",
+                    "purchase_order__supplier",
+                    "purchase_order__store",
+                    "purchase_order__requisition__branch",
+                )
             receipt_ids = receipts.values_list("id", flat=True)
             payload["receipts"] = GoodsReceiptNoteSerializer(receipts, many=True, context={"request": request}).data
             payload["receiptItems"] = GoodsReceiptItemSerializer(
-                GoodsReceiptItem.objects.filter(goods_receipt_id__in=receipt_ids),
+                GoodsReceiptItem.objects.filter(goods_receipt_id__in=receipt_ids)
+                .select_related("item", "purchase_order_item__unit")
+                .prefetch_related("inspection_items"),
                 many=True, context={"request": request},
             ).data
         if stage == "inspect":
@@ -1200,7 +1212,10 @@ class PurchaseOrderItemViewSet(CreatedByModelMixin, ModelViewSet):
 
 class GoodsReceiptNoteViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = GoodsReceiptNote.objects.select_related(
-        "purchase_order__supplier", "purchase_order__requisition", "received_by"
+        "received_by__user",
+        "purchase_order__supplier",
+        "purchase_order__store",
+        "purchase_order__requisition__branch",
     )
     serializer_class = GoodsReceiptNoteSerializer
     filterset_fields = ("purchase_order", "received_by", "received_date")
@@ -1265,11 +1280,11 @@ class GoodsReceiptNoteViewSet(CreatedByModelMixin, ModelViewSet):
 class GoodsReceiptItemViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = GoodsReceiptItem.objects.select_related(
         "goods_receipt",
-        "purchase_order_item",
+        "purchase_order_item__unit",
         "item",
         "store",
         "direct_issue_department",
-    )
+    ).prefetch_related("inspection_items")
     serializer_class = GoodsReceiptItemSerializer
     filterset_fields = ("goods_receipt", "purchase_order_item", "item", "store", "expiry_date")
     search_fields = ("goods_receipt__purchase_order__po_number", "item__name", "item__sku", "store__name")

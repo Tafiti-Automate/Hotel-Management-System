@@ -1350,6 +1350,15 @@ def test_receiving_clerk_workspace_keeps_grn_after_lpo_is_fully_received():
     assert workspace.data["orders"] == []
     assert [row["id"] for row in workspace.data["receipts"]] == [generated.data["id"]]
     assert workspace.data["receipts"][0]["branch_id"] == str(branch.pk)
+    assert workspace.data["receipts"][0]["branch_name"] == branch.name
+    assert workspace.data["receipts"][0]["supplier_name"] == supplier.name
+    assert workspace.data["receipts"][0]["received_by_name"] == employee.user.username
+    assert workspace.data["receiptItems"][0]["item_name"] == item.name
+    assert workspace.data["receiptItems"][0]["item_sku"] == item.sku
+    assert workspace.data["receiptItems"][0]["unit_name"] == item.base_unit.name
+    assert workspace.data["receiptItems"][0]["ordered_quantity"] == "2.00"
+    assert workspace.data["receiptItems"][0]["accepted_quantity"] == "2.00"
+    assert workspace.data["receiptItems"][0]["rejected_quantity"] == "0.00"
 
 
 @pytest.mark.django_db

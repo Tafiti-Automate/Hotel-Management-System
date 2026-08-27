@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { Icon } from '../components/Icon'
 import { HelpLabel } from '../components/HelpLabel'
 import { WorkflowPath } from '../components/WorkflowPath'
-import { createBackendRecord, downloadControlledPurchaseOrder, downloadProcurementAttachment, errorMessage, readBackendPayload, readBackendRecords, runBackendAction, updateBackendRecord, uploadProcurementAttachment } from '../lib/api'
+import { createBackendRecord, downloadControlledPurchaseOrder, downloadProcurementAttachment, errorMessage, fetchHotels, readBackendPayload, readBackendRecords, runBackendAction, updateBackendRecord, uploadProcurementAttachment, type HotelRecord } from '../lib/api'
 import type { Row } from '../lib/data'
 import { chipStyleFor, money } from '../lib/theme'
 import { useApp } from '../state/AppContext'
@@ -547,6 +547,8 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
   run: (operation: () => Promise<unknown>, success: string, nextForm?: Row | ((result: unknown) => Row)) => Promise<void>
   onRefresh: () => Promise<void>
 }) {
+  const app = useApp()
+  const [hotel, setHotel] = useState<HotelRecord | null>(null)
   const [view, setView] = useState<'ready' | 'history'>('ready')
   const [query, setQuery] = useState('')
   const [supplierFilter, setSupplierFilter] = useState('')
@@ -555,6 +557,16 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
   const [invoiceNumber, setInvoiceNumber] = useState('')
   const [receivedDate, setReceivedDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [quantities, setQuantities] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    let active = true
+    void fetchHotels()
+      .then((hotels) => {
+        if (active) setHotel(hotels.find((row) => row.is_active) || hotels[0] || null)
+      })
+      .catch(() => undefined)
+    return () => { active = false }
+  }, [])
 
   const readyOrders = useMemo(
     () => data.orders.filter((row) => ['issued', 'partially_received'].includes(id(row.status))),
@@ -690,26 +702,23 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
   }
 
   if (selectedReceipt) {
-    return <div style={{ maxWidth: 1120, margin: '0 auto' }}>
-      <button type="button" onClick={() => setSelectedReceiptId('')} style={{ ...secondary, marginBottom: 14 }}><Icon name="arrow_back" size={16} />Back to GRN History</button>
-      <section style={{ ...card, overflow: 'hidden' }}>
-        <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--border)' }}>
-          <div style={eyebrow}>Goods received note</div>
-          <h1 style={{ margin: '4px 0 2px', fontSize: 24, color: 'var(--text)' }}>GRN {id(selectedReceipt.grn_number)}</h1>
-          <div style={{ color: 'var(--text-muted)', fontSize: 12.5 }}>LPO {id(selectedReceipt.lpo_number)} · {id(selectedReceipt.supplier_name)}</div>
-        </div>
-        <div style={{ padding: 20 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 10, marginBottom: 18 }}>
-            <ReadOnlyValue label="Supplier invoice" value={id(selectedReceipt.supplier_invoice_no) || '—'} />
-            <ReadOnlyValue label="Delivery note" value={id(selectedReceipt.delivery_note_no) || '—'} />
-            <ReadOnlyValue label="Received date" value={formatDateTime(selectedReceipt.received_date).split(',')[0]} />
-          </div>
-          <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1.5fr) .7fr .6fr', gap: 10, padding: '10px 12px', background: 'var(--surface-2)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}><span>Article</span><span>Quantity received</span><span>Status</span></div>
-            {receiptLines.map((line) => <div key={id(line.id)} style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1.5fr) .7fr .6fr', gap: 10, padding: '12px', borderTop: '1px solid var(--border)', fontSize: 11.5 }}><strong style={{ color: 'var(--text)' }}>{names.items.get(id(line.item)) || id(line.item)}</strong><span style={{ color: 'var(--text-muted)' }}>{id(line.quantity_received)}</span><span style={{ color: line.inventory_changes_applied ? 'var(--good)' : 'var(--warn)', fontWeight: 750 }}>{line.inventory_changes_applied ? 'Posted' : 'Pending'}</span></div>)}
-          </div>
-        </div>
-      </section>
+    return <div className="grn-document-screen" style={{ maxWidth: 1380, margin: '0 auto' }}>
+      <div className="screen-document-view" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 14 }}>
+        <button type="button" onClick={() => setSelectedReceiptId('')} style={secondary}><Icon name="arrow_back" size={16} />Back to GRN History</button>
+        <button type="button" onClick={() => window.print()} style={{ ...secondary, color: 'var(--accent)', borderColor: 'var(--accent)' }}><Icon name="print" size={17} />Print GRN</button>
+      </div>
+      <div className="grn-document-scroll">
+        <GoodsReceiptDocument
+          receipt={selectedReceipt}
+          lines={receiptLines}
+          hotel={hotel}
+          propertyName={id(selectedReceipt.branch_name) || app.currentBranch || app.user.branchName}
+          preparedBy={id(selectedReceipt.received_by_name) || app.user.name}
+          items={app.data.items}
+          stores={app.data.locations}
+          departments={app.data.departments}
+        />
+      </div>
     </div>
   }
 
@@ -746,6 +755,139 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
       </>}
     </section>
   </div>
+}
+
+function GoodsReceiptDocument({ receipt, lines, hotel, propertyName, preparedBy, items, stores, departments }: {
+  receipt: Row
+  lines: Row[]
+  hotel: HotelRecord | null
+  propertyName: string
+  preparedBy: string
+  items: Row[]
+  stores: Row[]
+  departments: Row[]
+}) {
+  const receiptDate = formatDateOnly(receipt.received_date)
+  const lpoDate = formatDateOnly(receipt.lpo_date)
+  const hasCommercialValues = lines.some((line) => line.unit_cost !== undefined && line.unit_cost !== null && id(line.unit_cost) !== '')
+  const grandTotal = lines.reduce((total, line) => total + num(line.accepted_quantity ?? line.quantity_received) * num(line.unit_cost), 0)
+  const hotelName = id(hotel?.legal_name) || id(hotel?.name) || propertyName || 'Hotel Operations'
+  const hotelContact = [hotel?.address, hotel?.city, hotel?.country].filter(Boolean).join(', ')
+  const hotelPhones = [hotel?.phone, hotel?.alternate_phone].filter(Boolean).join(' / ')
+  const supplierContact = [receipt.supplier_phone, receipt.supplier_tin ? `TIN: ${id(receipt.supplier_tin)}` : ''].filter(Boolean).join(' · ')
+  const formatQty = (value: unknown) => {
+    const quantity = num(value)
+    return Number.isInteger(quantity) ? quantity.toFixed(0) : quantity.toFixed(2)
+  }
+
+  return <>
+    <style>{'@media print { @page { size: A4 landscape; margin: 8mm; } }'}</style>
+    <article className="grn-document" aria-label={`Goods Receipt Note ${id(receipt.grn_number)}`}>
+      <header className="grn-brand-header">
+        <div className="grn-logo-block">
+          {hotel?.logo ? <img src={hotel.logo} alt={`${hotel.name} logo`} /> : <div className="grn-logo-placeholder">{hotelName.split(/\s+/).map((part) => part[0]).join('').slice(0, 3)}</div>}
+          <div className="grn-property-name">{propertyName || hotel?.name || 'Hotel property'}</div>
+        </div>
+        <div className="grn-company-block">
+          <strong>{hotelName}</strong>
+          {hotelContact && <span>{hotelContact}</span>}
+          {(hotelPhones || hotel?.email) && <span>{hotelPhones}{hotelPhones && hotel?.email ? ' · ' : ''}{hotel?.email}</span>}
+          {(hotel?.registration_number || hotel?.tax_identification_number) && <span>Reg: {hotel?.registration_number || '—'} · TIN: {hotel?.tax_identification_number || '—'}</span>}
+          <div className="grn-document-title">Goods Receipt Note</div>
+        </div>
+        <div className="grn-authorized-mark">Authorized</div>
+      </header>
+
+      <div className="grn-reference-strip">
+        <div><b>GRN NO.</b><span>{id(receipt.grn_number) || '—'}</span></div>
+        <div><b>GRN DATE</b><span>{receiptDate}</span></div>
+      </div>
+
+      <section className="grn-party-grid">
+        <div className="grn-supplier-block">
+          <b>From,</b>
+          <strong>{id(receipt.supplier_name) || 'Supplier'}</strong>
+          <span>{id(receipt.supplier_address) || 'Address not recorded'}</span>
+          {supplierContact && <span>{supplierContact}</span>}
+        </div>
+        <dl className="grn-delivery-meta">
+          <div><dt>LPO NO.</dt><dd>{id(receipt.lpo_number) || '—'}</dd><dt>DATE</dt><dd>{lpoDate}</dd></div>
+          <div><dt>SUPPLIER INVOICE</dt><dd>{id(receipt.supplier_invoice_no) || '—'}</dd><dt>DATE</dt><dd>{receiptDate}</dd></div>
+          <div><dt>DELIVERY NOTE</dt><dd>{id(receipt.delivery_note_no) || '—'}</dd><dt>STATUS</dt><dd>{id(receipt.status).replace(/_/g, ' ') || 'Posted'}</dd></div>
+          <div><dt>RECEIVING STORE</dt><dd>{id(receipt.receiving_store_name) || 'Direct delivery'}</dd><dt>RECEIVED BY</dt><dd>{preparedBy}</dd></div>
+        </dl>
+      </section>
+
+      <table className="grn-material-table">
+        <thead><tr>
+          <th>Sl.<br />No.</th>
+          <th>LPO No. / Date</th>
+          <th>Item Code</th>
+          <th>Item Description</th>
+          <th>Dept. / Destination</th>
+          <th>UOM</th>
+          <th className="number">LPO<br />Qty.</th>
+          <th className="number">Received<br />Qty.</th>
+          <th className="number">Short<br />Qty.</th>
+          <th className="number">Excess<br />Qty.</th>
+          <th className="number">Rejected<br />Qty.</th>
+          <th className="number">Accepted<br />Qty.</th>
+          <th className="number">Rate</th>
+          <th className="number">Total<br />Value</th>
+        </tr></thead>
+        <tbody>
+          {lines.map((line, index) => {
+            const item = items.find((row) => id(row.id) === id(line.item))
+            const ordered = num(line.ordered_quantity ?? line.quantity_received)
+            const received = num(line.quantity_received)
+            const accepted = num(line.accepted_quantity ?? received)
+            const rejected = num(line.rejected_quantity)
+            const destination = line.direct_issue_department
+              ? departments.find((row) => id(row.id) === id(line.direct_issue_department))?.name
+              : stores.find((row) => id(row.id) === id(line.store))?.name
+            const rate = num(line.unit_cost)
+            return <tr key={id(line.id)}>
+              <td className="center">{index + 1}</td>
+              <td>{id(receipt.lpo_number)}<br />{lpoDate}</td>
+              <td>{id(line.item_sku) || id(item?.sku) || '—'}</td>
+              <td><strong>{id(line.item_name) || id(item?.name) || 'Article'}</strong>{item?.category && <small>{id(item.category)}</small>}</td>
+              <td>{id(destination) || '—'}</td>
+              <td className="center">{id(line.unit_abbreviation) || id(line.unit_name) || id(item?.uom) || '—'}</td>
+              <td className="number">{formatQty(ordered)}</td>
+              <td className="number">{formatQty(received)}</td>
+              <td className="number">{formatQty(Math.max(ordered - received, 0))}</td>
+              <td className="number">{formatQty(Math.max(received - ordered, 0))}</td>
+              <td className="number">{formatQty(rejected)}</td>
+              <td className="number">{formatQty(accepted)}</td>
+              <td className="number">{hasCommercialValues ? money(rate).replace('UGX ', '') : '—'}</td>
+              <td className="number">{hasCommercialValues ? money(rate * accepted).replace('UGX ', '') : '—'}</td>
+            </tr>
+          })}
+          {!lines.length && <tr><td colSpan={14} className="grn-empty-row">No received items recorded on this GRN.</td></tr>}
+        </tbody>
+        <tfoot><tr><td colSpan={12}></td><th>Grand Total</th><td className="number">{hasCommercialValues ? money(grandTotal) : '—'}</td></tr></tfoot>
+      </table>
+
+      <div className="grn-control-strip">
+        <span>Authorized&nbsp;&nbsp;: <b>{id(receipt.status) === 'posted' ? 'Yes' : 'Pending'}</b></span>
+        <span>Inspection Required&nbsp;&nbsp;: <b>Yes</b></span>
+        <span>Inventory Posted&nbsp;&nbsp;: <b>{lines.every((line) => line.inventory_changes_applied) ? 'Yes' : 'Pending'}</b></span>
+      </div>
+
+      <section className="grn-signatures">
+        <div><i>{preparedBy}</i><b>Prepared By</b></div>
+        <div><i></i><b>Store Manager</b></div>
+        <div><i>{preparedBy}</i><b>Inspected By</b></div>
+        <div><i></i><b>H.O.D.</b></div>
+        <div><i></i><b>Account Manager</b></div>
+      </section>
+
+      <footer className="grn-document-footer">
+        <span>Generated {formatDateTime(receipt.posted_at || receipt.created_at)}</span>
+        <span>Page 1 of 1</span>
+      </footer>
+    </article>
+  </>
 }
 
 function RequestPanel({ data, form, setForm, requisitionLabel, items }: any) {

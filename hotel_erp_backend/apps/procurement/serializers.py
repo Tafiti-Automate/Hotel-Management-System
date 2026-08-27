@@ -676,8 +676,19 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
 
 class GoodsReceiptNoteSerializer(serializers.ModelSerializer):
     lpo_number = serializers.CharField(source="purchase_order.lpo_number", read_only=True)
+    lpo_date = serializers.DateTimeField(source="purchase_order.sent_at", read_only=True)
     supplier_name = serializers.CharField(source="purchase_order.supplier.name", read_only=True)
+    supplier_address = serializers.CharField(source="purchase_order.supplier.address", read_only=True)
+    supplier_phone = serializers.CharField(source="purchase_order.supplier.phone", read_only=True)
+    supplier_tin = serializers.CharField(source="purchase_order.supplier.tin_number", read_only=True)
     branch_id = serializers.UUIDField(source="purchase_order.requisition.branch_id", read_only=True)
+    branch_name = serializers.CharField(source="purchase_order.requisition.branch.name", read_only=True)
+    receiving_store_name = serializers.CharField(source="purchase_order.store.name", read_only=True)
+    received_by_name = serializers.SerializerMethodField()
+
+    def get_received_by_name(self, instance):
+        user = instance.received_by.user
+        return user.get_full_name() or user.username
 
     class Meta:
         model = GoodsReceiptNote
@@ -686,9 +697,16 @@ class GoodsReceiptNoteSerializer(serializers.ModelSerializer):
             "grn_number",
             "purchase_order",
             "lpo_number",
+            "lpo_date",
             "supplier_name",
+            "supplier_address",
+            "supplier_phone",
+            "supplier_tin",
             "branch_id",
+            "branch_name",
+            "receiving_store_name",
             "received_by",
+            "received_by_name",
             "received_date",
             "status",
             "delivery_note_no",
@@ -747,6 +765,19 @@ class GoodsReceiptNoteSerializer(serializers.ModelSerializer):
 
 
 class GoodsReceiptItemSerializer(serializers.ModelSerializer):
+    item_name = serializers.CharField(source="item.name", read_only=True)
+    item_sku = serializers.CharField(source="item.sku", read_only=True)
+    unit_name = serializers.CharField(source="purchase_order_item.unit.name", read_only=True)
+    unit_abbreviation = serializers.CharField(source="purchase_order_item.unit.abbreviation", read_only=True)
+    ordered_quantity = serializers.DecimalField(
+        source="purchase_order_item.approved_quantity",
+        max_digits=12,
+        decimal_places=2,
+        read_only=True,
+    )
+    accepted_quantity = serializers.SerializerMethodField()
+    rejected_quantity = serializers.SerializerMethodField()
+
     class Meta:
         model = GoodsReceiptItem
         fields = "__all__"
@@ -762,6 +793,23 @@ class GoodsReceiptItemSerializer(serializers.ModelSerializer):
             "direct_issue_department",
             "unit_cost",
         )
+
+    def _inspection_quantity(self, instance, field):
+        inspection_item = instance.inspection_items.first()
+        if not inspection_item:
+            value = instance.base_quantity if field == "quantity_accepted" else Decimal("0.00")
+        else:
+            value = getattr(inspection_item, field)
+        factor = instance.purchase_order_item.conversion_factor
+        if factor <= Decimal("0.00"):
+            return "0.00"
+        return f"{value / factor:.2f}"
+
+    def get_accepted_quantity(self, instance):
+        return self._inspection_quantity(instance, "quantity_accepted")
+
+    def get_rejected_quantity(self, instance):
+        return self._inspection_quantity(instance, "quantity_rejected")
 
     def validate(self, attrs):
         receipt = attrs.get("goods_receipt") or getattr(self.instance, "goods_receipt", None)
