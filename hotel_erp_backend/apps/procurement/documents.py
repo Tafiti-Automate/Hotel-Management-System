@@ -2,6 +2,10 @@
 
 from io import BytesIO
 from html import escape
+from decimal import Decimal, InvalidOperation
+import re
+
+from django.conf import settings
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
@@ -41,13 +45,32 @@ def _money(value):
     return f"{value or 0:,.2f}"
 
 
+def _vat_rate():
+    """Document VAT rate, configurable as a fraction (0.18) or percent (18)."""
+    try:
+        rate = Decimal(str(getattr(settings, "VAT_RATE", "0.18")))
+    except (InvalidOperation, TypeError, ValueError):
+        rate = Decimal("0.18")
+    if rate > 1:
+        rate = rate / Decimal("100")
+    return max(rate, Decimal("0.00"))
+
+
+def _payment_terms_days(value):
+    match = re.search(r"\d+", str(value or ""))
+    if not match:
+        return "—"
+    days = int(match.group(0))
+    return f"{days} Day" if days == 1 else f"{days} Days"
+
+
 def _order_status(order):
     return {
-        "approved": "Approved (not issued)",
-        "issued": "PO Open (not received)",
-        "partially_received": "PO Partially Received",
-        "received": "PO Received",
-        "cancelled": "PO Cancelled",
+        "approved": "Not Received",
+        "issued": "Not Received",
+        "partially_received": "Partially Received",
+        "received": "Received",
+        "cancelled": "Cancelled",
     }.get(order.status, order.get_status_display())
 
 
@@ -172,7 +195,7 @@ def build_purchase_order_pdf(
         [Paragraph("E-mail", small), Paragraph(f": {_text(order.supplier.email)}", normal)],
         [Paragraph("TIN", small), Paragraph(f": {_text(order.supplier.tin_number)}", normal)],
         [Paragraph("Address", small), Paragraph(f": {_text(order.supplier.address)}", normal)],
-        [Paragraph("Terms of Payment", small), Paragraph(f": {_text(order.supplier.payment_terms)}", normal)],
+        [Paragraph("Terms of Payment", small), Paragraph(f": {_text(_payment_terms_days(order.supplier.payment_terms))}", normal)],
     ]
     order_data = [
         [Paragraph("LPO No.", small), Paragraph(f": <b>{_text(order.lpo_number)}</b>", normal)],
@@ -202,27 +225,35 @@ def build_purchase_order_pdf(
         ("RIGHTPADDING", (0, 0), (-1, -1), 0),
     ]))
 
+    vat_rate = _vat_rate()
+    vat_percent = vat_rate * Decimal("100")
+    net_total = order.total_amount or Decimal("0.00")
+    vat_total = (net_total * vat_rate).quantize(Decimal("0.01"))
+    gross_total = net_total + vat_total
+
     line_rows = [[
         Paragraph("Article", small),
         Paragraph("Qty", small),
         Paragraph("UoM", small),
         Paragraph("Unit Price", small),
-        Paragraph("Disc", small),
-        Paragraph("VAT", small),
         Paragraph("Net", small),
+        Paragraph("VAT %", small),
+        Paragraph("Amount", small),
     ]]
     for line in order.items.select_related("item", "unit", "item__base_unit").all():
         unit_name = line.unit.abbreviation if line.unit else (
             line.item.base_unit.abbreviation if line.item.base_unit else line.item.unit
         )
+        line_net = line.line_total or Decimal("0.00")
+        line_amount = line_net + (line_net * vat_rate)
         line_rows.append([
             Paragraph(f"{_text(line.item.sku)} &nbsp; {_text(line.item.name)}", normal),
             Paragraph(_money(line.approved_quantity), right),
             Paragraph(_text(unit_name), normal),
             Paragraph(_money(line.unit_cost), right),
-            Paragraph("0.00%", right),
-            Paragraph("0.00%", right),
-            Paragraph(_money(line.line_total), right),
+            Paragraph(_money(line_net), right),
+            Paragraph(f"{vat_percent:.0f}%", right),
+            Paragraph(_money(line_amount), right),
         ])
     lines = Table(
         line_rows,
@@ -243,9 +274,9 @@ def build_purchase_order_pdf(
     ]))
 
     total_table = Table([
-        [Paragraph("Net Amount", small), Paragraph(_money(order.total_amount), right)],
-        [Paragraph("VAT 0.00%", small), Paragraph("0.00", right)],
-        [Paragraph(f"<b>Total Amount {_text(order.requisition.currency)}</b>", normal), Paragraph(f"<b>{_money(order.total_amount)}</b>", right)],
+        [Paragraph("Net Amount", small), Paragraph(_money(net_total), right)],
+        [Paragraph(f"VAT {vat_percent:.0f}%", small), Paragraph(_money(vat_total), right)],
+        [Paragraph(f"<b>Total Amount {_text(order.requisition.currency)}</b>", normal), Paragraph(f"<b>{_money(gross_total)}</b>", right)],
     ], colWidths=[45 * mm, 32 * mm])
     total_table.hAlign = "RIGHT"
     total_table.setStyle(TableStyle([

@@ -114,6 +114,7 @@ class GoodsInspectionStatus(models.TextChoices):
 
 class GoodsReceiptStatus(models.TextChoices):
     DRAFT = "draft", "Draft"
+    RECEIVED = "received", "Received"
     INSPECTED = "inspected", "Inspected"
     POSTED = "posted", "Posted"
     CANCELLED = "cancelled", "Cancelled"

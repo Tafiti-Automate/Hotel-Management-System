@@ -8,7 +8,7 @@ import { chipStyleFor, money } from '../lib/theme'
 import { useApp } from '../state/AppContext'
 
 type Stage = 'request' | 'quote' | 'lpo' | 'receipt' | 'inspect' | 'return'
-type LpoQueue = 'prepare' | 'finance' | 'management' | 'approved' | 'history'
+type LpoQueue = 'prepare' | 'purchasing' | 'finance' | 'management' | 'approved' | 'history'
 type Datasets = Record<string, Row[]>
 
 const paths = {
@@ -61,6 +61,9 @@ function num(value: unknown) { const parsed = Number(value); return Number.isFin
 function currentApprovalStep(order: Row): Row | undefined {
   const steps = Array.isArray(order.approval_steps) ? order.approval_steps as Row[] : []
   return steps.find((step) => id(step.status) === 'pending')
+}
+function isPurchasingApproval(order: Row): boolean {
+  return /(purchasing manager|procurement manager|purchasing)/i.test(id(currentApprovalStep(order)?.stage_name))
 }
 function isFinanceApproval(order: Row): boolean {
   return /finance/i.test(id(currentApprovalStep(order)?.stage_name))
@@ -133,7 +136,7 @@ export default function ProcurementWorkbench() {
     setMessage('')
     try {
       const payload = await readBackendPayload(`requisitions/workspace?stage=${stage}`)
-      if (stage === 'lpo' && ['financial manager', 'general manager'].includes(role)) {
+      if (stage === 'lpo' && ['procurement manager', 'financial manager', 'general manager'].includes(role)) {
         payload.approvalQueueOrders = await readBackendRecords('purchase-orders/approval-inbox')
         if (role === 'general manager') {
           payload.decisionHistoryOrders = await readBackendRecords('purchase-orders/decision-history')
@@ -280,9 +283,14 @@ export default function ProcurementWorkbench() {
       return
     }
     const status = id(row.status)
-    // Finance and General Manager records come from the backend's authoritative
-    // approval inbox. Do not infer their queue again from a possibly stale or
-    // partially serialized approval timeline when they click the record.
+    // Approval records come from the backend's authoritative role queue.
+    // Do not infer ownership from a stale or partially serialized timeline.
+    if (role === 'procurement manager' && status === 'pending_approval' && isPurchasingApproval(row)) {
+      setSelectedRecord(null)
+      setLpoQueue('purchasing')
+      setForm({ order: id(row.id) })
+      return
+    }
     if (role === 'financial manager' && status === 'pending_approval') {
       setSelectedRecord(null)
       setLpoQueue('finance')
@@ -309,13 +317,15 @@ export default function ProcurementWorkbench() {
     }
     const queue: LpoQueue = status === 'draft'
       ? 'prepare'
-      : status === 'pending_approval' && isFinanceApproval(row)
-        ? 'finance'
-        : status === 'pending_approval'
-          ? 'management'
-          : status === 'approved'
-            ? 'approved'
-            : 'history'
+      : status === 'pending_approval' && isPurchasingApproval(row)
+        ? 'purchasing'
+        : status === 'pending_approval' && isFinanceApproval(row)
+          ? 'finance'
+          : status === 'pending_approval'
+            ? 'management'
+            : status === 'approved'
+              ? 'approved'
+              : 'history'
     setSelectedRecord(null)
     setLpoQueue(queue)
     setForm({ order: id(row.id) })
@@ -386,6 +396,9 @@ export default function ProcurementWorkbench() {
   const roleApprovalQueueOrders = useMemo(() => {
     const serverQueue = scopedData.approvalQueueOrders
     if (Array.isArray(serverQueue)) return serverQueue
+    if (role === 'procurement manager') {
+      return scopedData.orders.filter((row) => id(row.status) === 'pending_approval' && isPurchasingApproval(row))
+    }
     if (role === 'financial manager') {
       return scopedData.orders.filter((row) => id(row.status) === 'pending_approval' && isFinanceApproval(row))
     }
@@ -397,7 +410,10 @@ export default function ProcurementWorkbench() {
 
   useEffect(() => {
     if (stage !== 'lpo' || loading || form.order || !roleApprovalQueueOrders.length) return
-    if (role === 'financial manager') {
+    if (role === 'procurement manager') {
+      setLpoQueue('purchasing')
+      setForm({ order: id(roleApprovalQueueOrders[0].id) })
+    } else if (role === 'financial manager') {
       setLpoQueue('finance')
       setForm({ order: id(roleApprovalQueueOrders[0].id) })
     } else if (role === 'general manager') {
@@ -431,6 +447,7 @@ export default function ProcurementWorkbench() {
     return {
       allocation: needsAllocation.length,
       prepare: readyForLpo.length + scopedData.orders.filter((row) => id(row.status) === 'draft').length,
+      purchasing: scopedData.orders.filter((row) => id(row.status) === 'pending_approval' && isPurchasingApproval(row)).length,
       finance: scopedData.orders.filter((row) => id(row.status) === 'pending_approval' && isFinanceApproval(row)).length,
       management: scopedData.orders.filter((row) => id(row.status) === 'pending_approval' && isManagementApproval(row)).length,
       approved: scopedData.orders.filter((row) => id(row.status) === 'approved').length,
@@ -466,9 +483,9 @@ export default function ProcurementWorkbench() {
         <div className="workbench-hero" style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
           <span style={heroIcon}><Icon name="shopping_cart_checkout" size={24} color="#fff" /></span>
           <div>
-            <div style={eyebrow}>{role === 'financial manager' ? 'Financial control' : role === 'general manager' ? 'Executive control' : role === 'receiving clerk' ? 'Goods receiving' : 'Procurement'}</div>
-            <h1 style={{ margin: '3px 0', fontSize: 23, color: 'var(--text)' }}>{role === 'financial manager' ? 'LPO Financial Approval' : role === 'general manager' ? 'Final LPO Approvals' : role === 'receiving clerk' ? 'Receiving & GRN' : 'Procurement Queue'}</h1>
-            <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{role === 'financial manager' ? 'Review LPO value and quantities before approval.' : role === 'general manager' ? 'Review Finance-approved LPOs for final authorization.' : role === 'receiving clerk' ? 'Record deliveries against issued LPOs and post GRNs.' : 'Manage supplier allocation, LPO preparation and supplier issue.'}</div>
+            <div style={eyebrow}>{role === 'financial manager' ? 'Financial control' : role === 'general manager' ? 'Executive control' : role === 'receiving clerk' ? 'Goods receiving' : role === 'procurement manager' ? 'Purchasing control' : 'Procurement'}</div>
+            <h1 style={{ margin: '3px 0', fontSize: 23, color: 'var(--text)' }}>{role === 'financial manager' ? 'Level 2 · LPO Approval' : role === 'general manager' ? 'Level 3 · Final LPO Approval' : role === 'receiving clerk' ? 'Receiving & GRN' : role === 'procurement manager' ? 'Purchasing & LPO Control' : 'Procurement Queue'}</h1>
+            <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{role === 'financial manager' ? 'Review Level 1-approved LPO values and quantities.' : role === 'general manager' ? 'Review Level 2-approved LPOs for final authorization.' : role === 'receiving clerk' ? 'Receive deliveries, generate GRNs, then post them to inventory.' : role === 'procurement manager' ? 'Manage purchasing and complete Level 1 LPO approvals.' : 'Manage supplier allocation and LPO preparation.'}</div>
           </div>
           <button onClick={() => void load()} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button>
         </div>
@@ -477,8 +494,9 @@ export default function ProcurementWorkbench() {
         {([
           ['allocation', 'New Store Requisitions', procurementQueues.allocation],
           ['prepare', 'Prepare LPO', procurementQueues.prepare],
-          ['finance', 'Awaiting Finance', procurementQueues.finance],
-          ['management', 'Awaiting GM', procurementQueues.management],
+          ['purchasing', 'Level 1 Approval', procurementQueues.purchasing],
+          ['finance', 'Level 2 · Finance', procurementQueues.finance],
+          ['management', 'Level 3 · GM', procurementQueues.management],
           ['approved', 'Approved to Send', procurementQueues.approved],
           ['history', 'History', procurementQueues.history],
         ] as Array<['allocation' | LpoQueue, string, number]>).map(([key, label, count]) => {
@@ -725,10 +743,15 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
   }
 
   if (selectedReceipt) {
+    const receiptPosted = id(selectedReceipt.status) === 'posted' || (receiptLines.length > 0 && receiptLines.every((line) => Boolean(line.inventory_changes_applied)))
     return <div className="grn-document-screen" style={{ maxWidth: 1380, margin: '0 auto' }}>
-      <div className="screen-document-view" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 14 }}>
+      <div className="screen-document-view" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
         <button type="button" onClick={() => setSelectedReceiptId('')} style={secondary}><Icon name="arrow_back" size={16} />Back to GRN History</button>
-        <button type="button" onClick={() => window.print()} style={{ ...secondary, color: 'var(--accent)', borderColor: 'var(--accent)' }}><Icon name="print" size={17} />Print GRN</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface)', color: receiptPosted ? 'var(--good)' : 'var(--text-muted)', fontSize: 10.5, fontWeight: 800 }}>Status: {receiptPosted ? 'Posted' : 'Received'}</span>
+          {!receiptPosted && <button type="button" disabled={busy} onClick={() => void run(() => runBackendAction('grns', id(selectedReceipt.id), 'post-to-inventory'), 'GRN posted to inventory')} style={{ ...secondary, color: 'var(--good)', borderColor: 'var(--good)' }}><Icon name="inventory_2" size={17} />Post GRN</button>}
+          <button type="button" onClick={() => window.print()} style={{ ...secondary, color: 'var(--accent)', borderColor: 'var(--accent)' }}><Icon name="print" size={17} />Print GRN</button>
+        </div>
       </div>
       <div className="grn-document-scroll">
         <GoodsReceiptDocument
@@ -738,7 +761,6 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
           propertyName={id(selectedReceipt.branch_name) || app.currentBranch || app.user.branchName}
           preparedBy={id(selectedReceipt.received_by_name) || app.user.name}
           items={app.data.items}
-          stores={app.data.locations}
           departments={app.data.departments}
         />
       </div>
@@ -772,143 +794,131 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
         {filteredOrders.map((order) => <button key={id(order.id)} type="button" onClick={() => { setSelectedOrderId(id(order.id)); setQuantities({}); setExpiryDates({}); setInvoiceNumber('') }} style={{ width: '100%', display: 'grid', gridTemplateColumns: '.7fr 1.5fr .8fr .8fr auto', gap: 12, alignItems: 'center', padding: '13px 16px', border: 0, borderTop: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}><strong style={{ color: 'var(--text)', fontSize: 12 }}>LPO {id(order.lpo_number || order.po_number)}</strong><span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{names.suppliers.get(id(order.supplier)) || 'Supplier'}</span><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{formatDateOnly(order.expected_date)}</span><span style={{ color: id(order.status) === 'partially_received' ? 'var(--warn)' : 'var(--good)', fontSize: 10.8, fontWeight: 750 }}>{id(order.status) === 'partially_received' ? 'Partial' : 'Ready'}</span><span style={{ color: 'var(--accent)', fontSize: 10.8, fontWeight: 800 }}>Receive</span></button>)}
         {!filteredOrders.length && <div style={{ padding: 48, textAlign: 'center' }}><Icon name="inventory_2" size={25} color="var(--text-faint)" /><div style={{ marginTop: 8, color: 'var(--text)', fontWeight: 750 }}>No matching LPOs</div><div style={{ marginTop: 4, color: 'var(--text-muted)', fontSize: 11.5 }}>{readyOrders.length ? 'Try another LPO number or supplier.' : 'No supplier deliveries are currently ready for receiving.'}</div></div>}
       </> : <>
-        <div style={{ display: 'grid', gridTemplateColumns: '.7fr .7fr 1.4fr .8fr .7fr auto', gap: 12, padding: '10px 16px', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}><span>GRN</span><span>LPO</span><span>Supplier</span><span>Invoice</span><span>Date</span><span></span></div>
-        {historyRows.map((receipt) => <button key={id(receipt.id)} type="button" onClick={() => setSelectedReceiptId(id(receipt.id))} style={{ width: '100%', display: 'grid', gridTemplateColumns: '.7fr .7fr 1.4fr .8fr .7fr auto', gap: 12, alignItems: 'center', padding: '13px 16px', border: 0, borderTop: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}><strong style={{ color: 'var(--text)', fontSize: 12 }}>{id(receipt.grn_number)}</strong><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>LPO {id(receipt.lpo_number)}</span><span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{id(receipt.supplier_name)}</span><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{id(receipt.supplier_invoice_no) || '—'}</span><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{id(receipt.received_date)}</span><span style={{ color: 'var(--accent)', fontSize: 10.8, fontWeight: 800 }}>View</span></button>)}
+        <div style={{ display: 'grid', gridTemplateColumns: '.7fr .7fr 1.35fr .8fr .7fr .65fr auto', gap: 12, padding: '10px 16px', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}><span>GRN</span><span>LPO</span><span>Supplier</span><span>Invoice</span><span>Date</span><span>Status</span><span></span></div>
+        {historyRows.map((receipt) => {
+          const historyPosted = id(receipt.status) === 'posted'
+          return <button key={id(receipt.id)} type="button" onClick={() => setSelectedReceiptId(id(receipt.id))} style={{ width: '100%', display: 'grid', gridTemplateColumns: '.7fr .7fr 1.35fr .8fr .7fr .65fr auto', gap: 12, alignItems: 'center', padding: '13px 16px', border: 0, borderTop: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}><strong style={{ color: 'var(--text)', fontSize: 12 }}>{id(receipt.grn_number)}</strong><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>LPO {id(receipt.lpo_number)}</span><span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{id(receipt.supplier_name)}</span><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{id(receipt.supplier_invoice_no) || '—'}</span><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{id(receipt.received_date)}</span><span style={{ color: historyPosted ? 'var(--good)' : 'var(--text-muted)', fontSize: 10.8, fontWeight: 800 }}>{historyPosted ? 'Posted' : 'Received'}</span><span style={{ color: 'var(--accent)', fontSize: 10.8, fontWeight: 800 }}>View</span></button>
+        })}
         {!historyRows.length && <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)', fontSize: 11.5 }}>{data.receipts.length ? 'No GRNs match your search.' : 'No GRNs have been generated by you yet.'}</div>}
       </>}
     </section>
   </div>
 }
 
-function GoodsReceiptDocument({ receipt, lines, hotel, propertyName, preparedBy, items, stores, departments }: {
+function GoodsReceiptDocument({ receipt, lines, hotel, propertyName, preparedBy, items, departments }: {
   receipt: Row
   lines: Row[]
   hotel: HotelRecord | null
   propertyName: string
   preparedBy: string
   items: Row[]
-  stores: Row[]
   departments: Row[]
 }) {
   const receiptDate = formatDateOnly(receipt.received_date)
   const lpoDate = formatDateOnly(receipt.lpo_date)
+  const vatRate = 0.18
+  const vatPercent = vatRate * 100
   const hasCommercialValues = lines.some((line) => line.unit_cost !== undefined && line.unit_cost !== null && id(line.unit_cost) !== '')
-  const grandTotal = lines.reduce((total, line) => total + num(line.accepted_quantity ?? line.quantity_received) * num(line.unit_cost), 0)
+  const netTotal = lines.reduce((total, line) => total + num(line.accepted_quantity ?? line.quantity_received) * num(line.unit_cost), 0)
+  const vatTotal = netTotal * vatRate
+  const grandTotal = netTotal + vatTotal
+  const posted = id(receipt.status) === 'posted' || (lines.length > 0 && lines.every((line) => Boolean(line.inventory_changes_applied)))
+  const documentStatus = posted ? 'Posted' : 'Received'
   const hotelName = id(hotel?.legal_name) || id(hotel?.name) || propertyName || 'Hotel Operations'
-  const hotelContact = [hotel?.address, hotel?.city, hotel?.country].filter(Boolean).join(', ')
+  const hotelAddress = [hotel?.address, hotel?.city, hotel?.country].filter(Boolean).join(', ')
   const hotelPhones = [hotel?.phone, hotel?.alternate_phone].filter(Boolean).join(' / ')
-  const supplierContact = [receipt.supplier_phone, receipt.supplier_tin ? `TIN: ${id(receipt.supplier_tin)}` : ''].filter(Boolean).join(' · ')
+  const receivingDestination = id(receipt.receiving_store_name) || (() => {
+    const directDepartments = lines
+      .map((line) => departments.find((row) => id(row.id) === id(line.direct_issue_department))?.name)
+      .filter(Boolean)
+    const destinations = Array.from(new Set(directDepartments))
+    return destinations.length ? destinations.join(', ') : 'Direct delivery'
+  })()
   const formatQty = (value: unknown) => {
     const quantity = num(value)
     return Number.isInteger(quantity) ? quantity.toFixed(0) : quantity.toFixed(2)
   }
+  const amount = (value: number) => hasCommercialValues ? value.toLocaleString('en-UG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'
 
   return <>
-    <style>{'@media print { @page { size: A4 landscape; margin: 8mm; } }'}</style>
-    <article className="grn-document" aria-label={`Goods Receipt Note ${id(receipt.grn_number)}`}>
-      <header className="grn-brand-header">
-        <div className="grn-logo-block">
-          {hotel?.logo ? <img src={hotel.logo} alt={`${hotel.name} logo`} /> : <div className="grn-logo-placeholder">{hotelName.split(/\s+/).map((part) => part[0]).join('').slice(0, 3)}</div>}
-          <div className="grn-property-name">{propertyName || hotel?.name || 'Hotel property'}</div>
-        </div>
-        <div className="grn-company-block">
+    <style>{'@media print { @page { size: A4 landscape; margin: 9mm; } }'}</style>
+    <article className="grn-document" aria-label={`Goods Received Note ${id(receipt.grn_number)}`}>
+      <header className="grn-simple-header">
+        <div className="grn-simple-company">
+          {hotel?.logo && <img src={hotel.logo} alt={`${hotel.name} logo`} />}
           <strong>{hotelName}</strong>
-          {hotelContact && <span>{hotelContact}</span>}
-          {(hotelPhones || hotel?.email) && <span>{hotelPhones}{hotelPhones && hotel?.email ? ' · ' : ''}{hotel?.email}</span>}
-          {(hotel?.registration_number || hotel?.tax_identification_number) && <span>Reg: {hotel?.registration_number || '—'} · TIN: {hotel?.tax_identification_number || '—'}</span>}
-          <div className="grn-document-title">Goods Receipt Note</div>
+          {hotelAddress && <span>{hotelAddress}</span>}
+          {hotelPhones && <span>Tel: {hotelPhones}</span>}
+          {hotel?.email && <span>Email: {hotel.email}</span>}
+          {hotel?.tax_identification_number && <span>TIN: {hotel.tax_identification_number}</span>}
         </div>
-        <div className="grn-authorized-mark">Authorized</div>
+        <div className="grn-simple-title">
+          <span>{propertyName || hotel?.name || 'Hotel Property'}</span>
+          <strong>Goods Received Note</strong>
+          <small>(PURCHASE ORDER RECEIVING)</small>
+        </div>
       </header>
 
-      <div className="grn-reference-strip">
-        <div><b>GRN NO.</b><span>{id(receipt.grn_number) || '—'}</span></div>
-        <div><b>GRN DATE</b><span>{receiptDate}</span></div>
-      </div>
-
-      <section className="grn-party-grid">
-        <div className="grn-supplier-block">
-          <b>From,</b>
-          <strong>{id(receipt.supplier_name) || 'Supplier'}</strong>
-          <span>{id(receipt.supplier_address) || 'Address not recorded'}</span>
-          {supplierContact && <span>{supplierContact}</span>}
-        </div>
-        <dl className="grn-delivery-meta">
-          <div><dt>LPO NO.</dt><dd>{id(receipt.lpo_number) || '—'}</dd><dt>DATE</dt><dd>{lpoDate}</dd></div>
-          <div><dt>SUPPLIER INVOICE</dt><dd>{id(receipt.supplier_invoice_no) || '—'}</dd><dt>DATE</dt><dd>{receiptDate}</dd></div>
-          <div><dt>DELIVERY NOTE</dt><dd>{id(receipt.delivery_note_no) || '—'}</dd><dt>STATUS</dt><dd>{id(receipt.status).replace(/_/g, ' ') || 'Posted'}</dd></div>
-          <div><dt>RECEIVING STORE</dt><dd>{id(receipt.receiving_store_name) || 'Direct delivery'}</dd><dt>RECEIVED BY</dt><dd>{preparedBy}</dd></div>
-        </dl>
+      <section className="grn-simple-meta">
+        <div><b>GRN No.</b><span>{id(receipt.grn_number) || '—'}</span></div>
+        <div><b>LPO No.</b><span>{id(receipt.lpo_number) || '—'}</span></div>
+        <div><b>LPO Date</b><span>{lpoDate}</span></div>
+        <div><b>Delivery Date</b><span>{receiptDate}</span></div>
+        <div><b>Delivery Note No.</b><span>{id(receipt.delivery_note_no) || '—'}</span></div>
+        <div><b>Supplier Invoice No.</b><span>{id(receipt.supplier_invoice_no) || '—'}</span></div>
+        <div><b>Supplier</b><span>{id(receipt.supplier_name) || '—'}</span></div>
+        <div><b>Delivery Location</b><span>{receivingDestination}</span></div>
       </section>
 
       <table className="grn-material-table">
         <thead><tr>
-          <th>Sl.<br />No.</th>
-          <th>LPO No. / Date</th>
-          <th>Item Code</th>
-          <th>Item Description</th>
-          <th>Dept. / Destination</th>
-          <th>UOM</th>
-          <th className="number">LPO<br />Qty.</th>
-          <th className="number">Received<br />Qty.</th>
-          <th className="number">Short<br />Qty.</th>
-          <th className="number">Excess<br />Qty.</th>
-          <th className="number">Rejected<br />Qty.</th>
-          <th className="number">Accepted<br />Qty.</th>
-          <th>Expiry<br />Date</th>
-          <th className="number">Rate</th>
-          <th className="number">Total<br />Value</th>
+          <th>Status</th>
+          <th>Article</th>
+          <th className="number">Ordered</th>
+          <th>Unit</th>
+          <th className="number">Delivered</th>
+          <th className="number">Unit Price</th>
+          <th className="number">Net</th>
+          <th className="number">VAT %</th>
+          <th className="number">Amount</th>
         </tr></thead>
         <tbody>
-          {lines.map((line, index) => {
+          {lines.map((line) => {
             const item = items.find((row) => id(row.id) === id(line.item))
             const ordered = num(line.ordered_quantity ?? line.quantity_received)
-            const received = num(line.quantity_received)
-            const accepted = num(line.accepted_quantity ?? received)
-            const rejected = num(line.rejected_quantity)
-            const destination = line.direct_issue_department
-              ? departments.find((row) => id(row.id) === id(line.direct_issue_department))?.name
-              : stores.find((row) => id(row.id) === id(line.store))?.name
+            const delivered = num(line.accepted_quantity ?? line.quantity_received)
             const rate = num(line.unit_cost)
+            const net = delivered * rate
+            const gross = net * (1 + vatRate)
             return <tr key={id(line.id)}>
-              <td className="center">{index + 1}</td>
-              <td>{id(receipt.lpo_number)}<br />{lpoDate}</td>
-              <td>{id(line.item_sku) || id(item?.sku) || '—'}</td>
-              <td><strong>{id(line.item_name) || id(item?.name) || 'Article'}</strong>{item?.category && <small>{id(item.category)}</small>}</td>
-              <td>{id(destination) || '—'}</td>
-              <td className="center">{id(line.unit_abbreviation) || id(line.unit_name) || id(item?.uom) || '—'}</td>
+              <td>{documentStatus}</td>
+              <td><strong>{id(line.item_name) || id(item?.name) || 'Article'}</strong>{(id(line.item_sku) || id(item?.sku)) && <small>{id(line.item_sku) || id(item?.sku)}</small>}</td>
               <td className="number">{formatQty(ordered)}</td>
-              <td className="number">{formatQty(received)}</td>
-              <td className="number">{formatQty(Math.max(ordered - received, 0))}</td>
-              <td className="number">{formatQty(Math.max(received - ordered, 0))}</td>
-              <td className="number">{formatQty(rejected)}</td>
-              <td className="number">{formatQty(accepted)}</td>
-              <td>{formatDateOnly(line.expiry_date)}</td>
-              <td className="number">{hasCommercialValues ? money(rate).replace('UGX ', '') : '—'}</td>
-              <td className="number">{hasCommercialValues ? money(rate * accepted).replace('UGX ', '') : '—'}</td>
+              <td>{id(line.unit_abbreviation) || id(line.unit_name) || id(item?.uom) || 'Each'}</td>
+              <td className="number">{formatQty(delivered)}</td>
+              <td className="number">{amount(rate)}</td>
+              <td className="number">{amount(net)}</td>
+              <td className="number">{vatPercent.toFixed(0)}%</td>
+              <td className="number">{amount(gross)}</td>
             </tr>
           })}
-          {!lines.length && <tr><td colSpan={15} className="grn-empty-row">No received items recorded on this GRN.</td></tr>}
+          {!lines.length && <tr><td colSpan={9} className="grn-empty-row">No received items recorded on this GRN.</td></tr>}
         </tbody>
-        <tfoot><tr><td colSpan={13}></td><th>Grand Total</th><td className="number">{hasCommercialValues ? money(grandTotal) : '—'}</td></tr></tfoot>
+        <tfoot>
+          <tr><td colSpan={7}></td><th>Net Total</th><td className="number">{amount(netTotal)}</td></tr>
+          <tr><td colSpan={7}></td><th>VAT Total</th><td className="number">{amount(vatTotal)}</td></tr>
+          <tr className="grn-grand-total"><td colSpan={7}></td><th>Total Amount</th><td className="number">{amount(grandTotal)}</td></tr>
+        </tfoot>
       </table>
 
-      <div className="grn-control-strip">
-        <span>Authorized&nbsp;&nbsp;: <b>{id(receipt.status) === 'posted' ? 'Yes' : 'Pending'}</b></span>
-        <span>Inspection Required&nbsp;&nbsp;: <b>Yes</b></span>
-        <span>Inventory Posted&nbsp;&nbsp;: <b>{lines.every((line) => line.inventory_changes_applied) ? 'Yes' : 'Pending'}</b></span>
-      </div>
-
-      <section className="grn-signatures">
-        <div><i>{preparedBy}</i><b>Prepared By</b></div>
-        <div><i></i><b>Store Manager</b></div>
-        <div><i>{preparedBy}</i><b>Inspected By</b></div>
-        <div><i></i><b>H.O.D.</b></div>
-        <div><i></i><b>Account Manager</b></div>
+      <section className="grn-simple-signoff">
+        <div className="grn-signature-line"><span>Signature:</span><i></i></div>
+        <div><b>Received By:</b> {preparedBy}</div>
+        <div><b>Status:</b> {documentStatus}</div>
       </section>
 
       <footer className="grn-document-footer">
-        <span>Generated {formatDateTime(receipt.posted_at || receipt.created_at)}</span>
+        <span>{formatDateTime(receipt.posted_at || receipt.created_at)}</span>
         <span>Page 1 of 1</span>
       </footer>
     </article>
@@ -1077,6 +1087,7 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, ite
   const financeLineId = id(form.financeLine || (lpoQueue === 'finance' ? lines[0]?.id : ''))
   const financeLine = lines.find((row: Row) => id(row.id) === financeLineId)
   const financeQuantityValue = form.financeQuantity ?? financeLine?.approved_quantity ?? financeLine?.quantity ?? ''
+  const canDecidePurchasing = role === 'procurement manager' || role === 'system administrator'
   const canDecideFinance = role === 'financial manager' || role === 'system administrator'
   const canDecideManagement = role === 'general manager' || role === 'system administrator'
   const draftHasQuantityOverage = lines.some((orderLine: Row) => {
@@ -1094,8 +1105,9 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, ite
     return floorPurchaseQuantity(targetBase / factor)
   }
   const panelTitle = lpoQueue === 'prepare' ? 'LPO Preparation'
-    : lpoQueue === 'finance' ? 'Financial Review'
-      : lpoQueue === 'management' ? 'Final Approval'
+    : lpoQueue === 'purchasing' ? 'Level 1 · Purchasing Manager'
+      : lpoQueue === 'finance' ? 'Level 2 · Financial Manager'
+      : lpoQueue === 'management' ? 'Level 3 · General Manager'
         : lpoQueue === 'approved' ? 'Approved LPO'
           : order ? `LPO ${id(order.lpo_number) || id(order.po_number)}` : 'LPO History'
 
@@ -1107,7 +1119,7 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, ite
     </div>
   </Panel>
 
-  if (['finance', 'management', 'approved', 'history'].includes(lpoQueue) && !order) return <Panel title={panelTitle} note="">
+  if (['purchasing', 'finance', 'management', 'approved', 'history'].includes(lpoQueue) && !order) return <Panel title={panelTitle} note="">
     <div style={{ padding: '34px 18px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12.5 }}>
       <Icon name="receipt_long" size={24} color="var(--text-faint)" />
       <div style={{ marginTop: 9, fontWeight: 700, color: 'var(--text)' }}>Select an LPO</div>
@@ -1140,12 +1152,21 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, ite
     {lpoQueue === 'prepare' && order && canManage && <>
       <LpoSummary order={order} lines={lines} names={names} />
       {draftHasQuantityOverage ? <>
-        <Hint>This draft contains a quantity that must be corrected before it can be sent to Finance.</Hint>
+        <Hint>This draft contains a quantity that must be corrected before it can enter the approval route.</Hint>
         <Field label="Item to correct"><Select value={form.orderLine} onChange={(v) => { const found = lines.find((row: Row) => id(row.id) === v); setForm({ ...form, orderLine: v, quantity: found ? safeQuantityForLine(found) : '', cost: found?.unit_cost, unit: found?.unit }) }} rows={lines} label={(row: Row) => names.items.get(id(row.item)) || id(row.item)} /></Field>
         {line && <><Field label="Purchase unit"><Select value={form.unit} onChange={(v) => setForm({ ...form, unit: v, quantity: safeQuantityForLine(line, v) })} rows={availableUnits} /></Field><Two><Field label="Quantity"><Input type="number" value={form.quantity ?? line.quantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field>{canEditPrice ? <Field label="Unit price"><Input type="number" value={form.cost ?? line.unit_cost} onChange={(v) => setForm({ ...form, cost: v })} /></Field> : <ReadOnlyValue label="Unit price · read only" value={money(line.unit_cost)} />}</Two></>}
         {quantityExceedsApproval && <Hint>Quantity is above the approved limit.</Hint>}
         <Action disabled={busy || !form.orderLine || conversion <= 0 || quantityExceedsApproval || num(form.quantity) <= 0} onClick={() => run(() => updateBackendRecord('purchase-order-items', id(form.orderLine), { quantity: num(form.quantity), ...(canEditPrice ? { unit_cost: num(form.cost) } : {}), unit: form.unit || null }), 'LPO item corrected', { ...form })}>Save correction</Action>
-      </> : <Action tone="good" disabled={busy || !lines.length} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'submit-for-approval'), 'LPO sent to Financial Manager')}>Send to Financial Manager</Action>}
+      </> : <Action tone="good" disabled={busy || !lines.length} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'submit-for-approval'), 'LPO sent to Purchasing Manager')}>Send for Level 1 Approval</Action>}
+    </>}
+
+    {lpoQueue === 'purchasing' && order && <>
+      <LpoSummary order={order} lines={lines} names={names} />
+      {!canDecidePurchasing && <div style={{ padding: '10px 11px', borderRadius: 7, background: 'var(--warn-soft)', color: 'var(--warn)', fontSize: 11.3, fontWeight: 700 }}>Awaiting Purchasing Manager decision</div>}
+      {canDecidePurchasing && <>
+        <Action tone="good" disabled={busy || !currentApproval} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'approve', { comments: '' }), 'Level 1 approved and sent to Financial Manager')}>Approve LPO</Action>
+        {!form.showReject ? <Action tone="danger" disabled={busy} onClick={() => setForm({ ...form, showReject: true })}>Reject LPO</Action> : <><Field label="Rejection reason *"><Input value={form.approvalComments || ''} onChange={(v) => setForm({ ...form, approvalComments: v })} /></Field><Action tone="danger" disabled={busy || !id(form.approvalComments).trim()} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'reject', { comments: form.approvalComments }), 'LPO rejected')}>Confirm rejection</Action></>}
+      </>}
     </>}
 
     {lpoQueue === 'finance' && order && <>
@@ -1215,7 +1236,7 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, ite
   </Panel>
 }
 
-function friendlyLpoStatus(status: string, steps: Row[]) { if (status === 'pending_approval') { const pending = steps.find((step) => id(step.status) === 'pending'); if (/finance/i.test(id(pending?.stage_name))) return 'Awaiting Finance'; if (/(general manager|management)/i.test(id(pending?.stage_name))) return 'Awaiting General Manager'; return 'Awaiting Approval' } if (status === 'approved') return 'Approved · Print & Send'; if (status === 'issued') return 'Sent to Supplier'; if (status === 'partially_received') return 'Partially Received'; if (status === 'received') return 'Fully Received'; return status.replace(/_/g, ' ') }
+function friendlyLpoStatus(status: string, steps: Row[]) { if (status === 'pending_approval') { const pending = steps.find((step) => id(step.status) === 'pending'); if (/(purchasing manager|procurement manager|purchasing)/i.test(id(pending?.stage_name))) return 'Level 1 · Purchasing Manager'; if (/finance/i.test(id(pending?.stage_name))) return 'Level 2 · Financial Manager'; if (/(general manager|management)/i.test(id(pending?.stage_name))) return 'Level 3 · General Manager'; return 'Awaiting Approval' } if (status === 'approved') return 'Approved · Print & Send'; if (status === 'issued') return 'Not Received'; if (status === 'partially_received') return 'Partially Received'; if (status === 'received') return 'Received'; return status.replace(/_/g, ' ') }
 
 function LpoSummary({ order, lines, names }: { order: Row; lines: Row[]; names: Record<string, Map<string, string>> }) {
   const approvalSteps = Array.isArray(order.approval_steps) ? order.approval_steps as Row[] : []
@@ -1392,8 +1413,9 @@ function StageTable({ stage, lpoQueue, data, names, role, onSelect }: { stage: S
   let title = ''
   if (stage === 'request') { rows = data.requisitionItems; title = 'Requisition lines' }
   if (stage === 'lpo') {
-    if (lpoQueue === 'finance') { rows = Array.isArray(data.approvalQueueOrders) ? data.approvalQueueOrders : data.orders.filter((row) => id(row.status) === 'pending_approval' && isFinanceApproval(row)); title = 'Awaiting Finance' }
-    if (lpoQueue === 'management') { rows = Array.isArray(data.approvalQueueOrders) ? data.approvalQueueOrders : data.orders.filter((row) => id(row.status) === 'pending_approval' && isManagementApproval(row)); title = 'Awaiting General Manager' }
+    if (lpoQueue === 'purchasing') { rows = Array.isArray(data.approvalQueueOrders) && role === 'procurement manager' ? data.approvalQueueOrders : data.orders.filter((row) => id(row.status) === 'pending_approval' && isPurchasingApproval(row)); title = 'Level 1 · Purchasing Manager' }
+    if (lpoQueue === 'finance') { rows = Array.isArray(data.approvalQueueOrders) && role === 'financial manager' ? data.approvalQueueOrders : data.orders.filter((row) => id(row.status) === 'pending_approval' && isFinanceApproval(row)); title = 'Level 2 · Financial Manager' }
+    if (lpoQueue === 'management') { rows = Array.isArray(data.approvalQueueOrders) ? data.approvalQueueOrders : data.orders.filter((row) => id(row.status) === 'pending_approval' && isManagementApproval(row)); title = 'Level 3 · General Manager' }
     if (lpoQueue === 'approved') { rows = data.orders.filter((row) => id(row.status) === 'approved'); title = 'Approved to Send' }
     if (lpoQueue === 'history') { rows = role === 'general manager' ? (Array.isArray(data.decisionHistoryOrders) ? data.decisionHistoryOrders : data.orders.filter((row) => hasManagementDecision(row))) : data.orders.filter((row) => ['issued', 'partially_received', 'received', 'rejected', 'cancelled'].includes(id(row.status))); title = role === 'general manager' ? 'Decision History' : 'LPO History' }
   }
@@ -1414,7 +1436,7 @@ function StageTable({ stage, lpoQueue, data, names, role, onSelect }: { stage: S
   }
   return <><div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', gap: 10 }}><strong style={{ fontSize: 12.8 }}>{title}</strong><span style={{ color: 'var(--text-faint)', fontSize: 10.5 }}>{rows.length} record{rows.length === 1 ? '' : 's'}</span></div>
     {rows.map((row) => <button type="button" key={id(row.id)} onClick={() => onSelect(row)} className="procurement-record-row" style={{ width: '100%', display: 'grid', gridTemplateColumns: '1.2fr 1.5fr 1fr .9fr 24px', alignItems: 'center', gap: 12, padding: '12px 16px', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit', fontSize: 12 }}>{cells(row).map((cell, i) => <span key={i} style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: i === 0 ? 'var(--text)' : 'var(--text-muted)', fontWeight: i === 0 ? 750 : 500 }}>{cell || '—'}</span>)}<Icon name="chevron_right" size={17} color="var(--text-faint)" /></button>)}
-    {!rows.length && <div style={{ padding: 42, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}><div style={{ color: 'var(--text)', fontWeight: 750 }}>{role === 'general manager' && lpoQueue === 'management' ? 'No LPOs need your decision' : 'No records in this queue.'}</div>{role === 'general manager' && lpoQueue === 'management' && <div style={{ marginTop: 5 }}>Finance-approved LPOs will appear here automatically.</div>}</div>}
+    {!rows.length && <div style={{ padding: 42, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}><div style={{ color: 'var(--text)', fontWeight: 750 }}>{role === 'general manager' && lpoQueue === 'management' ? 'No LPOs need your decision' : 'No records in this queue.'}</div>{role === 'general manager' && lpoQueue === 'management' && <div style={{ marginTop: 5 }}>Level 2-approved LPOs will appear here automatically.</div>}</div>}
   </>
 }
 

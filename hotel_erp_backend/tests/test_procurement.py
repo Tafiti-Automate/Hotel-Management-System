@@ -853,8 +853,21 @@ def test_lpo_requires_independent_value_routed_approval_before_issue():
         unit_cost=Decimal("1000.00"),
         destination_store=store,
     )
+    purchasing_group, _ = Group.objects.get_or_create(name="Procurement Manager")
     finance_group, _ = Group.objects.get_or_create(name="Financial Manager")
     general_group, _ = Group.objects.get_or_create(name="General Manager")
+    purchasing_user = get_user_model().objects.create_user(
+        username="lpo-purchasing-manager",
+        employee_code="EMP-LPO-PM",
+        password="test-pass-123",
+    )
+    purchasing_user.groups.add(purchasing_group)
+    Employee.objects.create(
+        user=purchasing_user,
+        department=department,
+        branch=branch,
+        designation="Purchasing Manager",
+    )
     approver_user.groups.add(finance_group)
     manager_user.groups.add(general_group)
     second_finance_user = get_user_model().objects.create_user(
@@ -877,8 +890,19 @@ def test_lpo_requires_independent_value_routed_approval_before_issue():
     order.refresh_from_db()
     assert order.status == POStatus.PENDING_APPROVAL
     steps = list(order.approval_workflow.all())
-    assert [step.approver for step in steps] == [None, None]
-    assert [step.approver_role for step in steps] == [finance_group, general_group]
+    assert [step.approver for step in steps] == [None, None, None]
+    assert [step.approver_role for step in steps] == [purchasing_group, finance_group, general_group]
+
+    purchasing_client = APIClient()
+    purchasing_client.force_authenticate(purchasing_user)
+    purchasing_response = purchasing_client.post(
+        f"/api/v1/purchase-orders/{order.pk}/approve/",
+        {"comments": "Purchasing approved"},
+        format="json",
+    )
+    assert purchasing_response.status_code == 200
+    order.refresh_from_db()
+    assert order.status == POStatus.PENDING_APPROVAL
 
     finance_client = APIClient()
     finance_client.force_authenticate(second_finance_user)
@@ -1690,15 +1714,24 @@ def test_procurement_allocations_split_one_store_requisition_into_supplier_lpos(
 
 
 @pytest.mark.django_db
-def test_role_approval_inbox_advances_from_finance_to_general_manager():
+def test_role_approval_inbox_advances_from_purchasing_to_finance_to_general_manager():
     employee, department, supplier, item = create_procurement_context()
     branch = Branch.objects.create(name="Approval Inbox Branch")
     employee.branch = branch
     employee.save(update_fields=("branch", "updated_at"))
     store = StoreLocation.objects.create(branch=branch, name="Approval Inbox Store")
 
+    purchasing_group, _ = Group.objects.get_or_create(name="Procurement Manager")
     finance_group, _ = Group.objects.get_or_create(name="Financial Manager")
     general_group, _ = Group.objects.get_or_create(name="General Manager")
+
+    purchasing_user = get_user_model().objects.create_user(
+        username="approval-inbox-purchasing", employee_code="EMP-INBOX-PM", password="test-pass-123"
+    )
+    purchasing_user.groups.add(purchasing_group)
+    Employee.objects.create(
+        user=purchasing_user, department=department, branch=branch, designation="Purchasing Manager"
+    )
     finance_user = get_user_model().objects.create_user(
         username="approval-inbox-finance", employee_code="EMP-INBOX-FIN", password="test-pass-123"
     )
@@ -1728,27 +1761,37 @@ def test_role_approval_inbox_advances_from_finance_to_general_manager():
     )
     order.submit_for_approval()
 
+    purchasing_client = APIClient()
+    purchasing_client.force_authenticate(purchasing_user)
     finance_client = APIClient()
     finance_client.force_authenticate(finance_user)
     gm_client = APIClient()
     gm_client.force_authenticate(gm_user)
 
+    purchasing_before = purchasing_client.get("/api/v1/purchase-orders/approval-inbox/")
     finance_before = finance_client.get("/api/v1/purchase-orders/approval-inbox/")
     gm_before = gm_client.get("/api/v1/purchase-orders/approval-inbox/")
+    assert purchasing_before.status_code == 200
     assert finance_before.status_code == 200
     assert gm_before.status_code == 200
-    assert [row["id"] for row in finance_before.json()] == [str(order.id)]
+    assert [row["id"] for row in purchasing_before.json()] == [str(order.id)]
+    assert finance_before.json() == []
     assert gm_before.json() == []
 
-    approved = finance_client.post(
+    purchasing_approved = purchasing_client.post(
+        f"/api/v1/purchase-orders/{order.pk}/approve/", {"comments": "Purchasing approved"}, format="json"
+    )
+    assert purchasing_approved.status_code == 200
+    assert purchasing_client.get("/api/v1/purchase-orders/approval-inbox/").json() == []
+    assert [row["id"] for row in finance_client.get("/api/v1/purchase-orders/approval-inbox/").json()] == [str(order.id)]
+    assert gm_client.get("/api/v1/purchase-orders/approval-inbox/").json() == []
+
+    finance_approved = finance_client.post(
         f"/api/v1/purchase-orders/{order.pk}/approve/", {"comments": "Finance approved"}, format="json"
     )
-    assert approved.status_code == 200
-
-    finance_after = finance_client.get("/api/v1/purchase-orders/approval-inbox/")
-    gm_after = gm_client.get("/api/v1/purchase-orders/approval-inbox/")
-    assert finance_after.json() == []
-    assert [row["id"] for row in gm_after.json()] == [str(order.id)]
+    assert finance_approved.status_code == 200
+    assert finance_client.get("/api/v1/purchase-orders/approval-inbox/").json() == []
+    assert [row["id"] for row in gm_client.get("/api/v1/purchase-orders/approval-inbox/").json()] == [str(order.id)]
 
     final_approval = gm_client.post(
         f"/api/v1/purchase-orders/{order.pk}/approve/", {"comments": "Final approval"}, format="json"
@@ -1757,7 +1800,7 @@ def test_role_approval_inbox_advances_from_finance_to_general_manager():
     gm_history = gm_client.get("/api/v1/purchase-orders/decision-history/")
     assert gm_history.status_code == 200
     assert [row["id"] for row in gm_history.json()] == [str(order.id)]
-    gm_step = next(step for step in gm_history.json()[0]["approval_steps"] if step["stage"] == 2)
+    gm_step = next(step for step in gm_history.json()[0]["approval_steps"] if step["stage"] == 3)
     assert gm_step["status"] == "approved"
     expected_gm_name = gm_user.get_full_name() or gm_user.username
     assert gm_step["approver_name"] == expected_gm_name

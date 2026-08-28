@@ -1442,8 +1442,12 @@ class PurchaseOrder(BaseModel):
         decide completes that stage, and the actual decision-maker is recorded.
         """
         return (
-            (1, "Financial Manager Review", self._fixed_role_group("Financial Manager")),
-            (2, "General Manager Final Approval", self._fixed_role_group("General Manager")),
+            # The client-facing title is Purchasing Manager; internally this
+            # continues to use the existing Procurement Manager security group
+            # so no established permissions or user assignments are broken.
+            (1, "Purchasing Manager Approval", self._fixed_role_group("Procurement Manager")),
+            (2, "Financial Manager Approval", self._fixed_role_group("Financial Manager")),
+            (3, "General Manager Final Approval", self._fixed_role_group("General Manager")),
         )
 
     def approval_readiness(self):
@@ -1511,19 +1515,22 @@ class PurchaseOrder(BaseModel):
                 "approved_at", "approved_by", "rejected_at", "updated_at",
             ))
             order.record_activity(
-                action="submitted_for_finance",
+                action="submitted_for_purchasing_approval",
                 actor=order.ordered_by.user if order.ordered_by_id else None,
                 previous_status=previous_status,
                 new_status=POStatus.PENDING_APPROVAL,
-                metadata={"revision": order.revision, "route": ["Financial Manager", "General Manager"]},
+                metadata={
+                    "revision": order.revision,
+                    "route": ["Purchasing Manager", "Financial Manager", "General Manager"],
+                },
             )
             try:
                 from apps.notifications.services import notify_roles
                 notify_roles(
-                    ["Financial Manager"],
+                    ["Procurement Manager"],
                     branch=order.requisition.branch,
-                    title=f"LPO {order.lpo_number} requires financial approval",
-                    message="Review the LPO quantities and value, then approve, reduce or reject it.",
+                    title=f"LPO {order.lpo_number} requires Purchasing Manager approval",
+                    message="Review the LPO and approve or reject it before Finance review.",
                     created_by=order.ordered_by.user if order.ordered_by_id else None,
                 )
             except Exception:

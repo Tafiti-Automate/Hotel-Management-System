@@ -43,6 +43,7 @@ from apps.vendors.models import Supplier
 from core.constants.choices import (
     ApprovalStatus,
     GoodsInspectionStatus,
+    GoodsReceiptStatus,
     POStatus,
     PRStatus,
 )
@@ -170,10 +171,10 @@ def scope_purchase_orders_for_user(queryset, user):
 def current_lpo_approval_queue(queryset, user, role_name):
     """Return LPOs whose *first unfinished* approval stage belongs to this user/role.
 
-    Both Finance and General Manager workflow rows exist from submission time.  A
-    simple ``approval_workflow__status=pending`` filter therefore exposes future
-    stages too early and can also miss legacy employee-assigned stages.  The first
-    pending stage is the authoritative queue owner.
+    All approval rows exist from submission time. A simple
+    ``approval_workflow__status=pending`` filter would expose future stages too
+    early and can also miss legacy employee-assigned stages. The first pending
+    stage is the authoritative queue owner.
     """
     pending_steps = PurchaseOrderApprovalWorkflow.objects.filter(
         purchase_order_id=models.OuterRef("pk"),
@@ -294,7 +295,9 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             # Approval queues are authoritative server-side role queues.  Do not
             # make Finance/GM reconstruct their inbox from serialized status text.
             approval_role = None
-            if user_has_role(request.user, "Financial Manager"):
+            if user_has_role(request.user, "Procurement Manager"):
+                approval_role = "Procurement Manager"
+            elif user_has_role(request.user, "Financial Manager"):
                 approval_role = "Financial Manager"
             elif user_has_role(request.user, "General Manager"):
                 approval_role = "General Manager"
@@ -724,17 +727,19 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="approval-inbox")
     def approval_inbox(self, request):
-        """Return the authenticated Finance/GM user's current LPO approval inbox."""
-        if user_has_role(request.user, "Financial Manager"):
+        """Return the authenticated manager's current LPO approval inbox."""
+        if user_has_role(request.user, "Procurement Manager"):
+            role_name = "Procurement Manager"
+        elif user_has_role(request.user, "Financial Manager"):
             role_name = "Financial Manager"
         elif user_has_role(request.user, "General Manager"):
             role_name = "General Manager"
         elif request.user.is_superuser:
             role_name = str(request.query_params.get("role", "General Manager")).strip()
-            if role_name not in {"Financial Manager", "General Manager"}:
-                raise ValidationError({"role": "Choose Financial Manager or General Manager."})
+            if role_name not in {"Procurement Manager", "Financial Manager", "General Manager"}:
+                raise ValidationError({"role": "Choose Procurement Manager, Financial Manager or General Manager."})
         else:
-            raise PermissionDenied("Only Finance or General Manager can view this approval inbox.")
+            raise PermissionDenied("Only Purchasing, Finance or General Management can view this approval inbox.")
 
         queue = current_lpo_approval_queue(self.get_queryset(), request.user, role_name)
         queue = queue.select_related(
@@ -752,7 +757,7 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
         if not (request.user.is_superuser or user_has_role(request.user, "General Manager")):
             raise PermissionDenied("Only the General Manager can view final LPO decision history.")
         history = self.get_queryset().filter(
-            approval_workflow__stage=2,
+            approval_workflow__stage_name__icontains="General Manager",
             approval_workflow__status__in=(ApprovalStatus.APPROVED, ApprovalStatus.REJECTED),
         ).select_related(
             "requisition", "supplier", "ordered_by", "store", "sent_by", "approved_by"
@@ -779,13 +784,11 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="receive-delivery")
     def receive_delivery(self, request, pk=None):
-        """Receive an issued LPO and generate/post one GRN in a single clerk action.
+        """Receive an issued LPO and generate a GRN.
 
-        The clerk records only the supplier paperwork and physical quantity that
-        arrived.  The LPO quantity and commercial values remain unchanged.  An
-        accepted inspection record is created internally so the existing stock
-        posting controls and audit trail remain intact without exposing a second
-        technical workflow to the Receiving Clerk.
+        Receiving and inventory posting are deliberately separate controls. The
+        clerk first records the physical delivery and the GRN becomes Received;
+        the existing post-to-inventory action is then used for the Posting stage.
         """
         employee = self._require_receiving_clerk(request)
         supplier_invoice_no = str(request.data.get("supplier_invoice_no") or "").strip()
@@ -863,7 +866,7 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                     goods_receipt=receipt,
                     inspected_by=employee,
                     inspection_date=received_date,
-                    status=GoodsInspectionStatus.PENDING,
+                    status=GoodsInspectionStatus.ACCEPTED,
                     delivery_note_no=delivery_note_no,
                     remarks="Receiving Clerk confirmed delivered quantities against the issued LPO.",
                     created_by=request.user if request.user.is_authenticated else None,
@@ -879,7 +882,8 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                         created_by=request.user if request.user.is_authenticated else None,
                     )
 
-                receipt.post_to_inventory(posted_by=employee)
+                receipt.status = GoodsReceiptStatus.RECEIVED
+                receipt.save(update_fields=["status", "updated_at"])
                 receipt.refresh_from_db()
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
@@ -1015,7 +1019,7 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
         try:
             pdf = build_purchase_order_pdf(
                 order,
-                classification="SUPPLIER COPY",
+                classification="ORIGINAL COPY",
                 printed_by=request.user,
                 delivery_date=(timezone.now() + timedelta(days=order.lead_time_days or 0)).date(),
             )
@@ -1081,7 +1085,7 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
         try:
             pdf = build_purchase_order_pdf(
                 order,
-                classification="SUPPLIER COPY",
+                classification="ORIGINAL COPY",
                 printed_by=request.user,
             )
             email = EmailMessage(
@@ -1161,9 +1165,9 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
         try:
             print_record = order.record_print(printed_by=request.user)
             classification = (
-                "***** Original Order *****"
+                "ORIGINAL COPY"
                 if print_record.classification == "original"
-                else "***** Copy of Original Order *****"
+                else "COPY OF ORIGINAL"
             )
             pdf = build_purchase_order_pdf(
                 order,
