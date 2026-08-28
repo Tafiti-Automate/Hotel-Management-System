@@ -73,6 +73,7 @@ export interface AuthUser {
   branch_name?: string
   department_id?: string
   department_name?: string
+  designation?: string
   is_staff?: boolean
   is_superuser?: boolean
   permissions?: string[]
@@ -1137,6 +1138,8 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
       uom: unitNames.get(text(row.base_unit)) || text(row.unit),
       baseUnitId: text(row.base_unit),
       baseUnitLocked: bool(row.base_unit_locked),
+      batchTracking: bool(row.batch_tracking),
+      expiryTracking: bool(row.expiry_tracking),
       store: storeNames.get(text(balance?.store)) || '',
       onHand,
       reorder,

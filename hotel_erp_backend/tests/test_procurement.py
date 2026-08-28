@@ -10,6 +10,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.core.exceptions import ValidationError
 from django.test import override_settings
+from django.utils import timezone
 from rest_framework.test import APIClient, APIRequestFactory
 
 from apps.departments.models import Branch, Department
@@ -280,7 +281,7 @@ def test_store_keeper_can_read_only_assigned_store_lpo_without_commercial_data()
     branch = Branch.objects.create(name="Receiving Branch")
     employee.branch = branch
     employee.save(update_fields=["branch", "updated_at"])
-    employee.user.groups.add(Group.objects.create(name="Store Keeper"))
+    employee.user.groups.add(Group.objects.get_or_create(name="Store Keeper")[0])
     store = StoreLocation.objects.create(branch=branch, name="Assigned Main Store")
     StoreKeeperAssignment.objects.create(store=store, employee=employee)
     requisition = PurchaseRequisition.objects.create(
@@ -421,12 +422,11 @@ def test_requisition_creates_purchase_order_from_selected_supplier_quote():
 
     order_item = order.items.get()
     assert order.supplier == supplier
-    assert re.fullmatch(r"i\d{2}-\d{5,}", requisition.requisition_number)
+    assert re.fullmatch(r"\d{6}", requisition.requisition_number)
     assert order.po_number.isdigit()
-    assert re.fullmatch(r"[A-Z0-9]{3,4}\d{6}-\d{5,}", order.lpo_number)
-    assert len(
-        {requisition.requisition_number, order.po_number, order.lpo_number}
-    ) == 3
+    assert re.fullmatch(r"\d{6}", order.lpo_number)
+    assert order.po_number == order.lpo_number
+    assert requisition.requisition_number != order.lpo_number
     assert order.status == POStatus.DRAFT
     assert order.total_amount == Decimal("32000.00")
     assert order_item.item == item
@@ -1160,7 +1160,7 @@ def test_receiving_clerk_workspace_shows_only_ready_branch_lpos_without_prices()
     other_branch = Branch.objects.create(name="Other Receiving Branch")
     employee.branch = branch
     employee.save(update_fields=("branch", "updated_at"))
-    receiving = Group.objects.create(name="Receiving Clerk")
+    receiving, _ = Group.objects.get_or_create(name="Receiving Clerk")
     receiving.permissions.add(
         Permission.objects.get(codename="view_goodsreceiptnote")
     )
@@ -1217,8 +1217,10 @@ def test_receiving_clerk_can_generate_posted_grn_directly_from_issued_lpo():
     store = StoreLocation.objects.create(branch=branch, name="Main Store")
     employee.branch = branch
     employee.save(update_fields=("branch", "updated_at"))
-    receiving = Group.objects.create(name="Receiving Clerk")
+    receiving, _ = Group.objects.get_or_create(name="Receiving Clerk")
     employee.user.groups.add(receiving)
+    item.expiry_tracking = True
+    item.save(update_fields=("expiry_tracking", "updated_at"))
 
     requisition = PurchaseRequisition.objects.create(
         requester=employee,
@@ -1253,16 +1255,36 @@ def test_receiving_clerk_can_generate_posted_grn_directly_from_issued_lpo():
 
     client = APIClient()
     client.force_authenticate(employee.user)
+    received_date = timezone.localdate()
+    expiry_date = received_date + timedelta(days=20)
+    missing_expiry = client.post(
+        f"/api/v1/purchase-orders/{order.pk}/receive-delivery/",
+        {
+            "supplier_invoice_no": "INV-MISSING-EXPIRY",
+            "received_date": received_date.isoformat(),
+            "lines": [{
+                "purchase_order_item": str(order_line.pk),
+                "quantity_received": "1.00",
+            }],
+        },
+        format="json",
+    )
+    assert missing_expiry.status_code == 400
+    assert not GoodsReceiptNote.objects.filter(
+        supplier_invoice_no="INV-MISSING-EXPIRY"
+    ).exists()
+
     response = client.post(
         f"/api/v1/purchase-orders/{order.pk}/receive-delivery/",
         {
             "supplier_invoice_no": "INV-1001",
             "delivery_note_no": "DN-1001",
-            "received_date": "2026-08-27",
+            "received_date": received_date.isoformat(),
             "lines": [
                 {
                     "purchase_order_item": str(order_line.pk),
                     "quantity_received": "1.00",
+                    "expiry_date": expiry_date.isoformat(),
                 }
             ],
         },
@@ -1277,10 +1299,88 @@ def test_receiving_clerk_can_generate_posted_grn_directly_from_issued_lpo():
     assert receipt.status == "posted"
     assert receipt.supplier_invoice_no == "INV-1001"
     assert receipt_line.quantity_received == Decimal("1.00")
+    assert receipt_line.expiry_date == expiry_date
     assert receipt.inspection.status == "accepted"
     assert receipt.inspection.items.get().quantity_accepted == Decimal("1.00")
     assert order.status == POStatus.PARTIALLY_RECEIVED
     assert InventoryBalance.objects.get(item=item, store=store).quantity_in_stock == Decimal("1.00")
+    assert InventoryBatch.objects.get(item=item, store=store).expiry_date == expiry_date
+
+
+@pytest.mark.django_db
+def test_procurement_officer_and_general_manager_can_view_but_not_change_lpo_price():
+    employee, department, supplier, item = create_procurement_context()
+    procurement_group, _ = Group.objects.get_or_create(name="Procurement Manager")
+    item_permissions = Permission.objects.filter(
+        content_type__app_label="procurement",
+        codename__in=("view_purchaseorderitem", "change_purchaseorderitem"),
+    )
+    procurement_group.permissions.add(*item_permissions)
+    employee.user.groups.add(procurement_group)
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        reason="Read-only LPO rate",
+        status=PRStatus.APPROVED,
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity=Decimal("2.00"),
+        approved_quantity=Decimal("2.00"),
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition,
+        supplier=supplier,
+        ordered_by=employee,
+    )
+    order_line = PurchaseOrderItem.objects.create(
+        purchase_order=order,
+        item=item,
+        unit=item.base_unit,
+        quantity=Decimal("2.00"),
+        unit_cost=Decimal("5000.00"),
+    )
+
+    officer_client = APIClient()
+    officer_client.force_authenticate(employee.user)
+    officer_view = officer_client.get(f"/api/v1/purchase-order-items/{order_line.pk}/")
+    officer_change = officer_client.patch(
+        f"/api/v1/purchase-order-items/{order_line.pk}/",
+        {"unit_cost": "6000.00"},
+        format="json",
+    )
+
+    general_group, _ = Group.objects.get_or_create(name="General Manager")
+    general_group.permissions.add(*item_permissions)
+    gm_user = get_user_model().objects.create_user(
+        username="read-only-price-gm",
+        employee_code="PRICE-GM",
+        password="test-pass-123",
+    )
+    gm_user.groups.add(general_group)
+    Employee.objects.create(
+        user=gm_user,
+        department=department,
+        designation="General Manager",
+    )
+    gm_client = APIClient()
+    gm_client.force_authenticate(gm_user)
+    gm_view = gm_client.get(f"/api/v1/purchase-order-items/{order_line.pk}/")
+    gm_change = gm_client.patch(
+        f"/api/v1/purchase-order-items/{order_line.pk}/",
+        {"unit_cost": "7000.00"},
+        format="json",
+    )
+
+    order_line.refresh_from_db()
+    assert officer_view.status_code == 200
+    assert officer_view.data["unit_cost"] == "5000.00"
+    assert officer_change.status_code == 400
+    assert gm_view.status_code == 200
+    assert gm_view.data["unit_cost"] == "5000.00"
+    assert gm_change.status_code == 400
+    assert order_line.unit_cost == Decimal("5000.00")
 
 
 @pytest.mark.django_db
@@ -1677,6 +1777,7 @@ def test_supplier_pack_quote_keeps_lpo_quantity_in_article_base_uom():
         sku="A4-LPO-UOM",
         unit="ream",
         base_unit=ream,
+        reorder_level=Decimal("0.00"),
     )
     ItemUnitPrice.objects.create(
         item=paper,

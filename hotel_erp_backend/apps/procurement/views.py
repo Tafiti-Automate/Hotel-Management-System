@@ -62,6 +62,7 @@ from apps.procurement.serializers import (
     SupplierReturnSerializer,
     VendorQuotationItemSerializer,
     VendorQuotationSerializer,
+    lpo_price_is_read_only_for_user,
 )
 from core.mixins.viewsets import CreatedByModelMixin
 
@@ -446,6 +447,13 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
         confirmed_price = Decimal(str(payload.get("unit_price") or price.unit_price))
         if confirmed_price <= 0:
             raise ValidationError({"unit_price": f"Enter a valid current supplier price for {line.item}."})
+        if (
+            lpo_price_is_read_only_for_user(request.user)
+            and confirmed_price != price.unit_price
+        ):
+            raise PermissionDenied(
+                "Procurement Officers may select and view an approved supplier price, but cannot change it."
+            )
         base_unit_price = (confirmed_price / conversion_factor).quantize(Decimal("0.01"))
         if confirmed_price != price.unit_price:
             SupplierItemPriceHistory.objects.create(
@@ -822,7 +830,7 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                         raise ValidationError({"lines": "Received quantities must be valid numbers."}) from error
                     if quantity <= Decimal("0.00"):
                         continue
-                    normalized.append((line, quantity))
+                    normalized.append((line, quantity, entry.get("expiry_date") or None))
 
                 if not normalized:
                     raise ValidationError({"lines": "Enter a received quantity greater than zero."})
@@ -840,11 +848,12 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                 receipt.save()
 
                 receipt_items = []
-                for order_line, quantity in normalized:
+                for order_line, quantity, expiry_date in normalized:
                     receipt_item = GoodsReceiptItem(
                         goods_receipt=receipt,
                         purchase_order_item=order_line,
                         quantity_received=quantity,
+                        expiry_date=expiry_date,
                         created_by=request.user if request.user.is_authenticated else None,
                     )
                     receipt_item.save()

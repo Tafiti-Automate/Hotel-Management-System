@@ -37,6 +37,7 @@ def _user_payload(user) -> dict:
         "branch_name": employee.branch.name if employee and employee.branch_id else "",
         "department_id": str(employee.department_id) if employee and employee.department_id else "",
         "department_name": employee.department.name if employee and employee.department_id else "",
+        "designation": employee.designation if employee else "",
         "is_staff": user.is_staff,
         "is_superuser": user.is_superuser,
         "permissions": sorted(user.get_all_permissions()),

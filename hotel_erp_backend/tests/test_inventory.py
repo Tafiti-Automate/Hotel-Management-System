@@ -449,7 +449,7 @@ def test_store_request_requires_department_head_before_store_keeper_review():
     stores_user = get_user_model().objects.create_user(
         username="approval-flow-storekeeper", employee_code="EMP-FLOW-STORES"
     )
-    stores_user.groups.add(Group.objects.create(name="Store Keeper"))
+    stores_user.groups.add(Group.objects.get_or_create(name="Store Keeper")[0])
     stores = Employee.objects.create(
         user=stores_user, department=department, branch=branch, designation="Store Keeper"
     )

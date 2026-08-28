@@ -24,7 +24,7 @@ export type Screen = 'login' | 'launchpad' | 'app'
 export type Tab = 'overview' | 'procurement' | 'inventory'
 export type ActiveModule = 'operations' | 'hr'
 
-export interface User { name: string; role: string; id: string; employeeId: string; employeeCode: string; branchId: string; branchName: string; departmentId: string; departmentName: string; isStaff: boolean; isSuperuser: boolean; permissions: string[] }
+export interface User { name: string; role: string; designation: string; id: string; employeeId: string; employeeCode: string; branchId: string; branchName: string; departmentId: string; departmentName: string; isStaff: boolean; isSuperuser: boolean; permissions: string[] }
 
 interface FormTarget { entity: EntityKey; id: string | null }
 interface ConfirmTarget { entity: EntityKey; id: string; name: string }
@@ -116,7 +116,7 @@ export interface AppContextValue extends AppState {
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
-const GUEST: User = { name: 'Guest', role: '—', id: '', employeeId: '', employeeCode: '', branchId: '', branchName: '', departmentId: '', departmentName: '', isStaff: false, isSuperuser: false, permissions: [] }
+const GUEST: User = { name: 'Guest', role: '—', designation: '', id: '', employeeId: '', employeeCode: '', branchId: '', branchName: '', departmentId: '', departmentName: '', isStaff: false, isSuperuser: false, permissions: [] }
 const IDLE_TIMEOUT_MS = 8 * 60 * 60 * 1000
 const ACTIVITY_WRITE_INTERVAL_MS = 1000
 const LAST_ACTIVITY_KEY = 'hms_last_activity'
@@ -124,7 +124,7 @@ const APPEARANCE_KEY = 'hms_appearance'
 
 function toUser(user: AuthUser | null): User {
   return user
-    ? { name: user.name, role: user.role, id: user.user_id || user.id, employeeId: user.employee_id || '', employeeCode: user.employee_code || '', branchId: user.branch_id || '', branchName: user.branch_name || '', departmentId: user.department_id || '', departmentName: user.department_name || '', isStaff: Boolean(user.is_staff), isSuperuser: Boolean(user.is_superuser), permissions: user.permissions || [] }
+    ? { name: user.name, role: user.role, designation: user.designation || '', id: user.user_id || user.id, employeeId: user.employee_id || '', employeeCode: user.employee_code || '', branchId: user.branch_id || '', branchName: user.branch_name || '', departmentId: user.department_id || '', departmentName: user.department_name || '', isStaff: Boolean(user.is_staff), isSuperuser: Boolean(user.is_superuser), permissions: user.permissions || [] }
     : GUEST
 }
 

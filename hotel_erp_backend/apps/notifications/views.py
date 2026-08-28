@@ -6,6 +6,7 @@ from rest_framework.viewsets import ReadOnlyModelViewSet
 
 from apps.notifications.models import Notification
 from apps.notifications.serializers import NotificationSerializer
+from apps.notifications.services import sync_expiry_notifications_for_employee
 
 
 class NotificationViewSet(ReadOnlyModelViewSet):
@@ -17,6 +18,9 @@ class NotificationViewSet(ReadOnlyModelViewSet):
     ordering_fields = ("is_read", "created_at")
 
     def get_queryset(self):
+        sync_expiry_notifications_for_employee(
+            getattr(self.request.user, "employee_profile", None)
+        )
         return super().get_queryset().filter(employee__user=self.request.user)
 
     @action(detail=True, methods=("post",), url_path="mark-read")

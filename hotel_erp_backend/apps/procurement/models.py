@@ -2132,6 +2132,18 @@ class GoodsReceiptItem(BaseModel):
                 raise ValidationError({
                     "quantity_received": f"Receipt exceeds the outstanding LPO quantity. Remaining quantity: {remaining}."
                 })
+        if self.item_id and self.item.expiry_tracking and not self.expiry_date:
+            raise ValidationError({
+                "expiry_date": "Enter the expiry date for this expiry-tracked Article."
+            })
+        if (
+            self.expiry_date
+            and self.goods_receipt_id
+            and self.expiry_date < self.goods_receipt.received_date
+        ):
+            raise ValidationError({
+                "expiry_date": "Expiry date cannot be earlier than the received date."
+            })
 
     @property
     def committed_purchase_quantity(self):
@@ -2214,7 +2226,7 @@ class GoodsReceiptItem(BaseModel):
             balance.quantity_in_stock += post_quantity
             balance.save(update_fields=["quantity_in_stock", "updated_at"])
 
-            InventoryBatch.objects.create(
+            batch = InventoryBatch.objects.create(
                 item=receipt_item.item,
                 store=receipt_item.store,
                 quantity=post_quantity,
@@ -2222,6 +2234,12 @@ class GoodsReceiptItem(BaseModel):
                 unit_cost=receipt_item.base_unit_cost,
                 expiry_date=receipt_item.expiry_date,
                 purchase_order_item=receipt_item.purchase_order_item,
+                created_by=receipt_item.created_by,
+            )
+            from apps.notifications.services import notify_storekeepers_for_expiring_batch
+
+            notify_storekeepers_for_expiring_batch(
+                batch,
                 created_by=receipt_item.created_by,
             )
             StockLedger.objects.create(

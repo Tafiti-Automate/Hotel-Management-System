@@ -364,6 +364,11 @@ export default function ProcurementWorkbench() {
   }, [stage, tabs])
   const canChangeStage = can(stagePermissions[stage].change)
   const canManageLpo = app.user.isSuperuser || ['system administrator', 'procurement manager', 'procurement officer'].includes(app.user.role.toLowerCase())
+  const hasReadOnlyLpoPrice = !app.user.isSuperuser && (
+    ['procurement officer', 'general manager'].includes(role)
+    || ['procurement officer', 'general manager'].includes(app.user.designation.toLowerCase())
+  )
+  const canEditLpoPrice = !hasReadOnlyLpoPrice
   const metrics = useMemo(() => {
     const openOrders = scopedData.orders.filter((order) => ['issued', 'partially_received'].includes(id(order.status)))
     const overdue = openOrders.filter((order) => order.expected_date && new Date(id(order.expected_date)) < new Date())
@@ -522,9 +527,9 @@ export default function ProcurementWorkbench() {
           {!(role === 'general manager' && !form.order) && <aside style={{ ...card, padding: 18 }}>
             {!canChangeStage && stage !== 'lpo' && <ReadOnlyStage />}
             {canChangeStage && stage === 'request' && <RequestPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel }} items={app.data.items} stores={app.data.locations} departments={app.data.departments} />}
-            {canChangeStage && stage === 'quote' && <QuotePanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, names }} suppliers={app.data.suppliers} supplierItems={app.data.supplierItems} items={app.data.items} itemUnits={app.data.itemUnits} onContinueToLpo={(requisitionId: string) => { setStage('lpo'); setLpoQueue('prepare'); setForm({ requisition: requisitionId }) }} />}
-            {stage === 'lpo' && <LpoPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, orderLabel, names, lpoQueue, setLpoQueue }} role={role} canManage={canManageLpo} userName={app.user.name} suppliers={app.data.suppliers} units={app.data.uoms} items={app.data.items} itemUnits={app.data.itemUnits} />}
-            {canChangeStage && stage === 'receipt' && <ReceiptPanel {...{ data: scopedData, form, setForm, busy, run, orderLabel, receiptLabel, names }} employees={app.data.employees} stores={app.data.locations} />}
+            {canChangeStage && stage === 'quote' && <QuotePanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, names }} canEditPrice={canEditLpoPrice} suppliers={app.data.suppliers} supplierItems={app.data.supplierItems} items={app.data.items} itemUnits={app.data.itemUnits} onContinueToLpo={(requisitionId: string) => { setStage('lpo'); setLpoQueue('prepare'); setForm({ requisition: requisitionId }) }} />}
+            {stage === 'lpo' && <LpoPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, orderLabel, names, lpoQueue, setLpoQueue }} role={role} canManage={canManageLpo} canEditPrice={canEditLpoPrice} userName={app.user.name} suppliers={app.data.suppliers} units={app.data.uoms} items={app.data.items} itemUnits={app.data.itemUnits} />}
+            {canChangeStage && stage === 'receipt' && <ReceiptPanel {...{ data: scopedData, form, setForm, busy, run, orderLabel, receiptLabel, names }} employees={app.data.employees} stores={app.data.locations} items={app.data.items} />}
             {canChangeStage && stage === 'inspect' && <InspectionPanel {...{ data: scopedData, form, setForm, busy, run, receiptLabel, names }} employees={app.data.employees} />}
             {canChangeStage && stage === 'return' && <ReturnPanel {...{ data: scopedData, form, setForm, busy, run, receiptLabel, names }} employees={app.data.employees} stores={app.data.locations} />}
           </aside>}
@@ -557,6 +562,7 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
   const [invoiceNumber, setInvoiceNumber] = useState('')
   const [receivedDate, setReceivedDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [quantities, setQuantities] = useState<Record<string, string>>({})
+  const [expiryDates, setExpiryDates] = useState<Record<string, string>>({})
 
   useEffect(() => {
     let active = true
@@ -593,12 +599,20 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
     .map((line) => ({
       purchase_order_item: id(line.id),
       quantity_received: num(quantities[id(line.id)]),
+      expiry_date: expiryDates[id(line.id)] || null,
     }))
     .filter((line) => line.quantity_received > 0)
   const lineInvalid = orderLines.some((line) => {
     const entered = num(quantities[id(line.id)])
     const outstanding = num(line.outstanding_quantity ?? line.approved_quantity ?? line.quantity)
     return entered < 0 || entered > outstanding
+  })
+  const expiryInvalid = orderLines.some((line) => {
+    const lineId = id(line.id)
+    if (num(quantities[lineId]) <= 0) return false
+    const article = app.data.items.find((item) => id(item.id) === id(line.item))
+    const expiry = expiryDates[lineId] || ''
+    return (Boolean(article?.expiryTracking) && !expiry) || Boolean(expiry && expiry < receivedDate)
   })
 
   const selectedReceipt = data.receipts.find((row) => id(row.id) === selectedReceiptId)
@@ -618,6 +632,7 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
     setInvoiceNumber('')
     setReceivedDate(new Date().toISOString().slice(0, 10))
     setQuantities({})
+    setExpiryDates({})
   }
 
   if (selectedOrder) {
@@ -650,8 +665,8 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
             <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>{orderLines.length} item{orderLines.length === 1 ? '' : 's'} on LPO</span>
           </div>
           <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-            <div className="receiving-line-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1.5fr) .65fr .8fr .8fr .85fr .6fr', gap: 10, padding: '10px 12px', background: 'var(--surface-2)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}>
-              <span>Article</span><span>LPO Qty</span><span>Previously received</span><span>Outstanding</span><span>Receive now</span><span>UOM</span>
+            <div className="receiving-line-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(210px,1.4fr) .55fr .7fr .65fr .75fr .9fr .5fr', gap: 10, padding: '10px 12px', background: 'var(--surface-2)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}>
+              <span>Article</span><span>LPO Qty</span><span>Previously received</span><span>Outstanding</span><span>Receive now</span><span>Expiry date</span><span>UOM</span>
             </div>
             {orderLines.map((line) => {
               const lineId = id(line.id)
@@ -660,7 +675,11 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
               const outstanding = num(line.outstanding_quantity ?? Math.max(0, ordered - previous))
               const entered = num(quantities[lineId])
               const invalid = entered > outstanding
-              return <div key={lineId} className="receiving-line-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1.5fr) .65fr .8fr .8fr .85fr .6fr', gap: 10, alignItems: 'center', padding: '12px', borderTop: '1px solid var(--border)', fontSize: 11.5 }}>
+              const article = app.data.items.find((item) => id(item.id) === id(line.item))
+              const expiryRequired = Boolean(article?.expiryTracking)
+              const expiry = expiryDates[lineId] || ''
+              const invalidExpiry = Boolean(entered > 0 && ((expiryRequired && !expiry) || (expiry && expiry < receivedDate)))
+              return <div key={lineId} className="receiving-line-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(210px,1.4fr) .55fr .7fr .65fr .75fr .9fr .5fr', gap: 10, alignItems: 'center', padding: '12px', borderTop: '1px solid var(--border)', fontSize: 11.5 }}>
                 <strong style={{ color: 'var(--text)' }}>{names.items.get(id(line.item)) || id(line.item)}</strong>
                 <span style={{ color: 'var(--text-muted)' }}>{ordered}</span>
                 <span style={{ color: 'var(--text-muted)' }}>{previous}</span>
@@ -668,6 +687,10 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
                 <div>
                   <Input type="number" value={quantities[lineId] || ''} onChange={(value) => setQuantities((current) => ({ ...current, [lineId]: value }))} placeholder="0" />
                   {invalid && <div style={{ marginTop: 4, color: 'var(--bad)', fontSize: 9.5 }}>Maximum {outstanding}</div>}
+                </div>
+                <div>
+                  <Input type="date" value={expiry} onChange={(value) => setExpiryDates((current) => ({ ...current, [lineId]: value }))} />
+                  <div style={{ marginTop: 4, color: invalidExpiry ? 'var(--bad)' : 'var(--text-faint)', fontSize: 9.5 }}>{invalidExpiry ? (expiry ? 'Cannot be before received date' : 'Required for this Article') : expiryRequired ? 'Required' : 'Optional'}</div>
                 </div>
                 <span style={{ color: 'var(--text-muted)' }}>{names.units.get(id(line.unit)) || 'Unit'}</span>
               </div>
@@ -678,7 +701,7 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
             <button type="button" onClick={() => setSelectedOrderId('')} style={secondary}>Cancel</button>
             <button
               type="button"
-              disabled={busy || !invoiceNumber.trim() || !positiveLines.length || lineInvalid}
+              disabled={busy || !invoiceNumber.trim() || !positiveLines.length || lineInvalid || expiryInvalid}
               onClick={() => void run(
                 () => runBackendAction('purchase-orders', id(selectedOrder.id), 'receive-delivery', {
                   supplier_invoice_no: invoiceNumber.trim(),
@@ -693,7 +716,7 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
                 }),
                 'GRN generated successfully',
               )}
-              style={{ ...action, width: 'auto', minWidth: 150, marginTop: 0, padding: '0 18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, background: 'var(--good)', opacity: busy || !invoiceNumber.trim() || !positiveLines.length || lineInvalid ? .5 : 1 }}
+              style={{ ...action, width: 'auto', minWidth: 150, marginTop: 0, padding: '0 18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, background: 'var(--good)', opacity: busy || !invoiceNumber.trim() || !positiveLines.length || lineInvalid || expiryInvalid ? .5 : 1 }}
             ><Icon name="receipt_long" size={17} color="#fff" />Generate GRN</button>
           </div>
         </div>
@@ -746,7 +769,7 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
 
       {view === 'ready' ? <>
         <div className="receiving-ready-header" style={{ display: 'grid', gridTemplateColumns: '.7fr 1.5fr .8fr .8fr auto', gap: 12, padding: '10px 16px', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}><span>LPO</span><span>Supplier</span><span>Expected</span><span>Status</span><span></span></div>
-        {filteredOrders.map((order) => <button key={id(order.id)} type="button" onClick={() => { setSelectedOrderId(id(order.id)); setQuantities({}); setInvoiceNumber('') }} style={{ width: '100%', display: 'grid', gridTemplateColumns: '.7fr 1.5fr .8fr .8fr auto', gap: 12, alignItems: 'center', padding: '13px 16px', border: 0, borderTop: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}><strong style={{ color: 'var(--text)', fontSize: 12 }}>LPO {id(order.lpo_number || order.po_number)}</strong><span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{names.suppliers.get(id(order.supplier)) || 'Supplier'}</span><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{formatDateOnly(order.expected_date)}</span><span style={{ color: id(order.status) === 'partially_received' ? 'var(--warn)' : 'var(--good)', fontSize: 10.8, fontWeight: 750 }}>{id(order.status) === 'partially_received' ? 'Partial' : 'Ready'}</span><span style={{ color: 'var(--accent)', fontSize: 10.8, fontWeight: 800 }}>Receive</span></button>)}
+        {filteredOrders.map((order) => <button key={id(order.id)} type="button" onClick={() => { setSelectedOrderId(id(order.id)); setQuantities({}); setExpiryDates({}); setInvoiceNumber('') }} style={{ width: '100%', display: 'grid', gridTemplateColumns: '.7fr 1.5fr .8fr .8fr auto', gap: 12, alignItems: 'center', padding: '13px 16px', border: 0, borderTop: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}><strong style={{ color: 'var(--text)', fontSize: 12 }}>LPO {id(order.lpo_number || order.po_number)}</strong><span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{names.suppliers.get(id(order.supplier)) || 'Supplier'}</span><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{formatDateOnly(order.expected_date)}</span><span style={{ color: id(order.status) === 'partially_received' ? 'var(--warn)' : 'var(--good)', fontSize: 10.8, fontWeight: 750 }}>{id(order.status) === 'partially_received' ? 'Partial' : 'Ready'}</span><span style={{ color: 'var(--accent)', fontSize: 10.8, fontWeight: 800 }}>Receive</span></button>)}
         {!filteredOrders.length && <div style={{ padding: 48, textAlign: 'center' }}><Icon name="inventory_2" size={25} color="var(--text-faint)" /><div style={{ marginTop: 8, color: 'var(--text)', fontWeight: 750 }}>No matching LPOs</div><div style={{ marginTop: 4, color: 'var(--text-muted)', fontSize: 11.5 }}>{readyOrders.length ? 'Try another LPO number or supplier.' : 'No supplier deliveries are currently ready for receiving.'}</div></div>}
       </> : <>
         <div style={{ display: 'grid', gridTemplateColumns: '.7fr .7fr 1.4fr .8fr .7fr auto', gap: 12, padding: '10px 16px', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}><span>GRN</span><span>LPO</span><span>Supplier</span><span>Invoice</span><span>Date</span><span></span></div>
@@ -832,6 +855,7 @@ function GoodsReceiptDocument({ receipt, lines, hotel, propertyName, preparedBy,
           <th className="number">Excess<br />Qty.</th>
           <th className="number">Rejected<br />Qty.</th>
           <th className="number">Accepted<br />Qty.</th>
+          <th>Expiry<br />Date</th>
           <th className="number">Rate</th>
           <th className="number">Total<br />Value</th>
         </tr></thead>
@@ -859,13 +883,14 @@ function GoodsReceiptDocument({ receipt, lines, hotel, propertyName, preparedBy,
               <td className="number">{formatQty(Math.max(received - ordered, 0))}</td>
               <td className="number">{formatQty(rejected)}</td>
               <td className="number">{formatQty(accepted)}</td>
+              <td>{formatDateOnly(line.expiry_date)}</td>
               <td className="number">{hasCommercialValues ? money(rate).replace('UGX ', '') : '—'}</td>
               <td className="number">{hasCommercialValues ? money(rate * accepted).replace('UGX ', '') : '—'}</td>
             </tr>
           })}
-          {!lines.length && <tr><td colSpan={14} className="grn-empty-row">No received items recorded on this GRN.</td></tr>}
+          {!lines.length && <tr><td colSpan={15} className="grn-empty-row">No received items recorded on this GRN.</td></tr>}
         </tbody>
-        <tfoot><tr><td colSpan={12}></td><th>Grand Total</th><td className="number">{hasCommercialValues ? money(grandTotal) : '—'}</td></tr></tfoot>
+        <tfoot><tr><td colSpan={13}></td><th>Grand Total</th><td className="number">{hasCommercialValues ? money(grandTotal) : '—'}</td></tr></tfoot>
       </table>
 
       <div className="grn-control-strip">
@@ -910,7 +935,7 @@ function RequestPanel({ data, form, setForm, requisitionLabel, items }: any) {
   </Panel>
 }
 
-function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplierItems, items, itemUnits, onContinueToLpo }: any) {
+function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplierItems, items, itemUnits, canEditPrice, onContinueToLpo }: any) {
   const requisitions = data.requisitions.filter((row: Row) => ['store_requisition','store_shortage'].includes(id(row.procurement_source)) && ['approved','partially_ordered'].includes(id(row.status)))
   const selectedRequisition = requisitions.find((row: Row) => id(row.id) === id(form.requisition))
   const reqLines = data.requisitionItems.filter((row: Row) => id(row.requisition) === id(form.requisition))
@@ -929,8 +954,8 @@ function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplier
   // approved Article quantity (for example 1 ream, never 0.20 carton).
   const maxOrderQuantity = requestedBase
   const enteredOrderQuantity = num(form.quantity || maxOrderQuantity)
-  const confirmedPrice = num(form.price ?? selectedCatalogue?.price)
   const quotedPrice = num(selectedCatalogue?.price)
+  const confirmedPrice = canEditPrice ? num(form.price ?? selectedCatalogue?.price) : quotedPrice
   const confirmedBasePrice = selectedFactor > 0 ? confirmedPrice / selectedFactor : 0
   const priceChanged = Boolean(selectedCatalogue && Math.abs(confirmedPrice - quotedPrice) > 0.000001)
   const allocationExceedsRequest = Boolean(selectedCatalogue) && (selectedFactor <= 0 || enteredOrderQuantity > requestedBase + 0.000001)
@@ -1006,12 +1031,12 @@ function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplier
 
     {selectedCatalogue && <>
       <ReadOnlyValue label="Supplier" value={selectedSupplier?.name || names.suppliers.get(id(selectedCatalogue.supplierId)) || id(selectedCatalogue.supplier)} />
-      <Two><Field label={`Quantity to order (${id(selectedItem?.uom) || 'item unit'})`}><Input type="number" value={form.quantity || maxOrderQuantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><Field label={`Supplier price per ${id(selectedCatalogue.unit) || 'quoted unit'}`}><Input type="number" value={form.price ?? selectedCatalogue.price} onChange={(v) => setForm({ ...form, price: v })} /></Field></Two>
+      <Two><Field label={`Quantity to order (${id(selectedItem?.uom) || 'item unit'})`}><Input type="number" value={form.quantity || maxOrderQuantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field>{canEditPrice ? <Field label={`Supplier price per ${id(selectedCatalogue.unit) || 'quoted unit'}`}><Input type="number" value={form.price ?? selectedCatalogue.price} onChange={(v) => setForm({ ...form, price: v })} /></Field> : <ReadOnlyValue label={`Supplier price per ${id(selectedCatalogue.unit) || 'quoted unit'} · read only`} value={money(selectedCatalogue.price)} />}</Two>
       <Field label={priceChanged ? 'Reason for price change *' : 'Note'}><Input value={form.procurementNote || ''} onChange={(v) => setForm({ ...form, procurementNote: v })} placeholder={priceChanged ? 'Reason for the revised price' : 'Optional'} /></Field>
       {selectedCatalogue && <QuoteConversionNote orderQuantity={enteredOrderQuantity} factor={selectedFactor} quotedUnit={id(selectedCatalogue.unit) || 'quoted unit'} baseUnit={id(selectedItem?.uom) || 'item unit'} quotedPrice={confirmedPrice} basePrice={confirmedBasePrice} />}
       {allocationExceedsRequest && <Hint>Quantity exceeds the Store Keeper quantity. Maximum is {maxOrderQuantity} {id(selectedItem?.uom) || 'units'}.</Hint>}
       <Action tone="good" disabled={busy || !form.reqLine || !form.cataloguePrice || enteredOrderQuantity <= 0 || allocationExceedsRequest || confirmedPrice <= 0 || (priceChanged && !id(form.procurementNote).trim())} onClick={() => run(
-        () => runBackendAction('requisitions', id(form.requisition), 'allocate-line', { line_id: form.reqLine, supplier_price: form.cataloguePrice, quantity: enteredOrderQuantity, unit_price: num(form.price ?? selectedCatalogue.price), note: form.procurementNote || '' }),
+        () => runBackendAction('requisitions', id(form.requisition), 'allocate-line', { line_id: form.reqLine, supplier_price: form.cataloguePrice, quantity: enteredOrderQuantity, ...(canEditPrice ? { unit_price: num(form.price ?? selectedCatalogue.price) } : {}), note: form.procurementNote || '' }),
         'Supplier allocation saved',
         { requisition: form.requisition },
       )}>Save item</Action>
@@ -1024,7 +1049,7 @@ function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplier
   </Panel>
 }
 
-function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, items, itemUnits, canManage, role, userName, lpoQueue, setLpoQueue }: any) {
+function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, items, itemUnits, canManage, canEditPrice, role, userName, lpoQueue, setLpoQueue }: any) {
   const activeOrderRequisitions = new Set(
     data.orders.filter((row: Row) => id(row.status) !== 'cancelled').map((row: Row) => id(row.requisition)),
   )
@@ -1117,9 +1142,9 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, ite
       {draftHasQuantityOverage ? <>
         <Hint>This draft contains a quantity that must be corrected before it can be sent to Finance.</Hint>
         <Field label="Item to correct"><Select value={form.orderLine} onChange={(v) => { const found = lines.find((row: Row) => id(row.id) === v); setForm({ ...form, orderLine: v, quantity: found ? safeQuantityForLine(found) : '', cost: found?.unit_cost, unit: found?.unit }) }} rows={lines} label={(row: Row) => names.items.get(id(row.item)) || id(row.item)} /></Field>
-        {line && <><Field label="Purchase unit"><Select value={form.unit} onChange={(v) => setForm({ ...form, unit: v, quantity: safeQuantityForLine(line, v) })} rows={availableUnits} /></Field><Two><Field label="Quantity"><Input type="number" value={form.quantity ?? line.quantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><Field label="Unit price"><Input type="number" value={form.cost ?? line.unit_cost} onChange={(v) => setForm({ ...form, cost: v })} /></Field></Two></>}
+        {line && <><Field label="Purchase unit"><Select value={form.unit} onChange={(v) => setForm({ ...form, unit: v, quantity: safeQuantityForLine(line, v) })} rows={availableUnits} /></Field><Two><Field label="Quantity"><Input type="number" value={form.quantity ?? line.quantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field>{canEditPrice ? <Field label="Unit price"><Input type="number" value={form.cost ?? line.unit_cost} onChange={(v) => setForm({ ...form, cost: v })} /></Field> : <ReadOnlyValue label="Unit price · read only" value={money(line.unit_cost)} />}</Two></>}
         {quantityExceedsApproval && <Hint>Quantity is above the approved limit.</Hint>}
-        <Action disabled={busy || !form.orderLine || conversion <= 0 || quantityExceedsApproval || num(form.quantity) <= 0} onClick={() => run(() => updateBackendRecord('purchase-order-items', id(form.orderLine), { quantity: num(form.quantity), unit_cost: num(form.cost), unit: form.unit || null }), 'LPO item corrected', { ...form })}>Save correction</Action>
+        <Action disabled={busy || !form.orderLine || conversion <= 0 || quantityExceedsApproval || num(form.quantity) <= 0} onClick={() => run(() => updateBackendRecord('purchase-order-items', id(form.orderLine), { quantity: num(form.quantity), ...(canEditPrice ? { unit_cost: num(form.cost) } : {}), unit: form.unit || null }), 'LPO item corrected', { ...form })}>Save correction</Action>
       </> : <Action tone="good" disabled={busy || !lines.length} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'submit-for-approval'), 'LPO sent to Financial Manager')}>Send to Financial Manager</Action>}
     </>}
 
@@ -1217,7 +1242,7 @@ function LpoSummary({ order, lines, names }: { order: Row; lines: Row[]; names: 
   </section>
 }
 
-function ReceiptPanel({ data, form, setForm, busy, run, orderLabel, receiptLabel, names, stores }: any) {
+function ReceiptPanel({ data, form, setForm, busy, run, orderLabel, receiptLabel, names, stores, items }: any) {
   const readyOrders = data.orders.filter((row: Row) => ['issued', 'partially_received'].includes(id(row.status)))
   const selectedOrder = readyOrders.find((row: Row) => id(row.id) === id(form.order))
   const receipt = data.receipts.find((row: Row) => id(row.id) === id(form.receipt))
@@ -1230,6 +1255,10 @@ function ReceiptPanel({ data, form, setForm, busy, run, orderLabel, receiptLabel
   const outstanding = Math.max(0, orderedQuantity - previouslyReceived)
   const receiptLines = data.receiptItems.filter((row: Row) => id(row.goods_receipt) === id(form.receipt))
   const duplicate = receiptLines.some((row: Row) => id(row.purchase_order_item) === id(form.orderLine))
+  const selectedArticle = items.find((item: Row) => id(item.id) === id(line?.item))
+  const expiryRequired = Boolean(selectedArticle?.expiryTracking)
+  const receiptDate = id(receipt?.received_date || form.date || new Date().toISOString().slice(0, 10))
+  const invalidExpiry = Boolean(form.expiryDate && id(form.expiryDate) < receiptDate)
   return <Panel title="Receiving & GRN" note="Select an issued LPO. Supplier, articles, destination and approved quantities are inherited; only the physical quantity received is entered.">
     <Field label="Ready LPO"><Select value={form.order} onChange={(v) => setForm({ order: v, receipt: '', orderLine: '', quantity: '' })} rows={readyOrders} label={orderLabel} /></Field>
     {!readyOrders.length && <Hint>Nothing is ready for Receiving yet. After final General Manager approval, Procurement must open “Approved · Print & Send” and email the LPO to the supplier. It will appear here when its status becomes issued.</Hint>}
@@ -1240,7 +1269,7 @@ function ReceiptPanel({ data, form, setForm, busy, run, orderLabel, receiptLabel
     <Action disabled={busy || !form.order || !form.invoiceNumber} onClick={() => run(() => createBackendRecord('grns', { purchase_order: form.order, received_date: form.date || new Date().toISOString().slice(0, 10), delivery_note_no: form.deliveryNote || '', supplier_invoice_no: form.invoiceNumber, note: '' }), 'GRN opened from the issued LPO')}>Open GRN from LPO</Action>
     <Divider />
     <Field label="Draft / existing GRN"><Select value={form.receipt} onChange={(v) => { const found = data.receipts.find((row: Row) => id(row.id) === v); setForm({ receipt: v, order: found?.purchase_order || form.order }) }} rows={data.receipts.filter((row: Row) => readyOrders.some((order: Row) => id(order.id) === id(row.purchase_order)))} label={receiptLabel} /></Field>
-    <Field label="LPO item"><Select value={form.orderLine} onChange={(v) => setForm({ ...form, orderLine: v, quantity: '' })} rows={lines} label={(row: Row) => `${names.items.get(id(row.item)) || id(row.item)} · approved ${row.approved_quantity ?? row.quantity}`} /></Field>
+    <Field label="LPO item"><Select value={form.orderLine} onChange={(v) => setForm({ ...form, orderLine: v, quantity: '', expiryDate: '' })} rows={lines} label={(row: Row) => `${names.items.get(id(row.item)) || id(row.item)} · approved ${row.approved_quantity ?? row.quantity}`} /></Field>
     {line && <section style={{ margin: '10px 0 12px', display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 8 }}>
       <ReadOnlyValue label="LPO approved" value={orderedQuantity} />
       <ReadOnlyValue label="Previously received" value={previouslyReceived} />
@@ -1248,9 +1277,11 @@ function ReceiptPanel({ data, form, setForm, busy, run, orderLabel, receiptLabel
     </section>}
     {line && <Hint>Destination: {line.destination_type === 'workspace' ? `Department · ${names.departments.get(id(line.destination_department)) || 'inherited'}` : names.stores.get(id(line.destination_store)) || stores.find((store: Row) => id(store.id) === id(line.destination_store))?.name || 'Inherited LPO store'} · read only.</Hint>}
     <Field label={`Quantity received now (${names.units.get(id(line?.unit)) || 'LPO unit'})`}><Input type="number" value={form.quantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field>
+    <Field label={`Expiry date${expiryRequired ? ' *' : ' (optional)'}`}><Input type="date" value={form.expiryDate || ''} onChange={(v) => setForm({ ...form, expiryDate: v })} /></Field>
+    {invalidExpiry && <Hint>Expiry date cannot be earlier than the received date.</Hint>}
     {line && num(form.quantity) > outstanding && <Hint>Cannot receive more than the outstanding quantity of {outstanding}.</Hint>}
     {duplicate && <Hint>This LPO line is already on this GRN. Use a new GRN for a later partial delivery.</Hint>}
-    <Action disabled={busy || duplicate || !form.receipt || !form.orderLine || num(form.quantity) <= 0 || num(form.quantity) > outstanding} onClick={() => run(() => createBackendRecord('grn-items', { goods_receipt: form.receipt, purchase_order_item: form.orderLine, quantity_received: num(form.quantity), expiry_date: null }), 'Received quantity recorded; original LPO quantity remains unchanged')}>Record received quantity</Action>
+    <Action disabled={busy || duplicate || !form.receipt || !form.orderLine || num(form.quantity) <= 0 || num(form.quantity) > outstanding || (expiryRequired && !form.expiryDate) || invalidExpiry} onClick={() => run(() => createBackendRecord('grn-items', { goods_receipt: form.receipt, purchase_order_item: form.orderLine, quantity_received: num(form.quantity), expiry_date: form.expiryDate || null }), 'Received quantity and expiry date recorded; original LPO quantity remains unchanged')}>Record received quantity</Action>
     {receiptLines.length > 0 && <Hint>Next: open “2. Confirm & post GRN” to record accepted/rejected quantities and post accepted stock. The LPO quantity remains unchanged.</Hint>}
   </Panel>
 }

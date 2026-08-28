@@ -53,6 +53,22 @@ def has_role(request, *roles):
     )
 
 
+def lpo_price_is_read_only_for_user(user):
+    """Procurement Officers and General Managers may inspect, but never alter, LPO rates."""
+    if not user or not user.is_authenticated or user.is_superuser:
+        return False
+    role_names = {
+        name.strip().lower()
+        for name in user.groups.values_list("name", flat=True)
+    }
+    employee = getattr(user, "employee_profile", None)
+    designation = str(getattr(employee, "designation", "") or "").strip().lower()
+    return bool(
+        role_names.intersection({"procurement officer", "general manager"})
+        or designation in {"procurement officer", "general manager"}
+    )
+
+
 def validate_configured_item_unit(item, unit):
     if not item or not unit:
         return
@@ -648,6 +664,15 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         order = attrs.get("purchase_order") or getattr(self.instance, "purchase_order", None)
         item = attrs.get("item") or getattr(self.instance, "item", None)
+        request = self.context.get("request")
+        if "unit_cost" in attrs and lpo_price_is_read_only_for_user(
+            getattr(request, "user", None)
+        ):
+            current_price = getattr(self.instance, "unit_cost", None)
+            if self.instance is None or attrs["unit_cost"] != current_price:
+                raise serializers.ValidationError(
+                    {"unit_cost": "LPO prices are read-only for Procurement Officers and General Managers."}
+                )
         validate_configured_item_unit(
             item,
             attrs.get("unit", getattr(self.instance, "unit", None)),
@@ -821,6 +846,15 @@ class GoodsReceiptItemSerializer(serializers.ModelSerializer):
         if receipt and order_line and order_line.purchase_order_id != receipt.purchase_order_id:
             raise serializers.ValidationError(
                 {"purchase_order_item": "This LPO line does not belong to the selected goods receipt."}
+            )
+        expiry_date = attrs.get("expiry_date", getattr(self.instance, "expiry_date", None))
+        if order_line and order_line.item.expiry_tracking and not expiry_date:
+            raise serializers.ValidationError(
+                {"expiry_date": "Enter the expiry date for this expiry-tracked Article."}
+            )
+        if receipt and expiry_date and expiry_date < receipt.received_date:
+            raise serializers.ValidationError(
+                {"expiry_date": "Expiry date cannot be earlier than the received date."}
             )
         quantity = attrs.get("quantity_received")
         if receipt and order_line and quantity is not None:

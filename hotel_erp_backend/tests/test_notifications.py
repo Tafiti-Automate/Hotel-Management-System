@@ -1,19 +1,24 @@
+from datetime import timedelta
+
 import pytest
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.departments.models import Branch, Department
 from apps.employees.models import Employee
 from apps.inventory.models import (
     Category,
+    InventoryBatch,
     Item,
     StoreKeeperAssignment,
     StoreLocation,
     StoreRequisition,
     StoreRequisitionItem,
+    UnitOfMeasure,
 )
 from apps.notifications.models import Notification
 
@@ -116,6 +121,52 @@ def test_staff_can_mark_all_of_their_notifications_read():
 
 
 @pytest.mark.django_db
+def test_store_keeper_notification_poll_creates_one_expiry_alert_per_milestone():
+    branch = Branch.objects.create(name="Expiry Alert Hotel")
+    department = Department.objects.create(name="Expiry Alert Stores")
+    store = StoreLocation.objects.create(branch=branch, name="Expiry Alert Main Store")
+    user, employee = create_employee("expiry-keeper", "EXP-KEEP", department)
+    employee.branch = branch
+    employee.save(update_fields=("branch", "updated_at"))
+    user.groups.add(Group.objects.get_or_create(name="Store Keeper")[0])
+    StoreKeeperAssignment.objects.create(store=store, employee=employee)
+    unit = UnitOfMeasure.objects.create(name="Expiry Piece", abbreviation="pc")
+    category = Category.objects.create(name="Expiry Alert Supplies")
+    item = Item.objects.create(
+        category=category,
+        name="Fresh Milk",
+        sku="MILK-EXP-01",
+        unit="pc",
+        base_unit=unit,
+        reorder_level=Decimal("0.00"),
+        expiry_tracking=True,
+    )
+    batch = InventoryBatch.objects.create(
+        item=item,
+        store=store,
+        quantity=Decimal("12.00"),
+        remaining_quantity=Decimal("12.00"),
+        unit_cost=Decimal("2500.00"),
+        expiry_date=timezone.localdate() + timedelta(days=20),
+    )
+    client = APIClient()
+    client.force_authenticate(user=user)
+
+    first = client.get("/api/v1/notifications/")
+    second = client.get("/api/v1/notifications/")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    alerts = Notification.objects.filter(
+        employee=employee,
+        deduplication_key=f"inventory-expiry:{batch.pk}:within_30_days",
+    )
+    assert alerts.count() == 1
+    assert "Fresh Milk" in alerts.get().title
+    assert store.name in alerts.get().message
+
+
+@pytest.mark.django_db
 def test_department_store_request_notifies_each_next_role():
     branch = Branch.objects.create(name="Notification Hotel")
     department = Department.objects.create(name="Notification Housekeeping")
@@ -142,8 +193,8 @@ def test_department_store_request_notifies_each_next_role():
     procurement.save(update_fields=("branch", "updated_at"))
 
     head_user.groups.add(Group.objects.get_or_create(name="Department Head")[0])
-    stores_user.groups.add(Group.objects.create(name="Store Keeper"))
-    procurement_user.groups.add(Group.objects.create(name="Procurement Manager"))
+    stores_user.groups.add(Group.objects.get_or_create(name="Store Keeper")[0])
+    procurement_user.groups.add(Group.objects.get_or_create(name="Procurement Manager")[0])
     StoreKeeperAssignment.objects.create(store=store, employee=stores)
 
     requisition = StoreRequisition.objects.create(
@@ -165,7 +216,7 @@ def test_department_store_request_notifies_each_next_role():
     ).exists()
     assert not Notification.objects.filter(
         employee=stores,
-        title__contains="needs a stock decision",
+        title__contains="needs Store Keeper action",
     ).exists()
 
     requisition.approve_department(
@@ -174,9 +225,10 @@ def test_department_store_request_notifies_each_next_role():
     )
     assert Notification.objects.filter(
         employee=stores,
-        title__contains="needs a stock decision",
+        title__contains="needs Store Keeper action",
     ).exists()
 
+    requisition.items.update(quantity_approved=Decimal("4.00"))
     purchase = requisition.create_shortage_purchase_requisition(
         created_by=stores_user,
         reason="No soap is available in the store.",
@@ -184,5 +236,5 @@ def test_department_store_request_notifies_each_next_role():
     assert purchase.source_store_requisition == requisition
     assert Notification.objects.filter(
         employee=procurement,
-        title__contains="confirmed stock shortage",
+        title__contains="ready for Procurement",
     ).exists()
