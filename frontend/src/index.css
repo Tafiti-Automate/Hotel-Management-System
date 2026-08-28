@@ -3081,6 +3081,26 @@ html[data-theme="dark"] .screen-launchpad {
   --ui-control-shadow: 0 1px 2px rgba(0, 0, 0, .16);
 }
 
+/* The working application uses a quiet neutral rail. The workspace chooser keeps
+   its distinct top bar, while navigation stays visually integrated with content. */
+html:not([data-theme="dark"]) .screen-app {
+  --ui-sidebar: #fbfcfe;
+  --ui-sidebar-raised: #f3f6fa;
+  --ui-sidebar-text: #182235;
+  --ui-sidebar-muted: #526177;
+  --ui-sidebar-faint: #8491a4;
+  --ui-sidebar-border: #dfe5ed;
+}
+
+html[data-theme="dark"] .screen-app {
+  --ui-sidebar: #111319;
+  --ui-sidebar-raised: #191c24;
+  --ui-sidebar-text: #f4f6f9;
+  --ui-sidebar-muted: #aab2c0;
+  --ui-sidebar-faint: #737d8e;
+  --ui-sidebar-border: rgba(255, 255, 255, .08);
+}
+
 .screen-app {
   overflow: hidden;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
@@ -3188,11 +3208,11 @@ html[data-theme="dark"] .screen-launchpad {
   --text-muted: var(--ui-sidebar-muted);
   --text-faint: var(--ui-sidebar-faint);
   --border: var(--ui-sidebar-border);
-  --border-2: rgba(255,255,255,.16);
+  --border-2: color-mix(in srgb, var(--ui-sidebar-text) 18%, var(--ui-sidebar-border));
   --accent-soft: color-mix(in srgb, var(--accent) 18%, transparent);
   background: var(--ui-sidebar) !important;
-  border-right: 1px solid rgba(5, 12, 23, .42) !important;
-  box-shadow: 8px 0 30px rgba(7, 18, 34, .055) !important;
+  border-right: 1px solid var(--ui-sidebar-border) !important;
+  box-shadow: 4px 0 18px rgba(16, 31, 52, .025) !important;
 }
 
 html:not([data-theme="dark"]) .screen-app .sidebar,
@@ -3236,13 +3256,13 @@ html[data-theme="dark"] .screen-app .sidebar {
   padding: 9px 11px !important;
   border-color: var(--ui-sidebar-border) !important;
   border-radius: 10px !important;
-  background: rgba(255,255,255,.045) !important;
-  box-shadow: inset 0 1px rgba(255,255,255,.025);
+  background: var(--ui-sidebar-raised) !important;
+  box-shadow: inset 0 1px rgba(255,255,255,.32);
 }
 
 .screen-app .sidebar-property > button:hover {
-  border-color: rgba(255,255,255,.16) !important;
-  background: rgba(255,255,255,.065) !important;
+  border-color: var(--border-2) !important;
+  background: color-mix(in srgb, var(--ui-sidebar-raised) 70%, var(--surface)) !important;
 }
 
 .screen-app .sidebar-nav {
@@ -3284,7 +3304,7 @@ html[data-theme="dark"] .screen-app .sidebar {
 
 .screen-app .sidebar-nav-item:hover {
   color: var(--ui-sidebar-text) !important;
-  background: rgba(255,255,255,.055) !important;
+  background: var(--ui-sidebar-raised) !important;
 }
 
 .screen-app .sidebar-nav-item:hover .ic {
@@ -3292,20 +3312,20 @@ html[data-theme="dark"] .screen-app .sidebar {
 }
 
 .screen-app .sidebar-nav-item.active {
-  color: #fff !important;
-  background: color-mix(in srgb, var(--accent) 20%, rgba(255,255,255,.035)) !important;
-  box-shadow: inset 3px 0 0 var(--accent), inset 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent) !important;
+  color: var(--accent) !important;
+  background: color-mix(in srgb, var(--accent) 9%, var(--ui-sidebar)) !important;
+  box-shadow: inset 3px 0 0 var(--accent) !important;
   font-weight: 650 !important;
 }
 
 .screen-app .sidebar-nav-item.active .ic {
-  color: color-mix(in srgb, var(--accent) 55%, white) !important;
+  color: var(--accent) !important;
 }
 
 .screen-app .sidebar-footer {
   padding: 11px 14px 14px !important;
   border-top-color: var(--ui-sidebar-border) !important;
-  background: rgba(0,0,0,.06);
+  background: color-mix(in srgb, var(--ui-sidebar-raised) 70%, var(--ui-sidebar));
 }
 
 .screen-app .sidebar-user-avatar {
@@ -3316,7 +3336,7 @@ html[data-theme="dark"] .screen-app .sidebar {
 .screen-app .sidebar-desktop-collapse:hover,
 .screen-app .sidebar-mobile-toggle:hover {
   color: var(--ui-sidebar-text) !important;
-  background: rgba(255,255,255,.07) !important;
+  background: var(--ui-sidebar-raised) !important;
 }
 
 /* Global header */
@@ -4365,7 +4385,7 @@ html[data-theme="dark"] .screen-app .sidebar {
     top: 64px !important;
     background: var(--ui-sidebar) !important;
     border-right-color: var(--ui-sidebar-border) !important;
-    box-shadow: 18px 0 50px rgba(4, 12, 25, .28) !important;
+    box-shadow: 18px 0 50px rgba(15, 28, 48, .14) !important;
   }
 
   .screen-app .app-main {
