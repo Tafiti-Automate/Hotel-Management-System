@@ -841,7 +841,7 @@ function GoodsReceiptDocument({ receipt, lines, hotel, propertyName, preparedBy,
   const amount = (value: number) => hasCommercialValues ? value.toLocaleString('en-UG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'
 
   return <>
-    <style>{'@media print { @page { size: A4 landscape; margin: 9mm; } }'}</style>
+    <style>{'@media print { @page { size: A4 landscape; margin: 7mm; } }'}</style>
     <article className="grn-document" aria-label={`Goods Received Note ${id(receipt.grn_number)}`}>
       <header className="grn-simple-header">
         <div className="grn-simple-company">
