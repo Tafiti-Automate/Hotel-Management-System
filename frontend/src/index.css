@@ -960,12 +960,16 @@ select { appearance: none; -webkit-appearance: none; }
     width: 100% !important;
     max-width: none !important;
     min-width: 0 !important;
+    min-height: 196mm !important;
     margin: 0 !important;
+    box-sizing: border-box !important;
     border-width: .3mm !important;
     color: #111 !important;
-    font-size: 8.4pt !important;
-    line-height: 1.18 !important;
+    font-size: 9.2pt !important;
+    line-height: 1.25 !important;
     box-shadow: none !important;
+    display: grid !important;
+    grid-template-rows: 33mm 20mm minmax(103mm, 1fr) 31mm 7mm;
     break-inside: avoid-page;
     page-break-inside: avoid;
     print-color-adjust: exact;
@@ -973,48 +977,55 @@ select { appearance: none; -webkit-appearance: none; }
   }
 
   .grn-simple-header {
-    min-height: 27mm;
-    gap: 5mm;
-    padding: 3mm 3.5mm;
+    min-height: 33mm;
+    gap: 8mm;
+    padding: 4mm 5mm;
   }
 
-  .grn-simple-company strong { font-size: 9.2pt !important; }
-  .grn-simple-company span { font-size: 7.5pt !important; }
-  .grn-simple-company img { width: 38mm; height: 10mm; }
-  .grn-simple-title > span { font-size: 9pt !important; }
-  .grn-simple-title > strong { margin-top: 3.2mm; font-size: 13pt !important; }
-  .grn-simple-title > small { font-size: 7.4pt !important; }
+  .grn-simple-company { gap: .8mm; }
+  .grn-simple-company strong { font-size: 10.5pt !important; }
+  .grn-simple-company span { font-size: 8.5pt !important; }
+  .grn-simple-company img { width: 44mm; height: 12mm; }
+  .grn-simple-title > span { font-size: 10.5pt !important; }
+  .grn-simple-title > strong { margin-top: 4.5mm; font-size: 16pt !important; }
+  .grn-simple-title > small { font-size: 8.5pt !important; }
 
   .grn-simple-meta > div {
-    min-height: 8mm;
-    grid-template-columns: 27mm minmax(0, 1fr);
-    padding: 1mm 1.7mm;
+    min-height: 10mm;
+    grid-template-columns: 31mm minmax(0, 1fr);
+    padding: 1.4mm 2.2mm;
   }
-  .grn-simple-meta b { font-size: 7.4pt !important; }
-  .grn-simple-meta span { font-size: 7.6pt !important; }
+  .grn-simple-meta b { font-size: 8.3pt !important; }
+  .grn-simple-meta span { font-size: 8.7pt !important; }
 
+  .grn-material-table { height: 100% !important; }
   .grn-material-table th,
   .grn-material-table td {
-    padding: 1.6mm 1.4mm;
+    padding: 2.1mm 1.8mm;
   }
-  .grn-material-table thead th { font-size: 7.4pt !important; }
-  .grn-material-table tbody td { min-height: 9mm; font-size: 7.7pt !important; }
-  .grn-material-table tbody strong { font-size: 7.8pt !important; }
-  .grn-material-table tbody small { font-size: 6.9pt !important; }
+  .grn-material-table thead th { font-size: 8.5pt !important; }
+  .grn-material-table tbody td { height: 13mm; font-size: 9pt !important; }
+  .grn-material-table tbody strong { font-size: 9.2pt !important; }
+  .grn-material-table tbody small { font-size: 8pt !important; }
   .grn-material-table tfoot th,
-  .grn-material-table tfoot td { font-size: 7.8pt !important; }
+  .grn-material-table tfoot td { font-size: 8.8pt !important; }
   .grn-grand-total th,
-  .grn-grand-total td { font-size: 8.4pt !important; }
+  .grn-grand-total td { font-size: 9.5pt !important; }
 
   .grn-simple-signoff {
-    min-height: 23mm;
-    padding: 3mm 2.5mm 2mm;
-    font-size: 7.7pt !important;
+    min-height: 31mm;
+    padding: 4mm 4mm 3mm;
+    font-size: 9pt !important;
   }
-  .grn-remarks { min-height: 5mm; }
-  .grn-remarks span { min-height: 4mm; }
-  .grn-signature-line i { min-height: 7mm; }
-  .grn-document-footer { padding: 1mm 1.3mm; font-size: 6.8pt !important; }
+  .grn-remarks { min-height: 7mm; }
+  .grn-remarks span { min-height: 5mm; }
+  .grn-signature-line i { min-height: 9mm; }
+  .grn-document-footer {
+    min-height: 7mm;
+    align-items: center;
+    padding: 1.4mm 2mm;
+    font-size: 7.8pt !important;
+  }
 
   .inventory-print-document,
   .procurement-print-document {
