@@ -50,7 +50,6 @@ ROLE_SPECS = {
                 "procurementcommunication", "purchaserequisition", "requisitionitem",
             ],
         },
-        "change": {"inventory": ["supplieritemprice"]},
         "view": {
             "departments": ["department", "branch"],
             "inventory": ["item", "storelocation", "unitofmeasure", "supplieritemprice", "itemunitprice"],

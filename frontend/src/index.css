@@ -830,12 +830,27 @@ select { appearance: none; -webkit-appearance: none; }
 .grn-simple-signoff {
   display: grid;
   grid-template-columns: 1.3fr 1fr .7fr;
-  gap: 24px;
+  column-gap: 24px;
+  row-gap: 10px;
   align-items: end;
-  min-height: 65px;
+  min-height: 78px;
   padding: 12px 10px 8px;
   border-bottom: 1px solid #222;
   font-size: 9px;
+}
+
+.grn-remarks {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 7px;
+  min-height: 18px;
+  align-items: end;
+}
+
+.grn-remarks span {
+  min-height: 15px;
+  border-bottom: 1px dotted #222;
 }
 
 .grn-signature-line {
@@ -992,10 +1007,12 @@ select { appearance: none; -webkit-appearance: none; }
   .grn-grand-total td { font-size: 8.4pt !important; }
 
   .grn-simple-signoff {
-    min-height: 19mm;
+    min-height: 23mm;
     padding: 3mm 2.5mm 2mm;
     font-size: 7.7pt !important;
   }
+  .grn-remarks { min-height: 5mm; }
+  .grn-remarks span { min-height: 4mm; }
   .grn-signature-line i { min-height: 7mm; }
   .grn-document-footer { padding: 1mm 1.3mm; font-size: 6.8pt !important; }
 

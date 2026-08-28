@@ -359,7 +359,7 @@ export default function ProcurementWorkbench() {
   ] as Array<[Stage, string, string]>).filter(([key]) => can(stagePermissions[key].view) && (!allowedStages || allowedStages.includes(key)))
   const stageGuidance: Record<Stage, { actor: string; description: string; icon: string }> = {
     request: { actor: 'Requester', description: 'Add every required article, then submit the requisition.', icon: 'playlist_add' },
-    quote: { actor: 'Procurement', description: 'Assign a supplier and current price to each requisition item.', icon: 'compare_arrows' },
+    quote: { actor: 'Procurement', description: 'Select a supplier using the Cost Controller-approved price.', icon: 'compare_arrows' },
     lpo: role === 'financial manager'
       ? { actor: 'Financial Manager', description: 'Review price and quantities, then approve or return the LPO.', icon: 'receipt_long' }
       : role === 'general manager'
@@ -374,11 +374,6 @@ export default function ProcurementWorkbench() {
   }, [stage, tabs])
   const canChangeStage = can(stagePermissions[stage].change)
   const canManageLpo = app.user.isSuperuser || ['system administrator', 'procurement manager', 'procurement officer'].includes(app.user.role.toLowerCase())
-  const hasReadOnlyLpoPrice = !app.user.isSuperuser && (
-    ['procurement officer', 'general manager'].includes(role)
-    || ['procurement officer', 'general manager'].includes(app.user.designation.toLowerCase())
-  )
-  const canEditLpoPrice = !hasReadOnlyLpoPrice
   const metrics = useMemo(() => {
     const openOrders = scopedData.orders.filter((order) => ['issued', 'partially_received'].includes(id(order.status)))
     const overdue = openOrders.filter((order) => order.expected_date && new Date(id(order.expected_date)) < new Date())
@@ -545,8 +540,8 @@ export default function ProcurementWorkbench() {
           {!(role === 'general manager' && !form.order) && <aside style={{ ...card, padding: 18 }}>
             {!canChangeStage && stage !== 'lpo' && <ReadOnlyStage />}
             {canChangeStage && stage === 'request' && <RequestPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel }} items={app.data.items} stores={app.data.locations} departments={app.data.departments} />}
-            {canChangeStage && stage === 'quote' && <QuotePanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, names }} canEditPrice={canEditLpoPrice} suppliers={app.data.suppliers} supplierItems={app.data.supplierItems} items={app.data.items} itemUnits={app.data.itemUnits} onContinueToLpo={(requisitionId: string) => { setStage('lpo'); setLpoQueue('prepare'); setForm({ requisition: requisitionId }) }} />}
-            {stage === 'lpo' && <LpoPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, orderLabel, names, lpoQueue, setLpoQueue }} role={role} canManage={canManageLpo} canEditPrice={canEditLpoPrice} userName={app.user.name} suppliers={app.data.suppliers} units={app.data.uoms} items={app.data.items} itemUnits={app.data.itemUnits} />}
+            {canChangeStage && stage === 'quote' && <QuotePanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, names }} suppliers={app.data.suppliers} supplierItems={app.data.supplierItems} items={app.data.items} itemUnits={app.data.itemUnits} onContinueToLpo={(requisitionId: string) => { setStage('lpo'); setLpoQueue('prepare'); setForm({ requisition: requisitionId }) }} />}
+            {stage === 'lpo' && <LpoPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, orderLabel, names, lpoQueue, setLpoQueue }} role={role} canManage={canManageLpo} userName={app.user.name} suppliers={app.data.suppliers} units={app.data.uoms} items={app.data.items} itemUnits={app.data.itemUnits} />}
             {canChangeStage && stage === 'receipt' && <ReceiptPanel {...{ data: scopedData, form, setForm, busy, run, orderLabel, receiptLabel, names }} employees={app.data.employees} stores={app.data.locations} items={app.data.items} />}
             {canChangeStage && stage === 'inspect' && <InspectionPanel {...{ data: scopedData, form, setForm, busy, run, receiptLabel, names }} employees={app.data.employees} />}
             {canChangeStage && stage === 'return' && <ReturnPanel {...{ data: scopedData, form, setForm, busy, run, receiptLabel, names }} employees={app.data.employees} stores={app.data.locations} />}
@@ -892,7 +887,11 @@ function GoodsReceiptDocument({ receipt, lines, hotel, propertyName, preparedBy,
             const gross = net * (1 + vatRate)
             return <tr key={id(line.id)}>
               <td>{documentStatus}</td>
-              <td><strong>{id(line.item_name) || id(item?.name) || 'Article'}</strong>{(id(line.item_sku) || id(item?.sku)) && <small>{id(line.item_sku) || id(item?.sku)}</small>}</td>
+              <td>
+                <strong>{id(line.item_name) || id(item?.name) || 'Article'}</strong>
+                {(id(line.item_sku) || id(item?.sku)) && <small>{id(line.item_sku) || id(item?.sku)}</small>}
+                {line.expiry_date && <small>Expiry: {formatDateOnly(line.expiry_date)}</small>}
+              </td>
               <td className="number">{formatQty(ordered)}</td>
               <td>{id(line.unit_abbreviation) || id(line.unit_name) || id(item?.uom) || 'Each'}</td>
               <td className="number">{formatQty(delivered)}</td>
@@ -912,6 +911,7 @@ function GoodsReceiptDocument({ receipt, lines, hotel, propertyName, preparedBy,
       </table>
 
       <section className="grn-simple-signoff">
+        <div className="grn-remarks"><b>Remarks:</b><span>{id(receipt.note) || '—'}</span></div>
         <div className="grn-signature-line"><span>Signature:</span><i></i></div>
         <div><b>Received By:</b> {preparedBy}</div>
         <div><b>Status:</b> {documentStatus}</div>
@@ -945,7 +945,7 @@ function RequestPanel({ data, form, setForm, requisitionLabel, items }: any) {
   </Panel>
 }
 
-function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplierItems, items, itemUnits, canEditPrice, onContinueToLpo }: any) {
+function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplierItems, items, itemUnits, onContinueToLpo }: any) {
   const requisitions = data.requisitions.filter((row: Row) => ['store_requisition','store_shortage'].includes(id(row.procurement_source)) && ['approved','partially_ordered'].includes(id(row.status)))
   const selectedRequisition = requisitions.find((row: Row) => id(row.id) === id(form.requisition))
   const reqLines = data.requisitionItems.filter((row: Row) => id(row.requisition) === id(form.requisition))
@@ -965,30 +965,23 @@ function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplier
   const maxOrderQuantity = requestedBase
   const enteredOrderQuantity = num(form.quantity || maxOrderQuantity)
   const quotedPrice = num(selectedCatalogue?.price)
-  const confirmedPrice = canEditPrice ? num(form.price ?? selectedCatalogue?.price) : quotedPrice
+  const confirmedPrice = quotedPrice
   const confirmedBasePrice = selectedFactor > 0 ? confirmedPrice / selectedFactor : 0
-  const priceChanged = Boolean(selectedCatalogue && Math.abs(confirmedPrice - quotedPrice) > 0.000001)
   const allocationExceedsRequest = Boolean(selectedCatalogue) && (selectedFactor <= 0 || enteredOrderQuantity > requestedBase + 0.000001)
   const allocatedCount = reqLines.filter((line: Row) => line.procurement_supplier_price && num(line.procurement_quantity) > 0 && num(line.procurement_unit_cost) > 0).length
   const allAllocated = Boolean(reqLines.length) && allocatedCount === reqLines.length
 
   const selectArticle = (value: string) => {
     const line = reqLines.find((row: Row) => id(row.id) === value)
-    const article = items.find((item: Row) => id(item.id) === id(line?.item))
     const offers = supplierItems.filter((entry: Row) => id(entry.articleId) === id(line?.item) && id(entry.status) === 'Active')
       .sort((left: Row, right: Row) => num(left.basePrice || left.price) - num(right.basePrice || right.price))
     const existing = offers.find((entry: Row) => id(entry.id) === id(line?.procurement_supplier_price))
     const baseLimit = num(line?.remaining_order_quantity ?? line?.approved_base_quantity ?? line?.approved_quantity ?? line?.quantity)
-    const factor = existing ? conversionFactorFor(article, existing.unitId, itemUnits) : 1
-    const existingQuotePrice = existing && factor > 0 && line?.procurement_unit_cost
-      ? num(line.procurement_unit_cost) * factor
-      : existing?.price
     setForm({
       requisition: form.requisition,
       reqLine: value,
       cataloguePrice: id(existing?.id),
       quantity: (line?.procurement_quantity ?? baseLimit) || '',
-      price: existingQuotePrice ?? '',
       procurementNote: line?.procurement_note || '',
     })
   }
@@ -997,7 +990,7 @@ function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplier
     <div style={{ padding: '34px 18px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12.5 }}>
       <Icon name="assignment" size={24} color="var(--text-faint)" />
       <div style={{ marginTop: 9, fontWeight: 700, color: 'var(--text)' }}>Select a Store Requisition</div>
-      <div style={{ marginTop: 4 }}>Choose a requisition from the list to assign suppliers and confirm prices.</div>
+      <div style={{ marginTop: 4 }}>Choose a requisition to assign suppliers using the Cost Controller's approved prices.</div>
     </div>
   </Panel>
 
@@ -1028,7 +1021,7 @@ function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplier
           const selected = id(entry.id) === id(selectedCatalogue?.id)
           const supplierName = names.suppliers.get(id(entry.supplierId)) || id(entry.supplier) || 'Supplier'
           return <button key={id(entry.id)} type="button" onClick={() => {
-            setForm({ ...form, cataloguePrice: id(entry.id), price: entry.price, quantity: requestedBase })
+            setForm({ ...form, cataloguePrice: id(entry.id), quantity: requestedBase })
           }} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.3fr) .75fr .65fr auto', alignItems: 'center', gap: 8, padding: '9px 10px', border: `1px solid ${selected ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 7, background: selected ? 'var(--accent-soft)' : 'var(--surface)', color: 'var(--text)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
             <span style={{ minWidth: 0 }}><strong style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.3 }}>{supplierName}</strong><small style={{ color: 'var(--text-muted)' }}>{id(entry.quotationReference) || 'Quotation'} · {id(entry.unit) || id(selectedItem?.uom) || 'unit'}</small></span>
             <strong style={{ fontSize: 11.3 }}>{money(entry.price)}</strong>
@@ -1041,12 +1034,12 @@ function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplier
 
     {selectedCatalogue && <>
       <ReadOnlyValue label="Supplier" value={selectedSupplier?.name || names.suppliers.get(id(selectedCatalogue.supplierId)) || id(selectedCatalogue.supplier)} />
-      <Two><Field label={`Quantity to order (${id(selectedItem?.uom) || 'item unit'})`}><Input type="number" value={form.quantity || maxOrderQuantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field>{canEditPrice ? <Field label={`Supplier price per ${id(selectedCatalogue.unit) || 'quoted unit'}`}><Input type="number" value={form.price ?? selectedCatalogue.price} onChange={(v) => setForm({ ...form, price: v })} /></Field> : <ReadOnlyValue label={`Supplier price per ${id(selectedCatalogue.unit) || 'quoted unit'} · read only`} value={money(selectedCatalogue.price)} />}</Two>
-      <Field label={priceChanged ? 'Reason for price change *' : 'Note'}><Input value={form.procurementNote || ''} onChange={(v) => setForm({ ...form, procurementNote: v })} placeholder={priceChanged ? 'Reason for the revised price' : 'Optional'} /></Field>
+      <Two><Field label={`Quantity to order (${id(selectedItem?.uom) || 'item unit'})`}><Input type="number" value={form.quantity || maxOrderQuantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><ReadOnlyValue label={`Supplier price per ${id(selectedCatalogue.unit) || 'quoted unit'} · Cost Controller`} value={money(selectedCatalogue.price)} /></Two>
+      <Field label="Note"><Input value={form.procurementNote || ''} onChange={(v) => setForm({ ...form, procurementNote: v })} placeholder="Optional" /></Field>
       {selectedCatalogue && <QuoteConversionNote orderQuantity={enteredOrderQuantity} factor={selectedFactor} quotedUnit={id(selectedCatalogue.unit) || 'quoted unit'} baseUnit={id(selectedItem?.uom) || 'item unit'} quotedPrice={confirmedPrice} basePrice={confirmedBasePrice} />}
       {allocationExceedsRequest && <Hint>Quantity exceeds the Store Keeper quantity. Maximum is {maxOrderQuantity} {id(selectedItem?.uom) || 'units'}.</Hint>}
-      <Action tone="good" disabled={busy || !form.reqLine || !form.cataloguePrice || enteredOrderQuantity <= 0 || allocationExceedsRequest || confirmedPrice <= 0 || (priceChanged && !id(form.procurementNote).trim())} onClick={() => run(
-        () => runBackendAction('requisitions', id(form.requisition), 'allocate-line', { line_id: form.reqLine, supplier_price: form.cataloguePrice, quantity: enteredOrderQuantity, ...(canEditPrice ? { unit_price: num(form.price ?? selectedCatalogue.price) } : {}), note: form.procurementNote || '' }),
+      <Action tone="good" disabled={busy || !form.reqLine || !form.cataloguePrice || enteredOrderQuantity <= 0 || allocationExceedsRequest || confirmedPrice <= 0} onClick={() => run(
+        () => runBackendAction('requisitions', id(form.requisition), 'allocate-line', { line_id: form.reqLine, supplier_price: form.cataloguePrice, quantity: enteredOrderQuantity, note: form.procurementNote || '' }),
         'Supplier allocation saved',
         { requisition: form.requisition },
       )}>Save item</Action>
@@ -1059,7 +1052,7 @@ function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplier
   </Panel>
 }
 
-function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, items, itemUnits, canManage, canEditPrice, role, userName, lpoQueue, setLpoQueue }: any) {
+function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, items, itemUnits, canManage, role, userName, lpoQueue, setLpoQueue }: any) {
   const activeOrderRequisitions = new Set(
     data.orders.filter((row: Row) => id(row.status) !== 'cancelled').map((row: Row) => id(row.requisition)),
   )
@@ -1153,10 +1146,10 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, ite
       <LpoSummary order={order} lines={lines} names={names} />
       {draftHasQuantityOverage ? <>
         <Hint>This draft contains a quantity that must be corrected before it can enter the approval route.</Hint>
-        <Field label="Item to correct"><Select value={form.orderLine} onChange={(v) => { const found = lines.find((row: Row) => id(row.id) === v); setForm({ ...form, orderLine: v, quantity: found ? safeQuantityForLine(found) : '', cost: found?.unit_cost, unit: found?.unit }) }} rows={lines} label={(row: Row) => names.items.get(id(row.item)) || id(row.item)} /></Field>
-        {line && <><Field label="Purchase unit"><Select value={form.unit} onChange={(v) => setForm({ ...form, unit: v, quantity: safeQuantityForLine(line, v) })} rows={availableUnits} /></Field><Two><Field label="Quantity"><Input type="number" value={form.quantity ?? line.quantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field>{canEditPrice ? <Field label="Unit price"><Input type="number" value={form.cost ?? line.unit_cost} onChange={(v) => setForm({ ...form, cost: v })} /></Field> : <ReadOnlyValue label="Unit price · read only" value={money(line.unit_cost)} />}</Two></>}
+        <Field label="Item to correct"><Select value={form.orderLine} onChange={(v) => { const found = lines.find((row: Row) => id(row.id) === v); setForm({ ...form, orderLine: v, quantity: found ? safeQuantityForLine(found) : '', unit: found?.unit }) }} rows={lines} label={(row: Row) => names.items.get(id(row.item)) || id(row.item)} /></Field>
+        {line && <><Field label="Purchase unit"><Select value={form.unit} onChange={(v) => setForm({ ...form, unit: v, quantity: safeQuantityForLine(line, v) })} rows={availableUnits} /></Field><Two><Field label="Quantity"><Input type="number" value={form.quantity ?? line.quantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><ReadOnlyValue label="Unit price · Cost Controller" value={money(line.unit_cost)} /></Two></>}
         {quantityExceedsApproval && <Hint>Quantity is above the approved limit.</Hint>}
-        <Action disabled={busy || !form.orderLine || conversion <= 0 || quantityExceedsApproval || num(form.quantity) <= 0} onClick={() => run(() => updateBackendRecord('purchase-order-items', id(form.orderLine), { quantity: num(form.quantity), ...(canEditPrice ? { unit_cost: num(form.cost) } : {}), unit: form.unit || null }), 'LPO item corrected', { ...form })}>Save correction</Action>
+        <Action disabled={busy || !form.orderLine || conversion <= 0 || quantityExceedsApproval || num(form.quantity) <= 0} onClick={() => run(() => updateBackendRecord('purchase-order-items', id(form.orderLine), { quantity: num(form.quantity), unit: form.unit || null }), 'LPO item corrected', { ...form })}>Save correction</Action>
       </> : <Action tone="good" disabled={busy || !lines.length} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'submit-for-approval'), 'LPO sent to Purchasing Manager')}>Send for Level 1 Approval</Action>}
     </>}
 

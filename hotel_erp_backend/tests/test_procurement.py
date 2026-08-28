@@ -1235,7 +1235,7 @@ def test_receiving_clerk_workspace_shows_only_ready_branch_lpos_without_prices()
 
 
 @pytest.mark.django_db
-def test_receiving_clerk_can_generate_posted_grn_directly_from_issued_lpo():
+def test_receiving_clerk_can_generate_grn_then_post_it_to_inventory():
     employee, department, supplier, item = create_procurement_context()
     branch = Branch.objects.create(name="Direct GRN Branch")
     store = StoreLocation.objects.create(branch=branch, name="Main Store")
@@ -1320,12 +1320,24 @@ def test_receiving_clerk_can_generate_posted_grn_directly_from_issued_lpo():
     receipt_line = receipt.items.get()
     receipt.refresh_from_db()
     order.refresh_from_db()
-    assert receipt.status == "posted"
+    assert receipt.status == "received"
     assert receipt.supplier_invoice_no == "INV-1001"
     assert receipt_line.quantity_received == Decimal("1.00")
     assert receipt_line.expiry_date == expiry_date
     assert receipt.inspection.status == "accepted"
     assert receipt.inspection.items.get().quantity_accepted == Decimal("1.00")
+    assert not InventoryBalance.objects.filter(item=item, store=store).exists()
+
+    posted = client.post(
+        f"/api/v1/grns/{receipt.pk}/post-to-inventory/",
+        {},
+        format="json",
+    )
+
+    assert posted.status_code == 200, posted.data
+    receipt.refresh_from_db()
+    order.refresh_from_db()
+    assert receipt.status == "posted"
     assert order.status == POStatus.PARTIALLY_RECEIVED
     assert InventoryBalance.objects.get(item=item, store=store).quantity_in_stock == Decimal("1.00")
     assert InventoryBatch.objects.get(item=item, store=store).expiry_date == expiry_date
@@ -1365,6 +1377,17 @@ def test_procurement_officer_and_general_manager_can_view_but_not_change_lpo_pri
         quantity=Decimal("2.00"),
         unit_cost=Decimal("5000.00"),
     )
+    supplier_price = SupplierItemPrice.objects.create(
+        supplier=supplier,
+        item=item,
+        unit=item.base_unit,
+        unit_price=Decimal("5000.00"),
+    )
+    supplier_price_permissions = Permission.objects.filter(
+        content_type__app_label="inventory",
+        codename__in=("view_supplieritemprice", "change_supplieritemprice"),
+    )
+    procurement_group.permissions.add(*supplier_price_permissions)
 
     officer_client = APIClient()
     officer_client.force_authenticate(employee.user)
@@ -1372,6 +1395,14 @@ def test_procurement_officer_and_general_manager_can_view_but_not_change_lpo_pri
     officer_change = officer_client.patch(
         f"/api/v1/purchase-order-items/{order_line.pk}/",
         {"unit_cost": "6000.00"},
+        format="json",
+    )
+    officer_catalogue_view = officer_client.get(
+        f"/api/v1/supplier-item-prices/{supplier_price.pk}/"
+    )
+    officer_catalogue_change = officer_client.patch(
+        f"/api/v1/supplier-item-prices/{supplier_price.pk}/",
+        {"unit_price": "6000.00"},
         format="json",
     )
 
@@ -1401,10 +1432,53 @@ def test_procurement_officer_and_general_manager_can_view_but_not_change_lpo_pri
     assert officer_view.status_code == 200
     assert officer_view.data["unit_cost"] == "5000.00"
     assert officer_change.status_code == 400
+    assert officer_catalogue_view.status_code == 200
+    assert officer_catalogue_change.status_code == 403
     assert gm_view.status_code == 200
     assert gm_view.data["unit_cost"] == "5000.00"
     assert gm_change.status_code == 400
     assert order_line.unit_cost == Decimal("5000.00")
+    supplier_price.refresh_from_db()
+    assert supplier_price.unit_price == Decimal("5000.00")
+
+
+@pytest.mark.django_db
+def test_only_cost_controller_can_update_supplier_catalogue_price():
+    _employee, department, supplier, item = create_procurement_context()
+    supplier_price = SupplierItemPrice.objects.create(
+        supplier=supplier,
+        item=item,
+        unit=item.base_unit,
+        unit_price=Decimal("5000.00"),
+    )
+    cost_controller_group, _ = Group.objects.get_or_create(name="Cost Controller")
+    cost_controller_group.permissions.add(*Permission.objects.filter(
+        content_type__app_label="inventory",
+        codename__in=("view_supplieritemprice", "change_supplieritemprice"),
+    ))
+    cost_controller_user = get_user_model().objects.create_user(
+        username="supplier-price-cost-controller",
+        employee_code="PRICE-CC",
+        password="test-pass-123",
+    )
+    cost_controller_user.groups.add(cost_controller_group)
+    Employee.objects.create(
+        user=cost_controller_user,
+        department=department,
+        designation="Cost Controller",
+    )
+    client = APIClient()
+    client.force_authenticate(cost_controller_user)
+
+    response = client.patch(
+        f"/api/v1/supplier-item-prices/{supplier_price.pk}/",
+        {"unit_price": "6500.00"},
+        format="json",
+    )
+
+    assert response.status_code == 200, response.data
+    supplier_price.refresh_from_db()
+    assert supplier_price.unit_price == Decimal("6500.00")
 
 
 @pytest.mark.django_db
@@ -1465,6 +1539,17 @@ def test_receiving_clerk_workspace_keeps_grn_after_lpo_is_fully_received():
     )
 
     assert generated.status_code == 201, generated.data
+    receipt_id = generated.data["id"]
+    order.refresh_from_db()
+    assert order.status == POStatus.ISSUED
+
+    posted = client.post(
+        f"/api/v1/grns/{receipt_id}/post-to-inventory/",
+        {},
+        format="json",
+    )
+
+    assert posted.status_code == 200, posted.data
     order.refresh_from_db()
     assert order.status == POStatus.RECEIVED
 
@@ -1472,7 +1557,7 @@ def test_receiving_clerk_workspace_keeps_grn_after_lpo_is_fully_received():
 
     assert workspace.status_code == 200, workspace.data
     assert workspace.data["orders"] == []
-    assert [row["id"] for row in workspace.data["receipts"]] == [generated.data["id"]]
+    assert [row["id"] for row in workspace.data["receipts"]] == [receipt_id]
     assert workspace.data["receipts"][0]["branch_id"] == str(branch.pk)
     assert workspace.data["receipts"][0]["branch_name"] == branch.name
     assert workspace.data["receipts"][0]["supplier_name"] == supplier.name
@@ -1853,17 +1938,29 @@ def test_supplier_pack_quote_keeps_lpo_quantity_in_article_base_uom():
 
     client = APIClient()
     client.force_authenticate(employee.user)
+    rejected_price_change = client.post(
+        f"/api/v1/requisitions/{requisition.pk}/allocate-line/",
+        {
+            "line_id": str(requisition.items.get().pk),
+            "supplier_price": str(quote.pk),
+            "quantity": "1.00",
+            "unit_price": "99000.00",
+        },
+        format="json",
+    )
     allocation = client.post(
         f"/api/v1/requisitions/{requisition.pk}/allocate-line/",
         {
             "line_id": str(requisition.items.get().pk),
             "supplier_price": str(quote.pk),
             "quantity": "1.00",
-            "unit_price": "97500.00",
         },
         format="json",
     )
+    assert rejected_price_change.status_code == 403
     assert allocation.status_code == 200, allocation.data
+    quote.refresh_from_db()
+    assert quote.unit_price == Decimal("97500.00")
     allocated = requisition.items.get()
     assert allocated.procurement_quantity == Decimal("1.00")
     assert allocated.procurement_unit_id == ream.id

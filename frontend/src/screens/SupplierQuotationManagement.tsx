@@ -59,7 +59,7 @@ export default function SupplierQuotationManagement() {
       {!filtered.length && <div style={{ padding:38, textAlign:'center', color:'var(--text-faint)', fontSize:12.5 }}><Icon name="request_quote" size={25} color="var(--text-faint)" /><div style={{ marginTop:8 }}>No supplier quotations match the current filters.</div></div>}
     </section>
 
-    <div style={{ marginTop:10, color:'var(--text-faint)', fontSize:10.5, lineHeight:1.55 }}>Quoted price is the supplier quotation value maintained by the Cost Controller. Procurement may confirm a different current price during supplier allocation, but that does not overwrite this quotation record.</div>
+    <div style={{ marginTop:10, color:'var(--text-faint)', fontSize:10.5, lineHeight:1.55 }}>Quoted prices are maintained only by the Cost Controller. Procurement selects a supplier and views the approved price without changing it.</div>
   </div>
 }
 

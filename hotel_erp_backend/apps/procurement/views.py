@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from datetime import timedelta
 import json
 import smtplib
@@ -63,7 +63,6 @@ from apps.procurement.serializers import (
     SupplierReturnSerializer,
     VendorQuotationItemSerializer,
     VendorQuotationSerializer,
-    lpo_price_is_read_only_for_user,
 )
 from core.mixins.viewsets import CreatedByModelMixin
 
@@ -418,7 +417,7 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
         return Response(self.get_serializer(requisition).data)
 
     def _allocate_procurement_line(self, request, requisition, payload):
-        from apps.inventory.models import SupplierItemPrice, SupplierItemPriceHistory
+        from apps.inventory.models import SupplierItemPrice
 
         line = requisition.items.select_for_update().select_related("item").filter(
             pk=payload.get("line_id") or payload.get("id")
@@ -447,37 +446,20 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             raise ValidationError({
                 "supplier_price": f"The supplier quotation UOM for {line.item} has no valid conversion."
             })
-        confirmed_price = Decimal(str(payload.get("unit_price") or price.unit_price))
+        supplied_unit_price = payload.get("unit_price")
+        if supplied_unit_price not in (None, ""):
+            try:
+                requested_price = Decimal(str(supplied_unit_price))
+            except (InvalidOperation, TypeError, ValueError):
+                raise ValidationError({"unit_price": "Enter a valid supplier price."})
+            if requested_price != price.unit_price:
+                raise PermissionDenied(
+                    "Supplier prices are set by the Cost Controller and are read-only in Procurement."
+                )
+        confirmed_price = price.unit_price
         if confirmed_price <= 0:
-            raise ValidationError({"unit_price": f"Enter a valid current supplier price for {line.item}."})
-        if (
-            lpo_price_is_read_only_for_user(request.user)
-            and confirmed_price != price.unit_price
-        ):
-            raise PermissionDenied(
-                "Procurement Officers may select and view an approved supplier price, but cannot change it."
-            )
+            raise ValidationError({"supplier_price": f"The approved supplier price for {line.item} is invalid."})
         base_unit_price = (confirmed_price / conversion_factor).quantize(Decimal("0.01"))
-        if confirmed_price != price.unit_price:
-            SupplierItemPriceHistory.objects.create(
-                supplier_item_price=price, supplier=price.supplier, item=price.item,
-                unit=price.unit, unit_price=price.unit_price, currency=price.currency,
-                effective_from=price.effective_from, effective_to=timezone.localdate(),
-                changed_by=request.user, source="procurement_confirmation",
-            )
-            price.unit_price = confirmed_price
-            price.effective_from = timezone.localdate()
-            price.last_quoted_at = timezone.localdate()
-            # A phone/current-price confirmation may occur after the original
-            # quotation validity date. Preserve the old validity in history but
-            # do not let an expired date block the newly confirmed current price.
-            if price.quotation_valid_until and price.quotation_valid_until < timezone.localdate():
-                price.quotation_valid_until = None
-            price.full_clean()
-            price.save(update_fields=[
-                "unit_price", "effective_from", "last_quoted_at",
-                "quotation_valid_until", "updated_at",
-            ])
         line.procurement_supplier = price.supplier
         line.procurement_supplier_price = price
         line.procurement_unit = line.item.base_unit

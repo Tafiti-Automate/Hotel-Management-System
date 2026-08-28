@@ -307,12 +307,6 @@ class SupplierItemPriceViewSet(CostControllerAuthorityMixin, CreatedByModelMixin
     search_fields = ("supplier__name", "item__name", "item__sku", "supplier_sku")
     ordering_fields = ("unit_price", "lead_time_days", "minimum_order_quantity", "last_quoted_at", "created_at")
 
-    def perform_update(self, serializer):
-        if has_role(self.request.user, "Procurement Manager"):
-            serializer.save()
-            return
-        super().perform_update(serializer)
-
     @action(detail=True, methods=["get"])
     def history(self, request, pk=None):
         from apps.inventory.serializers import SupplierItemPriceHistorySerializer

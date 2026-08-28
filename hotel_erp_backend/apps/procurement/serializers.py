@@ -54,8 +54,13 @@ def has_role(request, *roles):
 
 
 def lpo_price_is_read_only_for_user(user):
-    """Procurement Officers and General Managers may inspect, but never alter, LPO rates."""
-    if not user or not user.is_authenticated or user.is_superuser:
+    """Only Cost Controllers (and system administrators) may maintain prices."""
+    # Serializers are also used internally without an HTTP request. API calls
+    # are authenticated before reaching this point, so only enforce role policy
+    # when an authenticated actor is present.
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser:
         return False
     role_names = {
         name.strip().lower()
@@ -63,9 +68,9 @@ def lpo_price_is_read_only_for_user(user):
     }
     employee = getattr(user, "employee_profile", None)
     designation = str(getattr(employee, "designation", "") or "").strip().lower()
-    return bool(
-        role_names.intersection({"procurement officer", "general manager"})
-        or designation in {"procurement officer", "general manager"}
+    return not bool(
+        role_names.intersection({"cost controller", "system administrator"})
+        or designation in {"cost controller", "system administrator"}
     )
 
 
@@ -671,7 +676,7 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
             current_price = getattr(self.instance, "unit_cost", None)
             if self.instance is None or attrs["unit_cost"] != current_price:
                 raise serializers.ValidationError(
-                    {"unit_cost": "LPO prices are read-only for Procurement Officers and General Managers."}
+                    {"unit_cost": "LPO prices are read-only. Only the Cost Controller can maintain supplier prices."}
                 )
         validate_configured_item_unit(
             item,
