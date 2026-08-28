@@ -5,8 +5,8 @@ import { canAccessModule } from '../lib/access'
 export default function Launchpad() {
   const app = useApp()
   const modules = [
-    { module: 'operations' as const, title: 'Hotel Operations', desc: 'Procurement, stores, inventory, suppliers and operational reporting.', icon: 'inventory_2', action: app.enterApp },
-    { module: 'hr' as const, title: 'Human Resources', desc: 'Employee records, departments and workforce administration.', icon: 'groups', action: app.enterHR },
+    { module: 'operations' as const, eyebrow: 'Core workspace', title: 'Hotel Operations', desc: 'Procurement, stores, inventory, suppliers and operational reporting.', meta: 'Inventory · Procurement · Finance', icon: 'inventory_2', action: app.enterApp },
+    { module: 'hr' as const, eyebrow: 'People workspace', title: 'Human Resources', desc: 'Employee records, departments and workforce administration.', meta: 'Employees · Departments · Access', icon: 'groups', action: app.enterHR },
   ].filter((module) => canAccessModule(app.user, module.module))
   const initials = app.user.name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()
 
@@ -25,21 +25,34 @@ export default function Launchpad() {
       </header>
 
       <main className="launchpad-main">
-        <div className="launchpad-heading">
-          <span className="launchpad-eyebrow">Workspace</span>
-          <h1>Choose a business area</h1>
-          <p>Select a workspace to continue.</p>
-        </div>
+        <section className="launchpad-intro">
+          <div className="launchpad-heading">
+            <span className="launchpad-eyebrow">Workspace directory</span>
+            <h1>Good to see you, {app.user.name.split(' ')[0]}.</h1>
+            <p>Choose the business area you want to manage. Your access and operational scope will carry into the workspace.</p>
+          </div>
+          <aside className="launchpad-session" aria-label="Current session">
+            <span className="launchpad-session-icon"><Icon name="verified_user" size={19} /></span>
+            <span><small>Signed in with</small><strong>{app.user.role}</strong></span>
+            <span className="launchpad-session-status"><i />Secure session</span>
+          </aside>
+        </section>
 
-        <div className="launchpad-active-grid">
+        <section className="launchpad-workspaces" aria-labelledby="workspace-heading">
+          <div className="launchpad-section-heading">
+            <div><span>Available to you</span><h2 id="workspace-heading">Business workspaces</h2></div>
+            <small>{modules.length} workspace{modules.length === 1 ? '' : 's'}</small>
+          </div>
+          <div className="launchpad-active-grid">
           {modules.map((module) => (
             <button key={module.title} onClick={module.action} className="module-card">
               <span className="module-card-icon"><Icon name={module.icon} size={22} /></span>
-              <span className="module-card-copy"><strong>{module.title}</strong><small>{module.desc}</small></span>
-              <span className="module-card-action">Open <Icon name="arrow_forward" size={17} /></span>
+              <span className="module-card-copy"><em>{module.eyebrow}</em><strong>{module.title}</strong><small>{module.desc}</small><span>{module.meta}</span></span>
+              <span className="module-card-action"><span>Enter workspace</span><Icon name="arrow_forward" size={18} /></span>
             </button>
           ))}
-        </div>
+          </div>
+        </section>
       </main>
     </div>
   )

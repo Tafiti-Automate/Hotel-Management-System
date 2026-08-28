@@ -55,7 +55,7 @@ export default function AppShell() {
       <Sidebar />
       <div className="app-main" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
         <Header />
-        <div className="app-content" style={{ flex: 1, overflowY: 'auto', padding: 'var(--pad)' }}>{content}</div>
+        <main className="app-content" style={{ flex: 1, overflowY: 'auto', padding: 'var(--pad)' }}>{content}</main>
       </div>
     </div>
   )

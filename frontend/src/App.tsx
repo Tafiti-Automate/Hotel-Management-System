@@ -47,7 +47,7 @@ export default function App() {
   }
 
   return (
-    <div style={rootStyle}>
+    <div className={`application-root screen-${app.screen}`} style={rootStyle}>
       {app.screen === 'login' && <Login />}
       {app.screen === 'launchpad' && <Launchpad />}
       {app.screen === 'app' && <AppShell />}
