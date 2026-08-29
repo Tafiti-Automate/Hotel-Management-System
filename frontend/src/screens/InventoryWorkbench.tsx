@@ -162,7 +162,7 @@ export default function InventoryWorkbench() {
     ['requests', 'assignment', 'Department requests'], ['issues', 'outbox', 'Pick & issue'],
     ['transfers', 'sync_alt', 'Transfers'], ['adjustments', 'tune', 'Adjustments'],
     ['counts', 'inventory', 'Stock counts'], ['returns', 'assignment_return', 'Returns'],
-    ['reorder', 'notification_important', 'Reorder queue'], ['batches', 'deployed_code', 'Batches & expiry'],
+    ['reorder', 'notification_important', 'Reorder queue'], ['batches', 'inventory_2', 'Batches & expiry'],
     ['consumption', 'monitoring', 'Consumption'],
   ] as Array<[Tab, string, string]>).filter(([key]) => can(tabPermissions[key].view))
   useEffect(() => {
