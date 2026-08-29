@@ -94,12 +94,24 @@ const hrGroups: NavGroup[] = [
   ] },
 ]
 
-const navAbbreviation = (label: string) => {
-  const words = label.split(/[^A-Za-z0-9]+/).filter(Boolean)
-  return (words.length > 1
-    ? words.slice(0, 2).map((word) => word[0]).join('')
-    : words[0]?.slice(0, 2) || '')
-    .toUpperCase()
+const navIcons: Record<string, string> = {
+  dashboard: 'space_dashboard',
+  'hr-dashboard': 'groups',
+  'workflow-stores': 'warehouse',
+  'workflow-procure': 'shopping_cart_checkout',
+  'workflow-pay': 'payments',
+  suppliers: 'local_shipping',
+  supplierItems: 'request_quote',
+  items: 'inventory_2',
+  categories: 'category',
+  uoms: 'straighten',
+  itemUnits: 'calculate',
+  locations: 'warehouse',
+  reports: 'bar_chart',
+  'audit-log': 'history',
+  'access-management': 'manage_accounts',
+  employees: 'badge',
+  departments: 'account_tree',
 }
 
 export default function Sidebar() {
@@ -120,11 +132,11 @@ export default function Sidebar() {
   const initials = app.user.name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()
   const branchLocked = !canSwitchBranches(app.user) && Boolean(app.user.branchId)
   const branches = branchLocked ? app.data.branches.filter((branch) => String(branch.id) === app.user.branchId) : app.data.branches
-  const width = collapsed ? 76 : 268
+  const width = collapsed ? 60 : 220
 
   const navStyle = (active: boolean): CSSProperties => ({
-    width: '100%', minHeight: 44, display: 'flex', alignItems: 'center', gap: 11,
-    padding: '0 12px', border: 0, borderRadius: 7,
+    width: '100%', minHeight: 34, display: 'flex', alignItems: 'center', gap: 9,
+    padding: '0 9px', border: 0, borderRadius: 4,
     background: 'transparent',
     color: active ? 'var(--text)' : 'var(--text-muted)', cursor: 'pointer',
     font: 'inherit', fontSize: 13.5, fontWeight: active ? 650 : 550, textAlign: 'left',
@@ -154,7 +166,7 @@ export default function Sidebar() {
       <nav className="sidebar-nav" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: collapsed ? '6px 10px 12px' : '6px 10px 16px' }}>
         {groups.map((group, groupIndex) => <div key={group.heading} className="sidebar-nav-group" style={{ paddingTop: groupIndex ? 14 : 4 }}>
           {!collapsed && <div className="sidebar-nav-heading" style={{ minHeight: 30, display: 'flex', alignItems: 'center', padding: '0 10px', color: 'var(--text-faint)', fontSize: 10.5, fontWeight: 750, letterSpacing: '.04em', textTransform: 'uppercase' }}>{group.heading}</div>}
-          {group.items.map((item) => { const active = app.navActive === item.route; return <button key={item.route} title={collapsed ? item.label : undefined} aria-label={collapsed ? item.label : undefined} aria-current={active ? 'page' : undefined} onClick={() => { app.navTo(item.route, item.label); setMobileOpen(false) }} className={`sidebar-nav-item ${active ? 'active' : 'hover-surface2'}`} style={navStyle(active)}>{collapsed ? <span className="sidebar-nav-abbreviation" aria-hidden="true">{navAbbreviation(item.label)}</span> : <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.label}</span>}</button> })}
+          {group.items.map((item) => { const active = app.navActive === item.route; return <button key={item.route} title={collapsed ? item.label : undefined} aria-label={collapsed ? item.label : undefined} aria-current={active ? 'page' : undefined} onClick={() => { app.navTo(item.route, item.label); setMobileOpen(false) }} className={`sidebar-nav-item ${active ? 'active' : 'hover-surface2'}`} style={navStyle(active)}><Icon name={navIcons[item.route] || 'chevron_right'} size={17} weight={300} />{!collapsed && <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.label}</span>}</button> })}
         </div>)}
       </nav>
 

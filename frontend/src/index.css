@@ -3369,18 +3369,6 @@ html[data-theme="dark"] .screen-app .sidebar {
   color: var(--accent) !important;
 }
 
-.screen-app .sidebar.is-collapsed .sidebar-nav-item {
-  justify-content: center;
-  padding-inline: 0 !important;
-}
-
-.screen-app .sidebar-nav-abbreviation {
-  color: inherit;
-  font-size: 10px;
-  font-weight: inherit;
-  letter-spacing: .04em;
-}
-
 .screen-app .sidebar-footer {
   padding: 11px 14px 14px !important;
   border-top-color: var(--ui-sidebar-border) !important;
@@ -4393,13 +4381,484 @@ html[data-theme="dark"] .screen-app .sidebar {
   color: var(--accent);
 }
 
+/* Compact operations shell
+   A flat, information-dense ERP treatment inspired by mature inventory tools. */
+.screen-app {
+  --ui-radius-sm: 4px;
+  --ui-radius: 5px;
+  --ui-radius-lg: 6px;
+  --ui-shadow-xs: none;
+  --ui-shadow-sm: none;
+  --ui-shadow-md: none;
+  --ui-control-shadow: none;
+}
+
+.screen-app .ic {
+  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20 !important;
+}
+
+html:not([data-theme="dark"]) .screen-app {
+  --ui-sidebar: #20283e;
+  --ui-sidebar-raised: #2c354f;
+  --ui-sidebar-text: #f4f6fb;
+  --ui-sidebar-muted: #c6ccda;
+  --ui-sidebar-faint: #8f99b0;
+  --ui-sidebar-border: rgba(255, 255, 255, .08);
+}
+
+html[data-theme="dark"] .screen-app {
+  --ui-sidebar: #171d2d;
+  --ui-sidebar-raised: #232b41;
+  --ui-sidebar-text: #f5f7fb;
+  --ui-sidebar-muted: #c2c9d8;
+  --ui-sidebar-faint: #8994aa;
+}
+
+.screen-app .sidebar:not(.is-collapsed) { width: 220px !important; }
+.screen-app .sidebar.is-collapsed { width: 60px !important; }
+
+.screen-app .sidebar {
+  box-shadow: none !important;
+}
+
+.screen-app .sidebar-brand {
+  height: 52px !important;
+  padding: 0 11px !important;
+}
+
+.screen-app .sidebar-brand-mark {
+  width: 27px !important;
+  height: 27px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.screen-app .sidebar-brand-mark .ic {
+  font-size: 20px !important;
+  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20 !important;
+}
+
+.screen-app .sidebar-brand-title {
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+}
+
+.screen-app .sidebar-brand-subtitle { display: none; }
+
+.screen-app .sidebar-property {
+  padding: 8px 8px 4px !important;
+}
+
+.screen-app .sidebar-property > button {
+  min-height: 43px !important;
+  padding: 6px 8px !important;
+  border-radius: 4px !important;
+  background: rgba(255,255,255,.035) !important;
+  box-shadow: none !important;
+}
+
+.screen-app .sidebar-property > button:hover {
+  background: rgba(255,255,255,.065) !important;
+}
+
+.screen-app .sidebar-property .ic,
+.screen-app .sidebar-desktop-collapse .ic,
+.screen-app .sidebar-mobile-toggle .ic,
+.screen-app .sidebar-footer .ic {
+  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20 !important;
+}
+
+.screen-app .sidebar-nav {
+  padding: 5px 8px 12px !important;
+}
+
+.screen-app .sidebar-nav-group,
+.screen-app .sidebar-nav-group:first-child {
+  padding-top: 9px !important;
+}
+
+.screen-app .sidebar-nav-heading {
+  min-height: 25px !important;
+  padding: 0 8px !important;
+  font-size: 9px !important;
+  font-weight: 600 !important;
+  letter-spacing: .08em !important;
+}
+
+.screen-app .sidebar-nav-item {
+  min-height: 34px !important;
+  margin: 1px 0 !important;
+  padding: 0 9px !important;
+  gap: 9px !important;
+  border-radius: 4px !important;
+  color: var(--ui-sidebar-muted) !important;
+  font-size: 12.5px !important;
+  font-weight: 400 !important;
+}
+
+.screen-app .sidebar-nav-item .ic {
+  color: var(--ui-sidebar-faint) !important;
+  font-size: 17px !important;
+  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20 !important;
+  transform: none !important;
+}
+
+.screen-app .sidebar-nav-item:hover {
+  color: var(--ui-sidebar-text) !important;
+  background: rgba(255,255,255,.055) !important;
+}
+
+.screen-app .sidebar-nav-item:hover .ic {
+  color: var(--ui-sidebar-muted) !important;
+}
+
+.screen-app .sidebar-nav-item.active,
+.screen-app .sidebar-nav-item.active:hover {
+  color: #fff !important;
+  background: var(--accent) !important;
+  box-shadow: none !important;
+  font-weight: 500 !important;
+}
+
+.screen-app .sidebar-nav-item.active .ic,
+.screen-app .sidebar-nav-item.active:hover .ic {
+  color: #fff !important;
+}
+
+.screen-app .sidebar.is-collapsed .sidebar-nav-item {
+  justify-content: center;
+  padding-inline: 0 !important;
+}
+
+.screen-app .sidebar-footer {
+  padding: 8px !important;
+  background: transparent !important;
+}
+
+.screen-app .sidebar-user-avatar {
+  width: 29px !important;
+  height: 29px !important;
+  border: 0;
+  border-radius: 50% !important;
+}
+
+.screen-app .app-header {
+  height: 84px !important;
+  min-height: 84px !important;
+  background: var(--surface) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+.screen-app .app-header-top {
+  height: 50px !important;
+  padding: 0 16px !important;
+}
+
+.screen-app .app-header-breadcrumbs {
+  height: 34px !important;
+  padding: 0 16px !important;
+  background: var(--surface) !important;
+}
+
+.screen-app .global-search-trigger {
+  width: min(360px, 36vw) !important;
+  height: 34px !important;
+  padding: 0 9px !important;
+  border-radius: 4px !important;
+  background: color-mix(in srgb, var(--surface-2) 72%, var(--surface)) !important;
+  box-shadow: none !important;
+}
+
+.screen-app .global-search-trigger kbd,
+.screen-app .header-notification-trigger,
+.screen-app .header-profile-trigger,
+.screen-app .header-avatar,
+.screen-app .header-live-state,
+.screen-app .header-primary-action {
+  border-radius: 4px !important;
+  box-shadow: none !important;
+}
+
+.screen-app .header-notification-trigger {
+  width: 34px !important;
+  height: 34px !important;
+}
+
+.screen-app .header-avatar {
+  width: 30px !important;
+  height: 30px !important;
+  border-radius: 50% !important;
+}
+
+.screen-app .app-content {
+  padding: 20px 22px 32px !important;
+  background: #f7f8fb !important;
+}
+
+html[data-theme="dark"] .screen-app .app-content {
+  background: #0e1117 !important;
+}
+
+.screen-app .app-content h1 {
+  font-size: 24px !important;
+  line-height: 1.2 !important;
+  letter-spacing: -.025em !important;
+}
+
+.screen-app .app-content h2 { font-size: 18px !important; }
+.screen-app .app-content h3 { font-size: 15px !important; }
+
+.screen-app input:not([type="checkbox"]):not([type="radio"]),
+.screen-app select,
+.screen-app textarea {
+  border-radius: 4px !important;
+  box-shadow: none !important;
+}
+
+.screen-app .erp-primary,
+.screen-app .erp-secondary,
+.screen-app .list-actions > button,
+.screen-app .list-actions > label + button {
+  min-height: 32px !important;
+  border-radius: 4px !important;
+  box-shadow: none !important;
+}
+
+.screen-app .erp-primary:hover,
+.screen-app .hover-accent:hover,
+.screen-app .hover-card:hover,
+.screen-app .hover-lift:hover {
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.screen-app .role-dashboard-header {
+  min-height: 74px;
+  padding: 0 0 14px;
+}
+
+.screen-app .role-dashboard-heading h1 {
+  margin: 4px 0 !important;
+  font-size: 25px !important;
+  letter-spacing: -.025em !important;
+}
+
+.screen-app .role-dashboard-heading p { font-size: 13px; }
+
+.screen-app .dashboard-primary-action {
+  min-height: 66px;
+  padding: 10px 12px;
+  border-color: var(--border);
+  border-radius: 4px !important;
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.screen-app .dashboard-primary-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+.screen-app .dashboard-section { margin-top: 18px; }
+.screen-app .dashboard-section-heading { min-height: 34px; }
+.screen-app .task-card-grid { gap: 9px; }
+
+.screen-app .dashboard-task-card {
+  min-height: 110px;
+  padding: 13px;
+  border-radius: 4px !important;
+  box-shadow: none;
+}
+
+.screen-app .dashboard-task-card:hover {
+  border-color: var(--border-2);
+  box-shadow: none;
+  transform: none;
+}
+
+.screen-app .dashboard-task-icon {
+  width: 27px;
+  height: 27px;
+  border-radius: 4px;
+}
+
+.screen-app .dashboard-task-count { font-size: 23px; }
+.screen-app .dashboard-work-grid { gap: 9px; margin-top: 9px; }
+
+.screen-app .dashboard-panel,
+.screen-app article,
+.screen-app .role-editor-card {
+  border-radius: 4px !important;
+  box-shadow: none !important;
+}
+
+.screen-app .dashboard-panel-header {
+  min-height: 52px;
+  padding: 9px 13px;
+}
+
+.screen-app .dashboard-activity-row {
+  min-height: 52px;
+  padding: 8px 13px;
+}
+
+.screen-app .dashboard-context-list { padding: 4px 13px; }
+.screen-app .dashboard-context-row { min-height: 41px; }
+
+.screen-app .workbench-hero {
+  min-height: 0;
+  margin-bottom: 12px !important;
+  padding: 14px 16px !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 4px !important;
+  background: var(--surface) !important;
+  box-shadow: none !important;
+}
+
+.screen-app .workbench-hero h1 {
+  margin: 2px 0 3px !important;
+  font-size: 24px !important;
+  letter-spacing: -.025em !important;
+}
+
+.screen-app .workbench-hero h1 + div { font-size: 12.5px !important; }
+
+.screen-app .workbench-grid,
+.screen-app .workflow-grid { gap: 12px !important; }
+
+.screen-app .workbench-grid > section,
+.screen-app .workbench-grid > aside,
+.screen-app .workflow-grid > section,
+.screen-app .workflow-grid > aside,
+.screen-app .requester-requisition-editor > section,
+.screen-app .requester-editor-actions,
+.screen-app .workflow-queue-panel,
+.screen-app .workflow-control-panel {
+  border-radius: 4px !important;
+  box-shadow: none !important;
+}
+
+.screen-app .workbench-metrics { gap: 8px !important; }
+
+.screen-app .workbench-metrics > div,
+.screen-app .workbench-metrics > button {
+  min-height: 76px !important;
+  border-radius: 4px !important;
+  box-shadow: none !important;
+}
+
+.screen-app .procurement-record-row,
+.screen-app .report-record-row,
+.screen-app .storekeeper-queue-row,
+.screen-app .hod-approval-row { min-height: 48px !important; }
+
+.screen-app .workflow-hub-header {
+  padding: 15px !important;
+  border-left: 1px solid var(--border) !important;
+  border-radius: 4px !important;
+  box-shadow: none !important;
+}
+
+.screen-app .workflow-hub-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+}
+
+.screen-app .workflow-hub-header h1 { font-size: 24px !important; }
+.screen-app .workflow-steps { margin: 12px 0 !important; gap: 6px; }
+
+.screen-app .workflow-step,
+.screen-app .workflow-step:first-child,
+.screen-app .workflow-step:last-child {
+  min-height: 108px !important;
+  padding: 12px !important;
+  border-radius: 4px !important;
+  box-shadow: none !important;
+}
+
+.screen-app .workflow-step:hover {
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.screen-app .workflow-panel-header {
+  min-height: 52px;
+  padding: 9px 13px;
+}
+
+.screen-app .list-toolbar { margin-bottom: 12px !important; }
+.screen-app .list-view h1 { font-size: 24px !important; }
+.screen-app .list-toolbar p { margin-top: 4px !important; font-size: 12.5px !important; }
+.screen-app .list-actions { gap: 6px !important; }
+
+.screen-app .list-actions button {
+  min-height: 32px !important;
+  padding-inline: 10px !important;
+  border-radius: 4px !important;
+}
+
+.screen-app .table-command-bar {
+  min-height: 46px !important;
+  margin-bottom: 7px;
+  padding: 6px 7px !important;
+  gap: 5px !important;
+  border-radius: 4px !important;
+  box-shadow: none !important;
+}
+
+.screen-app .table-command-bar input,
+.screen-app .table-command-bar select {
+  min-height: 32px !important;
+  border-radius: 4px !important;
+}
+
+.screen-app .table-command-bar > button,
+.screen-app .table-command-bar > div > button {
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: 4px !important;
+}
+
+.screen-app .data-table {
+  border-radius: 4px !important;
+  box-shadow: none !important;
+}
+
+.screen-app .data-head {
+  min-height: 38px;
+  padding-inline: 8px !important;
+}
+
+.screen-app .data-row {
+  min-height: 48px !important;
+  padding-inline: 8px !important;
+}
+
+.screen-app .data-cell { font-size: 12.5px !important; }
+
+.screen-app .notification-panel,
+.screen-app .access-modal,
+.screen-app .command-palette,
+.screen-app .confirm-dialog,
+.screen-app .feedback-dialog,
+.screen-app .workflow-alert {
+  border-radius: 5px !important;
+}
+
 @media (max-width: 1180px) {
   .screen-app .app-content {
-    padding: 28px 25px 42px !important;
+    padding: 18px 18px 30px !important;
   }
 
   .screen-app .sidebar:not(.is-collapsed) {
-    width: 272px !important;
+    width: 220px !important;
   }
 
   .screen-app .task-card-grid {
