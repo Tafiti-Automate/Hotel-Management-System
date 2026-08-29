@@ -117,9 +117,9 @@ export default function Sidebar() {
   const navStyle = (active: boolean): CSSProperties => ({
     width: '100%', minHeight: 44, display: 'flex', alignItems: 'center', gap: 11,
     padding: '0 12px', border: 0, borderRadius: 7,
-    background: active ? 'var(--accent-soft)' : 'transparent',
-    color: active ? 'var(--accent)' : 'var(--text-muted)', cursor: 'pointer',
-    font: 'inherit', fontSize: 13.5, fontWeight: active ? 700 : 550, textAlign: 'left',
+    background: 'transparent',
+    color: active ? 'var(--text)' : 'var(--text-muted)', cursor: 'pointer',
+    font: 'inherit', fontSize: 13.5, fontWeight: active ? 650 : 550, textAlign: 'left',
   })
 
   return <>
@@ -146,7 +146,7 @@ export default function Sidebar() {
       <nav className="sidebar-nav" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: collapsed ? '6px 10px 12px' : '6px 10px 16px' }}>
         {groups.map((group, groupIndex) => <div key={group.heading} className="sidebar-nav-group" style={{ paddingTop: groupIndex ? 14 : 4 }}>
           {!collapsed && <div className="sidebar-nav-heading" style={{ minHeight: 30, display: 'flex', alignItems: 'center', padding: '0 10px', color: 'var(--text-faint)', fontSize: 10.5, fontWeight: 750, letterSpacing: '.04em', textTransform: 'uppercase' }}>{group.heading}</div>}
-          {group.items.map((item) => { const active = app.navActive === item.route; return <button key={item.route} title={collapsed ? item.label : undefined} onClick={() => { app.navTo(item.route, item.label); setMobileOpen(false) }} className={`sidebar-nav-item ${active ? 'active' : 'hover-surface2'}`} style={navStyle(active)}><Icon name={item.icon} size={19} color={active ? 'var(--accent)' : 'var(--text-faint)'} />{!collapsed && <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.label}</span>}</button> })}
+          {group.items.map((item) => { const active = app.navActive === item.route; return <button key={item.route} title={collapsed ? item.label : undefined} aria-current={active ? 'page' : undefined} onClick={() => { app.navTo(item.route, item.label); setMobileOpen(false) }} className={`sidebar-nav-item ${active ? 'active' : 'hover-surface2'}`} style={navStyle(active)}><Icon name={item.icon} size={19} color={active ? 'var(--accent)' : 'var(--text-faint)'} />{!collapsed && <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.label}</span>}</button> })}
         </div>)}
       </nav>
 

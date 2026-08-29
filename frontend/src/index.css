@@ -2374,7 +2374,7 @@ html[data-theme="dark"] .launchpad {
   min-height: 40px !important;
   margin: 1px 0;
   padding: 0 11px !important;
-  border-radius: 6px !important;
+  border-radius: 4px !important;
   color: var(--text-muted) !important;
   font-size: 13px !important;
   font-weight: 550 !important;
@@ -2382,10 +2382,10 @@ html[data-theme="dark"] .launchpad {
 }
 .app-shell .sidebar-nav-item:hover { background: var(--surface-2) !important; color: var(--text) !important; }
 .app-shell .sidebar-nav-item.active {
-  background: var(--accent-soft) !important;
+  background: transparent !important;
   color: var(--text) !important;
   font-weight: 650 !important;
-  box-shadow: inset 3px 0 0 var(--accent);
+  box-shadow: none !important;
 }
 .app-shell .sidebar-nav-item.active .ic { color: var(--accent) !important; }
 .app-shell .sidebar-footer { padding-top: 8px !important; }
@@ -3338,7 +3338,7 @@ html[data-theme="dark"] .screen-app .sidebar {
   min-height: 43px !important;
   margin: 2px 0 !important;
   padding: 0 11px !important;
-  border-radius: 9px !important;
+  border-radius: 4px !important;
   color: var(--ui-sidebar-muted) !important;
   font-size: 13px !important;
   font-weight: 520 !important;
@@ -3359,9 +3359,9 @@ html[data-theme="dark"] .screen-app .sidebar {
 }
 
 .screen-app .sidebar-nav-item.active {
-  color: var(--accent) !important;
-  background: color-mix(in srgb, var(--accent) 9%, var(--ui-sidebar)) !important;
-  box-shadow: inset 3px 0 0 var(--accent) !important;
+  color: var(--ui-sidebar-text) !important;
+  background: transparent !important;
+  box-shadow: none !important;
   font-weight: 650 !important;
 }
 
