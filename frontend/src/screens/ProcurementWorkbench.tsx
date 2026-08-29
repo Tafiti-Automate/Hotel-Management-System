@@ -573,6 +573,7 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
   const [selectedOrderId, setSelectedOrderId] = useState('')
   const [selectedReceiptId, setSelectedReceiptId] = useState('')
   const [invoiceNumber, setInvoiceNumber] = useState('')
+  const [deliveryNoteNumber, setDeliveryNoteNumber] = useState('')
   const [receivedDate, setReceivedDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [quantities, setQuantities] = useState<Record<string, string>>({})
   const [expiryDates, setExpiryDates] = useState<Record<string, string>>({})
@@ -643,6 +644,7 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
     setSelectedOrderId('')
     setSelectedReceiptId('')
     setInvoiceNumber('')
+    setDeliveryNoteNumber('')
     setReceivedDate(new Date().toISOString().slice(0, 10))
     setQuantities({})
     setExpiryDates({})
@@ -668,8 +670,9 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
             <ReadOnlyValue label="Supplier (set by the LPO)" value={supplier} />
           </div>
 
-          <div className="receiving-document-fields" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12, marginBottom: 18 }}>
+          <div className="receiving-document-fields" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 12, marginBottom: 18 }}>
             <Field label="2. Enter supplier invoice number *"><Input value={invoiceNumber} onChange={setInvoiceNumber} placeholder="Number printed on the supplier invoice" /></Field>
+            <Field label="Delivery note number"><Input value={deliveryNoteNumber} onChange={setDeliveryNoteNumber} placeholder="Number on the delivery note" /></Field>
             <Field label="Received date"><Input type="date" value={receivedDate} onChange={setReceivedDate} /></Field>
           </div>
 
@@ -718,7 +721,7 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
               onClick={() => void run(
                 () => runBackendAction('purchase-orders', id(selectedOrder.id), 'receive-delivery', {
                   supplier_invoice_no: invoiceNumber.trim(),
-                  delivery_note_no: '',
+                  delivery_note_no: deliveryNoteNumber.trim(),
                   received_date: receivedDate,
                   lines: positiveLines,
                 }).then((result) => {
@@ -768,7 +771,7 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
       <div>
         <div style={eyebrow}>Receiving Clerk</div>
         <h1 style={{ margin: '3px 0', fontSize: 24, color: 'var(--text)' }}>Receive Supplier Delivery</h1>
-        <div style={{ color: 'var(--text-muted)', fontSize: 12.5 }}>First select the issued LPO for the delivery. The supplier comes from the LPO; enter the invoice number after opening it.</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: 12.5 }}>Select the issued LPO, record the supplier delivery documents and quantities, then generate the GRN.</div>
       </div>
       <button type="button" onClick={() => void onRefresh()} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button>
     </div>
@@ -786,7 +789,7 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
 
       {view === 'ready' ? <>
         <div className="receiving-ready-header" style={{ display: 'grid', gridTemplateColumns: '.7fr 1.5fr .8fr .8fr auto', gap: 12, padding: '10px 16px', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}><span>LPO</span><span>Supplier</span><span>Expected</span><span>Status</span><span></span></div>
-        {filteredOrders.map((order) => <button key={id(order.id)} type="button" onClick={() => { setSelectedOrderId(id(order.id)); setQuantities({}); setExpiryDates({}); setInvoiceNumber('') }} style={{ width: '100%', display: 'grid', gridTemplateColumns: '.7fr 1.5fr .8fr .8fr auto', gap: 12, alignItems: 'center', padding: '13px 16px', border: 0, borderTop: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}><strong style={{ color: 'var(--text)', fontSize: 12 }}>LPO {id(order.lpo_number || order.po_number)}</strong><span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{names.suppliers.get(id(order.supplier)) || 'Supplier'}</span><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{formatDateOnly(order.expected_date)}</span><span style={{ color: id(order.status) === 'partially_received' ? 'var(--warn)' : 'var(--good)', fontSize: 10.8, fontWeight: 750 }}>{id(order.status) === 'partially_received' ? 'Partial' : 'Ready'}</span><span style={{ color: 'var(--accent)', fontSize: 10.8, fontWeight: 800 }}>Receive</span></button>)}
+        {filteredOrders.map((order) => <button key={id(order.id)} type="button" onClick={() => { setSelectedOrderId(id(order.id)); setQuantities({}); setExpiryDates({}); setInvoiceNumber(''); setDeliveryNoteNumber('') }} style={{ width: '100%', display: 'grid', gridTemplateColumns: '.7fr 1.5fr .8fr .8fr auto', gap: 12, alignItems: 'center', padding: '13px 16px', border: 0, borderTop: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}><strong style={{ color: 'var(--text)', fontSize: 12 }}>LPO {id(order.lpo_number || order.po_number)}</strong><span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{names.suppliers.get(id(order.supplier)) || 'Supplier'}</span><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{formatDateOnly(order.expected_date)}</span><span style={{ color: id(order.status) === 'partially_received' ? 'var(--warn)' : 'var(--good)', fontSize: 10.8, fontWeight: 750 }}>{id(order.status) === 'partially_received' ? 'Partial' : 'Ready'}</span><span style={{ color: 'var(--accent)', fontSize: 10.8, fontWeight: 800 }}>Receive</span></button>)}
         {!filteredOrders.length && <div style={{ padding: 48, textAlign: 'center' }}><Icon name="inventory_2" size={25} color="var(--text-faint)" /><div style={{ marginTop: 8, color: 'var(--text)', fontWeight: 750 }}>No matching LPOs</div><div style={{ marginTop: 4, color: 'var(--text-muted)', fontSize: 11.5 }}>{readyOrders.length ? 'Try another LPO number or supplier.' : 'No supplier deliveries are currently ready for receiving.'}</div></div>}
       </> : <>
         <div style={{ display: 'grid', gridTemplateColumns: '.7fr .7fr 1.35fr .8fr .7fr .65fr auto', gap: 12, padding: '10px 16px', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}><span>GRN</span><span>LPO</span><span>Supplier</span><span>Invoice</span><span>Date</span><span>Status</span><span></span></div>
@@ -809,8 +812,6 @@ function GoodsReceiptDocument({ receipt, lines, hotel, propertyName, preparedBy,
   items: Row[]
   departments: Row[]
 }) {
-  const receiptDate = formatDateOnly(receipt.received_date)
-  const lpoDate = formatDateOnly(receipt.lpo_date)
   const vatRate = 0.18
   const vatPercent = vatRate * 100
   const hasCommercialValues = lines.some((line) => line.unit_cost !== undefined && line.unit_cost !== null && id(line.unit_cost) !== '')
@@ -819,9 +820,7 @@ function GoodsReceiptDocument({ receipt, lines, hotel, propertyName, preparedBy,
   const grandTotal = netTotal + vatTotal
   const posted = id(receipt.status) === 'posted' || (lines.length > 0 && lines.every((line) => Boolean(line.inventory_changes_applied)))
   const documentStatus = posted ? 'Posted' : 'Received'
-  const hotelName = id(hotel?.legal_name) || id(hotel?.name) || propertyName || 'Hotel Operations'
-  const hotelAddress = [hotel?.address, hotel?.city, hotel?.country].filter(Boolean).join(', ')
-  const hotelPhones = [hotel?.phone, hotel?.alternate_phone].filter(Boolean).join(' / ')
+  const propertyLabel = propertyName || id(hotel?.name) || id(hotel?.legal_name) || 'Hotel Property'
   const receivingDestination = id(receipt.receiving_store_name) || (() => {
     const directDepartments = lines
       .map((line) => departments.find((row) => id(row.id) === id(line.direct_issue_department))?.name)
@@ -829,41 +828,48 @@ function GoodsReceiptDocument({ receipt, lines, hotel, propertyName, preparedBy,
     const destinations = Array.from(new Set(directDepartments))
     return destinations.length ? destinations.join(', ') : 'Direct delivery'
   })()
-  const formatQty = (value: unknown) => {
-    const quantity = num(value)
-    return Number.isInteger(quantity) ? quantity.toFixed(0) : quantity.toFixed(2)
+  const formatQty = (value: unknown) => num(value).toLocaleString('en-UG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const documentDate = (value: unknown) => {
+    const raw = id(value).trim()
+    if (!raw) return '—'
+    const parsed = new Date(`${raw.slice(0, 10)}T00:00:00`)
+    if (Number.isNaN(parsed.getTime())) return raw
+    return parsed.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  }
+  const documentTimestamp = (value: unknown) => {
+    const raw = id(value).trim()
+    if (!raw) return ''
+    const parsed = new Date(raw)
+    if (Number.isNaN(parsed.getTime())) return raw
+    return `${parsed.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}  ${parsed.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })}`
   }
   const amount = (value: number) => hasCommercialValues ? value.toLocaleString('en-UG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'
 
   return <>
     <style>{'@media print { @page { size: A4 landscape; margin: 7mm; } }'}</style>
     <article className="grn-document" aria-label={`Goods Received Note ${id(receipt.grn_number)}`}>
-      <header className="grn-simple-header">
-        <div className="grn-simple-company">
-          {hotel?.logo && <img src={hotel.logo} alt={`${hotel.name} logo`} />}
-          <strong>{hotelName}</strong>
-          {hotelAddress && <span>{hotelAddress}</span>}
-          {hotelPhones && <span>Tel: {hotelPhones}</span>}
-          {hotel?.email && <span>Email: {hotel.email}</span>}
-          {hotel?.tax_identification_number && <span>TIN: {hotel.tax_identification_number}</span>}
+      <header className="grn-reference-header">
+        <div className="grn-reference-supplier">
+          <strong>{id(receipt.supplier_name) || 'Supplier'}</strong>
+          {receipt.supplier_address && <span>{id(receipt.supplier_address)}</span>}
+          {receipt.supplier_phone && <span>Tel: {id(receipt.supplier_phone)}</span>}
+          {receipt.supplier_email && <span>Email: {id(receipt.supplier_email)}</span>}
+          {receipt.supplier_tin && <span>TIN: {id(receipt.supplier_tin)}</span>}
         </div>
-        <div className="grn-simple-title">
-          <span>{propertyName || hotel?.name || 'Hotel Property'}</span>
+        <div className="grn-reference-title">
+          {hotel?.logo && <img src={hotel.logo} alt={`${hotel.name} logo`} />}
+          <span>{propertyLabel}</span>
           <strong>Goods Received Note</strong>
           <small>(PURCHASE ORDER RECEIVING)</small>
         </div>
+        <section className="grn-reference-meta">
+          <div><b>GRN No.</b><span>{id(receipt.grn_number) || '—'}</span></div>
+          <div><b>P/O No.</b><span>{id(receipt.lpo_number) || '—'}</span></div>
+          <div><b>Delivery Date</b><span>{documentDate(receipt.received_date)}</span></div>
+          <div><b>Delivery Note No.</b><span>{id(receipt.delivery_note_no) || '—'}</span></div>
+          <div><b>Delivery Location</b><span>{receivingDestination}</span></div>
+        </section>
       </header>
-
-      <section className="grn-simple-meta">
-        <div><b>GRN No.</b><span>{id(receipt.grn_number) || '—'}</span></div>
-        <div><b>LPO No.</b><span>{id(receipt.lpo_number) || '—'}</span></div>
-        <div><b>LPO Date</b><span>{lpoDate}</span></div>
-        <div><b>Delivery Date</b><span>{receiptDate}</span></div>
-        <div><b>Delivery Note No.</b><span>{id(receipt.delivery_note_no) || '—'}</span></div>
-        <div><b>Supplier Invoice No.</b><span>{id(receipt.supplier_invoice_no) || '—'}</span></div>
-        <div><b>Supplier</b><span>{id(receipt.supplier_name) || '—'}</span></div>
-        <div><b>Delivery Location</b><span>{receivingDestination}</span></div>
-      </section>
 
       <table className="grn-material-table">
         <thead><tr>
@@ -885,12 +891,12 @@ function GoodsReceiptDocument({ receipt, lines, hotel, propertyName, preparedBy,
             const rate = num(line.unit_cost)
             const net = delivered * rate
             const gross = net * (1 + vatRate)
-            return <tr key={id(line.id)}>
+            return <tr className="grn-material-line" key={id(line.id)}>
               <td>{documentStatus}</td>
               <td>
                 <strong>{id(line.item_name) || id(item?.name) || 'Article'}</strong>
                 {(id(line.item_sku) || id(item?.sku)) && <small>{id(line.item_sku) || id(item?.sku)}</small>}
-                {line.expiry_date && <small>Expiry: {formatDateOnly(line.expiry_date)}</small>}
+                {line.expiry_date && <small>Expiry: {documentDate(line.expiry_date)}</small>}
               </td>
               <td className="number">{formatQty(ordered)}</td>
               <td>{id(line.unit_abbreviation) || id(line.unit_name) || id(item?.uom) || 'Each'}</td>
@@ -910,16 +916,16 @@ function GoodsReceiptDocument({ receipt, lines, hotel, propertyName, preparedBy,
         </tfoot>
       </table>
 
-      <section className="grn-simple-signoff">
-        <div className="grn-remarks"><b>Remarks:</b><span>{id(receipt.note) || '—'}</span></div>
-        <div className="grn-signature-line"><span>Signature:</span><i></i></div>
-        <div><b>Received By:</b> {preparedBy}</div>
-        <div><b>Status:</b> {documentStatus}</div>
+      <section className="grn-reference-signoff">
+        <div className="grn-signature-line"><b>Signature:</b><i></i></div>
+        <div className="grn-received-by"><b>Received By:</b><span>{preparedBy}</span></div>
+        <div className="grn-reference-remarks"><b>Remarks:</b><span>{id(receipt.note) || '—'}</span></div>
+        <div className="grn-status-note"><b>Status:</b> {documentStatus}. Partial delivery applies only while the LPO remains open.</div>
       </section>
 
       <footer className="grn-document-footer">
-        <span>{formatDateTime(receipt.posted_at || receipt.created_at)}</span>
-        <span>Page 1 of 1</span>
+        <span>Supplier Invoice: {id(receipt.supplier_invoice_no) || '—'}</span>
+        <span>{documentTimestamp(receipt.posted_at || receipt.created_at)}</span>
       </footer>
     </article>
   </>

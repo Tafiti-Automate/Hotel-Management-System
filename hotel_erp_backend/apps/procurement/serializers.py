@@ -710,6 +710,7 @@ class GoodsReceiptNoteSerializer(serializers.ModelSerializer):
     supplier_name = serializers.CharField(source="purchase_order.supplier.name", read_only=True)
     supplier_address = serializers.CharField(source="purchase_order.supplier.address", read_only=True)
     supplier_phone = serializers.CharField(source="purchase_order.supplier.phone", read_only=True)
+    supplier_email = serializers.EmailField(source="purchase_order.supplier.email", read_only=True)
     supplier_tin = serializers.CharField(source="purchase_order.supplier.tin_number", read_only=True)
     branch_id = serializers.UUIDField(source="purchase_order.requisition.branch_id", read_only=True)
     branch_name = serializers.CharField(source="purchase_order.requisition.branch.name", read_only=True)
@@ -731,6 +732,7 @@ class GoodsReceiptNoteSerializer(serializers.ModelSerializer):
             "supplier_name",
             "supplier_address",
             "supplier_phone",
+            "supplier_email",
             "supplier_tin",
             "branch_id",
             "branch_name",
