@@ -189,6 +189,8 @@ export default function InventoryWorkbench() {
   const common = { app, data: scopedData, form, setForm, busy, execute }
   const requesterPreparing = role === 'requester' && tab === 'requests' && supplyPathActive === 'prepare'
   const requesterEditingDraft = requesterPreparing && Boolean(form.request)
+  const showSupplyNavigation = (can(tabPermissions.requests.view) || can(tabPermissions.issues.view))
+    && (isStoresApprover || (!isDepartmentHead && role !== 'requester'))
   const selectInventoryRecord = (row: Row) => {
     if (requesterPreparing && ['draft', 'rejected'].includes(id(row.status).trim().toLowerCase())) {
       setForm({ request: id(row.id) })
@@ -215,16 +217,28 @@ export default function InventoryWorkbench() {
       setBusy(false)
     }
   }
-  return <div style={{ maxWidth: 1460, margin: '0 auto' }}>
-    <section className="workbench-hero" style={{ ...card, padding: 20, display: 'flex', alignItems: 'center', gap: 13, marginBottom: 15 }}><span style={hero}><Icon name={isDepartmentHead ? 'approval' : role === 'requester' ? 'assignment' : 'warehouse'} size={24} color="#fff" /></span><div><div style={eyebrow}>{isDepartmentHead ? 'Approvals' : role === 'requester' ? 'Requisitions' : 'Inventory'}</div><h1 style={{ margin: '3px 0', fontSize: 23 }}>{isDepartmentHead ? 'Department Approvals' : isStoresApprover ? 'Store Keeper Queue' : 'My Requisitions'}</h1><div style={muted}>{isDepartmentHead ? `${scopedData.requests.filter((row: Row) => id(row.status) === 'pending_department_approval').length} request${scopedData.requests.filter((row: Row) => id(row.status) === 'pending_department_approval').length === 1 ? '' : 's'} need your attention.` : role === 'store keeper' ? 'HOD-approved requisitions ready for store processing.' : isStoresApprover ? 'Review inventory requests.' : 'Create and track department requisitions.'}</div></div><button onClick={() => void load()} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button></section>
-    {(can(tabPermissions.requests.view) || can(tabPermissions.issues.view)) && <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 15 }}>
-      {!isStoresApprover && !isDepartmentHead && role !== 'requester' && <button onClick={() => selectSupplyStep('prepare')} style={{ ...tabButton, background: supplyPathActive === 'prepare' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'prepare' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'prepare' ? 'var(--accent)' : 'var(--border)' }}><Icon name="assignment" size={17} />My requisitions</button>}
-      {isStoresApprover && <button onClick={() => selectSupplyStep('stores')} style={{ ...tabButton, background: supplyPathActive === 'stores' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'stores' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'stores' ? 'var(--accent)' : 'var(--border)' }}><Icon name="assignment" size={17} />Department requests ({scopedData.requests.filter((row: Row) => id(row.status) === 'submitted').length})</button>}
-      {isAdministrator && <button onClick={() => selectSupplyStep('shortage')} style={{ ...tabButton, background: supplyPathActive === 'shortage' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'shortage' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'shortage' ? 'var(--accent)' : 'var(--border)' }}><Icon name="shopping_cart_checkout" size={17} />Forward to Procurement ({readyForProcurementCount})</button>}
-    </div>}
-    {otherTabs.length > 0 && <><div style={{ marginBottom: 10, color: 'var(--text-muted)', fontSize: 14, fontWeight: 600 }}>Inventory operations</div><div style={{ display: 'flex', gap: 5, marginBottom: 15, flexWrap: 'wrap' }}>{otherTabs.map(([key, icon, label]) => <button key={key} onClick={() => { setSupplyPathHint(''); setTab(key) }} style={{ ...tabButton, background: tab === key ? 'var(--accent-soft)' : 'var(--surface)', color: tab === key ? 'var(--accent)' : 'var(--text-muted)', borderColor: tab === key ? 'var(--accent)' : 'var(--border)' }}><Icon name={icon} size={17} />{label}</button>)}</div></>}
-    {error && <div style={{ ...card, padding: 12, color: 'var(--bad)', fontSize: 12, marginBottom: 14 }}>{error}</div>}
-    {loading ? <div style={{ ...card, padding: 50, textAlign: 'center', color: 'var(--text-faint)' }}>Loading inventory controls…</div> : isDepartmentHead ? (
+  return <div className="inventory-workbench" style={{ maxWidth: 1460, margin: '0 auto' }} aria-busy={loading}>
+    <section className="workbench-hero inventory-workbench-hero" style={{ ...card, padding: 20, display: 'flex', alignItems: 'center', gap: 13, marginBottom: 15 }}>
+      <span className="inventory-workbench-hero-icon" style={hero}><Icon name={isDepartmentHead ? 'approval' : role === 'requester' ? 'assignment' : 'warehouse'} size={24} color="#fff" /></span>
+      <div className="inventory-workbench-hero-copy"><div style={eyebrow}>{isDepartmentHead ? 'Approvals' : role === 'requester' ? 'Requisitions' : 'Inventory'}</div><h1 style={{ margin: '3px 0', fontSize: 23 }}>{isDepartmentHead ? 'Department Approvals' : isStoresApprover ? 'Store Keeper Queue' : 'My Requisitions'}</h1><div style={muted}>{isDepartmentHead ? `${scopedData.requests.filter((row: Row) => id(row.status) === 'pending_department_approval').length} request${scopedData.requests.filter((row: Row) => id(row.status) === 'pending_department_approval').length === 1 ? '' : 's'} need your attention.` : role === 'store keeper' ? 'HOD-approved requisitions ready for store processing.' : isStoresApprover ? 'Review inventory requests.' : 'Create and track department requisitions.'}</div></div>
+      <button type="button" className="inventory-refresh-button" onClick={() => void load()} disabled={loading} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />{loading ? 'Refreshing…' : 'Refresh'}</button>
+    </section>
+    {(showSupplyNavigation || otherTabs.length > 0) && <nav className="inventory-workbench-navigation" aria-label="Inventory workspace navigation">
+      {showSupplyNavigation && <section className="inventory-nav-group" aria-labelledby="request-workflow-heading">
+        <div className="inventory-nav-group-copy"><div id="request-workflow-heading">Request workflow</div><small>Move requests through their assigned stage.</small></div>
+        <div className="inventory-nav-actions">
+          {!isStoresApprover && !isDepartmentHead && role !== 'requester' && <button type="button" className="inventory-nav-button" aria-pressed={supplyPathActive === 'prepare'} onClick={() => selectSupplyStep('prepare')} style={{ ...tabButton, background: supplyPathActive === 'prepare' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'prepare' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'prepare' ? 'var(--accent)' : 'var(--border)' }}><Icon name="assignment" size={17} />My requisitions</button>}
+          {isStoresApprover && <button type="button" className="inventory-nav-button" aria-pressed={supplyPathActive === 'stores'} onClick={() => selectSupplyStep('stores')} style={{ ...tabButton, background: supplyPathActive === 'stores' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'stores' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'stores' ? 'var(--accent)' : 'var(--border)' }}><Icon name="assignment" size={17} />Department requests ({scopedData.requests.filter((row: Row) => id(row.status) === 'submitted').length})</button>}
+          {isAdministrator && <button type="button" className="inventory-nav-button" aria-pressed={supplyPathActive === 'shortage'} onClick={() => selectSupplyStep('shortage')} style={{ ...tabButton, background: supplyPathActive === 'shortage' ? 'var(--accent-soft)' : 'var(--surface)', color: supplyPathActive === 'shortage' ? 'var(--accent)' : 'var(--text-muted)', borderColor: supplyPathActive === 'shortage' ? 'var(--accent)' : 'var(--border)' }}><Icon name="shopping_cart_checkout" size={17} />Forward to Procurement ({readyForProcurementCount})</button>}
+        </div>
+      </section>}
+      {otherTabs.length > 0 && <section className="inventory-nav-group" aria-labelledby="inventory-operations-heading">
+        <div className="inventory-nav-group-copy"><div id="inventory-operations-heading">Inventory operations</div><small>Manage stock movement, controls and visibility.</small></div>
+        <div className="inventory-nav-actions">{otherTabs.map(([key, icon, label]) => <button type="button" className="inventory-nav-button" aria-pressed={tab === key && !supplyPathHint} key={key} onClick={() => { setSupplyPathHint(''); setTab(key) }} style={{ ...tabButton, background: tab === key ? 'var(--accent-soft)' : 'var(--surface)', color: tab === key ? 'var(--accent)' : 'var(--text-muted)', borderColor: tab === key ? 'var(--accent)' : 'var(--border)' }}><Icon name={icon} size={17} />{label}</button>)}</div>
+      </section>}
+    </nav>}
+    {error && <div className="inventory-error-banner" role="alert" style={{ ...card, padding: 12, color: 'var(--bad)', fontSize: 12, marginBottom: 14 }}><Icon name="error" size={18} color="var(--bad)" /><span>{error}</span></div>}
+    {loading ? <section className="inventory-loading-state" style={card} role="status" aria-live="polite"><div><span className="inventory-loading-line inventory-loading-line-title" /><span className="inventory-loading-line" /></div><div className="inventory-loading-rows"><span /><span /><span /></div><span className="sr-only">Loading inventory controls…</span></section> : isDepartmentHead ? (
       <DepartmentApprovalWorkspace app={app} data={scopedData} busy={busy} execute={execute} selected={selectedRecord} onSelect={setSelectedRecord} />
     ) : role === 'store keeper' && tab === 'requests' && supplyPathActive === 'stores' ? (
       <StoreKeeperRequestWorkspace app={app} data={scopedData} busy={busy} execute={execute} selected={selectedRecord} onSelect={setSelectedRecord} />
@@ -232,9 +246,9 @@ export default function InventoryWorkbench() {
       <RequestPanel {...common} stage="prepare" />
     ) : requesterPreparing ? (
       <Records tab={tab} data={scopedData} app={app} stage={supplyPathActive} onSelect={selectInventoryRecord} onNewRequisition={() => void createRequesterRequisition()} />
-    ) : <div className="workbench-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) minmax(350px,.7fr)', gap: 16, alignItems: 'start' }}>
+    ) : <div className="workbench-grid inventory-workbench-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) minmax(350px,.7fr)', gap: 16, alignItems: 'start' }}>
       <Records tab={tab} data={scopedData} app={app} stage={supplyPathActive} onSelect={selectInventoryRecord} />
-      <aside style={{ ...card, padding: 18 }}>
+      <aside className="workbench-action-panel" style={{ ...card, padding: 18 }}>
         {!canChangeTab && !['batches', 'consumption'].includes(tab) && <ReadOnlyPanel title="Read-only access" note="View only." />}
         {canChangeTab && tab === 'requests' && <RequestPanel {...common} stage={(supplyPathActive || requestRoleStage) as SupplyTask} />}
         {canChangeTab && tab === 'issues' && <IssuePanel {...common} />}
@@ -882,17 +896,20 @@ function Records({ tab, data, app, stage, onSelect, onNewRequisition }: { tab: T
           : [departmentName(app, row.department), itemName(app, row.item), `${row.quantity} × ${row.unit_cost}`, id(row.consumed_on)]
   const titles: Record<Tab, string> = { requests: stage === 'department' ? 'Requests awaiting Department Head approval' : stage === 'stores' ? 'Requests awaiting Store Keeper action' : stage === 'shortage' ? 'Store Requisitions ready to forward' : stage === 'issue' ? 'Requests ready to issue' : 'My requests', issues: 'Issue vouchers', transfers: 'Inter-store transfers', adjustments: 'Stock adjustments', counts: 'Stock counts', returns: 'Department returns', reorder: 'Low-stock reorder queue', batches: 'Inventory batches and expiry', consumption: 'Department consumption' }
   const statuses = Array.from(new Set(stageRows.map((row) => id(row.status)).filter(Boolean)))
-  return <section style={{ ...card, overflow: 'hidden' }}>
-    <div style={{ padding: '15px 17px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
+  const hasFilters = Boolean(query || status || dateFrom || dateTo)
+  const clearFilters = () => { setQuery(''); setStatus(''); setDateFrom(''); setDateTo('') }
+  return <section className="inventory-records-card" style={{ ...card, overflow: 'hidden' }}>
+    <div className="inventory-records-header" style={{ padding: '15px 17px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
       <div><div style={{ fontSize: 13, fontWeight: 800 }}>{requesterView ? 'My requisitions' : titles[tab]}</div>{requesterView && <div style={{ marginTop: 3, color: 'var(--text-muted)', fontSize: 11 }}>View and manage your department requisitions.</div>}</div>
       <span style={{ marginLeft: 'auto', color: 'var(--text-faint)', fontSize: 11 }}>{rows.length} record{rows.length === 1 ? '' : 's'}</span>
       {requesterView && <button type="button" onClick={() => onNewRequisition?.()} style={{ ...secondary, color: '#fff', background: 'var(--accent)', borderColor: 'var(--accent)' }}><Icon name="add" size={17} color="#fff" />New requisition</button>}
     </div>
-    <div className="inventory-record-filters" style={{ display: 'grid', gridTemplateColumns: 'minmax(180px,1.5fr) minmax(130px,.8fr) minmax(130px,.8fr) minmax(130px,.8fr)', gap: 8, padding: 12, borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
-      <input aria-label="Search records" placeholder={requesterView ? "Search requisition or item..." : "Search reference or item..."} value={query} onChange={(e) => setQuery(e.target.value)} style={control} />
-      <select aria-label="Filter by status" value={status} onChange={(e) => setStatus(e.target.value)} style={control}><option value="">All statuses</option>{statuses.map((value) => <option key={value} value={value}>{statusLabel(value)}</option>)}</select>
-      <input aria-label="From date" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={control} />
-      <input aria-label="To date" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={control} />
+    <div className="inventory-record-filters" style={{ display: 'grid', gap: 8, padding: 12, borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+      <label className="inventory-filter-field inventory-filter-search"><span>Search</span><input aria-label="Search records" placeholder={requesterView ? "Requisition or item…" : "Reference or item…"} value={query} onChange={(e) => setQuery(e.target.value)} style={control} /></label>
+      <label className="inventory-filter-field"><span>Status</span><select aria-label="Filter by status" value={status} onChange={(e) => setStatus(e.target.value)} style={control}><option value="">All statuses</option>{statuses.map((value) => <option key={value} value={value}>{statusLabel(value)}</option>)}</select></label>
+      <label className="inventory-filter-field"><span>From</span><input aria-label="From date" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={control} /></label>
+      <label className="inventory-filter-field"><span>To</span><input aria-label="To date" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={control} /></label>
+      {hasFilters && <button type="button" className="inventory-clear-filters" onClick={clearFilters} style={secondary}><Icon name="filter_alt_off" size={16} />Clear</button>}
     </div>
     {requesterView && rows.length > 0 && <div className="requester-list-head" style={{ display: 'grid', gridTemplateColumns: '120px 160px minmax(240px,1.4fr) auto', gap: 14, padding: '9px 17px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em' }}><span>Requisition</span><span>Date</span><span>Items</span><span>Status</span></div>}
     {rows.map((row) => tab === 'requests' ? (() => {
@@ -906,7 +923,12 @@ function Records({ tab, data, app, stage, onSelect, onNewRequisition }: { tab: T
         <StatusBadge value={id(row.status)} />
       </button>
     })() : <button type="button" onClick={() => onSelect(row)} className="procurement-record-row" key={id(row.id)} style={{ ...recordRow, width: '100%', alignItems: 'center', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>{cells(row).map((cell, index) => <span key={index} style={{ color: index ? 'var(--text-muted)' : 'var(--text)', fontWeight: index ? 500 : 700 }}>{cell || '—'}</span>)}</button>)}
-    {!rows.length && <div style={{ padding: 45, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}><Icon name="inbox" size={28} color="var(--text-faint)" /><div style={{ marginTop: 8, color: 'var(--text)', fontWeight: 700 }}>No records found</div><div style={{ marginTop: 4 }}>No records match the current filters.</div></div>}
+    {!rows.length && <div className="inventory-empty-state" style={{ padding: 45, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>
+      <span className="inventory-empty-icon"><Icon name={hasFilters ? 'filter_alt_off' : 'inbox'} size={25} color={hasFilters ? 'var(--accent)' : 'var(--text-faint)'} /></span>
+      <div style={{ marginTop: 10, color: 'var(--text)', fontWeight: 750 }}>{hasFilters ? 'No matching records' : requesterView ? 'No requisitions yet' : 'No records available'}</div>
+      <div style={{ marginTop: 4 }}>{hasFilters ? 'Try clearing or changing the current filters.' : requesterView ? 'Create a requisition when your department needs an item.' : 'Records will appear here when they become available.'}</div>
+      <div className="inventory-empty-actions">{hasFilters && <button type="button" onClick={clearFilters} style={secondary}>Clear filters</button>}{requesterView && !hasFilters && <button type="button" onClick={() => onNewRequisition?.()} style={{ ...secondary, color: '#fff', background: 'var(--accent)', borderColor: 'var(--accent)' }}><Icon name="add" size={16} color="#fff" />New requisition</button>}</div>
+    </div>}
   </section>
 }
 
@@ -1005,7 +1027,7 @@ const itemName = (app: any, value: unknown) => id(app.data.items.find((r: Row) =
 const storeName = (app: any, value: unknown) => id(app.data.locations.find((r: Row) => id(r.id) === id(value))?.name) || id(value)
 const departmentName = (app: any, value: unknown) => id(app.data.departments.find((r: Row) => id(r.id) === id(value))?.name) || id(value)
 const employeeName = (app: any, value: unknown) => id(app.data.employees.find((r: Row) => id(r.id) === id(value))?.name) || id(value)
-function Panel({ title, note, children }: { title: string; note: string; children: ReactNode }) { return <><div style={{ fontSize: 14, fontWeight: 800 }}>{title}</div><div style={{ ...muted, margin: '4px 0 15px', lineHeight: 1.5 }}>{note}</div>{children}</> }
+function Panel({ title, note, children }: { title: string; note: string; children: ReactNode }) { return <div className="inventory-action-form"><header className="inventory-action-form-header"><div style={{ fontSize: 14, fontWeight: 800 }}>{title}</div><div style={{ ...muted, margin: '4px 0 0', lineHeight: 1.5 }}>{note}</div></header><div className="inventory-action-form-body">{children}</div></div> }
 function StatusBadge({ value }: { value: string }) {
   const status = id(value).trim().toLowerCase().replace(/\s+/g, '_')
   const label = statusLabel(status)
@@ -1023,7 +1045,7 @@ function StatusBadge({ value }: { value: string }) {
     cancelled: { fg: 'var(--text-muted)', bg: 'var(--surface-2)', icon: 'block' },
   }
   const tone = palette[status] || { fg: 'var(--accent)', bg: 'var(--accent-soft)', icon: 'info' }
-  return <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 9px', borderRadius: 999, color: tone.fg, background: tone.bg, fontSize: 9.5, fontWeight: 800 }}><Icon name={tone.icon} size={13} color={tone.fg} />{label}</span>
+  return <span className="inventory-status-badge" style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 9px', borderRadius: 999, color: tone.fg, background: tone.bg, fontSize: 9.5, fontWeight: 800 }}><Icon name={tone.icon} size={13} color={tone.fg} />{label}</span>
 }
 function RequestTimeline({ row, app }: { row: Row; app: any }) {
   const events = [
@@ -1034,16 +1056,16 @@ function RequestTimeline({ row, app }: { row: Row; app: any }) {
   ].filter(Boolean) as Array<{ label: string; detail: string; at: string }>
   return <section style={{ marginTop: 22 }}><h3 style={{ margin: '0 0 10px', fontSize: 13 }}>Activity</h3><div style={{ borderLeft: '2px solid var(--border)', marginLeft: 6 }}>{events.map((event) => <div key={`${event.label}-${event.at}`} style={{ position: 'relative', padding: '0 0 14px 18px' }}><span style={{ position: 'absolute', left: -6, top: 3, width: 10, height: 10, borderRadius: 10, background: 'var(--accent)', border: '2px solid var(--surface)' }} /><div style={{ color: 'var(--text)', fontSize: 11.5, fontWeight: 750 }}>{event.label}</div><div style={{ marginTop: 2, color: 'var(--text-muted)', fontSize: 10.5 }}>{[event.detail, formatDateTime(event.at)].filter(Boolean).join(' · ')}</div></div>)}</div></section>
 }
-function InfoBox({ label, value }: { label: string; value: unknown }) { return <div style={{ padding: '9px 10px', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface-2)' }}><div style={{ color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 750, textTransform: 'uppercase' }}>{label}</div><div style={{ marginTop: 3, color: 'var(--text)', fontSize: 13, fontWeight: 750 }}>{id(value)}</div></div> }
+function InfoBox({ label, value }: { label: string; value: unknown }) { return <div className="inventory-info-box" style={{ padding: '9px 10px', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface-2)' }}><div style={{ color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 750, textTransform: 'uppercase' }}>{label}</div><div style={{ marginTop: 3, color: 'var(--text)', fontSize: 13, fontWeight: 750 }}>{id(value)}</div></div> }
 function SectionLabel({ children }: { children: ReactNode }) { return <div style={{ margin: '4px 0 10px', color: 'var(--text)', fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em' }}>{children}</div> }
 const statusLabel = (value: string) => ({ draft: 'Draft', pending_department_approval: 'Pending HOD Approval', submitted: 'Pending Store Keeper', approved: 'Approved', partially_approved: 'Partially Approved', awaiting_procurement: 'Awaiting Procurement', partially_issued: 'Partially Issued', issued: 'Issued', completed: 'Completed', rejected: 'Rejected', cancelled: 'Cancelled' } as Record<string,string>)[value] || value.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase())
 const formatDateTime = (value: string) => value ? new Date(value).toLocaleString() : ''
-function Field({ label, children }: { label: string; children: ReactNode }) { return <label style={{ display: 'block', marginBottom: 10 }}><HelpLabel label={label} style={labelStyle} />{children}</label> }
-function Input({ value, change, type = 'text' }: { value: unknown; change: (value: string) => void; type?: string }) { return <input type={type} value={id(value)} onChange={(e) => change(e.target.value)} style={control} /> }
-function Select({ value, change, rows, label = (r: Row) => id(r.name), optional = false, emptyLabel }: { value: unknown; change: (value: string) => void; rows: Row[]; label?: (row: Row) => string; optional?: boolean; emptyLabel?: string }) { return <select value={id(value)} onChange={(e) => change(e.target.value)} style={control}><option value="">{emptyLabel || (optional ? 'None' : 'Select…')}</option>{rows.map((row) => <option key={id(row.id)} value={id(row.id)}>{label(row)}</option>)}</select> }
-function Action({ children, click, disabled, tone = 'accent' }: any) { return <button type="button" onClick={click} disabled={disabled} style={{ ...action, opacity: disabled ? .45 : 1, background: tone === 'good' ? 'var(--good)' : tone === 'danger' ? 'var(--bad)' : 'var(--accent)' }}>{children}</button> }
-function Rule() { return <div style={{ borderTop: '1px solid var(--border)', margin: '16px 0' }} /> }
-function Hint({ children }: { children: ReactNode }) { return <div style={{ padding: 9, color: 'var(--warn)', background: 'var(--warn-soft)', borderRadius: 6, fontSize: 11 }}>{children}</div> }
+function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="inventory-form-field" style={{ display: 'block', marginBottom: 10 }}><HelpLabel label={label} style={labelStyle} />{children}</label> }
+function Input({ value, change, type = 'text' }: { value: unknown; change: (value: string) => void; type?: string }) { return <input className="inventory-control" type={type} value={id(value)} onChange={(e) => change(e.target.value)} style={control} /> }
+function Select({ value, change, rows, label = (r: Row) => id(r.name), optional = false, emptyLabel }: { value: unknown; change: (value: string) => void; rows: Row[]; label?: (row: Row) => string; optional?: boolean; emptyLabel?: string }) { return <select className="inventory-control" value={id(value)} onChange={(e) => change(e.target.value)} style={control}><option value="">{emptyLabel || (optional ? 'None' : 'Select…')}</option>{rows.map((row) => <option key={id(row.id)} value={id(row.id)}>{label(row)}</option>)}</select> }
+function Action({ children, click, disabled, tone = 'accent' }: any) { return <button className="inventory-primary-action" type="button" onClick={click} disabled={disabled} style={{ ...action, opacity: disabled ? .45 : 1, background: tone === 'good' ? 'var(--good)' : tone === 'danger' ? 'var(--bad)' : 'var(--accent)' }}>{children}</button> }
+function Rule() { return <div className="inventory-form-rule" style={{ borderTop: '1px solid var(--border)', margin: '16px 0' }} /> }
+function Hint({ children }: { children: ReactNode }) { return <div className="inventory-form-hint" role="note" style={{ padding: 9, color: 'var(--warn)', background: 'var(--warn-soft)', borderRadius: 6, fontSize: 11 }}>{children}</div> }
 const card: CSSProperties = { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: 'var(--shadow-sm)' }
 const hero: CSSProperties = { width: 46, height: 46, borderRadius: 10, display: 'grid', placeItems: 'center', background: 'var(--accent)' }
 const eyebrow: CSSProperties = { fontSize: 12, fontWeight: 600, letterSpacing: '.02em', color: 'var(--accent)' }
