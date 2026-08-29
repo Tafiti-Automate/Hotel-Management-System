@@ -3369,6 +3369,18 @@ html[data-theme="dark"] .screen-app .sidebar {
   color: var(--accent) !important;
 }
 
+.screen-app .sidebar.is-collapsed .sidebar-nav-item {
+  justify-content: center;
+  padding-inline: 0 !important;
+}
+
+.screen-app .sidebar-nav-abbreviation {
+  color: inherit;
+  font-size: 10px;
+  font-weight: inherit;
+  letter-spacing: .04em;
+}
+
 .screen-app .sidebar-footer {
   padding: 11px 14px 14px !important;
   border-top-color: var(--ui-sidebar-border) !important;

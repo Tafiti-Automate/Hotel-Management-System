@@ -3,96 +3,104 @@ import { useApp } from '../state/AppContext'
 import { Icon } from './Icon'
 import { canAccessRoute, canSwitchBranches, canSwitchModules } from '../lib/access'
 
-interface NavItem { route: string; label: string; icon: string }
+interface NavItem { route: string; label: string }
 interface NavGroup { heading: string; items: NavItem[] }
 
 const workflowNav: Record<string, NavGroup[]> = {
   requester: [
     { heading: 'Workspace', items: [
-      { route: 'dashboard', label: 'Dashboard', icon: 'space_dashboard' },
-      { route: 'workflow-stores', label: 'My requisitions', icon: 'assignment' },
+      { route: 'dashboard', label: 'Dashboard' },
+      { route: 'workflow-stores', label: 'My requisitions' },
     ] },
   ],
   'department head': [
     { heading: 'Workspace', items: [
-      { route: 'dashboard', label: 'Dashboard', icon: 'space_dashboard' },
-      { route: 'workflow-stores', label: 'Department approvals', icon: 'approval' },
+      { route: 'dashboard', label: 'Dashboard' },
+      { route: 'workflow-stores', label: 'Department approvals' },
     ] },
   ],
   'store keeper': [
     { heading: 'Workspace', items: [
-      { route: 'dashboard', label: 'Dashboard', icon: 'space_dashboard' },
-      { route: 'workflow-stores', label: 'Store Keeper queue', icon: 'warehouse' },
+      { route: 'dashboard', label: 'Dashboard' },
+      { route: 'workflow-stores', label: 'Store Keeper queue' },
     ] },
   ],
   'cost controller': [
-    { heading: 'Workspace', items: [{ route: 'dashboard', label: 'Dashboard', icon: 'space_dashboard' }] },
+    { heading: 'Workspace', items: [{ route: 'dashboard', label: 'Dashboard' }] },
     { heading: 'Supplier & article setup', items: [
-      { route: 'suppliers', label: 'Suppliers', icon: 'local_shipping' },
-      { route: 'supplierItems', label: 'Supplier quotations', icon: 'request_quote' },
-      { route: 'items', label: 'Articles / items', icon: 'inventory_2' },
-      { route: 'categories', label: 'Categories', icon: 'category' },
-      { route: 'uoms', label: 'Units of measure', icon: 'straighten' },
-      { route: 'itemUnits', label: 'UOM conversions', icon: 'calculate' },
+      { route: 'suppliers', label: 'Suppliers' },
+      { route: 'supplierItems', label: 'Supplier quotations' },
+      { route: 'items', label: 'Articles / items' },
+      { route: 'categories', label: 'Categories' },
+      { route: 'uoms', label: 'Units of measure' },
+      { route: 'itemUnits', label: 'UOM conversions' },
     ] },
   ],
   'procurement manager': [
     { heading: 'Workspace', items: [
-      { route: 'dashboard', label: 'Dashboard', icon: 'space_dashboard' },
-      { route: 'workflow-procure', label: 'Procurement queue', icon: 'shopping_cart_checkout' },
+      { route: 'dashboard', label: 'Dashboard' },
+      { route: 'workflow-procure', label: 'Procurement queue' },
     ] },
   ],
   'financial manager': [
     { heading: 'Workspace', items: [
-      { route: 'dashboard', label: 'Dashboard', icon: 'space_dashboard' },
-      { route: 'workflow-procure', label: 'LPO approvals', icon: 'account_balance_wallet' },
+      { route: 'dashboard', label: 'Dashboard' },
+      { route: 'workflow-procure', label: 'LPO approvals' },
     ] },
   ],
   'general manager': [
     { heading: 'Workspace', items: [
-      { route: 'dashboard', label: 'Dashboard', icon: 'space_dashboard' },
-      { route: 'workflow-procure', label: 'Final LPO approvals', icon: 'verified_user' },
+      { route: 'dashboard', label: 'Dashboard' },
+      { route: 'workflow-procure', label: 'Final LPO approvals' },
     ] },
   ],
   'receiving clerk': [
     { heading: 'Workspace', items: [
-      { route: 'dashboard', label: 'Dashboard', icon: 'space_dashboard' },
-      { route: 'workflow-procure', label: 'Receiving & GRN', icon: 'move_to_inbox' },
+      { route: 'dashboard', label: 'Dashboard' },
+      { route: 'workflow-procure', label: 'Receiving & GRN' },
     ] },
   ],
 }
 
 const adminOperations: NavGroup[] = [
   { heading: 'Workspace', items: [
-    { route: 'dashboard', label: 'Dashboard', icon: 'space_dashboard' },
-    { route: 'workflow-stores', label: 'Department & Stores workflow', icon: 'warehouse' },
-    { route: 'workflow-procure', label: 'Procurement workflow', icon: 'shopping_cart_checkout' },
-    { route: 'workflow-pay', label: 'Finance', icon: 'payments' },
+    { route: 'dashboard', label: 'Dashboard' },
+    { route: 'workflow-stores', label: 'Department & Stores workflow' },
+    { route: 'workflow-procure', label: 'Procurement workflow' },
+    { route: 'workflow-pay', label: 'Finance' },
   ] },
   { heading: 'Master data', items: [
-    { route: 'suppliers', label: 'Suppliers', icon: 'local_shipping' },
-    { route: 'supplierItems', label: 'Supplier quotations', icon: 'request_quote' },
-    { route: 'items', label: 'Articles / items', icon: 'inventory_2' },
-    { route: 'categories', label: 'Categories', icon: 'category' },
-    { route: 'uoms', label: 'Units of measure', icon: 'straighten' },
-    { route: 'itemUnits', label: 'UOM conversions', icon: 'calculate' },
-    { route: 'locations', label: 'Stores', icon: 'warehouse' },
+    { route: 'suppliers', label: 'Suppliers' },
+    { route: 'supplierItems', label: 'Supplier quotations' },
+    { route: 'items', label: 'Articles / items' },
+    { route: 'categories', label: 'Categories' },
+    { route: 'uoms', label: 'Units of measure' },
+    { route: 'itemUnits', label: 'UOM conversions' },
+    { route: 'locations', label: 'Stores' },
   ] },
   { heading: 'Control', items: [
-    { route: 'reports', label: 'Reports', icon: 'bar_chart' },
-    { route: 'audit-log', label: 'Audit trail', icon: 'history' },
-    { route: 'access-management', label: 'User access', icon: 'manage_accounts' },
+    { route: 'reports', label: 'Reports' },
+    { route: 'audit-log', label: 'Audit trail' },
+    { route: 'access-management', label: 'User access' },
   ] },
 ]
 
 const hrGroups: NavGroup[] = [
   { heading: 'Human resources', items: [
-    { route: 'hr-dashboard', label: 'People dashboard', icon: 'space_dashboard' },
-    { route: 'employees', label: 'Employees', icon: 'badge' },
-    { route: 'departments', label: 'Departments', icon: 'account_tree' },
-    { route: 'access-management', label: 'User access', icon: 'manage_accounts' },
+    { route: 'hr-dashboard', label: 'People dashboard' },
+    { route: 'employees', label: 'Employees' },
+    { route: 'departments', label: 'Departments' },
+    { route: 'access-management', label: 'User access' },
   ] },
 ]
+
+const navAbbreviation = (label: string) => {
+  const words = label.split(/[^A-Za-z0-9]+/).filter(Boolean)
+  return (words.length > 1
+    ? words.slice(0, 2).map((word) => word[0]).join('')
+    : words[0]?.slice(0, 2) || '')
+    .toUpperCase()
+}
 
 export default function Sidebar() {
   const app = useApp()
@@ -146,7 +154,7 @@ export default function Sidebar() {
       <nav className="sidebar-nav" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: collapsed ? '6px 10px 12px' : '6px 10px 16px' }}>
         {groups.map((group, groupIndex) => <div key={group.heading} className="sidebar-nav-group" style={{ paddingTop: groupIndex ? 14 : 4 }}>
           {!collapsed && <div className="sidebar-nav-heading" style={{ minHeight: 30, display: 'flex', alignItems: 'center', padding: '0 10px', color: 'var(--text-faint)', fontSize: 10.5, fontWeight: 750, letterSpacing: '.04em', textTransform: 'uppercase' }}>{group.heading}</div>}
-          {group.items.map((item) => { const active = app.navActive === item.route; return <button key={item.route} title={collapsed ? item.label : undefined} aria-current={active ? 'page' : undefined} onClick={() => { app.navTo(item.route, item.label); setMobileOpen(false) }} className={`sidebar-nav-item ${active ? 'active' : 'hover-surface2'}`} style={navStyle(active)}><Icon name={item.icon} size={19} color={active ? 'var(--accent)' : 'var(--text-faint)'} />{!collapsed && <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.label}</span>}</button> })}
+          {group.items.map((item) => { const active = app.navActive === item.route; return <button key={item.route} title={collapsed ? item.label : undefined} aria-label={collapsed ? item.label : undefined} aria-current={active ? 'page' : undefined} onClick={() => { app.navTo(item.route, item.label); setMobileOpen(false) }} className={`sidebar-nav-item ${active ? 'active' : 'hover-surface2'}`} style={navStyle(active)}>{collapsed ? <span className="sidebar-nav-abbreviation" aria-hidden="true">{navAbbreviation(item.label)}</span> : <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.label}</span>}</button> })}
         </div>)}
       </nav>
 
