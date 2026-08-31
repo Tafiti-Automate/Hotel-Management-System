@@ -117,7 +117,7 @@ export interface AppContextValue extends AppState {
 
 const AppContext = createContext<AppContextValue | null>(null)
 const GUEST: User = { name: 'Guest', role: '—', designation: '', id: '', employeeId: '', employeeCode: '', branchId: '', branchName: '', departmentId: '', departmentName: '', isStaff: false, isSuperuser: false, permissions: [] }
-const IDLE_TIMEOUT_MS = 8 * 60 * 60 * 1000
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000
 const ACTIVITY_WRITE_INTERVAL_MS = 1000
 const LAST_ACTIVITY_KEY = 'hms_last_activity'
 const APPEARANCE_KEY = 'hms_appearance'

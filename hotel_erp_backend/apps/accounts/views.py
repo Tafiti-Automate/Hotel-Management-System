@@ -8,9 +8,11 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import mixins
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.viewsets import GenericViewSet, ModelViewSet, ReadOnlyModelViewSet
 
 from apps.accounts.serializers import PermissionSerializer, RoleSerializer, UserSerializer, TECHNICAL_ROLE_NAMES
+from apps.audit_logs.services import record_audit
 
 
 User = get_user_model()
@@ -45,10 +47,12 @@ def _user_payload(user) -> dict:
 
 
 class LoginView(APIView):
-    """Exchange username/employee code + password for an auth token."""
+    """Exchange username/employee code + password for a short-lived auth token."""
 
     authentication_classes: list = []
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "login"
 
     def post(self, request):
         identifier = str(request.data.get("username", "")).strip()
@@ -70,6 +74,11 @@ class LoginView(APIView):
                 user = authenticate(request, username=candidate.username, password=password)
 
         if user is None or not user.is_active:
+            record_audit(
+                action="login_failed",
+                entity_type="accounts.User",
+                metadata={"identifier": identifier},
+            )
             return Response(
                 {"detail": "Invalid credentials."},
                 status=status.HTTP_401_UNAUTHORIZED,
@@ -86,7 +95,18 @@ class LoginView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        token, _ = Token.objects.get_or_create(user=user)
+        # One active API credential per user reduces stolen-token lifetime and
+        # invalidates credentials left behind on another workstation.
+        Token.objects.filter(user=user).delete()
+        token = Token.objects.create(user=user)
+        record_audit(
+            actor=user,
+            action="login_succeeded",
+            entity_type="accounts.User",
+            entity_id=str(user.pk),
+            metadata={"role": _user_role(user)},
+            created_by=user,
+        )
         return Response({"token": token.key, "user": _user_payload(user)})
 
 
@@ -105,6 +125,13 @@ class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        record_audit(
+            actor=request.user,
+            action="logout",
+            entity_type="accounts.User",
+            entity_id=str(request.user.pk),
+            created_by=request.user,
+        )
         Token.objects.filter(user=request.user).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 

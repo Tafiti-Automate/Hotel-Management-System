@@ -376,6 +376,13 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             return queryset.filter(branch=employee.branch)
         return queryset.filter(requester=employee)
 
+    def perform_destroy(self, instance):
+        if instance.status != PRStatus.DRAFT:
+            raise ValidationError(
+                "Submitted procurement records cannot be deleted. Cancel or close the requisition instead."
+            )
+        instance.delete()
+
     @action(detail=True, methods=["get"])
     def readiness(self, request, pk=None):
         return Response(self.get_object().submission_readiness())
@@ -698,6 +705,13 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
         "lpo_number", "po_number", "supplier__name", "ordered_by__user__employee_code", "store__name"
     )
     ordering_fields = ("po_number", "status", "created_at")
+
+    def perform_destroy(self, instance):
+        if instance.status != POStatus.DRAFT:
+            raise ValidationError(
+                "An LPO that entered approval or supplier processing cannot be deleted. Cancel it instead."
+            )
+        instance.delete()
 
     def get_permissions(self):
         if self.action in ("approve_order", "reject_order", "receive_delivery"):
@@ -1216,6 +1230,13 @@ class GoodsReceiptNoteViewSet(CreatedByModelMixin, ModelViewSet):
     filterset_fields = ("purchase_order", "received_by", "received_date")
     search_fields = ("purchase_order__po_number", "received_by__user__employee_code")
     ordering_fields = ("received_date", "created_at")
+
+    def perform_destroy(self, instance):
+        if instance.status != GoodsReceiptStatus.DRAFT:
+            raise ValidationError(
+                "A received or posted GRN cannot be deleted. Use cancellation or a controlled reversal."
+            )
+        instance.delete()
 
     def get_queryset(self):
         queryset = super().get_queryset()

@@ -101,6 +101,13 @@ class SupplierInvoiceViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("invoice_number", "supplier__name", "purchase_order__po_number")
     ordering_fields = ("invoice_date", "due_date", "subtotal", "status", "created_at")
 
+    def perform_destroy(self, instance):
+        if instance.status != SupplierInvoice.STATUS_DRAFT:
+            raise ValidationError(
+                "An invoice that entered matching or approval cannot be deleted. Cancel or reverse it instead."
+            )
+        instance.delete()
+
     @action(detail=True, methods=["post"], url_path="match")
     def match_invoice(self, request, pk=None):
         with transaction.atomic():
@@ -155,6 +162,13 @@ class SupplierPaymentViewSet(CreatedByModelMixin, ModelViewSet):
     filterset_fields = ("invoice", "payment_method", "bank_account", "status", "payment_date")
     search_fields = ("reference", "invoice__invoice_number", "invoice__supplier__name")
     ordering_fields = ("payment_date", "amount", "status", "created_at")
+
+    def perform_destroy(self, instance):
+        if instance.status != SupplierPayment.STATUS_DRAFT:
+            raise ValidationError(
+                "A posted supplier payment cannot be deleted. Record a controlled reversal instead."
+            )
+        instance.delete()
 
     @action(detail=True, methods=["post"])
     def post(self, request, pk=None):

@@ -130,6 +130,45 @@ if VERCEL_PROJECT_PRODUCTION_URL:
         CSRF_TRUSTED_ORIGINS.append(vercel_production_origin)
 
 
+
+# ---------------------------------------------------------
+# Cache-backed durable sessions
+# ---------------------------------------------------------
+
+# cached_db keeps the database as the durable source of truth while Redis
+# accelerates session reads. If REDIS_URL is omitted, Django still uses the
+# database-backed session copy and the cache becomes a safe no-op.
+REDIS_URL = os.environ.get("REDIS_URL", "").strip()
+if REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": REDIS_URL,
+            "TIMEOUT": 300,
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.dummy.DummyCache",
+        }
+    }
+
+SESSION_ENGINE = "django.contrib.sessions.backends.cached_db"
+SESSION_COOKIE_AGE = int(os.environ.get("SESSION_COOKIE_AGE", "14400"))
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_SAVE_EVERY_REQUEST = False
+SESSION_COOKIE_NAME = os.environ.get("SESSION_COOKIE_NAME", "__Secure-hotel_session")
+
+# Separate API-token ceilings because the React client currently authenticates
+# with DRF tokens rather than relying on the Django session cookie.
+AUTH_TOKEN_MAX_AGE_SECONDS = int(os.environ.get("AUTH_TOKEN_MAX_AGE_SECONDS", "14400"))
+AUTH_TOKEN_IDLE_TIMEOUT_SECONDS = int(os.environ.get("AUTH_TOKEN_IDLE_TIMEOUT_SECONDS", "1800"))
+
+# Used to HMAC-chain application audit records. Set a dedicated high-entropy
+# value in production; SECRET_KEY is retained only as a compatibility fallback.
+AUDIT_LOG_HMAC_KEY = os.environ.get("AUDIT_LOG_HMAC_KEY", SECRET_KEY)
+
 # ---------------------------------------------------------
 # Production security
 # ---------------------------------------------------------
@@ -169,6 +208,7 @@ SECURE_HSTS_PRELOAD = os.environ.get(
 }
 
 SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = "same-origin"
 
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True

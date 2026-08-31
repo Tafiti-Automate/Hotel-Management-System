@@ -11,7 +11,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.viewsets import ModelViewSet
+from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
 
 from apps.employees.models import Employee
 from apps.inventory.models import (
@@ -260,7 +260,7 @@ class StoreKeeperAssignmentViewSet(CreatedByModelMixin, ModelViewSet):
         super().perform_destroy(instance)
 
 
-class InventoryBalanceViewSet(CreatedByModelMixin, ModelViewSet):
+class InventoryBalanceViewSet(ReadOnlyModelViewSet):
     queryset = InventoryBalance.objects.select_related("item", "store")
     serializer_class = InventoryBalanceSerializer
     filterset_fields = ("item", "store")
@@ -418,7 +418,7 @@ class SupplierItemPriceViewSet(CostControllerAuthorityMixin, CreatedByModelMixin
         return "updated" if existing else "created"
 
 
-class StockLedgerViewSet(CreatedByModelMixin, ModelViewSet):
+class StockLedgerViewSet(ReadOnlyModelViewSet):
     queryset = StockLedger.objects.select_related("item", "store")
     serializer_class = StockLedgerSerializer
     filterset_fields = ("item", "store", "reference_type", "reference_id")

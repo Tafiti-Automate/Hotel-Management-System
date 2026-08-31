@@ -63,6 +63,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "core.middleware.request_id.RequestIDMiddleware",
+    "core.middleware.audit_context.AuditRequestContextMiddleware",
 ]
 
 ROOT_URLCONF = "core.urls"
@@ -168,9 +169,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "core.exceptions.api_exception_handler",
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.TokenAuthentication",
+        "core.authentication.ExpiringTokenAuthentication",
         "rest_framework.authentication.SessionAuthentication",
-        "rest_framework.authentication.BasicAuthentication",
     ],
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
@@ -182,6 +182,18 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "core.permissions.roles.HotelDjangoModelPermissions",
     ],
+    "DEFAULT_THROTTLE_RATES": {
+        "login": os.environ.get("LOGIN_THROTTLE_RATE", "10/min"),
+    },
 }
+
+# Authentication sessions are intentionally short for shared operational terminals.
+AUTH_TOKEN_MAX_AGE_SECONDS = int(os.environ.get("AUTH_TOKEN_MAX_AGE_SECONDS", "14400"))
+AUTH_TOKEN_IDLE_TIMEOUT_SECONDS = int(os.environ.get("AUTH_TOKEN_IDLE_TIMEOUT_SECONDS", "1800"))
+
+# Django's server-side session settings protect admin/session-authenticated views.
+SESSION_COOKIE_AGE = AUTH_TOKEN_MAX_AGE_SECONDS
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_SAVE_EVERY_REQUEST = False
 
 from .jazzmin import JAZZMIN_SETTINGS, JAZZMIN_UI_TWEAKS  # noqa: E402,F401

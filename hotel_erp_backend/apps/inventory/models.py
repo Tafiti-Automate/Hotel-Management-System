@@ -611,6 +611,19 @@ class StockLedger(BaseModel):
         if self.quantity_in == Decimal("0") and self.quantity_out == Decimal("0"):
             raise ValidationError("A stock movement must include quantity in or quantity out.")
 
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise ValidationError(
+                "Posted stock ledger entries are immutable. Create a reversing movement instead."
+            )
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError(
+            "Posted stock ledger entries cannot be deleted. Create a reversing movement instead."
+        )
+
     def __str__(self):
         direction = "IN" if self.quantity_in else "OUT"
         quantity = self.quantity_in or self.quantity_out

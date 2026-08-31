@@ -1,8 +1,13 @@
-from django.db.models.signals import post_delete, post_save
-from django.dispatch import receiver
+from datetime import date, datetime
+from decimal import Decimal
+from uuid import UUID
+
+from django.db.models.signals import post_save, pre_delete, pre_save
 
 from apps.approvals.models import ApprovalWorkflow
 from apps.audit_logs.models import AuditLog
+from apps.audit_logs.services import record_audit
+from apps.finance.models import SupplierInvoice, SupplierPayment
 from apps.inventory.models import (
     StockAdjustment,
     StockCount,
@@ -16,14 +21,46 @@ from apps.procurement.models import (
     PurchaseRequisition,
     SupplierReturn,
 )
-from core.constants.choices import ApprovalStatus
+from core.constants.choices import ApprovalStatus, GoodsReceiptStatus, POStatus, PRStatus
 
 
-@receiver(post_save, sender=StockLedger)
-def audit_stock_movement(sender, instance, created, **kwargs):
-    if not created:
+def _json_value(value):
+    if isinstance(value, (datetime, date, Decimal, UUID)):
+        return str(value)
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return str(value)
+
+
+def _snapshot(instance):
+    data = {}
+    for field in instance._meta.concrete_fields:
+        name = field.attname
+        if name in {"updated_at"}:
+            continue
+        try:
+            data[name] = _json_value(getattr(instance, name))
+        except Exception:
+            continue
+    return data
+
+
+@pre_save
+def capture_previous_audited_state(sender, instance, **kwargs):
+    if sender not in AUDITED_MODELS or not instance.pk:
         return
-    AuditLog.objects.create(
+    try:
+        previous = sender.objects.get(pk=instance.pk)
+    except sender.DoesNotExist:
+        return
+    instance._audit_previous_state = _snapshot(previous)
+
+
+@post_save
+def audit_stock_movement(sender, instance, created, **kwargs):
+    if sender is not StockLedger or not created:
+        return
+    record_audit(
         actor=instance.created_by,
         action="stock_movement_posted",
         entity_type="inventory.StockLedger",
@@ -41,17 +78,18 @@ def audit_stock_movement(sender, instance, created, **kwargs):
     )
 
 
-@receiver(post_save, sender=ApprovalWorkflow)
+@post_save
 def audit_approval_decision(sender, instance, created, **kwargs):
-    if created or instance.status not in (
+    if sender is not ApprovalWorkflow or created or instance.status not in (
         ApprovalStatus.APPROVED,
         ApprovalStatus.REJECTED,
         ApprovalStatus.RETURNED,
         ApprovalStatus.SKIPPED,
     ):
         return
-    AuditLog.objects.create(
-        actor=instance.decided_by or instance.approver.user,
+    actor = instance.decided_by or getattr(instance.approver, "user", None)
+    record_audit(
+        actor=actor,
         action=f"approval_{instance.status}",
         entity_type="approvals.ApprovalWorkflow",
         entity_id=instance.id,
@@ -62,11 +100,11 @@ def audit_approval_decision(sender, instance, created, **kwargs):
             "approver_id": str(instance.approver_id),
             "comments": instance.comments,
         },
-        created_by=instance.decided_by or instance.approver.user,
+        created_by=actor,
     )
 
 
-AUDITED_DELETION_MODELS = (
+AUDITED_MODELS = (
     PurchaseRequisition,
     PurchaseOrder,
     GoodsReceiptNote,
@@ -75,42 +113,50 @@ AUDITED_DELETION_MODELS = (
     StockTransfer,
     StockAdjustment,
     StockCount,
+    SupplierInvoice,
+    SupplierPayment,
 )
 
 
+@post_save
 def audit_document_change(sender, instance, created, **kwargs):
-    metadata = {"snapshot": str(instance)}
-    if hasattr(instance, "status"):
-        metadata["status"] = instance.status
-    AuditLog.objects.create(
-        actor=instance.created_by,
+    if sender not in AUDITED_MODELS:
+        return
+    after = _snapshot(instance)
+    before = {} if created else getattr(instance, "_audit_previous_state", {})
+    changed = {
+        key: {"before": before.get(key), "after": value}
+        for key, value in after.items()
+        if before.get(key) != value
+    }
+    actor = getattr(instance, "created_by", None)
+    record_audit(
+        actor=actor,
         action="document_created" if created else "document_updated",
         entity_type=f"{sender._meta.app_label}.{sender.__name__}",
         entity_id=instance.id,
-        metadata=metadata,
-        created_by=instance.created_by,
+        metadata={
+            "changes": changed,
+            "status": getattr(instance, "status", None),
+        },
+        created_by=actor,
     )
 
 
-def audit_document_deletion(sender, instance, **kwargs):
-    AuditLog.objects.create(
-        actor=instance.created_by,
-        action="document_deleted",
-        entity_type=f"{sender._meta.app_label}.{sender.__name__}",
-        entity_id=instance.id,
-        metadata={"snapshot": str(instance)},
-        created_by=instance.created_by,
-    )
-
-
-for audited_model in AUDITED_DELETION_MODELS:
-    post_save.connect(
-        audit_document_change,
-        sender=audited_model,
-        dispatch_uid=f"audit_change_{audited_model._meta.label_lower}",
-    )
-    post_delete.connect(
-        audit_document_deletion,
-        sender=audited_model,
-        dispatch_uid=f"audit_delete_{audited_model._meta.label_lower}",
-    )
+@pre_delete
+def protect_immutable_records(sender, instance, **kwargs):
+    """Block destructive removal of evidence-bearing transactional records."""
+    if sender is AuditLog:
+        raise ValueError("Audit records are immutable and cannot be deleted.")
+    if sender is StockLedger:
+        raise ValueError("Stock ledger entries are immutable. Create a reversing movement instead.")
+    if sender is PurchaseRequisition and instance.status != PRStatus.DRAFT:
+        raise ValueError("Submitted procurement requisitions cannot be deleted; cancel or close them instead.")
+    if sender is PurchaseOrder and instance.status != POStatus.DRAFT:
+        raise ValueError("LPOs that entered approval or supplier processing cannot be deleted; cancel them instead.")
+    if sender is GoodsReceiptNote and instance.status != GoodsReceiptStatus.DRAFT:
+        raise ValueError("Received or posted GRNs cannot be deleted; use cancellation or a controlled reversal.")
+    if sender is SupplierInvoice and instance.status != SupplierInvoice.STATUS_DRAFT:
+        raise ValueError("Matched or approved supplier invoices cannot be deleted; cancel or reverse them instead.")
+    if sender is SupplierPayment and instance.status != SupplierPayment.STATUS_DRAFT:
+        raise ValueError("Posted supplier payments cannot be deleted; record a controlled reversal instead.")
