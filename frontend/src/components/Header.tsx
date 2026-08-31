@@ -153,7 +153,7 @@ export default function Header() {
               style={{ ...iconAction, position: 'relative' }}
             >
               <Icon name={notificationCount ? 'notifications_active' : 'notifications'} size={20} />
-              {notificationCount > 0 && <span style={{ position: 'absolute', right: 5, top: 4, minWidth: 17, height: 17, padding: '0 3px', display: 'grid', placeItems: 'center', borderRadius: 9, background: 'var(--bad)', color: '#fff', fontSize: 9, fontWeight: 750, border: '2px solid var(--surface)' }}>{notificationCount > 99 ? '99+' : notificationCount}</span>}
+              {notificationCount > 0 && <span style={{ position: 'absolute', right: 5, top: 4, minWidth: 17, height: 17, padding: '0 3px', display: 'grid', placeItems: 'center', borderRadius: 9, background: 'var(--bad)', color: '#fff', fontSize: 11.5, fontWeight: 750, border: '2px solid var(--surface)' }}>{notificationCount > 99 ? '99+' : notificationCount}</span>}
             </button>
             {notificationsOpen && <>
               <div className="notification-backdrop" onClick={() => setNotificationsOpen(false)} />
@@ -161,7 +161,7 @@ export default function Header() {
                 <header style={{ padding: '15px 16px 12px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid var(--border)' }}>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ color: 'var(--text)', fontSize: 14, fontWeight: 750 }}>Notifications</div>
-                    <div style={{ marginTop: 2, color: 'var(--text-faint)', fontSize: 10.5 }}>{notificationCount ? `${notificationCount} unread` : 'You are all caught up'}</div>
+                    <div style={{ marginTop: 2, color: 'var(--text-faint)', fontSize: 12 }}>{notificationCount ? `${notificationCount} unread` : 'You are all caught up'}</div>
                   </div>
                   <button onClick={() => void loadNotifications()} title="Refresh notifications" aria-label="Refresh notifications" className="hover-surface2" style={smallIconAction}><Icon name="refresh" size={17} /></button>
                   <button onClick={() => setNotificationsOpen(false)} title="Close notifications" aria-label="Close notifications" className="hover-surface2" style={smallIconAction}><Icon name="close" size={17} /></button>
@@ -184,15 +184,15 @@ export default function Header() {
                           <span style={{ flex: 1, color: 'var(--text)', fontSize: 12, lineHeight: 1.35, fontWeight: notification.is_read ? 600 : 750 }}>{notification.title}</span>
                           {!notification.is_read && <span aria-hidden="true" style={{ width: 7, height: 7, flex: 'none', marginTop: 4, borderRadius: '50%', background: 'var(--accent)' }} />}
                         </span>
-                        <span style={{ display: 'block', marginTop: 4, color: 'var(--text-muted)', fontSize: 10.5, lineHeight: 1.45 }}>{notification.message}</span>
-                        <span style={{ display: 'block', marginTop: 6, color: 'var(--text-faint)', fontSize: 9.5 }}>{notificationTime(notification.created_at)}</span>
+                        <span style={{ display: 'block', marginTop: 4, color: 'var(--text-muted)', fontSize: 12, lineHeight: 1.45 }}>{notification.message}</span>
+                        <span style={{ display: 'block', marginTop: 6, color: 'var(--text-faint)', fontSize: 11.5 }}>{notificationTime(notification.created_at)}</span>
                       </span>
                     </button>
                   ))}
                 </div>
 
                 {notifications.length > 0 && <footer style={{ padding: '10px 14px', display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--border)', background: 'var(--surface-2)' }}>
-                  <button onClick={() => void readAllNotifications()} disabled={!notificationCount} style={{ border: 0, background: 'transparent', color: notificationCount ? 'var(--accent)' : 'var(--text-faint)', cursor: notificationCount ? 'pointer' : 'default', fontSize: 11, fontWeight: 700 }}>Mark all as read</button>
+                  <button onClick={() => void readAllNotifications()} disabled={!notificationCount} style={{ border: 0, background: 'transparent', color: notificationCount ? 'var(--accent)' : 'var(--text-faint)', cursor: notificationCount ? 'pointer' : 'default', fontSize: 12, fontWeight: 700 }}>Mark all as read</button>
                 </footer>}
               </section>
             </>}
@@ -201,8 +201,8 @@ export default function Header() {
           <div style={{ width: 1, height: 28, background: 'var(--border)', margin: '0 8px' }} />
           <div style={{ position: 'relative' }}>
             <button onClick={() => setProfileOpen((open) => !open)} style={{ height: 40, display: 'flex', alignItems: 'center', gap: 9, border: 0, background: 'transparent', borderRadius: 7, padding: '0 4px 0 7px', cursor: 'pointer', font: 'inherit' }} className="header-profile-trigger hover-surface2">
-              <span className="header-avatar" style={{ width: 31, height: 31, borderRadius: 7, display: 'grid', placeItems: 'center', background: '#E8EEF9', color: '#1D4ED8', fontSize: 11, fontWeight: 700 }}>{initials}</span>
-              <span className="header-user-copy" style={{ textAlign: 'left' }}><span style={{ display: 'block', color: 'var(--text)', fontSize: 12.5, fontWeight: 600 }}>{app.user.name}</span><span style={{ display: 'block', color: 'var(--text-faint)', fontSize: 10.5, marginTop: 1 }}>{departmentLabel}</span></span>
+              <span className="header-avatar" style={{ width: 31, height: 31, borderRadius: 7, display: 'grid', placeItems: 'center', background: '#E8EEF9', color: '#1D4ED8', fontSize: 12, fontWeight: 700 }}>{initials}</span>
+              <span className="header-user-copy" style={{ textAlign: 'left' }}><span style={{ display: 'block', color: 'var(--text)', fontSize: 12.5, fontWeight: 600 }}>{app.user.name}</span><span style={{ display: 'block', color: 'var(--text-faint)', fontSize: 12, marginTop: 1 }}>{departmentLabel}</span></span>
               <Icon name="expand_more" size={17} color="var(--text-faint)" />
             </button>
             {profileOpen && <>
@@ -221,7 +221,7 @@ export default function Header() {
         <span style={{ color: 'var(--text-faint)', fontSize: 12 }}>{moduleName}</span>
         <Icon name="chevron_right" size={15} color="var(--text-faint)" />
         <span style={{ color: 'var(--text)', fontSize: 12, fontWeight: 600 }}>{app.crumb}</span>
-        {primary && app.route === 'dashboard' && <button onClick={primary.action} className="header-primary-action hover-accent" style={{ marginLeft: 'auto', height: 29, display: 'flex', alignItems: 'center', gap: 6, border: 0, borderRadius: 5, background: 'var(--accent)', color: '#fff', padding: '0 11px', cursor: 'pointer', font: 'inherit', fontSize: 11.5, fontWeight: 600 }}><Icon name={primary.icon} size={16} color="#fff" />{primary.label}</button>}
+        {primary && app.route === 'dashboard' && <button onClick={primary.action} className="header-primary-action hover-accent" style={{ marginLeft: 'auto', height: 29, display: 'flex', alignItems: 'center', gap: 6, border: 0, borderRadius: 5, background: 'var(--accent)', color: '#fff', padding: '0 11px', cursor: 'pointer', font: 'inherit', fontSize: 12, fontWeight: 600 }}><Icon name={primary.icon} size={16} color="#fff" />{primary.label}</button>}
       </div>
       <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
     </header>
@@ -233,8 +233,8 @@ function NotificationState({ icon, text, detail, action }: { icon: string; text:
     <div>
       <span style={{ width: 42, height: 42, margin: '0 auto 10px', display: 'grid', placeItems: 'center', borderRadius: 11, color: 'var(--text-faint)', background: 'var(--surface-2)' }}><Icon name={icon} size={21} /></span>
       <div style={{ color: 'var(--text)', fontSize: 12, fontWeight: 700 }}>{text}</div>
-      {detail && <div style={{ maxWidth: 260, marginTop: 5, color: 'var(--text-faint)', fontSize: 10.5, lineHeight: 1.45 }}>{detail}</div>}
-      {action && <button onClick={action} style={{ marginTop: 12, height: 30, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text-muted)', padding: '0 11px', cursor: 'pointer', fontSize: 10.5, fontWeight: 650 }}>Try again</button>}
+      {detail && <div style={{ maxWidth: 260, marginTop: 5, color: 'var(--text-faint)', fontSize: 12, lineHeight: 1.45 }}>{detail}</div>}
+      {action && <button onClick={action} style={{ marginTop: 12, height: 30, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text-muted)', padding: '0 11px', cursor: 'pointer', fontSize: 12, fontWeight: 650 }}>Try again</button>}
     </div>
   </div>
 }

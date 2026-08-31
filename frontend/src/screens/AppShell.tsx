@@ -1,22 +1,24 @@
+import { lazy, Suspense } from 'react'
 import { useApp } from '../state/AppContext'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import Dashboard from './Dashboard'
-import ListView from './ListView'
-import DetailView from './DetailView'
-import Reports from './Reports'
-import ReportView from './ReportView'
-import HotelProfile from './HotelProfile'
-import WorkflowHub from './WorkflowHub'
-import HRDashboard from './HRDashboard'
-import ProcurementWorkbench from './ProcurementWorkbench'
-import FinanceWorkbench from './FinanceWorkbench'
-import InventoryWorkbench from './InventoryWorkbench'
-import AuditLog from './AuditLog'
-import AccessManagement from './AccessManagement'
-import SupplierManagement from './SupplierManagement'
-import SupplierQuotationManagement from './SupplierQuotationManagement'
 import { canAccessRoute } from '../lib/access'
+
+const ListView = lazy(() => import('./ListView'))
+const DetailView = lazy(() => import('./DetailView'))
+const Reports = lazy(() => import('./Reports'))
+const ReportView = lazy(() => import('./ReportView'))
+const HotelProfile = lazy(() => import('./HotelProfile'))
+const WorkflowHub = lazy(() => import('./WorkflowHub'))
+const HRDashboard = lazy(() => import('./HRDashboard'))
+const ProcurementWorkbench = lazy(() => import('./ProcurementWorkbench'))
+const FinanceWorkbench = lazy(() => import('./FinanceWorkbench'))
+const InventoryWorkbench = lazy(() => import('./InventoryWorkbench'))
+const AuditLog = lazy(() => import('./AuditLog'))
+const AccessManagement = lazy(() => import('./AccessManagement'))
+const SupplierManagement = lazy(() => import('./SupplierManagement'))
+const SupplierQuotationManagement = lazy(() => import('./SupplierQuotationManagement'))
 
 const listRoutes: string[] = [
   'items', 'categories', 'uoms', 'itemUnits', 'locations', 'suppliers',
@@ -55,8 +57,16 @@ export default function AppShell() {
       <Sidebar />
       <div className="app-main" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
         <Header />
-        <main className="app-content" style={{ flex: 1, overflowY: 'auto', padding: 'var(--pad)' }}>{content}</main>
+        <main className="app-content" style={{ flex: 1, overflowY: 'auto', padding: 'var(--pad)' }}><Suspense fallback={<RouteLoading />}>{content}</Suspense></main>
       </div>
     </div>
   )
+}
+
+
+function RouteLoading() {
+  return <div className="route-loading" role="status" aria-live="polite">
+    <span className="route-loading-spinner" aria-hidden="true" />
+    <div><strong>Loading</strong><span>Preparing your workspace…</span></div>
+  </div>
 }

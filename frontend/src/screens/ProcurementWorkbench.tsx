@@ -532,7 +532,7 @@ export default function ProcurementWorkbench() {
       />}
 
       {message && <div style={{ ...card, padding: 13, marginBottom: 14, borderColor: 'rgba(220,38,38,.3)', color: 'var(--bad)', fontSize: 12.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}><span>{message}</span><button type="button" onClick={() => void load()} style={secondary}>Retry</button></div>}
-      {loading ? <div style={{ ...card, padding: 50, textAlign: 'center', color: 'var(--text-faint)' }}>Loading procurement records from the backend…</div> : (
+      {loading ? <div style={{ ...card, padding: 50, textAlign: 'center', color: 'var(--text-faint)' }}>Loading procurement records…</div> : (
         <div className="workbench-grid" style={{ display: 'grid', gridTemplateColumns: role === 'general manager' && !form.order ? '1fr' : stage === 'lpo' && form.order ? 'minmax(0,.9fr) minmax(460px,1.1fr)' : 'minmax(0,1.45fr) minmax(340px,.75fr)', gap: 16, alignItems: 'start' }}>
           <section style={{ ...card, overflow: 'hidden' }}>
             <StageTable stage={stage} lpoQueue={lpoQueue} data={scopedData} names={names} role={role} onSelect={selectWorkspaceRecord} />
@@ -943,7 +943,7 @@ function RequestPanel({ data, form, setForm, requisitionLabel, items }: any) {
       {lines.map((line: Row) => <div key={id(line.id)} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.5fr) .7fr minmax(120px,1fr)', gap: 10, padding: '10px 12px', borderBottom: '1px solid var(--border)', fontSize: 11.5 }}>
         <span style={{ color: 'var(--text)', fontWeight: 700 }}>{items.find((item: Row) => id(item.id) === id(line.item))?.name || id(line.item)}</span>
         <span style={{ color: 'var(--text-muted)' }}>{line.quantity}</span>
-        <span style={{ color: 'var(--text-muted)' }}>{line.destination_type === 'workspace' ? 'Department destination' : 'Store destination locked'}</span>
+        <span style={{ color: 'var(--text-muted)' }}>{line.destination_type === 'workspace' ? 'Department delivery' : 'Store delivery'}</span>
       </div>)}
       {!lines.length && <div style={{ padding: 16, color: 'var(--text-faint)', fontSize: 11.5 }}>No inherited lines are available.</div>}
     </section>}
@@ -1492,7 +1492,7 @@ function ProcurementRecordDrawer({ stage, row, data, names, canAttach, onClose, 
     ['Quantity', id(row.quantity)],
     ['Estimated unit cost', money(row.estimated_unit_cost)],
     ['Estimated total', money(row.estimated_total)],
-    ['Destination', row.destination_type === 'workspace' ? 'Direct to workspace' : 'Store inventory'],
+    ['Destination', row.destination_type === 'workspace' ? 'Direct to department' : 'Store inventory'],
     ['Receiving store', names.stores.get(id(row.destination_store)) || '—'],
     ['Workspace department', names.departments.get(id(row.destination_department)) || '—'],
     ['Routing justification', id(row.destination_justification) || '—'],
@@ -1650,8 +1650,8 @@ function ProcurementRecordDrawer({ stage, row, data, names, canAttach, onClose, 
                   ? `${id(quantity)} × ${money(line.unit_price ?? line.unit_cost)}`
                   : `Quantity ${id(quantity)}`
               const routeText = stage === 'lpo'
-                ? (line.destination_type === 'workspace' ? `Direct to ${names.departments.get(id(line.destination_department)) || 'workspace'}` : `Receive into ${names.stores.get(id(line.destination_store)) || 'store'}`)
-                : stage === 'receipt' ? (line.direct_issue_department ? `Direct to ${names.departments.get(id(line.direct_issue_department)) || 'workspace'}` : `Received into ${names.stores.get(id(line.store)) || 'store'}`) : ''
+                ? (line.destination_type === 'workspace' ? `Direct to ${names.departments.get(id(line.destination_department)) || 'department'}` : `Receive into ${names.stores.get(id(line.destination_store)) || 'store'}`)
+                : stage === 'receipt' ? (line.direct_issue_department ? `Direct to ${names.departments.get(id(line.direct_issue_department)) || 'department'}` : `Received into ${names.stores.get(id(line.store)) || 'store'}`) : ''
               return <div key={id(line.id)} style={{ display: 'flex', justifyContent: 'space-between', gap: 14, padding: '13px 14px', borderBottom: '1px solid var(--border)' }}><div><div style={{ color: 'var(--text)', fontSize: 12.5, fontWeight: 650 }}>{lineName(line)}</div><div style={{ marginTop: 4, color: 'var(--text-faint)', fontSize: 11.5 }}>{secondaryText}</div>{routeText && <div style={{ marginTop: 3, color: 'var(--accent)', fontSize: 10.5, fontWeight: 650 }}>{routeText}</div>}</div>{line.selected && <span style={{ color: 'var(--good)', fontSize: 11.5, fontWeight: 700 }}>Selected</span>}</div>
             })}
             {!lines.length && <div style={{ padding: 24, color: 'var(--text-faint)', textAlign: 'center', fontSize: 12 }}>No line items are attached to this document.</div>}

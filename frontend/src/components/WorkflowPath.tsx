@@ -47,7 +47,7 @@ export function WorkflowPath({ title, summary, steps, activeKey, onSelect, badge
               <span className="workflow-path-number">{index + 1}</span>
               <span style={{ minWidth: 0 }}>
                 <span className="workflow-path-actor">{step.actor}</span>
-                <span className="workflow-path-label"><Icon name={step.icon} size={16} />{step.label}{step.count != null && <span style={{ marginLeft: 'auto', minWidth: 21, padding: '2px 6px', borderRadius: 20, color: active ? '#fff' : 'var(--accent)', background: active ? 'var(--accent)' : 'var(--accent-soft)', fontSize: 9.5, fontWeight: 850, textAlign: 'center' }}>{step.count}</span>}</span>
+                <span className="workflow-path-label"><Icon name={step.icon} size={16} />{step.label}{step.count != null && <span style={{ marginLeft: 'auto', minWidth: 21, padding: '2px 6px', borderRadius: 20, color: active ? '#fff' : 'var(--accent)', background: active ? 'var(--accent)' : 'var(--accent-soft)', fontSize: 11.5, fontWeight: 850, textAlign: 'center' }}>{step.count}</span>}</span>
                 <span className="workflow-path-description">{step.description}</span>
               </span>
               {index < steps.length - 1 && <Icon name="chevron_right" size={17} color="var(--text-faint)" style={{ position: 'absolute', right: -13, top: 28, zIndex: 2 }} />}

@@ -20,8 +20,8 @@ export default function Reports() {
                 <Icon name={rc.icon} size={21} color="var(--accent)" />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 9.5, fontWeight: 750, color: rc.source === 'backend' ? 'var(--good)' : 'var(--text-faint)', background: rc.source === 'backend' ? 'var(--good-soft)' : 'var(--surface-2)', border: '1px solid var(--border)', padding: '3px 7px', borderRadius: 20 }}>{rc.source === 'backend' ? 'LIVE API' : 'SESSION'}</span>
-                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-faint)', background: 'var(--surface-2)', border: '1px solid var(--border)', padding: '3px 8px', borderRadius: 20 }}>{rc.grp}</span>
+                <span style={{ fontSize: 11.5, fontWeight: 750, color: rc.source === 'backend' ? 'var(--good)' : 'var(--text-faint)', background: rc.source === 'backend' ? 'var(--good-soft)' : 'var(--surface-2)', border: '1px solid var(--border)', padding: '3px 7px', borderRadius: 20 }}>{rc.source === 'backend' ? 'Live' : 'Snapshot'}</span>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-faint)', background: 'var(--surface-2)', border: '1px solid var(--border)', padding: '3px 8px', borderRadius: 20 }}>{rc.grp}</span>
               </div>
             </div>
             <div style={{ fontSize: 14.5, fontWeight: 800, color: 'var(--text)', letterSpacing: '-.01em' }}>{rc.title}</div>

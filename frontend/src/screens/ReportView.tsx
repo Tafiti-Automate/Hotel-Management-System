@@ -167,7 +167,7 @@ export default function ReportView() {
 
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 18 }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}><h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: '-.02em', color: 'var(--text)' }}>{report.title}</h1><span style={{ fontSize: 9.5, fontWeight: 800, color: live ? 'var(--good)' : 'var(--text-faint)', background: live ? 'var(--good-soft)' : 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 20, padding: '3px 8px' }}>{live ? 'LIVE API' : 'SESSION DATA'}</span></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}><h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: '-.02em', color: 'var(--text)' }}>{report.title}</h1><span style={{ fontSize: 11.5, fontWeight: 800, color: live ? 'var(--good)' : 'var(--text-faint)', background: live ? 'var(--good-soft)' : 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 20, padding: '3px 8px' }}>{live ? 'Live' : 'Snapshot'}</span></div>
           <p style={{ margin: '5px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>{report.subtitle}</p>
         </div>
         <div style={{ display: 'flex', gap: 9 }}>
@@ -200,7 +200,7 @@ export default function ReportView() {
         <div style={{ display: 'grid', gridTemplateColumns: report.grid, borderBottom: '1px solid var(--border)', padding: '0 8px', background: 'var(--surface-2)' }}>
           {report.columns.map((col, i) => <div key={i} style={col.style}>{col.label}</div>)}
         </div>
-        {liveLoading && <div style={{ padding: 42, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12.5 }}>Loading live report from the backend…</div>}
+        {liveLoading && <div style={{ padding: 42, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12.5 }}>Loading report…</div>}
         {!liveLoading && !visibleRows.length && <div style={{ padding: 42, textAlign: 'center', color: liveError ? 'var(--bad)' : 'var(--text-muted)', fontSize: 12.5 }}>{emptyMessage}</div>}
         {!liveLoading && visibleRows.map((row, ri) => (
           <button type="button" onClick={() => setSelectedReportRow(row.data || Object.fromEntries(report.columns.map((column, index) => [column.label, row.cells[index]?.text || '—'])))} key={ri} className="report-record-row hover-surface2" style={{ width: '100%', display: 'grid', gridTemplateColumns: report.grid, border: 0, borderBottom: '1px solid var(--border)', padding: '0 8px', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
@@ -228,4 +228,4 @@ function download(blob: Blob, filename: string) {
 }
 
 const filterControl: CSSProperties = { height: 34, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text)', padding: '0 9px', font: 'inherit', fontSize: 12 }
-const pager: CSSProperties = { height: 30, border: '1px solid var(--border)', borderRadius: 5, background: 'var(--surface)', color: 'var(--text-muted)', padding: '0 10px', cursor: 'pointer', font: 'inherit', fontSize: 11.5 }
+const pager: CSSProperties = { height: 30, border: '1px solid var(--border)', borderRadius: 5, background: 'var(--surface)', color: 'var(--text-muted)', padding: '0 10px', cursor: 'pointer', font: 'inherit', fontSize: 12 }

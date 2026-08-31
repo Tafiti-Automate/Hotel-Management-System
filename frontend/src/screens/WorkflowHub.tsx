@@ -43,11 +43,11 @@ function QueueRow({
     <button onClick={onClick} className="workflow-queue-row">
       <span style={{ minWidth: 0 }}>
         <span style={{ display: 'block', fontSize: 12.5, fontWeight: 650, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
-        <span style={{ display: 'block', marginTop: 3, fontSize: 10.5, color: 'var(--text-faint)', fontFamily: 'monospace' }}>{id.slice(0, 14)}</span>
+        <span style={{ display: 'block', marginTop: 3, fontSize: 12, color: 'var(--text-faint)', fontFamily: 'monospace' }}>{id.slice(0, 14)}</span>
       </span>
-      <span style={{ fontSize: 11.5, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{meta}</span>
+      <span style={{ fontSize: 12, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{meta}</span>
       {amount != null && <span style={{ fontSize: 12, fontWeight: 650, color: 'var(--text)' }}>{money(amount)}</span>}
-      <span style={{ textTransform: 'capitalize', fontSize: 10.5, fontWeight: 650, color: 'var(--accent)', background: 'var(--accent-soft)', padding: '4px 8px', borderRadius: 20, whiteSpace: 'nowrap' }}>{status}</span>
+      <span style={{ textTransform: 'capitalize', fontSize: 12, fontWeight: 650, color: 'var(--accent)', background: 'var(--accent-soft)', padding: '4px 8px', borderRadius: 20, whiteSpace: 'nowrap' }}>{status}</span>
     </button>
   )
 }

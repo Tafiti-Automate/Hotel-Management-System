@@ -164,7 +164,7 @@ export default function FormDrawer() {
       <div className="form-overlay" onClick={app.formSaving ? undefined : app.closeForm} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(16,17,33,.4)' }} />
       <div className="form-drawer" style={{ position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 71, width: 520, maxWidth: '94vw', background: 'var(--surface)', boxShadow: '-8px 0 28px rgba(15,23,42,.16)', display: 'flex', flexDirection: 'column', animation: 'slideIn .22s ease' }}>
         <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div><div style={{ fontSize: 17, fontWeight: 650, color: 'var(--text)' }}>{title}</div>{wizard && <div style={{ marginTop: 4, color: 'var(--text-faint)', fontSize: 11.5 }}>Step {step + 1} of {pageCount}</div>}</div>
+          <div><div style={{ fontSize: 17, fontWeight: 650, color: 'var(--text)' }}>{title}</div>{wizard && <div style={{ marginTop: 4, color: 'var(--text-faint)', fontSize: 12 }}>Step {step + 1} of {pageCount}</div>}</div>
           <button type="button" onClick={app.closeForm} disabled={app.formSaving} className="hover-text" style={{ width: 32, height: 32, border: 'none', background: 'var(--surface-2)', borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: app.formSaving ? 'wait' : 'pointer', color: 'var(--text-muted)' }}>
             <Icon name="close" size={19} />
           </button>
@@ -202,7 +202,7 @@ export default function FormDrawer() {
                   <div style={{ minHeight: 42, display: 'flex', alignItems: 'center', gap: 9, border: '1px solid var(--border)', background: 'var(--surface-2)', borderRadius: 10, padding: '0 12px', color: 'var(--text)', fontSize: 13.5 }}>
                     <Icon name={fd.key === 'department' ? 'account_tree' : fd.key === 'request_type' ? 'request_quote' : fd.key === 'store' ? 'warehouse' : 'person'} size={18} color="var(--text-faint)" />
                     <span style={{ flex: 1 }}>{fd.key === 'request_type' ? 'Department request' : fd.key === 'store' ? values.store || 'Assigned automatically' : values[fd.key] || 'Assigned automatically'}</span>
-                    <span style={{ color: 'var(--text-faint)', fontSize: 10.5 }}>{fd.key === 'store' ? 'Active issuing store' : 'From your account'}</span>
+                    <span style={{ color: 'var(--text-faint)', fontSize: 12 }}>{fd.key === 'store' ? 'Active issuing store' : 'From your account'}</span>
                   </div>
                 ) : isSelect ? (
                   <div style={{ position: 'relative' }}>
@@ -229,7 +229,7 @@ export default function FormDrawer() {
                   />
                 )}
                 {fieldLocked && (
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginTop: 7, color: 'var(--text-faint)', fontSize: 11.5, lineHeight: 1.45 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginTop: 7, color: 'var(--text-faint)', fontSize: 12, lineHeight: 1.45 }}>
                     <Icon name="info" size={15} color="var(--text-faint)" style={{ marginTop: 1 }} />
                     <div>
                       <span>
@@ -241,14 +241,14 @@ export default function FormDrawer() {
                           app.closeForm()
                           app.navTo('itemUnits', 'UOM conversions')
                         }}
-                        style={{ display: 'block', marginTop: 5, padding: 0, border: 0, background: 'transparent', color: 'var(--accent)', font: 'inherit', fontSize: 11.5, fontWeight: 650, cursor: 'pointer' }}
+                        style={{ display: 'block', marginTop: 5, padding: 0, border: 0, background: 'transparent', color: 'var(--accent)', font: 'inherit', fontSize: 12, fontWeight: 650, cursor: 'pointer' }}
                       >
                         Open unit conversions
                       </button>
                     </div>
                   </div>
                 )}
-                {fd.hint && <div style={{ marginTop: 6, color: 'var(--text-faint)', fontSize: 11.5, lineHeight: 1.45 }}>{fd.hint}</div>}
+                {fd.hint && <div style={{ marginTop: 6, color: 'var(--text-faint)', fontSize: 12, lineHeight: 1.45 }}>{fd.hint}</div>}
               </div>
             )
           })}

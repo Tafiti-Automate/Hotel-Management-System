@@ -6,9 +6,9 @@ import { chipStyleFor, money } from '../lib/theme'
 
 const lineGrid = 'minmax(0,1.8fr) 80px 70px 100px 110px'
 
-const fieldLabel: CSSProperties = { fontSize: 11, color: 'var(--text-faint)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 4 }
+const fieldLabel: CSSProperties = { fontSize: 12, color: 'var(--text-faint)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 4 }
 const fieldValue: CSSProperties = { fontSize: 13.5, fontWeight: 700, color: 'var(--text)' }
-const lineHead: CSSProperties = { padding: '9px 12px', fontSize: 10.5, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '.04em' }
+const lineHead: CSSProperties = { padding: '9px 12px', fontSize: 12, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '.04em' }
 
 export default function DetailView() {
   const app = useApp()
@@ -75,7 +75,7 @@ export default function DetailView() {
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, boxShadow: 'var(--shadow)', overflow: 'hidden' }}>
           <div style={{ padding: '20px 22px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 14 }}>
             <div>
-              <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '.05em' }}>{kind}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '.05em' }}>{kind}</div>
               <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', fontFamily: "'JetBrains Mono',monospace", letterSpacing: '-.01em', marginTop: 3 }}>{r.id}</div>
             </div>
             <span style={chipStyleFor(r.status)}>{r.status}</span>
@@ -126,9 +126,9 @@ export default function DetailView() {
           {blockers.length > 0 && <div style={{ background: 'var(--surface)', border: '1px solid rgba(217,119,6,.35)', borderRadius: 8, boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
             <div style={{ padding: '13px 15px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
               <Icon name="warning" size={18} color="var(--warn)" />
-              <div><div style={{ color: 'var(--text)', fontSize: 12.5, fontWeight: 650 }}>Operation readiness</div><div style={{ color: 'var(--text-faint)', fontSize: 10.5, marginTop: 2 }}>{blockers.length} requirement{blockers.length === 1 ? '' : 's'} outstanding</div></div>
+              <div><div style={{ color: 'var(--text)', fontSize: 12.5, fontWeight: 650 }}>Operation readiness</div><div style={{ color: 'var(--text-faint)', fontSize: 12, marginTop: 2 }}>{blockers.length} requirement{blockers.length === 1 ? '' : 's'} outstanding</div></div>
             </div>
-            <div style={{ padding: '8px 15px' }}>{prerequisites.filter((item) => !item.met).map((item) => <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', color: 'var(--text)', fontSize: 11.5 }}><Icon name="radio_button_unchecked" size={16} color="var(--warn)" />{item.label}</div>)}</div>
+            <div style={{ padding: '8px 15px' }}>{prerequisites.filter((item) => !item.met).map((item) => <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', color: 'var(--text)', fontSize: 12 }}><Icon name="radio_button_unchecked" size={16} color="var(--warn)" />{item.label}</div>)}</div>
           </div>}
 
           {isPending && canDecide && (
@@ -165,7 +165,7 @@ export default function DetailView() {
             {!approvalSteps.length && (
               <div style={{ display: 'flex', gap: 10 }}>
                 <span style={{ background: 'var(--surface-2)', width: 28, height: 28, borderRadius: 6, display: 'grid', placeItems: 'center', flex: 'none' }}><Icon name="edit_note" size={16} color="var(--text-faint)" /></span>
-                <div><div style={{ fontSize: 12, color: 'var(--text)', fontWeight: 650 }}>Draft preparation</div><div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>Approval route is assigned when submitted</div></div>
+                <div><div style={{ fontSize: 12, color: 'var(--text)', fontWeight: 650 }}>Draft preparation</div><div style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 2 }}>Approval route is assigned when submitted</div></div>
               </div>
             )}
             {approvalSteps.map((approval, index) => {
@@ -180,9 +180,9 @@ export default function DetailView() {
                   <span style={{ background: active ? 'var(--accent-soft)' : 'var(--surface-2)', width: 28, height: 28, borderRadius: 6, display: 'grid', placeItems: 'center', flex: 'none', zIndex: 1 }}><Icon name={icon} size={16} color={color} /></span>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 12, color: 'var(--text)', fontWeight: 700 }}>{approval.stageName}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{approval.approverName}</div>
-                    <div style={{ fontSize: 10.5, color, marginTop: 3, textTransform: 'capitalize', fontWeight: 650 }}>{active ? 'Waiting for approval' : String(approval.status).replace(/_/g, ' ')}</div>
-                    {approval.comments && <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 4, lineHeight: 1.4 }}>{approval.comments}</div>}
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{approval.approverName}</div>
+                    <div style={{ fontSize: 12, color, marginTop: 3, textTransform: 'capitalize', fontWeight: 650 }}>{active ? 'Waiting for approval' : String(approval.status).replace(/_/g, ' ')}</div>
+                    {approval.comments && <div style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 4, lineHeight: 1.4 }}>{approval.comments}</div>}
                   </div>
                 </div>
               )

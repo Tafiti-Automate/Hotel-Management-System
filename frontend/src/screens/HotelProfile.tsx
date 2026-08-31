@@ -60,7 +60,7 @@ function InfoItem({ label, value, icon }: { label: string; value: string; icon: 
         <Icon name={icon} size={16} color="var(--text-faint)" />
       </span>
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 10, color: 'var(--text-faint)', fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 3 }}>{label}</div>
+        <div style={{ fontSize: 11.5, color: 'var(--text-faint)', fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 3 }}>{label}</div>
         <div style={{ fontSize: 12.5, color: 'var(--text)', fontWeight: 650, lineHeight: 1.45, overflowWrap: 'anywhere' }}>{value}</div>
       </div>
     </div>
@@ -78,10 +78,10 @@ function HotelCard({ hotel, canEdit, onEdit }: { hotel: HotelRecord; canEdit: bo
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
             <h2 style={{ margin: 0, fontSize: 19, color: 'var(--text)', letterSpacing: '-.02em' }}>{hotel.name}</h2>
-            <span style={{ fontSize: 10.5, padding: '3px 8px', borderRadius: 20, color: hotel.is_active ? 'var(--good)' : 'var(--text-muted)', background: hotel.is_active ? 'var(--good-soft)' : 'var(--surface-2)', fontWeight: 800 }}>{hotel.is_active ? 'Active' : 'Inactive'}</span>
+            <span style={{ fontSize: 12, padding: '3px 8px', borderRadius: 20, color: hotel.is_active ? 'var(--good)' : 'var(--text-muted)', background: hotel.is_active ? 'var(--good-soft)' : 'var(--surface-2)', fontWeight: 800 }}>{hotel.is_active ? 'Active' : 'Inactive'}</span>
           </div>
           <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 5 }}>{display(hotel.legal_name)}</div>
-          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 11, color: 'var(--text-muted)', fontSize: 11.5, fontWeight: 650 }}>
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 11, color: 'var(--text-muted)', fontSize: 12, fontWeight: 650 }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="domain" size={15} />{hotel.business_type === 'group' ? 'Hotel Group' : 'Single Hotel'}</span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="apartment" size={15} />{hotel.branch_count} {hotel.branch_count === 1 ? 'branch' : 'branches'}</span>
           </div>
@@ -112,7 +112,7 @@ function HotelCard({ hotel, canEdit, onEdit }: { hotel: HotelRecord; canEdit: bo
 function Field({ label, children, required = false }: { label: string; children: React.ReactNode; required?: boolean }) {
   return (
     <label style={{ display: 'block' }}>
-      <span style={{ display: 'block', fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 750, marginBottom: 7 }}>{label}{required ? ' *' : ''}</span>
+      <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', fontWeight: 750, marginBottom: 7 }}>{label}{required ? ' *' : ''}</span>
       {children}
     </label>
   )
@@ -217,7 +217,7 @@ function HotelForm({ hotel, onClose, onSaved }: { hotel: HotelRecord | null; onC
         <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)' }}>{hotel ? 'Edit Hotel Profile' : 'Register Hotel'}</div>
-            <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 3 }}>Fields marked * are required.</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>Fields marked * are required.</div>
           </div>
           <button type="button" onClick={onClose} disabled={saving} className="hover-surface2" style={{ width: 32, height: 32, border: 'none', background: 'var(--surface-2)', borderRadius: 9, cursor: 'pointer', color: 'var(--text-muted)' }}><Icon name="close" size={19} /></button>
         </div>
@@ -268,7 +268,7 @@ function HotelForm({ hotel, onClose, onSaved }: { hotel: HotelRecord | null; onC
                 {[values.brand_primary_color, values.brand_secondary_color, values.brand_accent_color].map((color, index) => <span key={index} style={{ width: 46, height: 28, borderRadius: 7, background: color, border: '1px solid rgba(0,0,0,.12)' }} />)}
                 {preview && <button type="button" disabled={extractingTheme} onClick={() => void applyExtractedPalette(preview)} className="hover-surface2" style={{ marginLeft: 'auto', height: 36, padding: '0 12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)', color: 'var(--text)', font: 'inherit', fontSize: 12, fontWeight: 700, cursor: extractingTheme ? 'wait' : 'pointer' }}>{extractingTheme ? 'Generating…' : 'Regenerate from logo'}</button>}
               </div>
-              <div style={{ marginTop: 11, fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.5 }}>Preview the brand palette in light and dark modes before saving.</div>
+              <div style={{ marginTop: 11, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>Preview the brand palette in light and dark modes before saving.</div>
             </div>
           </section>
 

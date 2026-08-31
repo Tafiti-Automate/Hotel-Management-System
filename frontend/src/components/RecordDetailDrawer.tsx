@@ -51,7 +51,7 @@ export default function RecordDetailDrawer({
             <Icon name="description" size={22} />
           </span>
           <span style={{ minWidth: 0, flex: 1 }}>
-            <span style={{ display: 'block', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>{title}</span>
+            <span style={{ display: 'block', color: 'var(--text-faint)', fontSize: 11.5, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>{title}</span>
             <span style={{ display: 'block', marginTop: 3, overflow: 'hidden', color: 'var(--text)', fontSize: 18, fontWeight: 800, textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{subtitle || reference || 'Record details'}</span>
           </span>
           {status && <span style={chipStyleFor(status)}>{statusPresentation(status).label}</span>}
@@ -94,14 +94,14 @@ function DetailCollection({ title, value }: { title: string; value: unknown }) {
     {objectRows.length > 0 && <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 8 }}>
       <div style={{ minWidth: Math.max(420, columns.length * 130) }}>
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${columns.length},minmax(120px,1fr))`, background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
-          {columns.map((column) => <div key={column} style={{ padding: '8px 10px', color: 'var(--text-faint)', fontSize: 9, fontWeight: 800, textTransform: 'uppercase' }}>{humanise(column)}</div>)}
+          {columns.map((column) => <div key={column} style={{ padding: '8px 10px', color: 'var(--text-faint)', fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase' }}>{humanise(column)}</div>)}
         </div>
         {objectRows.map((row, index) => <div key={String(row.id || index)} style={{ display: 'grid', gridTemplateColumns: `repeat(${columns.length},minmax(120px,1fr))`, borderBottom: index < objectRows.length - 1 ? '1px solid var(--border)' : undefined }}>
-          {columns.map((column) => <div key={column} style={{ padding: '9px 10px', overflow: 'hidden', color: 'var(--text-muted)', fontSize: 10.5, textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayValue(row[column])}</div>)}
+          {columns.map((column) => <div key={column} style={{ padding: '9px 10px', overflow: 'hidden', color: 'var(--text-muted)', fontSize: 12, textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayValue(row[column])}</div>)}
         </div>)}
       </div>
     </div>}
-    {primitiveRows.length > 0 && <div style={{ padding: 12, border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-muted)', fontSize: 11.5, lineHeight: 1.6 }}>{primitiveRows.map(displayValue).join(', ')}</div>}
+    {primitiveRows.length > 0 && <div style={{ padding: 12, border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-muted)', fontSize: 12, lineHeight: 1.6 }}>{primitiveRows.map(displayValue).join(', ')}</div>}
   </section>
 }
 
@@ -165,7 +165,7 @@ const fieldStyle: CSSProperties = {
 
 const labelStyle: CSSProperties = {
   color: 'var(--text-faint)',
-  fontSize: 9,
+  fontSize: 11.5,
   fontWeight: 800,
   letterSpacing: '.05em',
   textTransform: 'uppercase',

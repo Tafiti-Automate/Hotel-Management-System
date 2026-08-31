@@ -139,6 +139,33 @@ function dashboardFor(role: string, data: any): DashboardView {
   const task = (label: string, rows: any[], hint: string, icon: string, route: string, routeLabel: string, tone?: TaskCard['tone']): TaskCard => ({ label, count: rows.length, hint, icon, route, routeLabel, tone })
   const activity = (rows: any[], title: (row:any)=>string, detail: (row:any)=>string, route: string, routeLabel: string): ActivityRow[] => rows.map((row) => ({ id: ref(row), title: title(row), detail: detail(row), status: String(row.status || row.statusCode || 'Open'), date: String(row.date || row.required_date || ''), route, routeLabel }))
 
+  if (role === 'system administrator') {
+    const operational = [...requests, ...procurement, ...orders, ...grns]
+    const recent = [
+      ...activity(orders, r => `LPO ${ref(r)}`, r => `${r.supplier || 'Supplier'} · ${money(r.total || 0)}`, 'workflow-procure', 'Procurement workflow'),
+      ...activity(grns, r => `GRN ${ref(r)}`, r => `${r.supplier || 'Supplier'} · ${r.receivedBy || r.received_by || 'Goods receipt'}`, 'workflow-procure', 'Procurement workflow'),
+    ]
+    return base({
+      subtitle: 'System oversight, access control and operational visibility.',
+      tasks: [
+        task('Properties', data.branches || [], 'Configured hotel properties', 'business', 'hotel-profile', 'Hotel profile'),
+        task('Departments', data.departments || [], 'Operational departments', 'account_tree', 'departments', 'Departments'),
+        task('Stores', data.locations || [], 'Configured store locations', 'warehouse', 'locations', 'Stores'),
+        task('Transactions', operational, 'Current workflow records', 'monitoring', 'reports', 'Reports'),
+      ],
+      activities: recent,
+      queueTitle: 'Recent operational activity',
+      queueHint: 'Latest purchasing and receiving records',
+      queueRoute: 'audit-log',
+      queueRouteLabel: 'Audit trail',
+      context: [
+        { label: 'Employees', value: String((data.employees || []).length) },
+        { label: 'Suppliers', value: String(suppliers.length) },
+      ],
+      primaryAction: { title: 'User access', hint: 'Manage accounts, roles and access status.', label: 'Manage access', route: 'access-management', icon: 'manage_accounts' },
+    })
+  }
+
   if (role === 'requester') {
     const drafts = requests.filter((r:any)=>statusKey(r.statusCode || r.status)==='draft')
     const pending = requests.filter((r:any)=>statusKey(r.statusCode || r.status)==='pending_department_approval')
@@ -219,5 +246,5 @@ function formatDashboardDate() {
   return new Intl.DateTimeFormat('en-UG', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).format(new Date())
 }
 function friendlyStatus(value: string) { return String(value || 'Open').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) }
-function statusBadge(value: string): CSSProperties { const key=statusKey(value); const danger=/rejected|cancelled/.test(key); const good=/approved|received|issued|completed|active/.test(key); const warn=/pending|partial|awaiting|draft/.test(key); return { justifySelf:'start', padding:'4px 8px', borderRadius:999, color:danger?'var(--bad)':good?'var(--good)':warn?'var(--warn)':'var(--accent)', background:danger?'var(--bad-soft)':good?'var(--good-soft)':warn?'var(--warn-soft)':'var(--accent-soft)', fontSize:10.5, fontWeight:650, whiteSpace:'nowrap' } }
+function statusBadge(value: string): CSSProperties { const key=statusKey(value); const danger=/rejected|cancelled/.test(key); const good=/approved|received|issued|completed|active/.test(key); const warn=/pending|partial|awaiting|draft/.test(key); return { justifySelf:'start', padding:'4px 8px', borderRadius:999, color:danger?'var(--bad)':good?'var(--good)':warn?'var(--warn)':'var(--accent)', background:danger?'var(--bad-soft)':good?'var(--good-soft)':warn?'var(--warn-soft)':'var(--accent-soft)', fontSize:12, fontWeight:650, whiteSpace:'nowrap' } }
 function EmptyState() { return <div className="dashboard-empty"><span><Icon name="task_alt" size={20} color="var(--good)" /></span><strong>Queue clear</strong><small>No pending records.</small></div> }

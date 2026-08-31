@@ -37,7 +37,7 @@ export default function HRDashboard() {
           <div key={card.label} style={{ padding: 17, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 15, boxShadow: 'var(--shadow-sm)' }}>
             <div style={{ width: 36, height: 36, borderRadius: 10, display: 'grid', placeItems: 'center', background: card.bg }}><Icon name={card.icon} size={20} color={card.tone} /></div>
             <div style={{ fontSize: 25, fontWeight: 850, color: 'var(--text)', marginTop: 14 }}>{card.value}</div>
-            <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 3 }}>{card.label}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>{card.label}</div>
           </div>
         ))}
       </div>
@@ -45,15 +45,15 @@ export default function HRDashboard() {
       <div className="hr-main-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.5fr) minmax(280px,.7fr)', gap: 16, marginTop: 16 }}>
         <section style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 15, boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
           <div style={{ padding: '16px 17px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div><div style={{ fontSize: 13, fontWeight: 850, color: 'var(--text)' }}>Employee directory</div><div style={{ fontSize: 10.5, color: 'var(--text-faint)', marginTop: 2 }}>Recent employee records</div></div>
-            <button onClick={() => app.navTo('employees', 'Employees')} style={{ border: 0, background: 'transparent', color: 'var(--accent)', cursor: 'pointer', font: 'inherit', fontSize: 11.5, fontWeight: 800 }}>View all</button>
+            <div><div style={{ fontSize: 13, fontWeight: 850, color: 'var(--text)' }}>Employee directory</div><div style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 2 }}>Recent employee records</div></div>
+            <button onClick={() => app.navTo('employees', 'Employees')} style={{ border: 0, background: 'transparent', color: 'var(--accent)', cursor: 'pointer', font: 'inherit', fontSize: 12, fontWeight: 800 }}>View all</button>
           </div>
           {(datedEmployees.length ? datedEmployees : employees.slice(0, 6)).map((employee) => (
             <button key={employee.id} onClick={() => { app.navTo('employees', 'Employees'); app.openEdit(employee.id) }} className="hover-surface2" style={{ width: '100%', border: 0, borderTop: '1px solid var(--border)', background: 'transparent', padding: '11px 17px', display: 'grid', gridTemplateColumns: '38px minmax(130px,1.5fr) minmax(110px,1fr) auto', alignItems: 'center', gap: 11, textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
-              <span style={{ width: 36, height: 36, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'var(--accent-soft)', color: 'var(--accent)', fontSize: 11.5, fontWeight: 850 }}>{String(employee.name).split(' ').map((part: string) => part[0]).join('').slice(0, 2)}</span>
-              <span><span style={{ display: 'block', color: 'var(--text)', fontSize: 12.5, fontWeight: 800 }}>{employee.name}</span><span style={{ display: 'block', color: 'var(--text-faint)', fontSize: 10.5, marginTop: 2 }}>{employee.employeeCode || 'Employee profile'}</span></span>
-              <span><span style={{ display: 'block', color: 'var(--text-muted)', fontSize: 11.5 }}>{employee.department || 'Unassigned'}</span><span style={{ display: 'block', color: 'var(--text-faint)', fontSize: 10, marginTop: 2 }}>{employee.designation || 'No job title'}</span></span>
-              <span style={{ color: employee.status === 'Active' ? 'var(--good)' : 'var(--text-faint)', background: employee.status === 'Active' ? 'var(--good-soft)' : 'var(--surface-2)', borderRadius: 20, padding: '4px 8px', fontSize: 10, fontWeight: 800 }}>{employee.status}</span>
+              <span style={{ width: 36, height: 36, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'var(--accent-soft)', color: 'var(--accent)', fontSize: 12, fontWeight: 850 }}>{String(employee.name).split(' ').map((part: string) => part[0]).join('').slice(0, 2)}</span>
+              <span><span style={{ display: 'block', color: 'var(--text)', fontSize: 12.5, fontWeight: 800 }}>{employee.name}</span><span style={{ display: 'block', color: 'var(--text-faint)', fontSize: 12, marginTop: 2 }}>{employee.employeeCode || 'Employee profile'}</span></span>
+              <span><span style={{ display: 'block', color: 'var(--text-muted)', fontSize: 12 }}>{employee.department || 'Unassigned'}</span><span style={{ display: 'block', color: 'var(--text-faint)', fontSize: 11.5, marginTop: 2 }}>{employee.designation || 'No job title'}</span></span>
+              <span style={{ color: employee.status === 'Active' ? 'var(--good)' : 'var(--text-faint)', background: employee.status === 'Active' ? 'var(--good-soft)' : 'var(--surface-2)', borderRadius: 20, padding: '4px 8px', fontSize: 11.5, fontWeight: 800 }}>{employee.status}</span>
             </button>
           ))}
           {!employees.length && <div style={{ borderTop: '1px solid var(--border)', padding: 34, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>No employees registered yet.</div>}
@@ -68,7 +68,7 @@ export default function HRDashboard() {
           ].map(([icon, title, description, action]) => (
             <button key={String(title)} onClick={action as () => void} className="hover-surface2" style={{ width: '100%', display: 'flex', gap: 10, alignItems: 'center', border: 0, background: 'transparent', borderRadius: 10, padding: '11px 8px', marginTop: 5, cursor: 'pointer', textAlign: 'left', font: 'inherit' }}>
               <span style={{ width: 34, height: 34, borderRadius: 10, display: 'grid', placeItems: 'center', background: 'var(--accent-soft)' }}><Icon name={String(icon)} size={18} color="var(--accent)" /></span>
-              <span><span style={{ display: 'block', color: 'var(--text)', fontSize: 11.5, fontWeight: 800 }}>{String(title)}</span><span style={{ display: 'block', color: 'var(--text-faint)', fontSize: 10.5, marginTop: 2 }}>{String(description)}</span></span>
+              <span><span style={{ display: 'block', color: 'var(--text)', fontSize: 12, fontWeight: 800 }}>{String(title)}</span><span style={{ display: 'block', color: 'var(--text-faint)', fontSize: 12, marginTop: 2 }}>{String(description)}</span></span>
             </button>
           ))}
         </aside>

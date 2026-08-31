@@ -5756,3 +5756,136 @@ html[data-theme="dark"] .screen-app .app-content {
     animation: none;
   }
 }
+
+
+/* Production UI/UX hardening — authenticated application only. */
+.screen-app .app-content {
+  scroll-behavior: smooth;
+  scrollbar-gutter: stable;
+}
+
+.screen-app button,
+.screen-app a,
+.screen-app input,
+.screen-app select,
+.screen-app textarea {
+  transition: border-color .14s ease, background-color .14s ease, color .14s ease, box-shadow .14s ease, opacity .14s ease, transform .14s ease;
+}
+
+.screen-app button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.screen-app button:disabled,
+.screen-app input:disabled,
+.screen-app select:disabled,
+.screen-app textarea:disabled {
+  cursor: not-allowed !important;
+  opacity: .58;
+}
+
+.screen-app :where(button, a, input, select, textarea, [role='button']):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 78%, white);
+  outline-offset: 2px;
+}
+
+.screen-app .route-loading {
+  min-height: min(420px, 55vh);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-muted);
+}
+
+.screen-app .route-loading-spinner {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--border-2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: route-spin .75s linear infinite;
+}
+
+.screen-app .route-loading > div {
+  display: grid;
+  gap: 1px;
+}
+
+.screen-app .route-loading strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.screen-app .route-loading span:not(.route-loading-spinner) {
+  font-size: 12px;
+}
+
+@keyframes route-spin { to { transform: rotate(360deg); } }
+
+/* Consistent operational surfaces across legacy and newer pages. */
+.screen-app .access-card,
+.screen-app .role-dashboard .dashboard-panel,
+.screen-app .hr-main-grid > section,
+.screen-app .hr-main-grid > aside {
+  border-radius: 10px !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+.screen-app .access-table-row,
+.screen-app .dashboard-activity-row,
+.screen-app .procurement-record-row,
+.screen-app .report-record-row {
+  min-height: 52px;
+}
+
+.screen-app .access-table-row:hover,
+.screen-app .dashboard-activity-row:hover,
+.screen-app .procurement-record-row:hover,
+.screen-app .report-record-row:hover {
+  background: color-mix(in srgb, var(--accent-soft) 34%, var(--surface)) !important;
+}
+
+.screen-app .dashboard-link-button,
+.screen-app .dashboard-context-action {
+  min-height: 34px;
+}
+
+.screen-app .dashboard-task-card {
+  min-height: 138px;
+}
+
+.screen-app .dashboard-task-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .07);
+}
+
+.screen-app .access-search input,
+.screen-app .inventory-control,
+.screen-app .inventory-record-filters input,
+.screen-app .inventory-record-filters select {
+  min-height: 38px;
+}
+
+@media (max-width: 900px) {
+  .screen-app .app-content { padding: 18px !important; }
+  .screen-app .role-dashboard-header { align-items: flex-start; }
+  .screen-app .dashboard-work-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .screen-app .dashboard-context-panel { order: -1; }
+}
+
+@media (max-width: 640px) {
+  .screen-app .app-content { padding: 14px !important; }
+  .screen-app .role-dashboard-tools { width: 100%; justify-content: space-between; }
+  .screen-app .dashboard-primary-action { align-items: flex-start; flex-wrap: wrap; }
+  .screen-app .dashboard-primary-action .erp-primary { width: 100%; justify-content: center; }
+  .screen-app .dashboard-activity-row { grid-template-columns: minmax(0, 1fr) auto !important; gap: 7px 10px; }
+  .screen-app .dashboard-activity-date { grid-column: 1 / 2; }
+  .screen-app .dashboard-activity-row > .ic { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen-app .app-content { scroll-behavior: auto; }
+  .screen-app *, .screen-app *::before, .screen-app *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}

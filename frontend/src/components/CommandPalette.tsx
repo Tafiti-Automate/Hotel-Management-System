@@ -5,8 +5,8 @@ import { canAccessRoute } from '../lib/access'
 import { Icon } from './Icon'
 
 const routeItems = [
-  ['dashboard','Dashboard','space_dashboard'],['workflow-stores','Stores workspace','warehouse'],['workflow-procure','Procurement workspace','shopping_cart_checkout'],
-  ['workflow-pay','Finance workspace','payments'],['approvals','Approval queue','approval'],['storeRequisitions','Store requisitions','assignment'],
+  ['dashboard','Dashboard','space_dashboard'],['workflow-stores','Stores','warehouse'],['workflow-procure','Procurement','shopping_cart_checkout'],
+  ['workflow-pay','Finance','payments'],['approvals','Approval queue','approval'],['storeRequisitions','Store requisitions','assignment'],
   ['requisitions','Purchase requisitions','request_quote'],['orders','Purchase orders','receipt_long'],['grns','Goods receipts','move_to_inbox'],
   ['balances','Stock balances','equalizer'],['ledgers','Stock ledger','menu_book'],['items','Article catalogue','inventory_2'],
   ['suppliers','Suppliers','local_shipping'],['employees','Employees','badge'],['reports','Reports','bar_chart'],['audit-log','Audit log','history'],
@@ -40,8 +40,8 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
     <section className="command-palette" role="dialog" aria-modal="true" aria-label="Global search">
       <div className="command-input"><Icon name="search" size={21}/><input ref={input} value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search pages, references, suppliers, employees…" aria-label="Search system"/><kbd>Esc</kbd></div>
       <div className="command-body">
-        <div className="command-section-title">Pages and workspaces</div>
-        {results.routes.map(([route,label,icon])=><button key={route} className="command-result" onClick={()=>go(route,label)}><span><Icon name={icon} size={18}/></span><div><b>{label}</b><small>Open workspace</small></div><Icon name="arrow_forward" size={16}/></button>)}
+        <div className="command-section-title">Pages</div>
+        {results.routes.map(([route,label,icon])=><button key={route} className="command-result" onClick={()=>go(route,label)}><span><Icon name={icon} size={18}/></span><div><b>{label}</b><small>Open</small></div><Icon name="arrow_forward" size={16}/></button>)}
         {results.records.length>0 && <><div className="command-section-title">Records</div>{results.records.map(r=><button key={`${r.entity}-${r.id}`} className="command-result" onClick={()=>{app.openDetail(r.entity,r.id,r.entity);onClose()}}><span><Icon name={cfg[r.entity].icon} size={18}/></span><div><b>{r.title}</b><small>{r.meta}</small></div><Icon name="open_in_new" size={16}/></button>)}</>}
         {!results.routes.length&&!results.records.length&&<div className="command-empty"><Icon name="search_off" size={25}/><b>No results found</b><small>Try a reference, supplier, employee, article or page name.</small></div>}
       </div>

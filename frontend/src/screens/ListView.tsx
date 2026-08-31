@@ -210,14 +210,14 @@ export default function ListView() {
         {(statusFilter || supplierFilter || articleFilter || categoryFilter || dateFrom || dateTo || app.searchTerm || app.itemCategoryFilter) && <button onClick={() => { setStatusFilter(''); setSupplierFilter(''); setArticleFilter(''); setCategoryFilter(''); setDateFrom(''); setDateTo(''); app.setSearchTerm(''); app.clearItemCategoryFilter() }} className="hover-surface2" style={commandAction}><Icon name="filter_alt_off" size={17} />Clear</button>}
         <span style={{ flex: 1 }} />
         <button title="Export selected records" disabled={!selected.size} onClick={() => exportRows(rows.filter((row) => selected.has(row.id)))} className="hover-surface2" style={{ ...iconCommand, opacity: selected.size ? 1 : .4 }}><Icon name="download_for_offline" size={19} /></button>
-        <div style={{ position: 'relative' }}><button title="Choose columns" onClick={() => setColumnsOpen((open) => !open)} className="hover-surface2" style={iconCommand}><Icon name="view_column" size={18} /></button>{columnsOpen && <div style={{ position: 'absolute', right: 0, top: 36, zIndex: 10, width: 210, padding: 8, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 7, boxShadow: 'var(--shadow)' }}>{config.cols.map((column) => <label key={column.key} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 7, fontSize: 11.5, color: 'var(--text-muted)' }}><input type="checkbox" checked={!hiddenColumns.has(column.key)} onChange={() => setHiddenColumns((current) => { const next = new Set(current); next.has(column.key) ? next.delete(column.key) : next.add(column.key); return next })} />{column.label}</label>)}</div>}</div>
+        <div style={{ position: 'relative' }}><button title="Choose columns" onClick={() => setColumnsOpen((open) => !open)} className="hover-surface2" style={iconCommand}><Icon name="view_column" size={18} /></button>{columnsOpen && <div style={{ position: 'absolute', right: 0, top: 36, zIndex: 10, width: 210, padding: 8, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 7, boxShadow: 'var(--shadow)' }}>{config.cols.map((column) => <label key={column.key} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 7, fontSize: 12, color: 'var(--text-muted)' }}><input type="checkbox" checked={!hiddenColumns.has(column.key)} onChange={() => setHiddenColumns((current) => { const next = new Set(current); next.has(column.key) ? next.delete(column.key) : next.add(column.key); return next })} />{column.label}</label>)}</div>}</div>
         <button title="Refresh" onClick={app.refreshData} className="hover-surface2" style={iconCommand}><Icon name="refresh" size={18} /></button>
       </div>
 
       <div className="data-table" style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
         <div className="data-head" style={{ display: 'grid', gridTemplateColumns: columns, padding: '0 8px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, zIndex: 2 }}>
           <div style={{ display: 'grid', placeItems: 'center' }}><input type="checkbox" checked={pageRows.length > 0 && pageRows.every((row) => selected.has(row.id))} onChange={(event) => setSelected((current) => { const next = new Set(current); pageRows.forEach((row) => event.target.checked ? next.add(row.id) : next.delete(row.id)); return next })} /></div>
-          {visibleColumns.map((column) => <button title={helpText(column.label)} onClick={() => toggleSort(column.key)} key={column.key} style={{ padding: '11px 12px', border: 0, background: 'transparent', color: 'var(--text-muted)', fontSize: 10.5, fontWeight: 650, letterSpacing: '.045em', textTransform: 'uppercase', display: 'flex', gap: 4, justifyContent: column.align === 'right' ? 'flex-end' : undefined, cursor: 'pointer' }}>{column.label}{helpText(column.label) && <Icon name="info" size={13} color="var(--text-faint)" />}{sortKey === column.key && <Icon name={sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward'} size={13} />}</button>)}
+          {visibleColumns.map((column) => <button title={helpText(column.label)} onClick={() => toggleSort(column.key)} key={column.key} style={{ padding: '11px 12px', border: 0, background: 'transparent', color: 'var(--text-muted)', fontSize: 12, fontWeight: 650, letterSpacing: '.045em', textTransform: 'uppercase', display: 'flex', gap: 4, justifyContent: column.align === 'right' ? 'flex-end' : undefined, cursor: 'pointer' }}>{column.label}{helpText(column.label) && <Icon name="info" size={13} color="var(--text-faint)" />}{sortKey === column.key && <Icon name={sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward'} size={13} />}</button>)}
           <div />
         </div>
 
@@ -247,13 +247,13 @@ export default function ListView() {
 
         {!rows.length && (
           <div style={{ padding: 44, textAlign: 'center', color: 'var(--text-faint)', fontSize: 13 }}>
-            {app.apiStatus === 'loading' && 'Loading records from the backend…'}
+            {app.apiStatus === 'loading' && 'Loading records…'}
             {app.apiStatus === 'offline' && <>
-              <div style={{ color: 'var(--bad)', marginBottom: 10 }}>{app.apiMessage || 'The backend is unavailable.'}</div>
+              <div style={{ color: 'var(--bad)', marginBottom: 10 }}>{app.apiMessage || 'The service is currently unavailable.'}</div>
               <button onClick={app.refreshData} style={secondaryAction}><Icon name="refresh" size={17} />Retry connection</button>
             </>}
             {app.apiStatus === 'live' && (term ? 'No records match the current search.' : emptyMessage)}
-            {app.apiStatus === 'idle' && 'Waiting for the backend connection…'}
+            {app.apiStatus === 'idle' && 'Connecting…'}
           </div>
         )}
         <div className="list-footer" style={{ minHeight: 48, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 18px', background: 'var(--surface-2)', color: 'var(--text-muted)', fontSize: 12 }}>
@@ -288,7 +288,7 @@ const commandAction: CSSProperties = { height: 34, display: 'flex', alignItems: 
 const iconCommand: CSSProperties = { width: 32, height: 32, display: 'grid', placeItems: 'center', border: 0, borderRadius: 5, background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer' }
 const iconAction: CSSProperties = { width: 30, height: 30, display: 'grid', placeItems: 'center', border: 0, borderRadius: 5, background: 'transparent', color: 'var(--text-faint)', cursor: 'pointer' }
 const pager: CSSProperties = { width: 30, height: 30, display: 'grid', placeItems: 'center', border: '1px solid var(--border)', borderRadius: 5, background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer' }
-const drawerSecondary: CSSProperties = { minHeight: 36, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 12px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer', font: 'inherit', fontSize: 11.5, fontWeight: 650 }
+const drawerSecondary: CSSProperties = { minHeight: 36, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 12px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer', font: 'inherit', fontSize: 12, fontWeight: 650 }
 const drawerDanger: CSSProperties = { ...drawerSecondary, borderColor: 'rgba(220,38,38,.25)', color: 'var(--bad)' }
 const drawerPrimary: CSSProperties = { ...drawerSecondary, borderColor: 'var(--accent)', background: 'var(--accent)', color: '#fff' }
 const filterSelect: CSSProperties = { height: 34, maxWidth: 170, border: '1px solid var(--border)', borderRadius: 5, padding: '0 8px', background: 'var(--surface)', color: 'var(--text-muted)', fontSize: 12 }
