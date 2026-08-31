@@ -1176,8 +1176,21 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, ite
         <Field label="LPO item"><Select value={financeLineId} onChange={(v) => { const selected = lines.find((row: Row) => id(row.id) === v); setForm({ ...form, financeLine: v, financeQuantity: selected?.approved_quantity ?? selected?.quantity ?? '', financeReason: selected?.finance_reduction_reason || '' }) }} rows={lines} label={(row: Row) => `${names.items.get(id(row.item)) || id(row.item)} · Procurement ${row.procurement_quantity ?? row.quantity}`} /></Field>
         <Two><Field label="Finance approved quantity"><Input type="number" value={financeQuantityValue} onChange={(v) => setForm({ ...form, financeLine: financeLineId, financeQuantity: v })} /></Field><Field label="Reason if reduced"><Input value={form.financeReason || ''} onChange={(v) => setForm({ ...form, financeLine: financeLineId, financeReason: v })} placeholder="Required only when quantity is reduced" /></Field></Two>
         {financeLine && <Hint>Procurement quantity: {id(financeLine.procurement_quantity ?? financeLine.quantity)}. Finance may keep or reduce it, but cannot increase it.</Hint>}
-        <Action disabled={busy || !financeLine || num(financeQuantityValue) < 0 || num(financeQuantityValue) > num(financeLine.procurement_quantity ?? financeLine.quantity) || (num(financeQuantityValue) < num(financeLine.procurement_quantity ?? financeLine.quantity) && !id(form.financeReason).trim())} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'finance-reduce-quantities', { comments: '', lines: [{ id: id(financeLine.id), approved_quantity: num(financeQuantityValue), reason: form.financeReason || '' }] }), 'Finance quantity saved')}>Save quantity decision</Action>
-        <Action tone="good" disabled={busy || !currentApproval} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'approve', { comments: '' }), 'LPO approved and sent to General Manager')}>Approve LPO</Action>
+        <Action
+          tone="good"
+          disabled={busy || !currentApproval || !financeLine || num(financeQuantityValue) < 0 || num(financeQuantityValue) > num(financeLine.procurement_quantity ?? financeLine.quantity) || (num(financeQuantityValue) < num(financeLine.procurement_quantity ?? financeLine.quantity) && !id(form.financeReason).trim())}
+          onClick={() => run(async () => {
+            await runBackendAction('purchase-orders', id(order.id), 'finance-reduce-quantities', {
+              comments: '',
+              lines: [{
+                id: id(financeLine.id),
+                approved_quantity: num(financeQuantityValue),
+                reason: form.financeReason || '',
+              }],
+            })
+            return runBackendAction('purchase-orders', id(order.id), 'approve', { comments: '' })
+          }, 'LPO approved and sent to General Manager')}
+        >Approve LPO</Action>
         {!form.showReject ? <Action tone="danger" disabled={busy} onClick={() => setForm({ ...form, showReject: true })}>Reject LPO</Action> : <><Field label="Rejection reason *"><Input value={form.approvalComments || ''} onChange={(v) => setForm({ ...form, approvalComments: v })} /></Field><Action tone="danger" disabled={busy || !id(form.approvalComments).trim()} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'reject', { comments: form.approvalComments }), 'LPO rejected')}>Confirm rejection</Action></>}
       </>}
     </>}
