@@ -3,6 +3,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from django.db.models.signals import post_save, pre_delete, pre_save
+from django.dispatch import receiver
 
 from apps.approvals.models import ApprovalWorkflow
 from apps.audit_logs.models import AuditLog
@@ -45,7 +46,7 @@ def _snapshot(instance):
     return data
 
 
-@pre_save
+@receiver(pre_save)
 def capture_previous_audited_state(sender, instance, **kwargs):
     if sender not in AUDITED_MODELS or not instance.pk:
         return
@@ -56,7 +57,7 @@ def capture_previous_audited_state(sender, instance, **kwargs):
     instance._audit_previous_state = _snapshot(previous)
 
 
-@post_save
+@receiver(post_save)
 def audit_stock_movement(sender, instance, created, **kwargs):
     if sender is not StockLedger or not created:
         return
@@ -78,7 +79,7 @@ def audit_stock_movement(sender, instance, created, **kwargs):
     )
 
 
-@post_save
+@receiver(post_save)
 def audit_approval_decision(sender, instance, created, **kwargs):
     if sender is not ApprovalWorkflow or created or instance.status not in (
         ApprovalStatus.APPROVED,
@@ -118,7 +119,7 @@ AUDITED_MODELS = (
 )
 
 
-@post_save
+@receiver(post_save)
 def audit_document_change(sender, instance, created, **kwargs):
     if sender not in AUDITED_MODELS:
         return
@@ -143,7 +144,7 @@ def audit_document_change(sender, instance, created, **kwargs):
     )
 
 
-@pre_delete
+@receiver(pre_delete)
 def protect_immutable_records(sender, instance, **kwargs):
     """Block destructive removal of evidence-bearing transactional records."""
     if sender is AuditLog:
