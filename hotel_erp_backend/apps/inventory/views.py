@@ -128,15 +128,17 @@ def scope_store_requisitions(queryset, user):
             requested_by__branch=employee.branch,
         ).exclude(status=StoreRequisitionStatus.DRAFT)
     if has_role(user, "Store Keeper"):
-        # A Department request reaches Stores before the Store Keeper confirms
-        # the destination store. Therefore submitted requests must be visible to
-        # Store Keepers assigned anywhere in the same branch; filtering only by
-        # the request's provisional/default store makes valid requests disappear.
+        # New requests already carry the requester's chosen issuing store. Keep
+        # the branch fallback only for legacy submitted requests with no store.
         store_ids = assigned_store_ids(user)
         branch_ids = StoreLocation.objects.filter(pk__in=store_ids).values_list("branch_id", flat=True)
         return queryset.filter(department_approved_by__isnull=False).filter(
             Q(store_id__in=store_ids)
-            | Q(status=StoreRequisitionStatus.SUBMITTED, requested_by__branch_id__in=branch_ids)
+            | Q(
+                status=StoreRequisitionStatus.SUBMITTED,
+                store__isnull=True,
+                requested_by__branch_id__in=branch_ids,
+            )
         ).distinct()
     # Only an explicitly assigned Requester may originate/track Department requests.
     if has_role(user, "Requester"):
@@ -638,6 +640,19 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
         if employee.pk == requisition.requested_by_id:
             raise PermissionDenied("You cannot approve or reject your own request.")
 
+    @action(detail=False, methods=["get"], url_path="store-options")
+    def store_options(self, request):
+        queryset = StoreLocation.objects.select_related("branch").filter(is_active=True)
+        if not has_role(request.user, "System Administrator") and not request.user.is_superuser:
+            employee = getattr(request.user, "employee_profile", None)
+            if not employee or not employee.branch_id:
+                queryset = queryset.none()
+            elif has_role(request.user, "Store Keeper"):
+                queryset = queryset.filter(pk__in=assigned_store_ids(request.user))
+            else:
+                queryset = queryset.filter(branch_id=employee.branch_id)
+        return Response(StoreLocationSerializer(queryset.order_by("name"), many=True).data)
+
     @action(detail=True, methods=["post"])
     def submit(self, request, pk=None):
         requisition = self.get_object()
@@ -700,15 +715,15 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     def assign_store(self, request, pk=None):
         requisition = self.get_object()
         if not has_role(request.user, "System Administrator", "Store Keeper"):
-            raise PermissionDenied("Only the Store Keeper can choose the destination store.")
+            raise PermissionDenied("Only the Store Keeper can change the issuing store after submission.")
         if requisition.status != StoreRequisitionStatus.SUBMITTED:
-            raise ValidationError("The destination store can only be selected for a submitted Department request.")
+            raise ValidationError("The issuing store can only be changed for a submitted Department request.")
         store_id = request.data.get("store")
         if not store_id:
-            raise ValidationError({"store": "Select the destination store."})
+            raise ValidationError({"store": "Select the issuing store."})
         store = StoreLocation.objects.filter(pk=store_id, is_active=True).first()
         if not store:
-            raise ValidationError({"store": "The selected destination store is not available."})
+            raise ValidationError({"store": "The selected issuing store is not available."})
         if not has_role(request.user, "System Administrator") and not StoreKeeperAssignment.objects.filter(
             store=store, employee=getattr(request.user, "employee_profile", None), is_active=True
         ).exists():

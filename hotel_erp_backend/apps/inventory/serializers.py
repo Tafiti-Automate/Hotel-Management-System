@@ -724,7 +724,7 @@ class StoreRequisitionItemSerializer(serializers.ModelSerializer):
 
 class StoreRequisitionSerializer(serializers.ModelSerializer):
     store = serializers.PrimaryKeyRelatedField(
-        queryset=StoreLocation.objects.filter(is_active=True), required=False
+        queryset=StoreLocation.objects.filter(is_active=True), required=False, allow_null=True
     )
     store_name = serializers.SerializerMethodField()
     store_address = serializers.SerializerMethodField()
@@ -791,12 +791,11 @@ class StoreRequisitionSerializer(serializers.ModelSerializer):
                 "Your employee profile is not assigned to a branch."
             )
 
-        # The Department does not choose the destination store. It is assigned
-        # by the Store Keeper only after Department Head approval.
-        if self.instance is None:
-            attrs["store"] = None
-        elif "store" in attrs:
-            attrs.pop("store", None)
+        store = attrs.get("store", getattr(self.instance, "store", None))
+        if store and store.branch_id != employee.branch_id:
+            raise serializers.ValidationError(
+                {"store": "Choose an issuing store from your assigned branch."}
+            )
         attrs["department"] = employee.department
         attrs["requested_by"] = employee
         return attrs

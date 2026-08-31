@@ -412,6 +412,7 @@ def test_department_user_store_request_uses_own_identity(client):
         {
             "department": str(other_department.pk),
             "requested_by": str(other_employee.pk),
+            "store": str(store.pk),
             "purpose": "Room supplies",
         },
         content_type="application/json",
@@ -421,7 +422,7 @@ def test_department_user_store_request_uses_own_identity(client):
     requisition = StoreRequisition.objects.get(pk=response.json()["id"])
     assert requisition.department == own_department
     assert requisition.requested_by == own_employee
-    assert requisition.store is None
+    assert requisition.store == store
 
 
 @pytest.mark.django_db
@@ -454,6 +455,102 @@ def test_store_requisition_exposes_issuing_store_name_and_address():
     assert str(payload["store"]) == str(store.pk)
     assert payload["store_name"] == "Main Dry Store"
     assert payload["store_address"] == "Basement, Block B"
+
+
+@pytest.mark.django_db
+def test_requester_store_options_and_selection_are_limited_to_own_branch():
+    branch = Branch.objects.create(name="Requester store branch")
+    other_branch = Branch.objects.create(name="Other store branch")
+    department = Department.objects.create(name="Requester store department")
+    own_store = StoreLocation.objects.create(
+        branch=branch,
+        name="Housekeeping Store",
+        address="Level 1, East Wing",
+    )
+    StoreLocation.objects.create(
+        branch=branch,
+        name="Inactive Store",
+        is_active=False,
+    )
+    other_store = StoreLocation.objects.create(
+        branch=other_branch,
+        name="Other Branch Store",
+    )
+    user = get_user_model().objects.create_user(
+        username="branch-store-requester",
+        employee_code="EMP-BRANCH-STORE",
+    )
+    employee = Employee.objects.create(
+        user=user,
+        department=department,
+        branch=branch,
+        designation="Requester",
+    )
+    user.groups.add(Group.objects.get_or_create(name="Requester")[0])
+    requisition = StoreRequisition.objects.create(
+        department=department,
+        requested_by=employee,
+    )
+    api_client = APIClient()
+    api_client.force_authenticate(user)
+
+    options = api_client.get("/api/v1/store-requisitions/store-options/")
+
+    assert options.status_code == 200
+    assert [(row["name"], row["address"]) for row in options.data] == [
+        ("Housekeeping Store", "Level 1, East Wing")
+    ]
+
+    denied = api_client.patch(
+        f"/api/v1/store-requisitions/{requisition.pk}/",
+        {"store": str(other_store.pk)},
+        format="json",
+    )
+    assert denied.status_code == 400
+
+    accepted = api_client.patch(
+        f"/api/v1/store-requisitions/{requisition.pk}/",
+        {"store": str(own_store.pk)},
+        format="json",
+    )
+    assert accepted.status_code == 200
+    requisition.refresh_from_db()
+    assert requisition.store == own_store
+
+
+@pytest.mark.django_db
+def test_store_requisition_requires_issuing_store_before_submit():
+    branch = Branch.objects.create(name="Required store branch")
+    department = Department.objects.create(name="Required store department")
+    category = Category.objects.create(name="Required store supplies")
+    item = Item.objects.create(
+        category=category,
+        name="Required store item",
+        unit="piece",
+        reorder_level=Decimal("1"),
+    )
+    user = get_user_model().objects.create_user(
+        username="required-store-requester",
+        employee_code="EMP-REQUIRED-STORE",
+    )
+    employee = Employee.objects.create(
+        user=user,
+        department=department,
+        branch=branch,
+        designation="Requester",
+    )
+    requisition = StoreRequisition.objects.create(
+        department=department,
+        requested_by=employee,
+    )
+    StoreRequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity_requested=Decimal("1.00"),
+    )
+
+    with pytest.raises(ValidationError, match="Select the issuing store"):
+        requisition.submit(actor=user)
 
 
 @pytest.mark.django_db
@@ -787,7 +884,7 @@ def test_department_head_can_reduce_quantity_without_overwriting_requester_quant
     keeper_user.groups.add(Group.objects.get_or_create(name="Store Keeper")[0])
     StoreKeeperAssignment.objects.create(store=store, employee=keeper)
 
-    requisition = StoreRequisition.objects.create(department=department, requested_by=requester)
+    requisition = StoreRequisition.objects.create(department=department, store=store, requested_by=requester)
     line = StoreRequisitionItem.objects.create(requisition=requisition, item=item, quantity_requested=Decimal("10.00"))
     requisition.submit(actor=requester_user)
 
@@ -881,8 +978,14 @@ def test_department_head_approval_is_not_failed_by_notification_error(monkeypatc
     )
     head_user.groups.add(Group.objects.get_or_create(name="Department Head")[0])
 
+    store = StoreLocation.objects.create(
+        branch=branch,
+        name="HOD Notification Store",
+    )
+
     requisition = StoreRequisition.objects.create(
         department=department,
+        store=store,
         requested_by=requester,
     )
     line = StoreRequisitionItem.objects.create(

@@ -1205,6 +1205,13 @@ class StoreRequisition(BaseModel):
     def submit(self, actor=None):
         if self.status not in (StoreRequisitionStatus.DRAFT, StoreRequisitionStatus.REJECTED):
             raise ValidationError("Only draft or rejected store requisitions can be submitted.")
+        if not self.store_id:
+            raise ValidationError("Select the issuing store before submitting this requisition.")
+        if not self.store.is_active:
+            raise ValidationError("The selected issuing store is not active.")
+        requester_branch_id = getattr(self.requested_by, "branch_id", None)
+        if requester_branch_id and self.store.branch_id != requester_branch_id:
+            raise ValidationError("The issuing store must belong to the requester's branch.")
         if not self.items.exists():
             raise ValidationError("Store requisition must include at least one item.")
         self.status = StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL

@@ -9,6 +9,7 @@ type Tab = 'requests' | 'issues' | 'transfers' | 'adjustments' | 'counts' | 'ret
 type SupplyTask = 'prepare' | 'department' | 'stores' | 'shortage' | 'issue'
 const inventoryPaths = {
   requests: 'store-requisitions', requestItems: 'store-requisition-items',
+  storeOptions: 'store-requisitions/store-options',
   issues: 'stock-issues', issueItems: 'stock-issue-items',
   transfers: 'stock-transfers', transferItems: 'stock-transfer-items',
   adjustments: 'stock-adjustments', adjustmentItems: 'stock-adjustment-items',
@@ -23,6 +24,7 @@ const inventoryPaths = {
 const pathViewPermissions: Record<keyof typeof inventoryPaths, string> = {
   requests: 'inventory.view_storerequisition',
   requestItems: 'inventory.view_storerequisitionitem',
+  storeOptions: 'inventory.view_storerequisition',
   issues: 'inventory.view_stockissue',
   issueItems: 'inventory.view_stockissueitem',
   transfers: 'inventory.view_stocktransfer',
@@ -574,7 +576,7 @@ function RequestPanel({ app, data, form, setForm, busy, execute, stage }: any) {
 }
 
 
-function RequesterDraftEditor({ app, form, setForm, busy, execute, draftRequest, draftLines, draftLine, requestBackendId }: any) {
+function RequesterDraftEditor({ app, data, form, setForm, busy, execute, draftRequest, draftLines, draftLine, requestBackendId }: any) {
   if (!draftRequest) {
     return <section style={{ ...card, padding: 28 }}>
       <button type="button" onClick={() => setForm({})} style={{ ...secondary, marginBottom: 18 }}><Icon name="arrow_back" size={17} />Back to my requisitions</button>
@@ -587,6 +589,11 @@ function RequesterDraftEditor({ app, form, setForm, busy, execute, draftRequest,
   }
 
   const uomNames = new Map<string, string>(app.data.uoms.map((row: Row): [string, string] => [id(row.id), id(row.name)]))
+  const requestStores = data.storeOptions?.length ? data.storeOptions : app.data.locations
+  const selectedStoreId = id(form.requestStore ?? draftRequest.store)
+  const selectedStore = requestStores.find((row: Row) => id(row.id) === selectedStoreId)
+  const requestPurpose = id(form.requestPurpose ?? draftRequest.purpose)
+  const requiredDate = id(form.requiredDate ?? draftRequest.required_date)
   const article = app.data.items.find((row: Row) => id(row.id) === id(form.item || draftLine?.item))
   const selectedUom = uomNames.get(id(form.unit || draftLine?.unit || article?.baseUnitId)) || id(article?.uom) || 'Base unit'
   const createdLabel = draftRequest.created_at ? new Date(id(draftRequest.created_at)).toLocaleDateString() : 'Today'
@@ -603,7 +610,14 @@ function RequesterDraftEditor({ app, form, setForm, busy, execute, draftRequest,
     })
   }
   const submitRequisition = () => execute(
-    () => runBackendAction('store-requisitions', id(form.request), 'submit'),
+    async () => {
+      await updateBackendRecord('store-requisitions', requestBackendId(draftRequest), {
+        store: selectedStoreId,
+        purpose: requestPurpose.trim(),
+        required_date: requiredDate || null,
+      })
+      return runBackendAction('store-requisitions', id(form.request), 'submit')
+    },
     'Requisition submitted',
     {},
   )
@@ -624,6 +638,17 @@ function RequesterDraftEditor({ app, form, setForm, busy, execute, draftRequest,
         <InfoBox label="Date" value={createdLabel} />
         <InfoBox label="Items" value={`${draftLines.length} item${draftLines.length === 1 ? '' : 's'}`} />
       </div>
+    </section>
+
+    <section style={{ ...card, overflow: 'hidden' }}>
+      <div style={{ padding: '15px 18px', borderBottom: '1px solid var(--border)' }}><div style={{ color: 'var(--text)', fontSize: 14, fontWeight: 800 }}>Request details</div></div>
+      <div className="requester-requisition-details" style={{ display: 'grid', gridTemplateColumns: 'minmax(240px,1.1fr) minmax(220px,1fr) 180px minmax(260px,1.35fr)', gap: 12, padding: '16px 18px', alignItems: 'start' }}>
+        <Field label="Request from store *"><Select value={selectedStoreId} change={(value) => { const nextForm = { ...form, requestStore: value }; setForm(nextForm); void execute(() => updateBackendRecord('store-requisitions', requestBackendId(draftRequest), { store: value || null }), value ? 'Issuing store selected' : 'Issuing store cleared', nextForm) }} rows={requestStores} emptyLabel="Select issuing store" label={storeOptionLabel} /></Field>
+        <div style={{ marginBottom: 10 }}><HelpLabel label="Store location" style={labelStyle} /><div style={{ ...control, height: 'auto', minHeight: 38, display: 'flex', alignItems: 'center', gap: 7, background: 'var(--surface-2)', color: selectedStore ? 'var(--text)' : 'var(--text-faint)' }}><Icon name="location_on" size={16} />{selectedStore ? id(selectedStore.address) || 'Location not recorded' : '—'}</div></div>
+        <Field label="Required date"><Input type="date" value={requiredDate} change={(value) => setForm({ ...form, requiredDate: value })} /></Field>
+        <Field label="Purpose / notes"><textarea value={requestPurpose} onChange={(event) => setForm({ ...form, requestPurpose: event.target.value })} rows={2} placeholder="What are the items needed for?" style={{ ...control, height: 64, padding: 10, resize: 'vertical' }} /></Field>
+      </div>
+      {!requestStores.length && <div style={{ padding: '0 18px 16px', color: 'var(--bad)', fontSize: 11.5 }}>No active stores are available for your branch.</div>}
     </section>
 
     <section style={{ ...card, overflow: 'hidden' }}>
@@ -678,7 +703,7 @@ function RequesterDraftEditor({ app, form, setForm, busy, execute, draftRequest,
         if (!window.confirm(`Delete ${id(draftRequest.requisition_no)}?`)) return
         void execute(() => deleteBackendPath('store-requisitions', requestBackendId(draftRequest)), 'Draft deleted', {})
       }} style={{ ...secondary, color: 'var(--bad)', borderColor: 'rgba(220,38,38,.3)' }}><Icon name="delete" size={16} color="var(--bad)" />Delete draft</button>
-      <button type="button" disabled={busy || draftLines.length === 0} onClick={() => void submitRequisition()} style={{ ...secondary, marginLeft: 'auto', color: '#fff', background: 'var(--accent)', borderColor: 'var(--accent)', opacity: busy || draftLines.length === 0 ? .5 : 1 }}><Icon name="send" size={16} color="#fff" />Submit requisition</button>
+      <button type="button" disabled={busy || !selectedStoreId || draftLines.length === 0} onClick={() => void submitRequisition()} style={{ ...secondary, marginLeft: 'auto', color: '#fff', background: 'var(--accent)', borderColor: 'var(--accent)', opacity: busy || !selectedStoreId || draftLines.length === 0 ? .5 : 1 }}><Icon name="send" size={16} color="#fff" />Submit requisition</button>
     </section>
   </div>
 }
@@ -717,7 +742,8 @@ function RequestSummary({ request, lines, data, app, showAvailability = false, s
         {showOperationalContext && <div style={{ marginTop: 7, display: 'flex', flexWrap: 'wrap', gap: '5px 14px', color: 'var(--text-muted)', fontSize: 11.5 }}>
           <span><b style={{ color: 'var(--text)' }}>Requester:</b> {employeeName(app, request.requested_by) || 'Not recorded'}</span>
           <span><b style={{ color: 'var(--text)' }}>Required:</b> {id(request.required_date || request.requiredDate) || 'Not specified'}</span>
-          <span><b style={{ color: 'var(--text)' }}>Issuing store:</b> {storeName(app, request.store)}</span>
+          <span><b style={{ color: 'var(--text)' }}>Issuing store:</b> {requestStoreName(app, request)}</span>
+          <span><b style={{ color: 'var(--text)' }}>Location:</b> {requestStoreLocation(app, request)}</span>
         </div>}
         {lines.length > 0 && <div style={{ marginTop: 5, color: 'var(--text-faint)', fontSize: 10.5 }}>{lines.length} item{lines.length === 1 ? '' : 's'} across {categoryCount} categor{categoryCount === 1 ? 'y' : 'ies'}</div>}
       </div>
