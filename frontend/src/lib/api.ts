@@ -878,6 +878,7 @@ export async function readBackendPayload(path: string): Promise<Record<string, R
 }
 
 export type OperationalReportId =
+  | 'departmentRequests' | 'storeIssues' | 'purchaseRequisitions' | 'purchaseOrders' | 'goodsReceipts'
   | 'valuation'
   | 'lowstock'
   | 'movement'
@@ -905,6 +906,11 @@ export interface OperationalReportFilters {
 }
 
 const operationalReportPaths: Record<OperationalReportId, string> = {
+  departmentRequests: 'reports/department-requests',
+  storeIssues: 'reports/store-issues',
+  purchaseRequisitions: 'reports/purchase-requisitions',
+  purchaseOrders: 'reports/purchase-orders',
+  goodsReceipts: 'reports/goods-receipts',
   valuation: 'reports/stock-summary',
   lowstock: 'reports/low-stock',
   movement: 'reports/stock-card',

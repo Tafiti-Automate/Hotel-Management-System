@@ -15,6 +15,8 @@ from apps.inventory.models import (
     ReorderRule,
     StockLedger,
     StockCountItem,
+    StockIssue,
+    StoreKeeperAssignment,
     StoreRequisition,
     SupplierItemPriceHistory,
 )
@@ -25,19 +27,105 @@ from apps.finance.models import SupplierInvoice
 from core.constants.choices import LedgerReferenceType
 
 
+REPORT_ROLE_ACCESS = {
+    "departmentRequests": {"Requester", "Department Head", "Store Keeper", "General Manager"},
+    "storeIssues": {"Requester", "Department Head", "Store Keeper", "General Manager"},
+    "purchaseRequisitions": {"Procurement Manager", "Procurement Officer", "General Manager"},
+    "purchaseOrders": {"Procurement Manager", "Procurement Officer", "Financial Manager", "General Manager", "Receiving Clerk"},
+    "goodsReceipts": {"Store Keeper", "Procurement Manager", "Procurement Officer", "Financial Manager", "General Manager", "Receiving Clerk"},
+    "valuation": {"Store Keeper", "General Manager"},
+    "lowstock": {"Store Keeper", "Cost Controller"},
+    "movement": {"Store Keeper"},
+    "aging": {"Store Keeper"},
+    "consumption": {"Store Keeper", "General Manager"},
+    "procurement": {"Cost Controller", "Procurement Manager", "Procurement Officer", "Financial Manager", "General Manager"},
+    "pendingActions": {"Procurement Manager", "Procurement Officer", "Financial Manager", "General Manager", "Receiving Clerk"},
+    "exceptions": {"Procurement Manager", "Procurement Officer", "Financial Manager", "General Manager", "Receiving Clerk"},
+    "userActivity": set(),
+    "stockMovementControl": {"Store Keeper", "General Manager"},
+    "approvalTrail": {"Procurement Manager", "Procurement Officer", "Financial Manager", "General Manager"},
+    "directWorkspace": {"Procurement Manager", "Procurement Officer", "General Manager", "Receiving Clerk"},
+    "supplierPriceChanges": {"Cost Controller", "Procurement Manager", "Procurement Officer"},
+    "managementSummary": {"Financial Manager", "General Manager"},
+    "dailyActivities": {"Procurement Manager", "Procurement Officer", "General Manager"},
+}
+
+CONTROL_REPORT_KEYS = {
+    "daily": "dailyActivities",
+    "pending": "pendingActions",
+    "exceptions": "exceptions",
+    "user_activity": "userActivity",
+    "stock_movements": "stockMovementControl",
+    "approval_trail": "approvalTrail",
+    "direct_workspace": "directWorkspace",
+    "supplier_price_changes": "supplierPriceChanges",
+    "management_summary": "managementSummary",
+}
+
+
+def user_role_names(user):
+    if not user or not user.is_authenticated:
+        return set()
+    return set(user.groups.values_list("name", flat=True))
+
+
+def is_report_administrator(user):
+    return bool(
+        user
+        and user.is_authenticated
+        and (user.is_superuser or user.groups.filter(name="System Administrator").exists())
+    )
+
+
+def report_key_for_view(view):
+    key = getattr(view, "report_key", "")
+    if key:
+        return key
+    return CONTROL_REPORT_KEYS.get(getattr(view, "report_kind", ""), "")
+
+
 class CanViewOperationalReports(BasePermission):
+    """Server-side report entitlement; frontend visibility is never trusted alone."""
+
     def has_permission(self, request, view):
         user = request.user
-        return bool(
-            user
-            and user.is_authenticated
-            and (
-                user.is_superuser
-                or user.has_perm("inventory.view_inventorybalance")
-                or user.has_perm("inventory.view_stockledger")
-                or user.has_perm("procurement.view_purchaseorder")
-            )
-        )
+        if not user or not user.is_authenticated:
+            return False
+        if is_report_administrator(user):
+            return True
+        report_key = report_key_for_view(view)
+        allowed = REPORT_ROLE_ACCESS.get(report_key, set())
+        return bool(user_role_names(user).intersection(allowed))
+
+
+def assigned_store_ids_for_reports(user):
+    employee = getattr(user, "employee_profile", None)
+    if not employee:
+        return []
+    return list(
+        StoreKeeperAssignment.objects.filter(
+            employee=employee,
+            is_active=True,
+            store__is_active=True,
+        ).values_list("store_id", flat=True)
+    )
+
+
+def employee_branch_id(user):
+    employee = getattr(user, "employee_profile", None)
+    return str(getattr(employee, "branch_id", "") or "")
+
+
+def apply_branch_scope(queryset, request, *, branch_field="branch"):
+    requested = str(request.query_params.get("branch", "") or "")
+    if is_report_administrator(request.user):
+        return queryset.filter(**{f"{branch_field}_id": requested}) if requested else queryset
+    branch_id = employee_branch_id(request.user)
+    if not branch_id:
+        return queryset.none()
+    if requested and requested != branch_id:
+        return queryset.none()
+    return queryset.filter(**{f"{branch_field}_id": branch_id})
 
 
 class ReportAPIView(APIView):
@@ -45,12 +133,35 @@ class ReportAPIView(APIView):
 
 
 def apply_store_scope(queryset, request, *, store_field="store"):
-    store_id = request.query_params.get("store")
-    branch_id = request.query_params.get("branch")
+    store_id = str(request.query_params.get("store", "") or "")
+    branch_id = str(request.query_params.get("branch", "") or "")
+    roles = user_role_names(request.user)
+
+    if is_report_administrator(request.user):
+        if store_id:
+            return queryset.filter(**{f"{store_field}_id": store_id})
+        if branch_id:
+            return queryset.filter(**{f"{store_field}__branch_id": branch_id})
+        return queryset
+
+    if "Store Keeper" in roles:
+        allowed_store_ids = {str(value) for value in assigned_store_ids_for_reports(request.user)}
+        if not allowed_store_ids:
+            return queryset.none()
+        if store_id and store_id not in allowed_store_ids:
+            return queryset.none()
+        queryset = queryset.filter(**{f"{store_field}_id__in": allowed_store_ids})
+        return queryset.filter(**{f"{store_field}_id": store_id}) if store_id else queryset
+
+    employee = getattr(request.user, "employee_profile", None)
+    employee_branch = str(getattr(employee, "branch_id", "") or "")
+    if not employee_branch:
+        return queryset.none()
+    if branch_id and branch_id != employee_branch:
+        return queryset.none()
+    queryset = queryset.filter(**{f"{store_field}__branch_id": employee_branch})
     if store_id:
         queryset = queryset.filter(**{f"{store_field}_id": store_id})
-    elif branch_id:
-        queryset = queryset.filter(**{f"{store_field}__branch_id": branch_id})
     return queryset
 
 
@@ -95,7 +206,236 @@ def decimal_string(value):
     return str(value.quantize(Decimal("0.01")))
 
 
+class DepartmentRequestRegisterReportView(ReportAPIView):
+    report_key = "departmentRequests"
+
+    def get(self, request):
+        queryset = StoreRequisition.objects.select_related(
+            "department", "store__branch", "requested_by__user", "requested_by__branch"
+        ).annotate(item_count=Count("items"))
+        roles = user_role_names(request.user)
+        employee = getattr(request.user, "employee_profile", None)
+
+        if not is_report_administrator(request.user):
+            if not employee:
+                queryset = queryset.none()
+            elif "Requester" in roles:
+                queryset = queryset.filter(requested_by=employee)
+            elif "Department Head" in roles:
+                queryset = queryset.filter(
+                    department=employee.department,
+                    requested_by__branch=employee.branch,
+                ).exclude(status="draft")
+            elif "Store Keeper" in roles:
+                store_ids = assigned_store_ids_for_reports(request.user)
+                queryset = queryset.filter(store_id__in=store_ids, department_approved_by__isnull=False)
+            else:
+                queryset = apply_branch_scope(queryset, request, branch_field="requested_by__branch")
+        else:
+            branch = str(request.query_params.get("branch", "") or "")
+            if branch:
+                queryset = queryset.filter(requested_by__branch_id=branch)
+
+        queryset = apply_date_scope(queryset, request)
+        status = str(request.query_params.get("status", "") or "")
+        store_id = str(request.query_params.get("store", "") or "")
+        department_id = str(request.query_params.get("department", "") or "")
+        if status:
+            queryset = queryset.filter(status=status)
+        if store_id:
+            queryset = queryset.filter(store_id=store_id)
+        if department_id:
+            queryset = queryset.filter(department_id=department_id)
+        rows = [{
+            "date": req.created_at,
+            "reference": req.requisition_no,
+            "department": str(req.department),
+            "requester": str(req.requested_by),
+            "store": str(req.store) if req.store_id else "",
+            "item_count": req.item_count,
+            "status": req.status,
+            "detail": req.purpose,
+            "drilldown_type": "store-requisitions",
+            "drilldown_id": str(req.id),
+        } for req in queryset.order_by("-created_at")]
+        return Response({"results": rows})
+
+
+class StoreIssueRegisterReportView(ReportAPIView):
+    report_key = "storeIssues"
+
+    def get(self, request):
+        queryset = StockIssue.objects.select_related(
+            "requisition__department", "requisition__requested_by", "store__branch", "issued_by"
+        ).annotate(item_count=Count("items"))
+        roles = user_role_names(request.user)
+        employee = getattr(request.user, "employee_profile", None)
+        if not is_report_administrator(request.user):
+            if not employee:
+                queryset = queryset.none()
+            elif "Requester" in roles:
+                queryset = queryset.filter(requisition__requested_by=employee)
+            elif "Department Head" in roles:
+                queryset = queryset.filter(
+                    requisition__department=employee.department,
+                    requisition__requested_by__branch=employee.branch,
+                )
+            elif "Store Keeper" in roles:
+                queryset = queryset.filter(store_id__in=assigned_store_ids_for_reports(request.user))
+            else:
+                queryset = apply_branch_scope(queryset, request, branch_field="store__branch")
+        else:
+            branch = str(request.query_params.get("branch", "") or "")
+            if branch:
+                queryset = queryset.filter(store__branch_id=branch)
+        queryset = apply_date_scope(queryset, request)
+        store_id = str(request.query_params.get("store", "") or "")
+        department_id = str(request.query_params.get("department", "") or "")
+        if store_id:
+            queryset = queryset.filter(store_id=store_id)
+        if department_id:
+            queryset = queryset.filter(requisition__department_id=department_id)
+        rows = [{
+            "date": issue.issue_date,
+            "reference": issue.issue_no,
+            "request_reference": issue.requisition.requisition_no,
+            "department": str(issue.requisition.department),
+            "store": str(issue.store),
+            "actor": str(issue.issued_by),
+            "item_count": issue.item_count,
+            "status": "posted" if issue.inventory_changes_applied else "pending",
+            "drilldown_type": "stock_issue",
+            "drilldown_id": str(issue.id),
+        } for issue in queryset.order_by("-issue_date", "-created_at")]
+        return Response({"results": rows})
+
+
+class PurchaseRequisitionRegisterReportView(ReportAPIView):
+    report_key = "purchaseRequisitions"
+
+    def get(self, request):
+        queryset = PurchaseRequisition.objects.select_related(
+            "branch", "department", "requester__user"
+        ).annotate(item_count=Count("items"))
+        queryset = apply_branch_scope(queryset, request, branch_field="branch")
+        queryset = apply_date_scope(queryset, request)
+        status = str(request.query_params.get("status", "") or "")
+        department_id = str(request.query_params.get("department", "") or "")
+        if status:
+            queryset = queryset.filter(status=status)
+        if department_id:
+            queryset = queryset.filter(department_id=department_id)
+        rows = [{
+            "date": req.created_at,
+            "reference": req.requisition_number,
+            "department": str(req.department) if req.department_id else "",
+            "requester": str(req.requester) if req.requester_id else "",
+            "item_count": req.item_count,
+            "value": decimal_string(req.estimated_total),
+            "status": req.status,
+            "detail": req.reason,
+            "drilldown_type": "requisitions",
+            "drilldown_id": str(req.id),
+        } for req in queryset.order_by("-created_at")]
+        return Response({"results": rows})
+
+
+class PurchaseOrderRegisterReportView(ReportAPIView):
+    report_key = "purchaseOrders"
+
+    def get(self, request):
+        queryset = PurchaseOrder.objects.select_related(
+            "supplier", "requisition__branch", "requisition__department", "store"
+        ).prefetch_related("print_records")
+        queryset = apply_branch_scope(queryset, request, branch_field="requisition__branch")
+        queryset = apply_date_scope(queryset, request)
+        status = str(request.query_params.get("status", "") or "")
+        store_id = str(request.query_params.get("store", "") or "")
+        department_id = str(request.query_params.get("department", "") or "")
+        supplier_id = str(request.query_params.get("supplier", "") or "")
+        if status:
+            queryset = queryset.filter(status=status)
+        if store_id:
+            queryset = queryset.filter(store_id=store_id)
+        if department_id:
+            queryset = queryset.filter(requisition__department_id=department_id)
+        if supplier_id:
+            queryset = queryset.filter(supplier_id=supplier_id)
+        total_value = Decimal("0.00")
+        rows = []
+        for order in queryset.order_by("-created_at"):
+            total_value += order.total_amount
+            print_count = len(order.print_records.all())
+            rows.append({
+                "date": order.created_at,
+                "reference": order.lpo_number or order.po_number,
+                "supplier": str(order.supplier),
+                "department": str(order.requisition.department) if order.requisition.department_id else "",
+                "store": str(order.store) if order.store_id else "",
+                "expected_date": order.expected_date,
+                "value": decimal_string(order.total_amount),
+                "status": order.status,
+                "copy_classification": "ORIGINAL COPY" if print_count == 0 else "COPY OF ORIGINAL",
+                "print_count": print_count,
+                "drilldown_type": "orders",
+                "drilldown_id": str(order.id),
+            })
+        return Response({"total_value": decimal_string(total_value), "results": rows})
+
+
+class GoodsReceiptRegisterReportView(ReportAPIView):
+    report_key = "goodsReceipts"
+
+    def get(self, request):
+        queryset = GoodsReceiptNote.objects.select_related(
+            "purchase_order__supplier", "purchase_order__requisition__branch", "received_by", "posted_by"
+        ).annotate(item_count=Count("items"))
+        roles = user_role_names(request.user)
+        if not is_report_administrator(request.user) and "Store Keeper" in roles:
+            branch_id = employee_branch_id(request.user)
+            requested_branch = str(request.query_params.get("branch", "") or "")
+            if not branch_id or (requested_branch and requested_branch != branch_id):
+                queryset = queryset.none()
+            else:
+                queryset = queryset.filter(
+                    purchase_order__store_id__in=assigned_store_ids_for_reports(request.user),
+                    purchase_order__requisition__branch_id=branch_id,
+                )
+        else:
+            queryset = apply_branch_scope(queryset, request, branch_field="purchase_order__requisition__branch")
+        queryset = apply_date_scope(queryset, request)
+        status = str(request.query_params.get("status", "") or "")
+        store_id = str(request.query_params.get("store", "") or "")
+        department_id = str(request.query_params.get("department", "") or "")
+        supplier_id = str(request.query_params.get("supplier", "") or "")
+        if status:
+            queryset = queryset.filter(status=status)
+        if store_id:
+            queryset = queryset.filter(purchase_order__store_id=store_id)
+        if department_id:
+            queryset = queryset.filter(purchase_order__requisition__department_id=department_id)
+        if supplier_id:
+            queryset = queryset.filter(purchase_order__supplier_id=supplier_id)
+        rows = [{
+            "date": grn.received_date,
+            "reference": grn.grn_number,
+            "lpo_reference": grn.purchase_order.lpo_number or grn.purchase_order.po_number,
+            "supplier": str(grn.purchase_order.supplier),
+            "actor": str(grn.received_by),
+            "item_count": grn.item_count,
+            "status": grn.status,
+            "posted_at": grn.posted_at,
+            "posted_by": str(grn.posted_by) if grn.posted_by_id else "",
+            "delivery_note_no": grn.delivery_note_no,
+            "supplier_invoice_no": grn.supplier_invoice_no,
+            "drilldown_type": "grns",
+            "drilldown_id": str(grn.id),
+        } for grn in queryset.order_by("-received_date", "-created_at")]
+        return Response({"results": rows})
+
+
 class StockSummaryReportView(ReportAPIView):
+    report_key = "valuation"
     def get(self, request):
         queryset = InventoryBalance.objects.select_related("item", "store", "item__category")
         queryset = apply_store_scope(queryset, request)
@@ -123,6 +463,7 @@ class StockSummaryReportView(ReportAPIView):
 
 
 class LowStockReportView(ReportAPIView):
+    report_key = "lowstock"
     def get(self, request):
         queryset = InventoryBalance.objects.select_related("item", "store")
         queryset = apply_store_scope(queryset, request)
@@ -152,6 +493,7 @@ class LowStockReportView(ReportAPIView):
 
 
 class ExpiryReportView(ReportAPIView):
+    report_key = "aging"
     def get(self, request):
         raw_days = request.query_params.get("days", "30")
         try:
@@ -193,6 +535,7 @@ class ExpiryReportView(ReportAPIView):
 
 
 class ConsumptionReportView(ReportAPIView):
+    report_key = "consumption"
     def get(self, request):
         queryset = StockLedger.objects.select_related("item", "store").filter(
             quantity_out__gt=Decimal("0.00"),
@@ -231,15 +574,17 @@ class ConsumptionReportView(ReportAPIView):
 
 
 class ProcurementSummaryReportView(ReportAPIView):
+    report_key = "procurement"
     def get(self, request):
-        requisition_queryset = PurchaseRequisition.objects.all()
-        purchase_order_queryset = PurchaseOrder.objects.all()
-        supplier_return_queryset = SupplierReturn.objects.all()
-        branch_id = request.query_params.get("branch")
-        if branch_id:
-            requisition_queryset = requisition_queryset.filter(branch_id=branch_id)
-            purchase_order_queryset = purchase_order_queryset.filter(requisition__branch_id=branch_id)
-            supplier_return_queryset = supplier_return_queryset.filter(store__branch_id=branch_id)
+        requisition_queryset = apply_branch_scope(
+            PurchaseRequisition.objects.all(), request, branch_field="branch"
+        )
+        purchase_order_queryset = apply_branch_scope(
+            PurchaseOrder.objects.all(), request, branch_field="requisition__branch"
+        )
+        supplier_return_queryset = apply_branch_scope(
+            SupplierReturn.objects.all(), request, branch_field="store__branch"
+        )
         requisition_queryset = apply_date_scope(requisition_queryset, request)
         purchase_order_queryset = apply_date_scope(purchase_order_queryset, request)
         supplier_return_queryset = apply_date_scope(supplier_return_queryset, request)
@@ -275,6 +620,7 @@ class ProcurementSummaryReportView(ReportAPIView):
 
 
 class StockCardReportView(ReportAPIView):
+    report_key = "movement"
     def get(self, request):
         item_id = request.query_params.get("item")
         if not item_id:
@@ -358,6 +704,25 @@ def filter_control_rows(rows, request):
     return [{key: value for key, value in row.items() if not key.startswith("_")} for row in rows]
 
 
+def scope_control_rows_for_user(rows, request, report_kind):
+    if is_report_administrator(request.user):
+        return rows
+    if report_kind == "supplier_price_changes":
+        # Supplier catalogue pricing is hotel-wide master data for the approved roles.
+        return rows
+    roles = user_role_names(request.user)
+    requested_branch = str(request.query_params.get("branch", "") or "")
+    branch_id = employee_branch_id(request.user)
+    if requested_branch and requested_branch != branch_id:
+        return []
+    if "Store Keeper" in roles:
+        allowed = {str(value) for value in assigned_store_ids_for_reports(request.user)}
+        return [row for row in rows if str(row.get("_store_id", "")) in allowed]
+    if not branch_id:
+        return []
+    return [row for row in rows if str(row.get("_branch_id", "")) == branch_id]
+
+
 class ControlReportView(ReportAPIView):
     report_kind = "daily"
 
@@ -374,6 +739,7 @@ class ControlReportView(ReportAPIView):
             "management_summary": self.management_rows,
         }
         rows = builders[self.report_kind](request)
+        rows = scope_control_rows_for_user(rows, request, self.report_kind)
         if self.report_kind == "daily" and not request.query_params.get("date_from") and not request.query_params.get("date_to"):
             rows = [row for row in rows if row.get("_date") == timezone.localdate()]
         rows = filter_control_rows(rows, request)
@@ -409,16 +775,23 @@ class ControlReportView(ReportAPIView):
         today = timezone.localdate()
         for order in PurchaseOrder.objects.select_related("supplier", "requisition__branch").filter(status__in=("issued", "partially_received"), expected_date__lt=today):
             rows.append(control_row(date=order.expected_date, document_type="purchase_order", reference=order.po_number, action="Overdue delivery", status=order.status, supplier=str(order.supplier), branch=str(order.requisition.branch or ""), value=decimal_string(order.total_amount), detail=f"Expected {order.expected_date}", drilldown_type="orders", drilldown_id=str(order.id), _date=order.expected_date, _value=order.total_amount, _branch_id=str(order.requisition.branch_id or ""), _supplier_id=str(order.supplier_id)))
-        for line in GoodsInspectionItem.objects.select_related("inspection__goods_receipt", "goods_receipt_item__item").filter(quantity_rejected__gt=0):
+        for line in GoodsInspectionItem.objects.select_related(
+            "inspection__goods_receipt__purchase_order__requisition__branch",
+            "goods_receipt_item__item",
+        ).filter(quantity_rejected__gt=0):
             item = line.goods_receipt_item.item
-            rows.append(control_row(date=line.created_at, document_type="inspection", reference=str(line.inspection.goods_receipt), action="Rejected delivery", status="exception", item=str(item), quantity=decimal_string(line.quantity_rejected), detail=line.rejection_reason, drilldown_type="inspections", drilldown_id=str(line.inspection_id), _date=line.created_at.date(), _item_id=str(item.id), _category_id=str(item.category_id)))
+            receipt = line.inspection.goods_receipt
+            branch = receipt.purchase_order.requisition.branch
+            rows.append(control_row(date=line.created_at, document_type="inspection", reference=str(receipt), action="Rejected delivery", status="exception", branch=str(branch or ""), item=str(item), quantity=decimal_string(line.quantity_rejected), detail=line.rejection_reason, drilldown_type="inspections", drilldown_id=str(line.inspection_id), _date=line.created_at.date(), _branch_id=str(receipt.purchase_order.requisition.branch_id or ""), _item_id=str(item.id), _category_id=str(item.category_id)))
         for invoice in SupplierInvoice.objects.select_related("supplier", "purchase_order__requisition__branch").filter(status="exception"):
             rows.append(control_row(date=invoice.updated_at, document_type="supplier_invoice", reference=invoice.invoice_number, action="Invoice mismatch", status=invoice.status, supplier=str(invoice.supplier), value=decimal_string(invoice.total_amount), detail=invoice.match_notes, drilldown_type="supplier-invoices", drilldown_id=str(invoice.id), _date=invoice.updated_at.date(), _value=invoice.total_amount, _supplier_id=str(invoice.supplier_id), _branch_id=str(invoice.purchase_order.requisition.branch_id or "")))
-        for line in StockCountItem.objects.select_related("stock_count__store", "item").all():
+        for line in StockCountItem.objects.select_related("stock_count__store__branch", "item").all():
             if line.variance:
-                rows.append(control_row(date=line.updated_at, document_type="stock_count", reference=line.stock_count.count_no, action="Count variance", status=line.stock_count.status, store_workspace=str(line.stock_count.store), item=str(line.item), quantity=decimal_string(line.variance), detail=f"System {line.system_quantity}; physical {line.physical_quantity}", drilldown_type="stock-counts", drilldown_id=str(line.stock_count_id), _date=line.updated_at.date(), _store_id=str(line.stock_count.store_id), _item_id=str(line.item_id), _category_id=str(line.item.category_id)))
-        for req in StoreRequisition.objects.select_related("store__branch", "department").filter(status="awaiting_procurement"):
-            rows.append(control_row(date=req.updated_at, document_type="store_requisition", reference=req.requisition_no, action="Stock shortage", status=req.status, branch=str(req.store.branch or ""), department=str(req.department), detail=req.purpose, drilldown_type="store-requisitions", drilldown_id=str(req.id), _date=req.updated_at.date(), _branch_id=str(req.store.branch_id or ""), _department_id=str(req.department_id)))
+                rows.append(control_row(date=line.updated_at, document_type="stock_count", reference=line.stock_count.count_no, action="Count variance", status=line.stock_count.status, branch=str(line.stock_count.store.branch or ""), store_workspace=str(line.stock_count.store), item=str(line.item), quantity=decimal_string(line.variance), detail=f"System {line.system_quantity}; physical {line.physical_quantity}", drilldown_type="stock-counts", drilldown_id=str(line.stock_count_id), _date=line.updated_at.date(), _branch_id=str(line.stock_count.store.branch_id or ""), _store_id=str(line.stock_count.store_id), _item_id=str(line.item_id), _category_id=str(line.item.category_id)))
+        for req in StoreRequisition.objects.select_related("store__branch", "requested_by__branch", "department").filter(status="awaiting_procurement"):
+            branch = req.store.branch if req.store_id else req.requested_by.branch
+            branch_id = req.store.branch_id if req.store_id else req.requested_by.branch_id
+            rows.append(control_row(date=req.updated_at, document_type="store_requisition", reference=req.requisition_no, action="Stock shortage", status=req.status, branch=str(branch or ""), department=str(req.department), detail=req.purpose, drilldown_type="store-requisitions", drilldown_id=str(req.id), _date=req.updated_at.date(), _branch_id=str(branch_id or ""), _department_id=str(req.department_id)))
         return rows
 
     def stock_movement_rows(self, request):
@@ -454,14 +827,43 @@ class ControlReportView(ReportAPIView):
 
     def management_rows(self, request):
         today = timezone.localdate()
+        requested_branch = str(request.query_params.get("branch", "") or "")
+        branch_id = requested_branch if is_report_administrator(request.user) else employee_branch_id(request.user)
+        if not is_report_administrator(request.user) and requested_branch and requested_branch != branch_id:
+            return []
+
         open_pos = PurchaseOrder.objects.filter(status__in=("issued", "partially_received"))
         exception_invoices = SupplierInvoice.objects.filter(status="exception")
-        direct_value = sum((line.base_quantity * line.base_unit_cost for line in GoodsReceiptItem.objects.select_related("purchase_order_item").filter(direct_issue_department__isnull=False, inventory_changes_applied=True)), Decimal("0"))
+        direct_lines = GoodsReceiptItem.objects.select_related("purchase_order_item").filter(
+            direct_issue_department__isnull=False,
+            inventory_changes_applied=True,
+        )
+        low_stock = InventoryBalance.objects.all()
+        if branch_id:
+            open_pos = open_pos.filter(requisition__branch_id=branch_id)
+            exception_invoices = exception_invoices.filter(purchase_order__requisition__branch_id=branch_id)
+            direct_lines = direct_lines.filter(goods_receipt__purchase_order__requisition__branch_id=branch_id)
+            low_stock = low_stock.filter(store__branch_id=branch_id)
+
+        direct_value = sum((line.base_quantity * line.base_unit_cost for line in direct_lines), Decimal("0"))
         metrics = [
             ("Open purchase commitments", open_pos.count(), open_pos.aggregate(total=Sum("total_amount"))["total"] or 0),
             ("Overdue purchase orders", open_pos.filter(expected_date__lt=today).count(), 0),
             ("Invoice exceptions", exception_invoices.count(), sum((invoice.total_amount for invoice in exception_invoices), Decimal("0"))),
-            ("Direct workspace consumption", GoodsReceiptItem.objects.filter(direct_issue_department__isnull=False, inventory_changes_applied=True).count(), direct_value),
-            ("Low-stock balances", sum(1 for balance in InventoryBalance.objects.all() if balance.is_below_reorder), 0),
+            ("Direct workspace consumption", direct_lines.count(), direct_value),
+            ("Low-stock balances", sum(1 for balance in low_stock if balance.is_below_reorder), 0),
         ]
-        return [control_row(date=today, document_type="management_metric", reference=name, action="Management summary", status="current", quantity=str(count), value=decimal_string(Decimal(value)), detail=name, _date=today, _value=Decimal(value)) for name, count, value in metrics]
+        return [control_row(
+            date=today,
+            document_type="management_metric",
+            reference=name,
+            action="Management summary",
+            status="current",
+            quantity=str(count),
+            value=decimal_string(Decimal(value)),
+            detail=name,
+            _date=today,
+            _value=Decimal(value),
+            _branch_id=branch_id,
+        ) for name, count, value in metrics]
+

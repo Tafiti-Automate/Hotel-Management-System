@@ -66,7 +66,51 @@ export function buildOperationalReport(
 ): BuiltReport {
   const R: BuiltReport = { title: '', subtitle: '', grid: '', columns: [], rows: [], hasTotals: false, totals: [] }
 
-  if (id === 'valuation') {
+  if (id === 'departmentRequests') {
+    R.title = 'Department Request Register'; R.subtitle = 'Department stock requests and their current workflow position'
+    R.grid = '1.05fr 1fr minmax(0,1.35fr) minmax(0,1.35fr) 1.15fr 80px 1.15fr'
+    R.columns = head([{ t: 'Request' }, { t: 'Date' }, { t: 'Department' }, { t: 'Requester' }, { t: 'Store' }, { t: 'Items', a: 'right' }, { t: 'Status' }])
+    R.rows = records(payload.results).map((row) => ({ data: row, cells: [
+      rcell(text(row.reference), undefined, true), rcell(text(row.date).slice(0, 10)), rcell(text(row.department)),
+      rcell(text(row.requester)), rcell(text(row.store, '—')), rcell(number(row.item_count), 'right'), rcell(title(row.status)),
+    ] }))
+  } else if (id === 'storeIssues') {
+    R.title = 'Stock Issue Register'; R.subtitle = 'Stock issues raised against approved department requests'
+    R.grid = '1.05fr 1fr 1.05fr minmax(0,1.35fr) 1.15fr 1.2fr 80px 1fr'
+    R.columns = head([{ t: 'Issue' }, { t: 'Date' }, { t: 'Request' }, { t: 'Department' }, { t: 'Store' }, { t: 'Issued by' }, { t: 'Items', a: 'right' }, { t: 'Status' }])
+    R.rows = records(payload.results).map((row) => ({ data: row, cells: [
+      rcell(text(row.reference), undefined, true), rcell(text(row.date).slice(0, 10)), rcell(text(row.request_reference)),
+      rcell(text(row.department)), rcell(text(row.store)), rcell(text(row.actor, '—')), rcell(number(row.item_count), 'right'), rcell(title(row.status)),
+    ] }))
+  } else if (id === 'purchaseRequisitions') {
+    R.title = 'Purchase Requisition Register'; R.subtitle = 'Controlled procurement requisitions by department, value and status'
+    R.grid = '1.05fr 1fr minmax(0,1.25fr) minmax(0,1.25fr) 80px 120px 1.15fr'
+    R.columns = head([{ t: 'Requisition' }, { t: 'Date' }, { t: 'Department' }, { t: 'Requester' }, { t: 'Items', a: 'right' }, { t: 'Value', a: 'right' }, { t: 'Status' }])
+    R.rows = records(payload.results).map((row) => ({ data: row, cells: [
+      rcell(text(row.reference), undefined, true), rcell(text(row.date).slice(0, 10)), rcell(text(row.department)),
+      rcell(text(row.requester)), rcell(number(row.item_count), 'right'), rcell(money(number(row.value)), 'right'), rcell(title(row.status)),
+    ] }))
+  } else if (id === 'purchaseOrders') {
+    R.title = 'LPO Register'; R.subtitle = 'Local Purchase Orders with supplier, value, status and controlled-copy position'
+    R.grid = '1fr 1fr minmax(0,1.45fr) minmax(0,1.15fr) 1fr 120px 1fr 1.25fr'
+    R.columns = head([{ t: 'LPO' }, { t: 'Date' }, { t: 'Supplier' }, { t: 'Department' }, { t: 'Expected' }, { t: 'Total', a: 'right' }, { t: 'Status' }, { t: 'Controlled output' }])
+    R.rows = records(payload.results).map((row) => ({ data: row, cells: [
+      rcell(text(row.reference), undefined, true), rcell(text(row.date).slice(0, 10)), rcell(text(row.supplier)),
+      rcell(text(row.department, '—')), rcell(text(row.expected_date, '—')), rcell(money(number(row.value)), 'right'),
+      rcell(title(row.status)), rcell(text(row.copy_classification, 'ORIGINAL COPY')),
+    ] }))
+    R.hasTotals = true
+    R.totals = [rcell('Total LPO value', undefined, true), rcell(''), rcell(''), rcell(''), rcell(''), rcell(money(number(payload.total_value)), 'right'), rcell(''), rcell('')]
+  } else if (id === 'goodsReceipts') {
+    R.title = 'GRN Register'; R.subtitle = 'Goods Received Notes with receipt and posting status'
+    R.grid = '1fr 1fr 1fr minmax(0,1.45fr) minmax(0,1.25fr) 80px 1fr 1fr'
+    R.columns = head([{ t: 'GRN' }, { t: 'Date' }, { t: 'LPO' }, { t: 'Supplier' }, { t: 'Received by' }, { t: 'Items', a: 'right' }, { t: 'Receipt status' }, { t: 'Posting' }])
+    R.rows = records(payload.results).map((row) => ({ data: row, cells: [
+      rcell(text(row.reference), undefined, true), rcell(text(row.date).slice(0, 10)), rcell(text(row.lpo_reference)),
+      rcell(text(row.supplier)), rcell(text(row.actor, '—')), rcell(number(row.item_count), 'right'),
+      rcell(title(row.status)), rcell(text(row.posted_at) ? 'Posted' : 'Received'),
+    ] }))
+  } else if (id === 'valuation') {
     R.title = 'Stock Valuation'; R.subtitle = 'Live weighted-average stock value from inventory batches'
     R.grid = 'minmax(0,1.5fr) 1fr 1.1fr 1.2fr 90px 110px 120px'
     R.columns = head([{ t: 'Item' }, { t: 'SKU' }, { t: 'Category' }, { t: 'Store' }, { t: 'On hand', a: 'right' }, { t: 'Avg cost', a: 'right' }, { t: 'Value', a: 'right' }])

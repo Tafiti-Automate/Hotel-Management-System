@@ -42,15 +42,59 @@ const routePermissions: Record<string, string[]> = {
 const hrApps = new Set(['employees', 'departments', 'accounts'])
 
 const strictRoleRoutes: Record<string, Set<string>> = {
-  requester: new Set(['dashboard', 'detail', 'workflow-stores']),
-  'department head': new Set(['dashboard', 'detail', 'workflow-stores']),
-  'store keeper': new Set(['dashboard', 'detail', 'workflow-stores']),
-  'cost controller': new Set(['dashboard', 'detail', 'items', 'categories', 'uoms', 'itemUnits', 'suppliers', 'supplierItems']),
-  'procurement manager': new Set(['dashboard', 'detail', 'workflow-procure']),
-  'procurement officer': new Set(['dashboard', 'detail', 'workflow-procure']),
-  'financial manager': new Set(['dashboard', 'detail', 'workflow-procure']),
-  'general manager': new Set(['dashboard', 'detail', 'workflow-procure']),
-  'receiving clerk': new Set(['dashboard', 'detail', 'workflow-procure']),
+  requester: new Set(['dashboard', 'detail', 'workflow-stores', 'reports', 'reportview']),
+  'department head': new Set(['dashboard', 'detail', 'workflow-stores', 'reports', 'reportview']),
+  'store keeper': new Set(['dashboard', 'detail', 'workflow-stores', 'reports', 'reportview']),
+  'cost controller': new Set(['dashboard', 'detail', 'items', 'categories', 'uoms', 'itemUnits', 'suppliers', 'supplierItems', 'reports', 'reportview']),
+  'procurement manager': new Set(['dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
+  'procurement officer': new Set(['dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
+  'financial manager': new Set(['dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
+  'general manager': new Set(['dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
+  'receiving clerk': new Set(['dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
+}
+
+
+
+export const roleReportIds: Record<string, string[]> = {
+  requester: ['departmentRequests', 'storeIssues'],
+  'department head': ['departmentRequests', 'storeIssues'],
+  'store keeper': [
+    'departmentRequests', 'storeIssues', 'valuation', 'lowstock', 'movement', 'aging',
+    'consumption', 'stockMovementControl', 'goodsReceipts',
+  ],
+  'cost controller': ['lowstock', 'procurement', 'supplierPriceChanges', 'supplier'],
+  'procurement manager': [
+    'purchaseRequisitions', 'procurement', 'purchaseOrders', 'goodsReceipts', 'pendingActions',
+    'exceptions', 'approvalTrail', 'supplierPriceChanges', 'directWorkspace', 'supplier',
+  ],
+  'procurement officer': [
+    'purchaseRequisitions', 'procurement', 'purchaseOrders', 'goodsReceipts', 'pendingActions',
+    'exceptions', 'approvalTrail', 'supplierPriceChanges', 'directWorkspace', 'supplier',
+  ],
+  'financial manager': [
+    'procurement', 'purchaseOrders', 'goodsReceipts', 'pendingActions', 'exceptions',
+    'approvalTrail', 'managementSummary',
+  ],
+  'general manager': [
+    'managementSummary', 'procurement', 'purchaseOrders', 'goodsReceipts', 'valuation',
+    'consumption', 'pendingActions', 'exceptions', 'approvalTrail',
+  ],
+  'receiving clerk': ['purchaseOrders', 'goodsReceipts', 'pendingActions', 'exceptions', 'directWorkspace'],
+}
+
+export function reportIdsForUser(user: AccessUser): string[] {
+  if (user.isSuperuser || roleKey(user) === 'system administrator') return ['*']
+  return roleReportIds[roleKey(user)] || []
+}
+
+export function canViewReport(user: AccessUser, reportId: string): boolean {
+  const allowed = reportIdsForUser(user)
+  return allowed.includes('*') || allowed.includes(reportId)
+}
+
+export function hasReportAccess(user: AccessUser): boolean {
+  const allowed = reportIdsForUser(user)
+  return allowed.includes('*') || allowed.length > 0
 }
 
 function roleKey(user: Pick<AccessUser, 'role'>): string {
@@ -76,6 +120,7 @@ export function canAccessRoute(user: AccessUser, route: string): boolean {
   if (route === 'workflow-stores' && !['department head', 'store keeper', 'requester'].includes(role)) return false
   if (route === 'storeRequisitions' && role !== 'requester') return false
   if (route === 'dashboard' || route === 'detail') return true
+  if (route === 'reports' || route === 'reportview') return hasReportAccess(user)
   const required = routePermissions[route]
   return required ? required.some((permission) => user.permissions.includes(permission)) : false
 }

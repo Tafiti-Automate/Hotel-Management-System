@@ -2,6 +2,11 @@ from django.urls import path
 
 from apps.reports.views import (
     ConsumptionReportView,
+    DepartmentRequestRegisterReportView,
+    StoreIssueRegisterReportView,
+    PurchaseRequisitionRegisterReportView,
+    PurchaseOrderRegisterReportView,
+    GoodsReceiptRegisterReportView,
     ExpiryReportView,
     LowStockReportView,
     ProcurementSummaryReportView,
@@ -12,6 +17,11 @@ from apps.reports.views import (
 
 
 urlpatterns = [
+    path("reports/department-requests/", DepartmentRequestRegisterReportView.as_view(), name="report-department-requests"),
+    path("reports/store-issues/", StoreIssueRegisterReportView.as_view(), name="report-store-issues"),
+    path("reports/purchase-requisitions/", PurchaseRequisitionRegisterReportView.as_view(), name="report-purchase-requisitions"),
+    path("reports/purchase-orders/", PurchaseOrderRegisterReportView.as_view(), name="report-purchase-orders"),
+    path("reports/goods-receipts/", GoodsReceiptRegisterReportView.as_view(), name="report-goods-receipts"),
     path("reports/stock-summary/", StockSummaryReportView.as_view(), name="report-stock-summary"),
     path("reports/low-stock/", LowStockReportView.as_view(), name="report-low-stock"),
     path("reports/expiry/", ExpiryReportView.as_view(), name="report-expiry"),

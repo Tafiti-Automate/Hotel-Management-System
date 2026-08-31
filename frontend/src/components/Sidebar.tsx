@@ -12,18 +12,21 @@ const workflowNav: Record<string, NavGroup[]> = {
       { route: 'dashboard', label: 'Dashboard' },
       { route: 'workflow-stores', label: 'My requisitions' },
     ] },
+    { heading: 'Control', items: [{ route: 'reports', label: 'Reports' }] },
   ],
   'department head': [
     { heading: 'Workspace', items: [
       { route: 'dashboard', label: 'Dashboard' },
       { route: 'workflow-stores', label: 'Department approvals' },
     ] },
+    { heading: 'Control', items: [{ route: 'reports', label: 'Reports' }] },
   ],
   'store keeper': [
     { heading: 'Workspace', items: [
       { route: 'dashboard', label: 'Dashboard' },
       { route: 'workflow-stores', label: 'Store Keeper queue' },
     ] },
+    { heading: 'Control', items: [{ route: 'reports', label: 'Reports' }] },
   ],
   'cost controller': [
     { heading: 'Workspace', items: [{ route: 'dashboard', label: 'Dashboard' }] },
@@ -35,30 +38,35 @@ const workflowNav: Record<string, NavGroup[]> = {
       { route: 'uoms', label: 'Units of measure' },
       { route: 'itemUnits', label: 'UOM conversions' },
     ] },
+    { heading: 'Control', items: [{ route: 'reports', label: 'Reports' }] },
   ],
   'procurement manager': [
     { heading: 'Workspace', items: [
       { route: 'dashboard', label: 'Dashboard' },
       { route: 'workflow-procure', label: 'Procurement queue' },
     ] },
+    { heading: 'Control', items: [{ route: 'reports', label: 'Reports' }] },
   ],
   'financial manager': [
     { heading: 'Workspace', items: [
       { route: 'dashboard', label: 'Dashboard' },
       { route: 'workflow-procure', label: 'LPO approvals' },
     ] },
+    { heading: 'Control', items: [{ route: 'reports', label: 'Reports' }] },
   ],
   'general manager': [
     { heading: 'Workspace', items: [
       { route: 'dashboard', label: 'Dashboard' },
       { route: 'workflow-procure', label: 'Final LPO approvals' },
     ] },
+    { heading: 'Control', items: [{ route: 'reports', label: 'Reports' }] },
   ],
   'receiving clerk': [
     { heading: 'Workspace', items: [
       { route: 'dashboard', label: 'Dashboard' },
       { route: 'workflow-procure', label: 'Receiving & GRN' },
     ] },
+    { heading: 'Control', items: [{ route: 'reports', label: 'Reports' }] },
   ],
 }
 

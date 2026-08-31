@@ -18,7 +18,7 @@ import {
   type AuthUser,
 } from '../lib/api'
 import type { AccentName, Density, Mode } from '../lib/theme'
-import { canAccessModule, canAccessRoute, canSwitchModules, operationsLandingFor } from '../lib/access'
+import { canAccessModule, canAccessRoute, canSwitchModules, canViewReport, operationsLandingFor } from '../lib/access'
 
 export type Screen = 'login' | 'launchpad' | 'app'
 export type Tab = 'overview' | 'procurement' | 'inventory'
@@ -682,7 +682,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     approveReq,
     rejectReq,
     returnReq,
-    openReport: (reportId) => patch({ route: 'reportview', reportId }),
+    openReport: (reportId) => {
+      if (!canViewReport(user, reportId)) {
+        showWorkflowAlert('Report access restricted', `This report is not available to the ${user.role} role.`, 'warning')
+        return
+      }
+      patch({ route: 'reportview', reportId })
+    },
     backFromReport: () => patch({ route: 'reports', reportId: null }),
     showToast,
     closeToast: () => patch({ toast: null }),

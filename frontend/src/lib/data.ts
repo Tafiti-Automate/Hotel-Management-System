@@ -49,6 +49,7 @@ export interface ReportCard {
   icon: string
   grp: string
   source: 'backend' | 'local'
+  controlledDocument?: 'lpo' | 'grn'
 }
 
 export const cfg: Record<string, EntityConfig> = {
@@ -433,26 +434,29 @@ export const cfg: Record<string, EntityConfig> = {
 }
 
 export const reports: ReportCard[] = [
+  { id: 'departmentRequests', title: 'Department Request Register', desc: 'Department stock requests, current status and responsible workflow stage.', icon: 'assignment', grp: 'Department & Stores', source: 'backend' },
+  { id: 'storeIssues', title: 'Stock Issue Register', desc: 'Stock issued against approved department requests.', icon: 'outbox', grp: 'Department & Stores', source: 'backend' },
+  { id: 'purchaseRequisitions', title: 'Purchase Requisition Register', desc: 'Controlled procurement requisitions with department, value and status.', icon: 'request_quote', grp: 'Procurement', source: 'backend' },
+  { id: 'purchaseOrders', title: 'LPO Register', desc: 'Local Purchase Orders with supplier, value, status and controlled-copy position.', icon: 'receipt_long', grp: 'Procurement', source: 'backend', controlledDocument: 'lpo' },
+  { id: 'goodsReceipts', title: 'GRN Register', desc: 'Goods Received Notes with receipt and posting status.', icon: 'move_to_inbox', grp: 'Receiving', source: 'backend', controlledDocument: 'grn' },
   { id: 'valuation', title: 'Stock Valuation', desc: 'Weighted-average stock value by article and store.', icon: 'savings', grp: 'Inventory', source: 'backend' },
-  { id: 'lowstock', title: 'Low Stock & Reorder', desc: 'Live balances at or below effective reorder levels.', icon: 'warning', grp: 'Inventory', source: 'backend' },
+  { id: 'lowstock', title: 'Low Stock & Reorder', desc: 'Balances at or below effective reorder levels.', icon: 'warning', grp: 'Inventory', source: 'backend' },
   { id: 'movement', title: 'Stock Card', desc: 'Chronological movements and running balance for an article.', icon: 'sync_alt', grp: 'Inventory', source: 'backend' },
   { id: 'aging', title: 'Stock Expiry', desc: 'Non-depleted batches expiring within the selected period.', icon: 'schedule', grp: 'Inventory', source: 'backend' },
-  { id: 'consumption', title: 'Stock Consumption', desc: 'Outbound quantity by article, store and source.', icon: 'pie_chart', grp: 'Analytics', source: 'backend' },
-  { id: 'procurement', title: 'Procurement Status Summary', desc: 'PR, PO and supplier-return totals by status.', icon: 'monitoring', grp: 'Procurement', source: 'backend' },
-  { id: 'dailyActivities', title: 'Daily Crucial Activities', desc: 'Important controlled actions completed today or within a selected period.', icon: 'today', grp: 'Control', source: 'backend' },
-  { id: 'pendingActions', title: 'Pending Actions', desc: 'Requisitions, orders, receipts and inspections awaiting completion.', icon: 'pending_actions', grp: 'Control', source: 'backend' },
-  { id: 'exceptions', title: 'Exception Report', desc: 'Shortages, overdue orders, rejected deliveries, mismatches and count variances.', icon: 'report_problem', grp: 'Control', source: 'backend' },
-  { id: 'userActivity', title: 'User Activity', desc: 'Crucial actions performed by employees and system actors.', icon: 'manage_accounts', grp: 'Audit', source: 'backend' },
-  { id: 'stockMovementControl', title: 'Stock Movement Control', desc: 'Receipts, issues, returns, transfers, adjustments and counts.', icon: 'swap_vert', grp: 'Inventory', source: 'backend' },
-  { id: 'approvalTrail', title: 'Approval Trail', desc: 'Complete maker-checker decisions and comments.', icon: 'approval', grp: 'Audit', source: 'backend' },
-  { id: 'directWorkspace', title: 'Direct-to-Workspace', desc: 'Goods routed past store inventory into operating departments.', icon: 'fork_right', grp: 'Procurement', source: 'backend' },
-  { id: 'supplierPriceChanges', title: 'Supplier Price Changes', desc: 'Old and new supplier prices with percentage movement.', icon: 'price_change', grp: 'Vendors', source: 'backend' },
-  { id: 'managementSummary', title: 'Management Summary', desc: 'Current commitments, exceptions, direct consumption and risk indicators.', icon: 'dashboard_customize', grp: 'Management', source: 'backend' },
-  { id: 'req', title: 'Requisition Register', desc: 'Detailed requisitions currently loaded in this session.', icon: 'request_quote', grp: 'Procurement', source: 'local' },
-  { id: 'po', title: 'Purchase Order Register', desc: 'Detailed purchase orders currently loaded in this session.', icon: 'receipt_long', grp: 'Procurement', source: 'local' },
-  { id: 'grn', title: 'Goods Receipt Register', desc: 'GRNs and inspection outcomes currently loaded.', icon: 'move_to_inbox', grp: 'Procurement', source: 'local' },
-  { id: 'supplier', title: 'Supplier Directory', desc: 'Supplier contacts and current account status.', icon: 'local_shipping', grp: 'Vendors', source: 'local' },
+  { id: 'consumption', title: 'Stock Consumption', desc: 'Outbound quantity by article, store and source.', icon: 'pie_chart', grp: 'Inventory', source: 'backend' },
+  { id: 'procurement', title: 'Procurement Status Summary', desc: 'Requisition, LPO and supplier-return totals by status.', icon: 'monitoring', grp: 'Procurement', source: 'backend' },
+  { id: 'pendingActions', title: 'Pending Actions', desc: 'Controlled documents still waiting for the next responsible action.', icon: 'pending_actions', grp: 'Control', source: 'backend' },
+  { id: 'exceptions', title: 'Exception Report', desc: 'Overdue deliveries, rejected goods, mismatches and stock variances.', icon: 'report_problem', grp: 'Control', source: 'backend' },
+  { id: 'stockMovementControl', title: 'Stock Movement Control', desc: 'Posted receipts, issues, returns, transfers and adjustments.', icon: 'swap_vert', grp: 'Inventory', source: 'backend' },
+  { id: 'approvalTrail', title: 'Approval Trail', desc: 'Sequential maker-checker decisions, comments and timestamps.', icon: 'approval', grp: 'Control', source: 'backend' },
+  { id: 'directWorkspace', title: 'Direct-to-Workspace', desc: 'Accepted goods delivered directly to an operating department.', icon: 'fork_right', grp: 'Receiving', source: 'backend' },
+  { id: 'supplierPriceChanges', title: 'Supplier Price Changes', desc: 'Auditable old-to-new supplier price movements.', icon: 'price_change', grp: 'Supplier Control', source: 'backend' },
+  { id: 'managementSummary', title: 'Management Summary', desc: 'Current commitments, exceptions and key operational risk indicators.', icon: 'dashboard_customize', grp: 'Management', source: 'backend' },
+  { id: 'dailyActivities', title: 'Daily Crucial Activities', desc: 'Important controlled actions completed during the selected period.', icon: 'today', grp: 'Audit', source: 'backend' },
+  { id: 'userActivity', title: 'User Activity', desc: 'Important actions grouped by the responsible system actor.', icon: 'manage_accounts', grp: 'Audit', source: 'backend' },
+  { id: 'supplier', title: 'Supplier Directory', desc: 'Supplier contacts and current account status.', icon: 'local_shipping', grp: 'Supplier Control', source: 'local' },
 ]
+
 
 export function getOptions(key: string, data: Record<EntityKey, Row[]>): string[] {
   if (key === 'categories' || key === 'categoryParents') return (data.categories || []).map((c) => c.name)
