@@ -1077,6 +1077,7 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
     locations: raw.stores.map((row) => ({
       id: idOf(row),
       name: text(row.name),
+      address: text(row.address),
       branch: branchNames.get(text(row.branch)) || '',
       branchId: text(row.branch),
       type: bool(row.is_default) ? 'Default' : 'Store',
@@ -1242,7 +1243,8 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
       id: text(row.requisition_no, idOf(row)),
       apiId: idOf(row),
       department: departmentNames.get(text(row.department)) || shortId(row.department),
-      store: storeNames.get(text(row.store)) || shortId(row.store),
+      store: text(row.store_name) || storeNames.get(text(row.store)) || shortId(row.store),
+      storeLocation: text(row.store_address),
       requester: employeeNames.get(text(row.requested_by)) || shortId(row.requested_by),
       date: dateOnly(row.created_at),
       required_date: dateOnly(row.required_date),

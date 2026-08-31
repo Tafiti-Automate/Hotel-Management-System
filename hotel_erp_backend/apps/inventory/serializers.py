@@ -726,6 +726,15 @@ class StoreRequisitionSerializer(serializers.ModelSerializer):
     store = serializers.PrimaryKeyRelatedField(
         queryset=StoreLocation.objects.filter(is_active=True), required=False
     )
+    store_name = serializers.SerializerMethodField()
+    store_address = serializers.SerializerMethodField()
+
+    def get_store_name(self, obj):
+        return obj.store.name if obj.store_id else ""
+
+    def get_store_address(self, obj):
+        return obj.store.address if obj.store_id else ""
+
     class Meta:
         model = StoreRequisition
         fields = "__all__"

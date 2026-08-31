@@ -42,6 +42,7 @@ from apps.inventory.serializers import (
     ItemUnitPriceSerializer,
     StockTransferItemSerializer,
     StoreLocationSerializer,
+    StoreRequisitionSerializer,
 )
 
 
@@ -424,6 +425,38 @@ def test_department_user_store_request_uses_own_identity(client):
 
 
 @pytest.mark.django_db
+def test_store_requisition_exposes_issuing_store_name_and_address():
+    branch = Branch.objects.create(name="Store origin branch")
+    department = Department.objects.create(name="Store origin department")
+    store = StoreLocation.objects.create(
+        branch=branch,
+        name="Main Dry Store",
+        address="Basement, Block B",
+    )
+    user = get_user_model().objects.create_user(
+        username="store-origin-requester",
+        employee_code="EMP-STORE-ORIGIN",
+    )
+    employee = Employee.objects.create(
+        user=user,
+        department=department,
+        branch=branch,
+        designation="Requester",
+    )
+    requisition = StoreRequisition.objects.create(
+        department=department,
+        store=store,
+        requested_by=employee,
+    )
+
+    payload = StoreRequisitionSerializer(requisition).data
+
+    assert str(payload["store"]) == str(store.pk)
+    assert payload["store_name"] == "Main Dry Store"
+    assert payload["store_address"] == "Basement, Block B"
+
+
+@pytest.mark.django_db
 def test_store_request_requires_department_head_before_store_keeper_review():
     branch = Branch.objects.create(name="Approval Flow Hotel")
     department = Department.objects.create(name="Approval Flow Housekeeping")
@@ -467,7 +500,7 @@ def test_store_request_requires_department_head_before_store_keeper_review():
     employee_request.submit(actor=employee_user)
     assert employee_request.status == StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL
     assert employee_request.department_approved_by is None
-    with pytest.raises(ValidationError, match="Stores-reviewed submitted"):
+    with pytest.raises(ValidationError, match="HOD-approved Department request"):
         employee_request.create_shortage_purchase_requisition(created_by=stores_user)
 
     stores_client = APIClient()

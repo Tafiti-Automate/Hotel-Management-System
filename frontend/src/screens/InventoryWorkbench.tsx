@@ -350,8 +350,8 @@ function DepartmentApprovalWorkspace({ app, data, busy, execute, selected, onSel
           <span style={{ marginLeft: 'auto', padding: '6px 10px', borderRadius: 999, color: isPending ? 'var(--warn)' : selected.department_approved_at ? 'var(--good)' : 'var(--bad)', background: isPending ? 'var(--warn-soft)' : selected.department_approved_at ? 'var(--good-soft)' : 'var(--bad-soft)', fontSize: 10.5, fontWeight: 800 }}>{isPending ? 'Pending Approval' : decisionLabel}</span>
         </header>
         <div style={{ padding: 20 }}>
-          <div className="hod-request-meta" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 10, marginBottom: 20 }}>
-            <InfoBox label="Requested by" value={requester(selected)} /><InfoBox label="Department" value={departmentName(app, selected.department)} /><InfoBox label="Date" value={formatDate(selected.created_at || selected.request_date)} />
+          <div className="hod-request-meta" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10, marginBottom: 20 }}>
+            <InfoBox label="Requested by" value={requester(selected)} /><InfoBox label="Department" value={departmentName(app, selected.department)} /><InfoBox label="Date" value={formatDate(selected.created_at || selected.request_date)} /><InfoBox label="Issuing store" value={requestStoreName(app, selected)} /><InfoBox label="Store location" value={requestStoreLocation(app, selected)} />
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 }}><h3 style={{ margin: 0, fontSize: 14 }}>Requested items</h3><span style={{ color: 'var(--text-faint)', fontSize: 11 }}>{lines.length} item{lines.length === 1 ? '' : 's'}</span></div>
           <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
@@ -453,7 +453,11 @@ function StoreKeeperRequestWorkspace({ app, data, busy, execute, selected, onSel
         <header style={{ padding: '18px 20px', display: 'flex', gap: 14, alignItems: 'flex-start', borderBottom: '1px solid var(--border)' }}><span style={{ width: 42, height: 42, display: 'grid', placeItems: 'center', borderRadius: 9, background: 'var(--accent-soft)' }}><Icon name="warehouse" size={21} color="var(--accent)" /></span><div><div style={{ color: 'var(--text-faint)', fontSize: 10, fontWeight: 800, textTransform: 'uppercase' }}>Department requisition</div><h2 style={{ margin: '3px 0 0', fontSize: 22 }}>{id(selected.requisition_no)}</h2></div><StatusBadge value={id(selected.status)} /></header>
         <div style={{ padding: 20 }}>
           <div className="storekeeper-request-meta" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 10, marginBottom: 18 }}><InfoBox label="Requested by" value={employeeName(app, selected.requested_by) || 'Requester'} /><InfoBox label="Department" value={departmentName(app, selected.department)} /><InfoBox label="Date" value={formatDate(selected.created_at)} /></div>
-          <div style={{ maxWidth: 460, marginBottom: 18 }}><label style={labelStyle}>Destination store</label>{active ? <select value={destinationStore} onChange={(event) => setDestinationStore(event.target.value)} style={control}><option value="">Select destination store</option>{app.data.locations.map((store: Row) => <option key={id(store.id)} value={id(store.id)}>{storeName(app, store.id)}</option>)}</select> : <div style={{ ...control, display: 'flex', alignItems: 'center', background: 'var(--surface-2)' }}>{storeName(app, selected.store) || '—'}</div>}</div>
+          <div style={{ maxWidth: 520, marginBottom: 18 }}>
+            <label style={labelStyle}>Issuing store</label>
+            {active ? <select value={destinationStore} onChange={(event) => setDestinationStore(event.target.value)} style={control}><option value="">Select issuing store</option>{app.data.locations.map((store: Row) => <option key={id(store.id)} value={id(store.id)}>{storeOptionLabel(store)}</option>)}</select> : <div style={{ ...control, height: 'auto', minHeight: 44, display: 'flex', flexDirection: 'column', justifyContent: 'center', background: 'var(--surface-2)' }}><strong>{requestStoreName(app, selected)}</strong><small style={{ marginTop: 3, color: 'var(--text-muted)' }}>{requestStoreLocation(app, selected)}</small></div>}
+            {active && destinationStore && <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 7, color: 'var(--text-muted)', fontSize: 11.5 }}><Icon name="location_on" size={15} />{storeLocation(app, destinationStore) || 'Location not recorded'}</div>}
+          </div>
           <div style={{ marginBottom: 9, display: 'flex', alignItems: 'baseline', gap: 8 }}><h3 style={{ margin: 0, fontSize: 14 }}>Items</h3><span style={{ color: 'var(--text-faint)', fontSize: 11 }}>{lines.length} item{lines.length === 1 ? '' : 's'}</span></div>
           <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
             <div className="storekeeper-items-head" style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1.5fr) 110px 120px 150px 110px minmax(180px,1fr)', gap: 12, padding: '9px 13px', background: 'var(--surface-2)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}><span>Article</span><span>Requested</span><span>HOD approved</span><span>Forward to Procurement</span><span>UOM</span><span>Note</span></div>
@@ -537,8 +541,8 @@ function RequestPanel({ app, data, form, setForm, busy, execute, stage }: any) {
       <Field label="Department request"><Select value={form.submitted} change={(v) => { const request = data.requests.find((r: Row) => id(r.id) === v); setForm({ submitted: v, destinationStore: request?.store || '' }) }} rows={data.requests.filter((r: Row) => id(r.status) === 'submitted')} label={(r) => `${id(r.requisition_no)} · ${departmentName(app, r.department)}`} /></Field>
       {!data.requests.some((r: Row) => id(r.status) === 'submitted') && <Hint>No submitted Department requisitions are waiting for Store Keeper action.</Hint>}
       {submittedRequest && <RequestSummary request={submittedRequest} lines={submittedLines} data={data} app={app} />}
-      <Field label="Destination store"><Select value={form.destinationStore || submittedRequest?.store || ''} change={(v) => setForm({ ...form, destinationStore: v })} rows={app.data.locations} emptyLabel="Select destination store" /></Field>
-      <Action disabled={busy || !submittedRequest || !form.destinationStore} click={() => execute(() => runBackendAction('store-requisitions', id(form.submitted), 'assign-store', { store: form.destinationStore }), 'Destination store confirmed', { submitted: form.submitted, destinationStore: form.destinationStore })}>Confirm destination store</Action>
+      <Field label="Issuing store"><Select value={form.destinationStore || submittedRequest?.store || ''} change={(v) => setForm({ ...form, destinationStore: v })} rows={app.data.locations} label={storeOptionLabel} emptyLabel="Select issuing store" /></Field>
+      <Action disabled={busy || !submittedRequest || !form.destinationStore} click={() => execute(() => runBackendAction('store-requisitions', id(form.submitted), 'assign-store', { store: form.destinationStore }), 'Issuing store confirmed', { submitted: form.submitted, destinationStore: form.destinationStore })}>Confirm issuing store</Action>
       <Rule />
       <Field label="Item to review"><Select value={form.decisionLine} change={(v) => { const line = submittedLines.find((r: Row) => id(r.id) === v); setForm({ ...form, decisionLine: v, approved: num(line?.quantity_approved) > 0 ? line?.quantity_approved : line?.base_quantity_requested || '', decisionComment: line?.storekeeper_comment || '' }) }} rows={submittedLines} label={(r) => `${itemName(app, r.item)} · requested ${r.base_quantity_requested}`} /></Field>
       {decisionLine && <section style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 8, marginBottom: 10 }}>
@@ -911,15 +915,16 @@ function Records({ tab, data, app, stage, onSelect, onNewRequisition }: { tab: T
       <label className="inventory-filter-field"><span>To</span><input aria-label="To date" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={control} /></label>
       {hasFilters && <button type="button" className="inventory-clear-filters" onClick={clearFilters} style={secondary}><Icon name="filter_alt_off" size={16} />Clear</button>}
     </div>
-    {requesterView && rows.length > 0 && <div className="requester-list-head" style={{ display: 'grid', gridTemplateColumns: '120px 160px minmax(240px,1.4fr) auto', gap: 14, padding: '9px 17px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em' }}><span>Requisition</span><span>Date</span><span>Items</span><span>Status</span></div>}
+    {requesterView && rows.length > 0 && <div className="requester-list-head" style={{ display: 'grid', gridTemplateColumns: '120px 160px minmax(240px,1.4fr) minmax(180px,1fr) auto', gap: 14, padding: '9px 17px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em' }}><span>Requisition</span><span>Date</span><span>Items</span><span>Issuing store / location</span><span>Status</span></div>}
     {rows.map((row) => tab === 'requests' ? (() => {
       const requestLines = data.requestItems.filter((line) => id(line.requisition) === id(row.id))
       const itemNames = requestLines.slice(0, 2).map((line) => itemName(app, line.item))
       const itemPreview = itemNames.length ? `${itemNames.join(', ')}${requestLines.length > 2 ? ` +${requestLines.length - 2} more` : ''}` : 'No items added'
-      return <button type="button" onClick={() => onSelect(row)} className="procurement-record-row store-request-row" key={id(row.id)} style={{ ...recordRow, gridTemplateColumns: requesterView ? '120px 160px minmax(240px,1.4fr) auto' : '1.05fr 1.15fr 1.25fr 1.25fr auto', width: '100%', alignItems: 'center', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
+      return <button type="button" onClick={() => onSelect(row)} className="procurement-record-row store-request-row" key={id(row.id)} style={{ ...recordRow, gridTemplateColumns: requesterView ? '120px 160px minmax(240px,1.4fr) minmax(180px,1fr) auto' : '1.05fr 1.15fr 1.25fr 1.25fr auto', width: '100%', alignItems: 'center', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
         <span style={{ color: 'var(--text)', fontWeight: 800 }}>{id(row.requisition_no)}</span>
         <span style={{ color: 'var(--text-muted)' }}>{row.created_at ? new Date(id(row.created_at)).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</span>
         <span style={{ minWidth: 0 }}><b style={{ display: 'block', color: 'var(--text)', fontSize: 11.5 }}>{requestLines.length} item{requestLines.length === 1 ? '' : 's'}</b><small style={{ display: 'block', marginTop: 3, color: 'var(--text-muted)', fontSize: 10.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{itemPreview}</small></span>
+        <span style={{ minWidth: 0 }}><b style={{ display: 'block', color: 'var(--text)', fontSize: 11.5 }}>{requestStoreName(app, row)}</b><small style={{ display: 'block', marginTop: 3, color: 'var(--text-muted)', fontSize: 10.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{requestStoreLocation(app, row)}</small></span>
         <StatusBadge value={id(row.status)} />
       </button>
     })() : <button type="button" onClick={() => onSelect(row)} className="procurement-record-row" key={id(row.id)} style={{ ...recordRow, width: '100%', alignItems: 'center', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>{cells(row).map((cell, index) => <span key={index} style={{ color: index ? 'var(--text-muted)' : 'var(--text)', fontWeight: index ? 500 : 700 }}>{cell || '—'}</span>)}</button>)}
@@ -948,7 +953,8 @@ function InventoryRecordDrawer({ tab, row, data, app, close }: { tab: Tab; row: 
   }
   const config = configs[tab]
   const details: Array<[string, string]> = tab === 'requests' ? [
-    ['Department', departmentName(app, row.department)], ['Issuing store', storeName(app, row.store)],
+    ['Department', departmentName(app, row.department)], ['Issuing store', requestStoreName(app, row)],
+    ['Store location', requestStoreLocation(app, row)],
     ['Required date', id(row.required_date) || '—'], ['Purpose', id(row.purpose) || '—'],
     ['Department approval', id(row.department_approval_comments) || '—'], ['Store Keeper note', id(row.approval_comments) || '—'],
     ['Rejection reason', id(row.rejection_reason) || '—'],
@@ -1025,6 +1031,10 @@ function InventoryPrintSheet({ propertyName, title, reference, status, details, 
 
 const itemName = (app: any, value: unknown) => id(app.data.items.find((r: Row) => id(r.id) === id(value))?.name) || id(value)
 const storeName = (app: any, value: unknown) => id(app.data.locations.find((r: Row) => id(r.id) === id(value))?.name) || id(value)
+const storeLocation = (app: any, value: unknown) => id(app.data.locations.find((r: Row) => id(r.id) === id(value))?.address)
+const storeOptionLabel = (store: Row) => [id(store.name), id(store.address)].filter(Boolean).join(' · ')
+const requestStoreName = (app: any, row: Row) => id(row.store_name) || storeName(app, row.store) || 'Pending store assignment'
+const requestStoreLocation = (app: any, row: Row) => id(row.store_address || row.storeLocation) || storeLocation(app, row.store) || (row.store ? 'Location not recorded' : 'Assigned after Store Keeper review')
 const departmentName = (app: any, value: unknown) => id(app.data.departments.find((r: Row) => id(r.id) === id(value))?.name) || id(value)
 const employeeName = (app: any, value: unknown) => id(app.data.employees.find((r: Row) => id(r.id) === id(value))?.name) || id(value)
 function Panel({ title, note, children }: { title: string; note: string; children: ReactNode }) { return <div className="inventory-action-form"><header className="inventory-action-form-header"><div style={{ fontSize: 14, fontWeight: 800 }}>{title}</div><div style={{ ...muted, margin: '4px 0 0', lineHeight: 1.5 }}>{note}</div></header><div className="inventory-action-form-body">{children}</div></div> }

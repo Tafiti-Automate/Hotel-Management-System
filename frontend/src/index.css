@@ -2173,6 +2173,7 @@ html:not([data-theme="dark"]) .form-drawer {
     grid-template-columns: 1fr 1fr !important;
   }
   .requester-items-table,
+  .store-request-row,
   .requester-list-head {
     grid-template-columns: 100px minmax(160px, 1fr) minmax(190px, 1.2fr) minmax(160px, 1fr) auto !important;
   }
@@ -2208,7 +2209,7 @@ html:not([data-theme="dark"]) .form-drawer {
   }
   .store-request-row > span:nth-child(2),
   .store-request-row > span:nth-child(3),
-  .store-request-row > div:nth-child(4) {
+  .store-request-row > span:nth-child(4) {
     grid-column: 1 / -1;
   }
   .store-request-row > span:nth-child(5) {
