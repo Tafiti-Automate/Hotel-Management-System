@@ -155,9 +155,8 @@ export default function ArticleManagement() {
   return <div style={{ maxWidth: 1500, margin: '0 auto' }}>
     <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 14 }}>
       <div>
-        <div style={{ color: 'var(--accent)', fontSize: 12, fontWeight: 750 }}>Cost Controller · Article master</div>
-        <h1 style={{ margin: '3px 0 5px', color: 'var(--text)', fontSize: 29, fontWeight: 750 }}>Articles / Items</h1>
-        <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 13 }}>Maintain stock and article controls here; open the dedicated workspaces for prices and unit rules.</p>
+        <h1 style={{ margin: '0 0 5px', color: 'var(--text)', fontSize: 29, fontWeight: 750 }}>Articles / Items</h1>
+        <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 13 }}>Stock and article controls.</p>
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <button type="button" onClick={exportCsv} style={secondary}><Icon name="download" size={17} />Export CSV</button>
@@ -232,7 +231,7 @@ export default function ArticleManagement() {
               <Summary label="On hand" value={number(selectedItem.onHand).toLocaleString()} sub={text(selectedItem.store) || 'All stores'} />
               <Summary label="Reorder level" value={number(selectedItem.reorder).toLocaleString()} />
               <Summary label="Base unit" value={text(selectedItem.uom) || '—'} />
-              <Summary label="Reference cost" value={number(selectedItem.unitCost) ? money(selectedItem.unitCost) : 'Not priced'} sub="Read-only here" />
+              <Summary label="Reference cost" value={number(selectedItem.unitCost) ? money(selectedItem.unitCost) : 'Not priced'} />
               <Summary label="Suppliers" value={String(supplierCount)} sub="Active quotes" />
               <div style={{ ...summaryCard, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><div style={summaryLabel}>Stock status</div><span style={{ marginTop: 5, alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 8px', borderRadius: 999, color: state.color, background: state.background, fontSize: 11.5, fontWeight: 750 }}><Icon name={state.icon} size={14} color={state.color} />{state.label}</span></div>
             </div>
@@ -248,7 +247,7 @@ export default function ArticleManagement() {
           </div>
 
           <section style={{ padding: '13px 14px 14px', borderBottom: '1px solid var(--border)' }}>
-            <div style={{ marginBottom: 9 }}><div style={{ color: 'var(--text)', fontSize: 13.5, fontWeight: 750 }}>Related setup</div><div style={{ marginTop: 2, color: 'var(--text-faint)', fontSize: 11.5 }}>A concise status is shown here; maintenance stays in its authoritative workspace.</div></div>
+            <div style={{ marginBottom: 9, color: 'var(--text)', fontSize: 13.5, fontWeight: 750 }}>Related setup</div>
             <div className="article-related-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 9 }}>
               <RelatedWorkspace
                 icon="request_quote"

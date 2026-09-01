@@ -88,9 +88,8 @@ export default function SupplierManagement() {
   return <div style={{ maxWidth: 1500, margin: '0 auto' }}>
     <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 14 }}>
       <div>
-        <div style={{ color: 'var(--accent)', fontSize: 12, fontWeight: 750 }}>Cost Controller · Supplier master</div>
-        <h1 style={{ margin: '3px 0 5px', color: 'var(--text)', fontSize: 29, fontWeight: 750 }}>Suppliers</h1>
-        <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 13 }}>Maintain supplier profiles and review article coverage; compare commercial terms in Supplier Quotations.</p>
+        <h1 style={{ margin: '0 0 5px', color: 'var(--text)', fontSize: 29, fontWeight: 750 }}>Suppliers</h1>
+        <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 13 }}>Supplier profiles and supplied articles.</p>
       </div>
       {canAddSupplier && <button type="button" onClick={() => app.openCreate('suppliers', 'Register supplier')} style={primary}><Icon name="add" size={17} />Register supplier</button>}
     </header>
@@ -161,7 +160,7 @@ export default function SupplierManagement() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '12px 14px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
-            <div><div style={{ color: 'var(--text)', fontSize: 13.5, fontWeight: 750 }}>Items supplied</div><div style={{ marginTop: 2, color: 'var(--text-faint)', fontSize: 11.5 }}>Supplier coverage only. Pricing, validity and lead-time comparison stays in Supplier Quotations.</div></div>
+            <div style={{ color: 'var(--text)', fontSize: 13.5, fontWeight: 750 }}>Items supplied</div>
             <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>{canAddQuote && <button type="button" onClick={() => addQuoteFor(text(selected.name))} style={primaryCompact}><Icon name="add" size={16} />Add quotation</button>}<button type="button" onClick={() => app.navTo('supplierItems', 'Supplier quotations')} style={secondary}><Icon name="request_quote" size={16} />All quotations</button></div>
           </div>
 
@@ -185,7 +184,7 @@ export default function SupplierManagement() {
             </div>
           </div>
 
-          <footer style={{ minHeight: 48, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderTop: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-muted)', fontSize: 11.5 }}><span>{prices.length} supplied item{prices.length === 1 ? '' : 's'}</span><span>·</span><span>{activeQuotes} active quotation{activeQuotes === 1 ? '' : 's'}</span><span style={{ flex: 1 }} /><span>Prices maintained by Cost Controller</span></footer>
+          <footer style={{ minHeight: 48, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderTop: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-muted)', fontSize: 11.5 }}><span>{prices.length} supplied item{prices.length === 1 ? '' : 's'}</span><span>·</span><span>{activeQuotes} active quotation{activeQuotes === 1 ? '' : 's'}</span></footer>
         </> : <div style={{ flex: 1, display: 'grid', placeItems: 'center', padding: 48, textAlign: 'center', color: 'var(--text-muted)' }}><div><SupplierTreeIcon /><div style={{ marginTop: 10, color: 'var(--text)', fontWeight: 750 }}>Select a supplier</div><div style={{ marginTop: 4, fontSize: 12 }}>Choose a supplier from the explorer to view its profile and quotations.</div></div></div>}
       </section>
     </div>

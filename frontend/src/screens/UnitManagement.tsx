@@ -123,9 +123,8 @@ export default function UnitManagement() {
   return <div style={{ maxWidth: 1500, margin: '0 auto' }}>
     <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 14 }}>
       <div>
-        <div style={{ color: 'var(--accent)', fontSize: 12, fontWeight: 750 }}>Cost Controller · Measurement control</div>
-        <h1 style={{ margin: '3px 0 5px', color: 'var(--text)', fontSize: 29, fontWeight: 750 }}>Units &amp; Conversions</h1>
-        <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 13 }}>Define each unit once, then configure only the article-specific conversion rule.</p>
+        <h1 style={{ margin: '0 0 5px', color: 'var(--text)', fontSize: 29, fontWeight: 750 }}>Units &amp; Conversions</h1>
+        <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 13 }}>Shared units and article conversion rules.</p>
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {canAddUnit && <button type="button" onClick={() => app.openCreate('uoms', 'Units & conversions')} style={secondary}><Icon name="add" size={17} />New unit</button>}
@@ -185,7 +184,7 @@ export default function UnitManagement() {
             </div>
           </div>
 
-          <div style={{ minHeight: 54, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 14px' }}><div><strong style={{ color: 'var(--text)', fontSize: 13.5 }}>Article relationships</strong><div style={{ marginTop: 2, color: 'var(--text-faint)', fontSize: 11.5 }}>Base assignments are automatic; only alternate purchase or issue rules are entered here.</div></div><span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{filteredRelations.length} relationship{filteredRelations.length === 1 ? '' : 's'}</span></div>
+          <div style={{ minHeight: 54, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 14px' }}><strong style={{ color: 'var(--text)', fontSize: 13.5 }}>Article relationships</strong><span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{filteredRelations.length} relationship{filteredRelations.length === 1 ? '' : 's'}</span></div>
           <div style={{ overflowX: 'auto', flex: 1 }}>
             <div style={{ minWidth: 820 }}>
               <div className="unit-relation-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(185px,1.4fr) 120px 120px minmax(190px,1.2fr) 115px 90px 42px', padding: '0 9px', background: 'var(--surface-2)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}><span style={headCell}>Article</span><span style={headCell}>Base unit</span><span style={headCell}>Used as</span><span style={headCell}>Conversion rule</span><span style={{ ...headCell, justifyContent: 'flex-end' }}>Selling price</span><span style={headCell}>Status</span><span /></div>
@@ -202,7 +201,6 @@ export default function UnitManagement() {
             </div>
           </div>
 
-          <footer style={{ minHeight: 50, display: 'flex', alignItems: 'center', gap: 9, padding: '9px 14px', borderTop: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-muted)', fontSize: 11.5 }}><Icon name="info" size={16} color="var(--accent)" /><span><strong style={{ color: 'var(--text)' }}>One definition, many relationships:</strong> “Carton” is created once; each article records how many of its own base units one carton contains.</span></footer>
         </> : <Empty icon="straighten" title="Create the first unit" note="Add a shared unit name and abbreviation before configuring article conversions." />}
       </section>
     </div>

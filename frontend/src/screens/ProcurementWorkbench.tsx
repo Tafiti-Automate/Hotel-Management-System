@@ -360,7 +360,7 @@ export default function ProcurementWorkbench() {
   ] as Array<[Stage, string, string]>).filter(([key]) => can(stagePermissions[key].view) && (!allowedStages || allowedStages.includes(key)))
   const stageGuidance: Record<Stage, { actor: string; description: string; icon: string }> = {
     request: { actor: 'Requester', description: 'Add every required article, then submit the requisition.', icon: 'playlist_add' },
-    quote: { actor: 'Procurement', description: 'Select a supplier using the Cost Controller-approved price.', icon: 'compare_arrows' },
+    quote: { actor: 'Procurement', description: 'Select a supplier quotation.', icon: 'compare_arrows' },
     lpo: role === 'financial manager'
       ? { actor: 'Financial Manager', description: 'Review price and quantities, then approve or return the LPO.', icon: 'receipt_long' }
       : role === 'general manager'
@@ -998,7 +998,7 @@ function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplier
     <div style={{ padding: '34px 18px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12.5 }}>
       <Icon name="assignment" size={24} color="var(--text-faint)" />
       <div style={{ marginTop: 9, fontWeight: 700, color: 'var(--text)' }}>Select a Store Requisition</div>
-      <div style={{ marginTop: 4 }}>Choose a requisition to assign suppliers using the Cost Controller's approved prices.</div>
+      <div style={{ marginTop: 4 }}>Choose a requisition to assign suppliers.</div>
     </div>
   </Panel>
 
@@ -1054,7 +1054,7 @@ function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplier
 
     {selectedCatalogue && <>
       <ReadOnlyValue label="Supplier" value={selectedSupplier?.name || names.suppliers.get(id(selectedCatalogue.supplierId)) || id(selectedCatalogue.supplier)} />
-      <Two><Field label={`Quantity to order (${id(selectedItem?.uom) || 'item unit'})`}><Input type="number" value={form.quantity || maxOrderQuantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><ReadOnlyValue label={`Supplier price per ${id(selectedCatalogue.unit) || 'quoted unit'} · Cost Controller`} value={money(selectedCatalogue.price)} /></Two>
+      <Two><Field label={`Quantity to order (${id(selectedItem?.uom) || 'item unit'})`}><Input type="number" value={form.quantity || maxOrderQuantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><ReadOnlyValue label={`Supplier price per ${id(selectedCatalogue.unit) || 'quoted unit'}`} value={money(selectedCatalogue.price)} /></Two>
       <Field label="Note"><Input value={form.procurementNote || ''} onChange={(v) => setForm({ ...form, procurementNote: v })} placeholder="Optional" /></Field>
       {selectedCatalogue && <QuoteConversionNote orderQuantity={enteredOrderQuantity} factor={selectedFactor} quotedUnit={id(selectedCatalogue.unit) || 'quoted unit'} baseUnit={id(selectedItem?.uom) || 'item unit'} quotedPrice={confirmedPrice} basePrice={confirmedBasePrice} />}
       {allocationExceedsRequest && <Hint>Quantity exceeds the Store Keeper quantity. Maximum is {maxOrderQuantity} {id(selectedItem?.uom) || 'units'}.</Hint>}
@@ -1152,12 +1152,11 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, ite
         <strong style={{ color: 'var(--text)' }}>{names.items.get(id(orderLine.item)) || id(orderLine.item)}</strong>
         <span style={{ color: 'var(--text-muted)' }}>Previous {upstream}</span>
         <input type="number" min="0" max={upstream} step="0.01" disabled={rejectedEarlier} value={decisionQuantity(orderLine, approvalStage)} onChange={(event) => setDecisionQuantity(orderLine, approvalStage, event.target.value)} style={{ ...control, height: 34, opacity: rejectedEarlier ? .65 : 1 }} />
-        <span style={{ color: 'var(--text-muted)' }}><small style={{ display: 'block', color: 'var(--text-faint)' }}>Unit price · Cost Controller</small>{money(orderLine.unit_cost)}</span>
+        <span style={{ color: 'var(--text-muted)' }}><small style={{ display: 'block', color: 'var(--text-faint)' }}>Unit price</small>{money(orderLine.unit_cost)}</span>
         <input disabled={rejectedEarlier || quantity >= upstream} value={reason} onChange={(event) => setDecisionReason(orderLine, approvalStage, event.target.value)} placeholder={quantity < upstream ? 'Reason required' : 'No change'} style={{ ...control, height: 34, opacity: rejectedEarlier || quantity >= upstream ? .65 : 1 }} />
         {rejectedEarlier ? <span style={{ color: 'var(--bad)', fontWeight: 750 }}>Rejected earlier</span> : quantity === 0 ? <button type="button" onClick={() => { setDecisionQuantity(orderLine, approvalStage, upstream); setDecisionReason(orderLine, approvalStage, '') }} style={{ ...secondary, height: 30, justifyContent: 'center' }}>Keep item</button> : <button type="button" onClick={() => { setDecisionQuantity(orderLine, approvalStage, 0); setDecisionReason(orderLine, approvalStage, '') }} style={{ ...secondary, height: 30, justifyContent: 'center', color: 'var(--bad)', borderColor: 'rgba(220,38,38,.35)' }}>Reject item</button>}
       </div>
     })}
-    <div style={{ padding: '8px 11px', color: 'var(--text-muted)', background: 'var(--surface-2)', fontSize: 10.5 }}>Quantities may be kept or reduced, never increased above the previous stage. Price is read-only and remains controlled by the Cost Controller.</div>
   </section>
   const reviewAndApprove = async (approvalStage: ApprovalQuantityStage) => {
     await runBackendAction('purchase-orders', id(order.id), 'review-quantities', { lines: approvalDecisions(approvalStage), comments: '' })
@@ -1228,7 +1227,7 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, ite
       {draftHasQuantityOverage ? <>
         <Hint>This draft contains a quantity that must be corrected before it can enter the approval route.</Hint>
         <Field label="Item to correct"><Select value={form.orderLine} onChange={(v) => { const found = lines.find((row: Row) => id(row.id) === v); setForm({ ...form, orderLine: v, quantity: found ? safeQuantityForLine(found) : '', unit: found?.unit }) }} rows={lines} label={(row: Row) => names.items.get(id(row.item)) || id(row.item)} /></Field>
-        {line && <><Field label="Purchase unit"><Select value={form.unit} onChange={(v) => setForm({ ...form, unit: v, quantity: safeQuantityForLine(line, v) })} rows={availableUnits} /></Field><Two><Field label="Quantity"><Input type="number" value={form.quantity ?? line.quantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><ReadOnlyValue label="Unit price · Cost Controller" value={money(line.unit_cost)} /></Two></>}
+        {line && <><Field label="Purchase unit"><Select value={form.unit} onChange={(v) => setForm({ ...form, unit: v, quantity: safeQuantityForLine(line, v) })} rows={availableUnits} /></Field><Two><Field label="Quantity"><Input type="number" value={form.quantity ?? line.quantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><ReadOnlyValue label="Unit price" value={money(line.unit_cost)} /></Two></>}
         {quantityExceedsApproval && <Hint>Quantity is above the approved limit.</Hint>}
         <Action disabled={busy || !form.orderLine || conversion <= 0 || quantityExceedsApproval || num(form.quantity) <= 0} onClick={() => run(() => updateBackendRecord('purchase-order-items', id(form.orderLine), { quantity: num(form.quantity), unit: form.unit || null }), 'LPO item corrected', { ...form })}>Save correction</Action>
       </> : <Action tone="good" disabled={busy || !lines.length} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'submit-for-approval'), 'LPO sent to Purchasing Manager')}>Send for Level 1 Approval</Action>}
@@ -1367,7 +1366,7 @@ function ReceiptPanel({ data, form, setForm, busy, run, orderLabel, receiptLabel
     {line && <section style={{ margin: '10px 0 12px' }}>
       <ReadOnlyValue label="LPO approved" value={orderedQuantity} />
     </section>}
-    {line && <Hint>Destination: {line.destination_type === 'workspace' ? `Department · ${names.departments.get(id(line.destination_department)) || 'inherited'}` : names.stores.get(id(line.destination_store)) || stores.find((store: Row) => id(store.id) === id(line.destination_store))?.name || 'Inherited LPO store'} · read only.</Hint>}
+    {line && <Hint>Destination: {line.destination_type === 'workspace' ? `Department · ${names.departments.get(id(line.destination_department)) || 'inherited'}` : names.stores.get(id(line.destination_store)) || stores.find((store: Row) => id(store.id) === id(line.destination_store))?.name || 'Inherited LPO store'}.</Hint>}
     <Field label={`Quantity received now (${names.units.get(id(line?.unit)) || 'LPO unit'})`}><Input type="number" value={form.quantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field>
     <Field label={`Expiry date${expiryRequired ? ' *' : ' (optional)'}`}><Input type="date" value={form.expiryDate || ''} onChange={(v) => setForm({ ...form, expiryDate: v })} /></Field>
     {invalidExpiry && <Hint>Expiry date cannot be earlier than the received date.</Hint>}

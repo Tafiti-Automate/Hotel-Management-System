@@ -153,8 +153,7 @@ export default function SupplierQuotationManagement() {
   return <div style={{ maxWidth: 1500, margin: '0 auto' }}>
     <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 14 }}>
       <div>
-        <div style={{ color: 'var(--accent)', fontSize: 12, fontWeight: 750 }}>Cost Controller · Price catalogue</div>
-        <h1 style={{ margin: '3px 0 5px', color: 'var(--text)', fontSize: 29, fontWeight: 750 }}>Supplier Quotations</h1>
+        <h1 style={{ margin: '0 0 5px', color: 'var(--text)', fontSize: 29, fontWeight: 750 }}>Supplier Quotations</h1>
         <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 13 }}>Select an article to compare supplier prices, purchase units, quotation validity and lead times.</p>
       </div>
       {canAdd && <button type="button" onClick={() => app.openCreate('supplierItems', 'Add supplier quotation')} style={primary}><Icon name="add" size={17} />Add supplier quotation</button>}
@@ -232,7 +231,7 @@ export default function SupplierQuotationManagement() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '12px 14px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
-            <div><div style={{ color: 'var(--text)', fontSize: 13.5, fontWeight: 750 }}>Supplier price comparison</div><div style={{ marginTop: 2, color: 'var(--text-faint)', fontSize: 11.5 }}>Prices are maintained by the Cost Controller. Lowest active price is highlighted for comparison only.</div></div>
+            <div style={{ color: 'var(--text)', fontSize: 13.5, fontWeight: 750 }}>Supplier price comparison</div>
             <span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{filteredQuotes.length} quotation{filteredQuotes.length === 1 ? '' : 's'}</span>
           </div>
 
@@ -260,7 +259,7 @@ export default function SupplierQuotationManagement() {
             </div>
           </div>
 
-          <footer style={{ minHeight: 48, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderTop: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-muted)', fontSize: 11.5 }}><span>{articleQuotes.length} quotation{articleQuotes.length === 1 ? '' : 's'} recorded</span><span>·</span><span>{supplierCount} active supplier option{supplierCount === 1 ? '' : 's'}</span><span style={{ flex: 1 }} /><span>Price access: Cost Controller</span></footer>
+          <footer style={{ minHeight: 48, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderTop: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-muted)', fontSize: 11.5 }}><span>{articleQuotes.length} quotation{articleQuotes.length === 1 ? '' : 's'} recorded</span><span>·</span><span>{supplierCount} active supplier option{supplierCount === 1 ? '' : 's'}</span></footer>
         </> : <div style={{ flex: 1, display: 'grid', placeItems: 'center', padding: 48, textAlign: 'center', color: 'var(--text-muted)' }}><div><ArticleIcon /><div style={{ marginTop: 10, color: 'var(--text)', fontWeight: 750 }}>Select an article</div><div style={{ marginTop: 4, fontSize: 12 }}>Choose an article from the explorer to compare supplier quotations.</div></div></div>}
       </section>
     </div>
