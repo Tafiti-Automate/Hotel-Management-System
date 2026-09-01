@@ -736,9 +736,9 @@ function RequesterDraftEditor({ app, data, form, setForm, busy, execute, draftRe
         </div>
         {!majorGroups.length && <div role="alert" style={{ margin: '0 0 12px', padding: '10px 12px', border: '1px solid var(--warn)', borderRadius: 8, background: 'var(--warn-soft)', color: 'var(--text)', fontSize: 12, lineHeight: 1.45 }}><strong>Catalogue groups are not available.</strong> Refresh the page after the Requester catalogue permissions have been synchronized.</div>}
         <div className="requester-item-entry cascade" style={{ display: 'grid', gridTemplateColumns: 'minmax(145px,.85fr) minmax(150px,.9fr) minmax(190px,1.2fr) 90px 90px minmax(150px,.9fr) auto', gap: 10, alignItems: 'end' }}>
-          <Field label="1. Major Group"><Select value={form.majorGroup} change={(value) => setForm({ ...form, majorGroup: value, itemGroup: '', item: '', unit: '' })} rows={majorGroups} emptyLabel="Choose Major Group" /></Field>
-          <Field label="2. Item Group"><Select disabled={!form.majorGroup} value={form.itemGroup} change={(value) => setForm({ ...form, itemGroup: value, item: '', unit: '' })} rows={itemGroups} emptyLabel={form.majorGroup ? 'Choose Item Group' : 'Select Major Group first'} /></Field>
-          <Field label="3. Target Item"><Select disabled={!form.itemGroup} value={form.item} change={(value) => { const selected = app.data.items.find((row: Row) => id(row.id) === value); setForm({ ...form, item: value, unit: selected?.baseUnitId || '', quantity: form.quantity || '', note: form.note || '' }) }} rows={selectableItems} emptyLabel={form.itemGroup ? 'Choose item' : 'Select Item Group first'} label={(row) => itemName(app, row.id)} /></Field>
+          <Field label="1. Major Group"><StablePicker value={form.majorGroup} change={(value) => setForm({ ...form, majorGroup: value, itemGroup: '', item: '', unit: '' })} rows={majorGroups} emptyLabel="Choose Major Group" searchPlaceholder="Search Major Groups…" /></Field>
+          <Field label="2. Item Group"><StablePicker disabled={!form.majorGroup} value={form.itemGroup} change={(value) => setForm({ ...form, itemGroup: value, item: '', unit: '' })} rows={itemGroups} emptyLabel={form.majorGroup ? 'Choose Item Group' : 'Select Major Group first'} searchPlaceholder="Search Item Groups…" /></Field>
+          <Field label="3. Target Item"><StablePicker disabled={!form.itemGroup} value={form.item} change={(value) => { const selected = app.data.items.find((row: Row) => id(row.id) === value); setForm({ ...form, item: value, unit: selected?.baseUnitId || '', quantity: form.quantity || '', note: form.note || '' }) }} rows={selectableItems} emptyLabel={form.itemGroup ? 'Choose item' : 'Select Item Group first'} searchPlaceholder="Search items…" label={(row) => itemName(app, row.id)} /></Field>
           <Field label="Quantity"><Input type="number" value={form.quantity} change={(value) => setForm({ ...form, quantity: value })} /></Field>
           <div style={{ marginBottom: 10 }}><HelpLabel label="UOM" style={labelStyle} /><div style={{ ...control, display: 'flex', alignItems: 'center', background: 'var(--surface-2)', color: form.item ? 'var(--text)' : 'var(--text-faint)' }}>{form.item ? selectedUom : '—'}</div></div>
           <Field label="Note (optional)"><Input value={form.note} change={(value) => setForm({ ...form, note: value })} /></Field>
@@ -1152,6 +1152,86 @@ const statusLabel = (value: string) => ({ draft: 'Draft', pending_department_app
 const formatDateTime = (value: string) => value ? new Date(value).toLocaleString() : ''
 function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="inventory-form-field" style={{ display: 'block', marginBottom: 10 }}><HelpLabel label={label} style={labelStyle} />{children}</label> }
 function Input({ value, change, type = 'text' }: { value: unknown; change: (value: string) => void; type?: string }) { return <input className="inventory-control" type={type} value={id(value)} onChange={(e) => change(e.target.value)} style={control} /> }
+function StablePicker({ value, change, rows, label = (r: Row) => id(r.name), emptyLabel = 'Select…', searchPlaceholder = 'Search…', disabled = false }: { value: unknown; change: (value: string) => void; rows: Row[]; label?: (row: Row) => string; emptyLabel?: string; searchPlaceholder?: string; disabled?: boolean }) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const selected = rows.find((row) => id(row.id) === id(value))
+  const filteredRows = rows.filter((row) => label(row).toLowerCase().includes(search.trim().toLowerCase()))
+
+  useEffect(() => {
+    if (!open) return
+    const onPointerDown = (event: PointerEvent) => {
+      if (!wrapRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (disabled) setOpen(false)
+  }, [disabled])
+
+  const choose = (nextValue: string) => {
+    change(nextValue)
+    setOpen(false)
+    setSearch('')
+  }
+
+  return <div ref={wrapRef} className="requester-stable-picker" style={{ position: 'relative', minWidth: 0 }}>
+    <button
+      type="button"
+      disabled={disabled}
+      aria-haspopup="listbox"
+      aria-expanded={open}
+      onClick={() => !disabled && setOpen((current) => !current)}
+      style={{ ...control, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, textAlign: 'left', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? .65 : 1, color: selected ? 'var(--text)' : 'var(--text-muted)' }}
+    >
+      <span style={{ minWidth: 0, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selected ? label(selected) : emptyLabel}</span>
+      <Icon name={open ? 'expand_less' : 'expand_more'} size={18} color="var(--text-faint)" />
+    </button>
+    {open && !disabled && <div role="listbox" style={{ position: 'absolute', zIndex: 120, left: 0, right: 0, top: 'calc(100% + 5px)', minWidth: 230, padding: 6, border: '1px solid var(--border)', borderRadius: 9, background: 'var(--surface)', boxShadow: '0 12px 28px rgba(15,23,42,.18)' }}>
+      <div style={{ position: 'relative', marginBottom: 5 }}>
+        <Icon name="search" size={16} color="var(--text-faint)" style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+        <input
+          autoFocus
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && filteredRows.length === 1) choose(id(filteredRows[0].id))
+          }}
+          placeholder={searchPlaceholder}
+          style={{ width: '100%', height: 34, padding: '0 9px 0 31px', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface-2)', color: 'var(--text)', outline: 'none', fontSize: 12 }}
+        />
+      </div>
+      <div style={{ maxHeight: 230, overflowY: 'auto', overscrollBehavior: 'contain' }}>
+        {filteredRows.map((row) => {
+          const active = id(row.id) === id(value)
+          return <button
+            key={id(row.id)}
+            type="button"
+            role="option"
+            aria-selected={active}
+            onClick={() => choose(id(row.id))}
+            style={{ width: '100%', minHeight: 38, display: 'flex', alignItems: 'center', gap: 8, padding: '7px 9px', border: 0, borderRadius: 6, background: active ? 'var(--accent-soft)' : 'transparent', color: active ? 'var(--accent)' : 'var(--text)', cursor: 'pointer', textAlign: 'left', font: 'inherit', fontSize: 12.5, fontWeight: active ? 700 : 550 }}
+          >
+            <span style={{ flex: 1 }}>{label(row)}</span>
+            {active && <Icon name="check" size={16} color="var(--accent)" />}
+          </button>
+        })}
+        {!filteredRows.length && <div style={{ padding: '16px 10px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>No matching options.</div>}
+      </div>
+    </div>}
+  </div>
+}
+
 function Select({ value, change, rows, label = (r: Row) => id(r.name), optional = false, emptyLabel, disabled = false }: { value: unknown; change: (value: string) => void; rows: Row[]; label?: (row: Row) => string; optional?: boolean; emptyLabel?: string; disabled?: boolean }) { return <select className="inventory-control" disabled={disabled} value={id(value)} onChange={(e) => change(e.target.value)} style={{ ...control, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? .65 : 1 }}><option value="">{emptyLabel || (optional ? 'None' : 'Select…')}</option>{rows.map((row) => <option key={id(row.id)} value={id(row.id)}>{label(row)}</option>)}</select> }
 function Action({ children, click, disabled, tone = 'accent' }: any) { return <button className="inventory-primary-action" type="button" onClick={click} disabled={disabled} style={{ ...action, opacity: disabled ? .45 : 1, background: tone === 'good' ? 'var(--good)' : tone === 'danger' ? 'var(--bad)' : 'var(--accent)' }}>{children}</button> }
 function Rule() { return <div className="inventory-form-rule" style={{ borderTop: '1px solid var(--border)', margin: '16px 0' }} /> }
