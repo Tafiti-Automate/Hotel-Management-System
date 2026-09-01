@@ -37,7 +37,7 @@ export default function LpoPreviewModal({ orderId, reference, onClose }: LpoPrev
       <div onClick={onClose} style={backdrop} />
       <section role="dialog" aria-modal="true" aria-label={`Preview LPO ${reference}`} style={modal}>
         <header style={header}>
-          <span style={iconBox}><Icon name="preview" size={21} color="var(--accent)" /></span>
+          <span style={iconBox}><Icon name="description" size={21} color="var(--accent)" /></span>
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ color: 'var(--text)', fontSize: 15, fontWeight: 800 }}>LPO {reference}</div>
             <div style={{ marginTop: 3, color: 'var(--text-muted)', fontSize: 11.5 }}>On-screen preview · does not use the ORIGINAL/COPY print number</div>

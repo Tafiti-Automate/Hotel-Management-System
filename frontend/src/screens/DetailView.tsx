@@ -81,7 +81,7 @@ export default function DetailView() {
               <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', fontFamily: "'JetBrains Mono',monospace", letterSpacing: '-.01em', marginTop: 3 }}>{r.id}</div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {!isReq && <button type="button" onClick={() => setPreviewOpen(true)} style={{ height: 36, display: 'inline-flex', alignItems: 'center', gap: 7, padding: '0 12px', border: '1px solid var(--accent)', borderRadius: 7, background: 'var(--accent-soft)', color: 'var(--accent)', cursor: 'pointer', font: 'inherit', fontSize: 12.5, fontWeight: 750 }}><Icon name="visibility" size={18} />View LPO</button>}
+              {!isReq && <button type="button" onClick={() => setPreviewOpen(true)} style={{ height: 36, display: 'inline-flex', alignItems: 'center', gap: 7, padding: '0 12px', border: '1px solid var(--accent)', borderRadius: 7, background: 'var(--accent-soft)', color: 'var(--accent)', cursor: 'pointer', font: 'inherit', fontSize: 12.5, fontWeight: 750 }}><Icon name="description" size={18} />View LPO</button>}
               <span style={chipStyleFor(r.status)}>{r.status}</span>
             </div>
           </div>

@@ -1129,7 +1129,7 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, ite
   </Panel>
 
   return <Panel title={panelTitle} note="">
-    {order && <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}><Action onClick={() => setPreviewOpen(true)}><Icon name="visibility" size={17} />View LPO in system</Action></div>}
+    {order && <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}><Action onClick={() => setPreviewOpen(true)}><Icon name="description" size={17} />View LPO in system</Action></div>}
     {lpoQueue === 'prepare' && selectedRequisition && canManage && <>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8, marginBottom: 13 }}>
         <ReadOnlyValue label="Store Requisition" value={id(selectedRequisition.source_store_requisition_no) || id(selectedRequisition.requisition_number)} />
@@ -1745,7 +1745,7 @@ function ProcurementRecordDrawer({ stage, row, data, names, canAttach, onClose, 
         />
       )}
       <footer className="screen-document-view" style={{ padding: '14px 22px', display: 'flex', justifyContent: 'flex-end', gap: 8, borderTop: '1px solid var(--border)' }}>
-        {stage === 'lpo' && <button type="button" onClick={() => setPreviewOpen(true)} style={secondary}><Icon name="visibility" size={17} />View LPO</button>}
+        {stage === 'lpo' && <button type="button" onClick={() => setPreviewOpen(true)} style={secondary}><Icon name="description" size={17} />View LPO</button>}
         {['lpo', 'receipt', 'return'].includes(stage) && <button type="button" disabled={printing} onClick={() => void printDocument()} style={secondary}><Icon name="print" size={17} />{printing ? 'Preparing…' : stage === 'lpo' ? 'Generate controlled LPO PDF' : 'Print document'}</button>}
         <button type="button" onClick={onClose} style={secondary}>Close</button>
       </footer>
@@ -1866,7 +1866,7 @@ const heroIcon: CSSProperties = { width: 46, height: 46, borderRadius: 10, displ
 const eyebrow: CSSProperties = { fontSize: 12, fontWeight: 600, letterSpacing: '.02em', color: 'var(--accent)' }
 const labelStyle: CSSProperties = { display: 'block', fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 5 }
 const control: CSSProperties = { width: '100%', height: 38, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text)', padding: '0 10px', font: 'inherit', fontSize: 12 }
-const action: CSSProperties = { width: '100%', minHeight: 38, border: 0, borderRadius: 6, color: '#fff', font: 'inherit', fontSize: 12, fontWeight: 700, cursor: 'pointer', marginTop: 5 }
+const action: CSSProperties = { width: '100%', minHeight: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, border: 0, borderRadius: 6, color: '#fff', font: 'inherit', fontSize: 12, fontWeight: 700, cursor: 'pointer', marginTop: 5 }
 const secondary: CSSProperties = { height: 36, padding: '0 12px', display: 'flex', alignItems: 'center', gap: 6, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text-muted)', font: 'inherit', fontSize: 12, cursor: 'pointer' }
 const drawerHeading: CSSProperties = { margin: '0 0 10px', color: 'var(--text)', fontSize: 13, fontWeight: 700 }
 const drawerLabel: CSSProperties = { marginBottom: 5, color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase' }
