@@ -295,11 +295,11 @@ export default function FormDrawer() {
                   </div>
                 ) : isSelect ? (
                   <div style={{ position: 'relative' }}>
-                    <select disabled={selectLocked} value={values[fd.key] ?? ''} onChange={(e) => setVal(fd.key, e.target.value, false)} style={{ width: '100%', height: 42, border: '1px solid var(--border)', background: selectLocked ? 'var(--surface-3)' : 'var(--surface-2)', borderRadius: 10, padding: '0 34px 0 12px', fontSize: 13.5, color: selectLocked ? 'var(--text-muted)' : 'var(--text)', outline: 'none', cursor: selectLocked ? 'not-allowed' : 'pointer', opacity: selectLocked ? .82 : 1 }}>
+                    <select disabled={selectLocked} value={values[fd.key] ?? ''} onChange={(e) => setVal(fd.key, e.target.value, false)} style={{ width: '100%', height: 42, border: '1px solid var(--border)', background: selectLocked ? 'var(--surface-3)' : 'var(--surface-2)', borderRadius: 10, padding: selectLocked ? '0 34px 0 12px' : '0 12px', fontSize: 13.5, color: selectLocked ? 'var(--text-muted)' : 'var(--text)', outline: 'none', cursor: selectLocked ? 'not-allowed' : 'pointer', opacity: selectLocked ? .82 : 1 }}>
                       <option value="">{dependencyLocked ? 'Select a Major Group first' : 'Select an option'}</option>
                       {options.map((opt) => <option key={opt} value={opt}>{['categories', 'itemGroups'].includes(fd.opts || '') ? categoryOptionLabel(opt, app.data.categories) : optionLabel(opt)}</option>)}
                     </select>
-                    <Icon name={selectLocked ? 'lock' : 'expand_more'} size={selectLocked ? 16 : 19} color="var(--text-faint)" style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+                    {selectLocked && <Icon name="lock" size={16} color="var(--text-faint)" style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />}
                   </div>
                 ) : fd.type === 'textarea' ? (
                   <textarea

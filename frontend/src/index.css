@@ -130,7 +130,13 @@ input:focus, select:focus, textarea:focus {
   border-color: var(--accent) !important;
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
-select { appearance: none; -webkit-appearance: none; }
+/* Keep the platform picker intact. Stripping native select appearance made
+   mouse/touch opening unreliable in some browser and desktop combinations. */
+select {
+  appearance: auto;
+  -webkit-appearance: menulist;
+}
+select:not(:disabled) { cursor: pointer; }
 ::selection { background: rgba(110, 86, 240, .18); }
 
 *::-webkit-scrollbar { width: 10px; height: 10px; }
