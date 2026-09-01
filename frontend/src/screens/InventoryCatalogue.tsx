@@ -7,7 +7,7 @@ import { useApp } from '../state/AppContext'
 const id = (value: unknown) => String(value || '')
 const num = (value: unknown) => Number(value || 0)
 
-type TreeSelection = { type: 'category' | 'item' | 'unassigned'; id: string }
+type TreeSelection = { type: 'category' | 'item'; id: string }
 
 
 function FolderTreeIcon({ open = false, color = 'currentColor', size = 18 }: { open?: boolean; color?: string; size?: number }) {
@@ -82,7 +82,7 @@ export default function InventoryCatalogue() {
     if (!selected.id && firstSelectableId) setSelected({ type: 'category', id: firstSelectableId })
   }, [childrenByParent, firstSelectableId, roots, selected.id])
 
-  const selectedCategory = selected.type === 'category' || selected.type === 'unassigned'
+  const selectedCategory = selected.type === 'category'
     ? categories.find((category) => id(category.id) === selected.id)
     : categories.find((category) => id(category.id) === id(items.find((item) => id(item.id) === selected.id)?.categoryId))
 
@@ -92,10 +92,9 @@ export default function InventoryCatalogue() {
 
   const selectedIds = useMemo(() => {
     if (selected.type === 'item') return new Set([id(selectedItem?.id)])
-    if (selected.type === 'unassigned') return new Set([selected.id])
     if (!selectedCategory) return new Set<string>()
     if (selectedCategory.parentId) return new Set([id(selectedCategory.id)])
-    return new Set([id(selectedCategory.id), ...(childrenByParent.get(id(selectedCategory.id)) || []).map((child) => id(child.id))])
+    return new Set((childrenByParent.get(id(selectedCategory.id)) || []).map((child) => id(child.id)))
   }, [childrenByParent, selected.type, selectedCategory, selectedItem])
 
   const normalizedQuery = query.trim().toLowerCase()
@@ -105,7 +104,6 @@ export default function InventoryCatalogue() {
         .some((value) => id(value).toLowerCase().includes(normalizedQuery))
     }
     if (selected.type === 'item') return id(item.id) === selected.id
-    if (selected.type === 'unassigned') return id(item.categoryId) === selected.id
     return selectedIds.size ? selectedIds.has(id(item.categoryId)) : true
   })
 
@@ -114,11 +112,9 @@ export default function InventoryCatalogue() {
     : null
   const breadcrumb = normalizedQuery
     ? `Search results for “${query.trim()}”`
-    : selected.type === 'unassigned'
-      ? `${id(selectedCategory?.name)} › Unassigned Items`
-      : selectedItem
-        ? `${id(selectedItem.categoryPath || selectedCategory?.name)} › ${id(selectedItem.name)}`
-        : selectedParent
+    : selectedItem
+      ? `${id(selectedItem.categoryPath || selectedCategory?.name)} › ${id(selectedItem.name)}`
+      : selectedParent
         ? `${id(selectedParent.name)} › ${id(selectedCategory?.name)}`
         : id(selectedCategory?.name) || 'All inventory'
   const permissionMetadata = app.user.permissions.length > 0
@@ -133,13 +129,6 @@ export default function InventoryCatalogue() {
     setSelected({ type: 'category', id: id(category.id) })
     setQuery('')
     setSelectedItems(new Set())
-  }
-  const chooseUnassigned = (root: Row) => {
-    const rootId = id(root.id)
-    setSelected({ type: 'unassigned', id: rootId })
-    setQuery('')
-    setSelectedItems(new Set())
-    setExpanded((current) => new Set(current).add(rootId))
   }
   const chooseItem = (item: Row) => {
     setSelected({ type: 'item', id: id(item.id) })
@@ -230,7 +219,6 @@ export default function InventoryCatalogue() {
             const children = childrenByParent.get(rootId) || []
             const rootOpen = expanded.has(rootId)
             const rootSelected = selected.type === 'category' && selected.id === rootId
-            const directItems = itemsByCategory.get(rootId) || []
             return <div key={rootId} style={{ marginBottom: 4 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <button type="button" onClick={() => toggleExpanded(rootId)} aria-label={`${rootOpen ? 'Collapse' : 'Expand'} ${id(root.name)}`} style={treeToggle}><Icon name={rootOpen ? 'expand_more' : 'chevron_right'} size={18} /></button>
@@ -268,31 +256,7 @@ export default function InventoryCatalogue() {
                     {childOpen && childItems.length === 0 && <div style={{ marginLeft: 62, padding: '4px 8px 8px', color: 'var(--text-faint)', fontSize: 11.5 }}>No items in this group yet.</div>}
                   </div>
                 })}
-                {directItems.length > 0 && (() => {
-                  const directOpen = expanded.has(`unassigned:${rootId}`)
-                  const directSelected = selected.type === 'unassigned' && selected.id === rootId
-                  return <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <button type="button" onClick={() => toggleExpanded(`unassigned:${rootId}`)} aria-label={`${directOpen ? 'Collapse' : 'Expand'} unassigned items in ${id(root.name)}`} style={{ ...treeToggle, marginLeft: 18 }}><Icon name={directOpen ? 'expand_more' : 'chevron_right'} size={18} /></button>
-                      <button type="button" onClick={() => chooseUnassigned(root)} style={{ ...treeRow, width: 'calc(100% - 18px)', color: directSelected ? 'var(--accent)' : 'var(--text-muted)', background: directSelected ? 'var(--accent-soft)' : 'transparent', fontWeight: directSelected ? 750 : 650 }}>
-                        <FolderTreeIcon open={directOpen} size={18} color={directSelected ? 'var(--accent)' : 'var(--text-faint)'} />
-                        <span style={{ flex: 1 }}>Unassigned Items</span>
-                        <small>{directItems.length}</small>
-                      </button>
-                    </div>
-                    {directOpen && <div style={{ marginLeft: 49, borderLeft: '1px solid var(--border)', paddingLeft: 12 }}>
-                      {directItems.map((item) => {
-                        const active = selected.type === 'item' && selected.id === id(item.id)
-                        return <button type="button" key={id(item.id)} onClick={() => chooseItem(item)} style={{ ...treeLeaf, width: 'calc(100% - 10px)', marginLeft: 0, color: active ? 'var(--accent)' : 'var(--text-muted)', background: active ? 'var(--accent-soft)' : 'transparent', fontWeight: active ? 700 : 560 }}>
-                          <ItemTreeIcon size={17} color={active ? 'var(--accent)' : 'var(--text-faint)'} />
-                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{id(item.name)}</span>
-                          <small>{num(item.onHand).toLocaleString()}</small>
-                        </button>
-                      })}
-                    </div>}
-                  </div>
-                })()}
-                {!children.length && !directItems.length && <div style={{ marginLeft: 50, padding: '4px 8px 8px', color: 'var(--text-faint)', fontSize: 11.5 }}>No Item Groups or items yet.</div>}
+                {!children.length && <div style={{ marginLeft: 50, padding: '4px 8px 8px', color: 'var(--text-faint)', fontSize: 11.5 }}>No Item Groups yet. Create an Item Group before adding items.</div>}
               </div>}
             </div>
           })}
@@ -303,7 +267,7 @@ export default function InventoryCatalogue() {
       <section style={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <div style={{ ...panelHeader, minHeight: 54 }}>
           <div>
-            <small style={{ display: 'block', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '.05em' }}>{normalizedQuery ? 'Inventory search' : selected.type === 'item' ? 'Selected item' : selected.type === 'unassigned' ? 'Items awaiting group assignment' : 'Viewing'}</small>
+            <small style={{ display: 'block', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '.05em' }}>{normalizedQuery ? 'Inventory search' : selected.type === 'item' ? 'Selected item' : 'Viewing'}</small>
             <strong style={{ color: 'var(--text)', fontSize: 13 }}>{breadcrumb}</strong>
           </div>
           <span style={{ marginLeft: 'auto', color: 'var(--text-muted)', fontSize: 11.5 }}>{displayedItems.length} item{displayedItems.length === 1 ? '' : 's'}</span>

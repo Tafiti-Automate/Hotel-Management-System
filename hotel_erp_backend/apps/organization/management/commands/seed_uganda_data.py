@@ -594,7 +594,7 @@ class Command(BaseCommand):
         self.stdout.write("Creating Items...")
         
         item_water = Item.objects.create(
-            category=cat_water,
+            category=cat_soft_drinks,
             name="Rwenzori Mineral Water 500ml",
             brand="Rwenzori",
             description="Uganda's premium drinking mineral water.",

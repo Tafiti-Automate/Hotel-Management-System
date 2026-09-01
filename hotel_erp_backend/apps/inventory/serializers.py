@@ -221,6 +221,20 @@ class ItemSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
+        category = attrs.get("category", getattr(self.instance, "category", None))
+        if not category:
+            raise serializers.ValidationError(
+                {"category": "Choose an Item Group before saving this item."}
+            )
+        if not category.parent_id:
+            raise serializers.ValidationError(
+                {
+                    "category": (
+                        "Items cannot be attached directly to a Major Group. "
+                        "Choose an Item Group under the required Major Group."
+                    )
+                }
+            )
         base_unit = attrs.get("base_unit", getattr(self.instance, "base_unit", None))
         if not base_unit:
             raise serializers.ValidationError(

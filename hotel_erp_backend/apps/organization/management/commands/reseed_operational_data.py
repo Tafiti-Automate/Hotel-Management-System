@@ -657,13 +657,13 @@ class Command(BaseCommand):
 
     @staticmethod
     def _create_categories(created_by):
-        specs = (
+        major_specs = (
             ("Food Supplies", "FOOD", "Dry food and kitchen inputs."),
             ("Beverages", "BEV", "Non-alcoholic beverages for hotel operations."),
             ("Housekeeping Supplies", "HKS", "Cleaning and housekeeping consumables."),
             ("Stationery", "STA", "Office and administrative consumables."),
         )
-        return {
+        categories = {
             name: Category.objects.create(
                 name=name,
                 code=code,
@@ -671,8 +671,24 @@ class Command(BaseCommand):
                 is_active=True,
                 created_by=created_by,
             )
-            for name, code, description in specs
+            for name, code, description in major_specs
         }
+        item_group_specs = (
+            ("Soft Drinks", "BEV-SD", "Beverages", "Soft drinks, bottled water and related non-alcoholic beverages."),
+            ("Rice & Grains", "FOOD-RG", "Food Supplies", "Rice, grains and related dry food staples."),
+            ("Cleaning & Hygiene", "HKS-CH", "Housekeeping Supplies", "Cleaning, hygiene and housekeeping consumables."),
+            ("Paper Products", "STA-PP", "Stationery", "Printing paper and related office paper products."),
+        )
+        for name, code, major_name, description in item_group_specs:
+            categories[name] = Category.objects.create(
+                name=name,
+                code=code,
+                parent=categories[major_name],
+                description=description,
+                is_active=True,
+                created_by=created_by,
+            )
+        return categories
 
     @staticmethod
     def _create_items_and_conversions(categories, units, created_by):
@@ -680,7 +696,7 @@ class Command(BaseCommand):
             {
                 "sku": "TAF-RICE-25",
                 "name": "Long Grain Rice",
-                "category": "Food Supplies",
+                "category": "Rice & Grains",
                 "base_unit": "Kilogram",
                 "purchase_unit": "Sack",
                 "factor": "25",
@@ -690,7 +706,7 @@ class Command(BaseCommand):
             {
                 "sku": "TAF-WATER-500",
                 "name": "Mineral Water 500ml",
-                "category": "Beverages",
+                "category": "Soft Drinks",
                 "base_unit": "Bottle",
                 "purchase_unit": "Carton",
                 "factor": "24",
@@ -700,7 +716,7 @@ class Command(BaseCommand):
             {
                 "sku": "TAF-SOAP-5L",
                 "name": "Liquid Hand Soap",
-                "category": "Housekeeping Supplies",
+                "category": "Cleaning & Hygiene",
                 "base_unit": "Litre",
                 "purchase_unit": "Jerrycan",
                 "factor": "5",
@@ -710,7 +726,7 @@ class Command(BaseCommand):
             {
                 "sku": "TAF-PAPER-A4",
                 "name": "A4 Printing Paper 80gsm",
-                "category": "Stationery",
+                "category": "Paper Products",
                 "base_unit": "Ream",
                 "purchase_unit": "Carton",
                 "factor": "5",

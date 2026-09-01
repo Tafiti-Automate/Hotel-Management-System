@@ -809,7 +809,7 @@ function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey
 
   if (entity === 'items') {
     const categoryId = findDataId(data, 'categories', values.category)
-    if (!categoryId) throw new Error('Choose a backend category before saving this item.')
+    if (!categoryId) throw new Error('Choose an Item Group before saving this item.')
 
     const unitId = findDataId(data, 'uoms', values.uom)
     return {

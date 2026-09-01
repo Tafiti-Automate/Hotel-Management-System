@@ -167,6 +167,21 @@ export default function FormDrawer() {
       app.showWorkflowAlert('Purpose required', 'Enter the reason for this store request before continuing.', 'warning')
       return
     }
+    if (f.entity === 'items') {
+      if (!String(values.majorGroup || '').trim()) {
+        app.showWorkflowAlert('Major Group required', 'Choose the Major Group before selecting an Item Group.', 'warning')
+        return
+      }
+      if (!String(values.category || '').trim()) {
+        app.showWorkflowAlert('Item Group required', 'Every item must belong to an Item Group under the selected Major Group.', 'warning')
+        return
+      }
+      const chosenGroup = app.data.categories.find((category) => String(category.name) === String(values.category))
+      if (!chosenGroup?.parentId) {
+        app.showWorkflowAlert('Choose an Item Group', 'Items cannot be attached directly to a Major Group.', 'warning')
+        return
+      }
+    }
     await app.saveForm(out)
   }
 
