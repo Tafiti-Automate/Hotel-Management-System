@@ -132,7 +132,7 @@ export default function ArticleManagement() {
       return next
     })
   }
-  const addItem = () => app.openCreate('items', 'Inventory Catalogue Setup', 'item')
+  const addItem = () => app.openCreate('items', 'Item Grouping', 'item')
   const addQuote = () => selectedItem && app.openCreate('supplierItems', 'Add supplier quotation', undefined, { article: text(selectedItem.name) })
   const exportCsv = () => {
     const quote = (value: unknown) => `"${text(value).replace(/"/g, '""')}"`

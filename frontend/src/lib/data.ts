@@ -77,7 +77,7 @@ export const cfg: Record<string, EntityConfig> = {
     ],
   },
   categories: {
-    title: 'Inventory Catalogue Setup', sub: 'Major Group → Item Group → Items', icon: 'account_tree', add: 'Create group', singular: 'Group', prefix: 'CAT-', editable: true,
+    title: 'Item Grouping', sub: 'Major Group → Item Group → Items', icon: 'account_tree', add: 'Create group', singular: 'Group', prefix: 'CAT-', editable: true,
     cols: [
       { key: 'name', label: 'Group', w: 'minmax(0,1.8fr)', kind: 'bold' },
       { key: 'groupType', label: 'Level', w: '1fr', kind: 'status' },

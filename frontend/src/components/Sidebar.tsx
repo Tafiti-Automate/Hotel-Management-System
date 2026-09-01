@@ -33,7 +33,7 @@ const workflowNav: Record<string, NavGroup[]> = {
     { heading: 'Supplier & article setup', items: [
       { route: 'suppliers', label: 'Suppliers' },
       { route: 'supplierItems', label: 'Supplier quotations' },
-      { route: 'categories', label: 'Inventory Catalogue Setup' },
+      { route: 'categories', label: 'Item Category' },
       { route: 'items', label: 'Articles / items' },
       { route: 'uoms', label: 'Units & conversions' },
     ] },
@@ -79,7 +79,7 @@ const adminOperations: NavGroup[] = [
   { heading: 'Master data', items: [
     { route: 'suppliers', label: 'Suppliers' },
     { route: 'supplierItems', label: 'Supplier quotations' },
-    { route: 'categories', label: 'Inventory Catalogue Setup' },
+    { route: 'categories', label: 'Item Category' },
     { route: 'items', label: 'Articles / items' },
     { route: 'uoms', label: 'Units & conversions' },
     { route: 'locations', label: 'Stores' },

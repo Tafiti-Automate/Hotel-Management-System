@@ -206,24 +206,24 @@ export default function InventoryCatalogue() {
 
   const majorGroupCount = roots.length
   const itemGroupCount = categories.length - roots.length
-  const openMajorGroup = () => app.openCreate('categories', 'Inventory Catalogue Setup', 'majorGroup')
+  const openMajorGroup = () => app.openCreate('categories', 'Item Grouping', 'majorGroup')
   const openItemGroup = () => {
     if (!majorGroupCount) {
       app.showWorkflowAlert('Create a Major Group first', 'An Item Group must belong to a Major Group.', 'warning')
       return
     }
-    app.openCreate('categories', 'Inventory Catalogue Setup', 'itemGroup')
+    app.openCreate('categories', 'Item Grouping', 'itemGroup')
   }
   const openItem = () => {
     if (!itemGroupCount) {
       app.showWorkflowAlert('Create an Item Group first', 'An item must belong to an Item Group inside a Major Group.', 'warning')
       return
     }
-    app.openCreate('items', 'Inventory Catalogue Setup', 'item')
+    app.openCreate('items', 'Item Grouping', 'item')
   }
   const openItemGroupForMajor = (majorGroup: Row) => {
     if (!canMaintainCategories) return
-    app.openCreate('categories', 'Inventory Catalogue Setup', 'itemGroup', { parent: id(majorGroup.name) })
+    app.openCreate('categories', 'Item Grouping', 'itemGroup', { parent: id(majorGroup.name) })
   }
   const openItemForGroup = (itemGroup: Row) => {
     if (!canMaintainItems) return
@@ -232,7 +232,7 @@ export default function InventoryCatalogue() {
       app.showWorkflowAlert('Major Group not found', 'This Item Group is not attached to a valid Major Group.', 'warning')
       return
     }
-    app.openCreate('items', 'Inventory Catalogue Setup', 'item', {
+    app.openCreate('items', 'Item Grouping', 'item', {
       majorGroup: id(majorGroup.name),
       category: id(itemGroup.name),
     })
@@ -240,12 +240,12 @@ export default function InventoryCatalogue() {
 
   return <div style={{ maxWidth: 1500, margin: '0 auto' }}>
     <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, marginBottom: 14, flexWrap: 'wrap' }}>
-      <div><h1 style={{ margin: 0, color: 'var(--text)', fontSize: 24 }}>Inventory Catalogue Setup</h1><p style={{ margin: '5px 0 0', color: 'var(--text-muted)', fontSize: 12.5 }}>Maintain the catalogue in the order Major Group → Item Group → Item.</p></div>
+      <div><h1 style={{ margin: 0, color: 'var(--text)', fontSize: 24 }}>Item Grouping</h1><p style={{ margin: '5px 0 0', color: 'var(--text-muted)', fontSize: 12.5 }}>Maintain the catalogue in the order Major Group → Item Group → Item.</p></div>
       {canMaintainItems && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><input ref={importInput} type="file" accept=".csv,.xlsx" hidden onChange={(event) => void importFile(event.target.files?.[0])} /><button type="button" disabled={importing} onClick={() => importInput.current?.click()} style={secondary}><Icon name="upload_file" size={17} />{importing ? 'Importing…' : 'Import Items'}</button><button type="button" onClick={downloadTemplate} title="Download item import template" style={iconButton}><Icon name="download" size={17} /></button></div>}
     </header>
 
     {(canMaintainCategories || canMaintainItems) && <section style={{ marginBottom: 14, padding: 14, border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 11 }}><Icon name="account_tree" size={18} color="var(--accent)" /><strong style={{ color: 'var(--text)', fontSize: 13 }}>Catalogue setup</strong><span style={{ color: 'var(--text-faint)', fontSize: 11.5 }}>Create each level in sequence.</span></div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 11 }}><Icon name="account_tree" size={18} color="var(--accent)" /><strong style={{ color: 'var(--text)', fontSize: 13 }}>Grouping setup</strong><span style={{ color: 'var(--text-faint)', fontSize: 11.5 }}>Create each level in sequence.</span></div>
       <div className="catalogue-setup-actions" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 10 }}>
         <button type="button" disabled={!canMaintainCategories} onClick={openMajorGroup} className="catalogue-setup-action" style={{ ...setupAction, opacity: canMaintainCategories ? 1 : .55 }}>
           <span style={setupStep}>1</span><FolderTreeIcon size={21} color="var(--accent)" /><span style={setupCopy}><strong>Create Major Group</strong><small>Top-level family, e.g. Beverages</small></span><span style={setupCount}>{majorGroupCount}</span>
