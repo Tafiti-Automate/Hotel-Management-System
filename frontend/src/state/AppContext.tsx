@@ -93,7 +93,7 @@ export interface AppContextValue extends AppState {
   clearItemCategoryFilter: () => void
   // forms + crud
   openCreate: (entity?: EntityKey, label?: string) => void
-  openEdit: (id: string) => void
+  openEdit: (id: string, entity?: EntityKey) => void
   closeForm: () => void
   saveForm: (values: Row) => Promise<void>
   requestDelete: (id: string) => void
@@ -671,7 +671,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       patch(next)
     },
-    openEdit: (id) => patch({ form: { entity: state.route as EntityKey, id } }),
+    openEdit: (id, entity) => patch({ form: { entity: entity || state.route as EntityKey, id } }),
     closeForm: () => patch({ form: null }),
     saveForm,
     requestDelete,

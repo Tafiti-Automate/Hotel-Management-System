@@ -68,7 +68,7 @@ from apps.inventory.serializers import (
 )
 from apps.procurement.models import RequisitionItem
 from core.mixins.viewsets import CreatedByModelMixin
-from core.constants.choices import StoreRequisitionStatus
+from core.constants.choices import ItemBusinessType, StoreRequisitionStatus
 
 
 def raise_drf_validation_error(error):
@@ -202,6 +202,170 @@ class ItemViewSet(CostControllerAuthorityMixin, CreatedByModelMixin, ModelViewSe
     filterset_fields = ("category", "unit", "base_unit", "is_active")
     search_fields = ("name", "sku", "barcode", "brand", "category__name")
     ordering_fields = ("name", "sku", "reorder_level", "created_at")
+
+    @action(detail=False, methods=["post"], url_path="import")
+    def import_items(self, request):
+        """Atomically create or update Articles from a CSV or Excel workbook."""
+        self._require_master_data_authority()
+        upload = request.FILES.get("file")
+        if not upload:
+            raise ValidationError({"file": "Choose a CSV or Excel (.xlsx) item file."})
+        try:
+            rows = self._spreadsheet_rows(upload)
+        except (ValueError, UnicodeDecodeError) as error:
+            raise ValidationError({"file": str(error)})
+
+        created = updated = 0
+        errors = []
+        with transaction.atomic():
+            for number, raw in enumerate(rows, start=2):
+                try:
+                    result = self._import_item_row(raw, request)
+                    created += result == "created"
+                    updated += result == "updated"
+                except Exception as error:
+                    detail = (
+                        getattr(error, "detail", None)
+                        or getattr(error, "message_dict", None)
+                        or str(error)
+                    )
+                    errors.append({"row": number, "error": detail})
+            if errors:
+                transaction.set_rollback(True)
+        if errors:
+            return Response(
+                {
+                    "detail": "Nothing was imported. Correct the listed rows and try again.",
+                    "errors": errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response({"created": created, "updated": updated, "total": created + updated})
+
+    @staticmethod
+    def _spreadsheet_rows(upload):
+        name = upload.name.lower()
+        if name.endswith(".csv"):
+            content = upload.read().decode("utf-8-sig")
+            return list(csv.DictReader(io.StringIO(content)))
+        if name.endswith(".xlsx"):
+            try:
+                from openpyxl import load_workbook
+            except ImportError as error:
+                raise ValueError(
+                    "Excel support is not installed on the server; upload CSV instead."
+                ) from error
+            sheet = load_workbook(upload, read_only=True, data_only=True).active
+            values = sheet.iter_rows(values_only=True)
+            try:
+                headers = [str(value or "").strip() for value in next(values)]
+            except StopIteration:
+                return []
+            return [
+                dict(zip(headers, row))
+                for row in values
+                if any(value is not None for value in row)
+            ]
+        raise ValueError("Unsupported file type. Upload .csv or .xlsx.")
+
+    @staticmethod
+    def _import_item_row(raw, request):
+        normalized = {
+            str(key).strip().lower().replace(" ", "_"): value
+            for key, value in raw.items()
+        }
+        major_name = str(normalized.get("major_group") or "").strip()
+        group_name = str(normalized.get("item_group") or normalized.get("category") or "").strip()
+        item_name = str(normalized.get("item_name") or normalized.get("name") or "").strip()
+        sku = str(normalized.get("sku") or normalized.get("sku_code") or "").strip().upper()
+        unit_name = str(normalized.get("base_unit") or normalized.get("unit") or "").strip()
+        if not all((major_name, group_name, item_name, sku, unit_name)):
+            raise ValueError(
+                "major_group, item_group, item_name, sku and base_unit are required"
+            )
+
+        major = Category.objects.filter(name__iexact=major_name).first()
+        if major and major.parent_id:
+            raise ValueError(f"'{major_name}' is an item group, not a major group")
+        if not major:
+            major = Category.objects.create(name=major_name, created_by=request.user)
+
+        group = Category.objects.filter(name__iexact=group_name).first()
+        if group and group.parent_id != major.id:
+            raise ValueError(f"Item group '{group_name}' does not belong to '{major_name}'")
+        if group and not group.parent_id:
+            raise ValueError(f"'{group_name}' is a major group, not an item group")
+        if not group:
+            group = Category.objects.create(
+                name=group_name,
+                parent=major,
+                created_by=request.user,
+            )
+
+        unit = (
+            UnitOfMeasure.objects.filter(abbreviation__iexact=unit_name).first()
+            or UnitOfMeasure.objects.filter(name__iexact=unit_name).first()
+        )
+        if not unit:
+            raise ValueError(f"Unknown base unit '{unit_name}'")
+
+        business_value = str(
+            normalized.get("business_type")
+            or normalized.get("business_classification")
+            or ItemBusinessType.CONSUMABLE_EXPENSE
+        ).strip()
+        business_lookup = {
+            str(label).lower(): value for value, label in ItemBusinessType.choices
+        }
+        business_type = business_lookup.get(
+            business_value.lower().replace("_", " "),
+            business_value.lower().replace(" ", "_"),
+        )
+        if business_type not in ItemBusinessType.values:
+            raise ValueError(f"Unknown business type '{business_value}'")
+
+        def decimal_value(key, default="0.00", nullable=False):
+            value = normalized.get(key)
+            if value in (None, ""):
+                return None if nullable else Decimal(default)
+            try:
+                return Decimal(str(value))
+            except (InvalidOperation, TypeError, ValueError) as error:
+                raise ValueError(f"{key} must be a number") from error
+
+        def boolean_value(key, default=False):
+            value = normalized.get(key)
+            if value in (None, ""):
+                return default
+            return str(value).strip().lower() not in {"no", "false", "0", "inactive"}
+
+        payload = {
+            "category": group.pk,
+            "name": item_name,
+            "sku": sku,
+            "brand": str(normalized.get("brand") or "").strip(),
+            "description": str(normalized.get("description") or "").strip(),
+            "barcode": str(normalized.get("barcode") or "").strip() or None,
+            "unit": unit.abbreviation or unit.name,
+            "base_unit": unit.pk,
+            "reorder_level": decimal_value("reorder_level"),
+            "maximum_level": decimal_value("maximum_level", nullable=True),
+            "batch_tracking": boolean_value("batch_tracking"),
+            "expiry_tracking": boolean_value("expiry_tracking"),
+            "business_type": business_type,
+            "is_active": boolean_value("is_active", True),
+        }
+        existing = Item.objects.filter(sku__iexact=sku).first()
+        serializer = ItemSerializer(
+            existing,
+            data=payload,
+            context={"request": request},
+        ) if existing else ItemSerializer(data=payload, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save(
+            created_by=existing.created_by if existing else request.user,
+        )
+        return "updated" if existing else "created"
 
 
 class ItemUnitPriceViewSet(CostControllerAuthorityMixin, CreatedByModelMixin, ModelViewSet):

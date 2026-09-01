@@ -248,6 +248,22 @@ export async function importSupplierCatalogue(file: File): Promise<{ created: nu
   return result as { created: number; updated: number; total: number }
 }
 
+export async function importItems(file: File): Promise<{ created: number; updated: number; total: number }> {
+  const body = new FormData()
+  body.append('file', file)
+  const response = await fetchWithTimeout(`${apiRoot()}/items/import/`, {
+    method: 'POST', headers: { Accept: 'application/json', ...authHeaders() }, body,
+  })
+  const result = await response.json().catch(() => ({})) as Record<string, any>
+  if (!response.ok) {
+    const rows = Array.isArray(result.errors)
+      ? result.errors.slice(0, 5).map((entry: any) => `Row ${entry.row}: ${JSON.stringify(entry.error)}`).join(' · ')
+      : ''
+    throw new Error(rows || String(result.detail || 'The item file could not be imported.'))
+  }
+  return result as { created: number; updated: number; total: number }
+}
+
 export async function fetchSupplierPriceHistory(id: string): Promise<Record<string, any>[]> {
   const response = await fetchWithTimeout(`${apiRoot()}/supplier-item-prices/${id}/history/`, {
     headers: { Accept: 'application/json', ...authHeaders() },
@@ -1167,6 +1183,7 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
       baseUnitLocked: bool(row.base_unit_locked),
       batchTracking: bool(row.batch_tracking),
       expiryTracking: bool(row.expiry_tracking),
+      maximumLevel: row.maximum_level == null ? null : num(row.maximum_level),
       store: storeNames.get(text(balance?.store)) || '',
       onHand,
       reorder,

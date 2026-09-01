@@ -82,6 +82,11 @@ export default function FormDrawer() {
       seed.department = signedInEmployee.department
       seed.requester = signedInEmployee.name
     }
+    if (f.entity === 'items' && existing) {
+      const itemGroup = app.data.categories.find((category) => String(category.name) === String(existing.category))
+      const majorGroup = app.data.categories.find((category) => String(category.id) === String(itemGroup?.parentId))
+      seed.majorGroup = majorGroup?.name || ''
+    }
     setValues(seed)
     setStep(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -122,6 +127,7 @@ export default function FormDrawer() {
         next.unit = ''
         if (raw === 'Base unit') next.conversionFactor = 1
       }
+      if (f.entity === 'items' && key === 'majorGroup') next.category = ''
       return next
     })
 
@@ -189,6 +195,12 @@ export default function FormDrawer() {
             if (fd.opts === 'categories' && values[fd.key] && !options.includes(String(values[fd.key]))) {
               options = [String(values[fd.key]), ...options]
             }
+            if (fd.opts === 'itemGroups') {
+              options = app.data.categories
+                .filter((category) => String(category.parent) === String(values.majorGroup))
+                .map((category) => String(category.name))
+              if (values[fd.key] && !options.includes(String(values[fd.key]))) options = [String(values[fd.key]), ...options]
+            }
             if (fd.opts === 'uoms' && f.entity === 'itemUnits' && values.item) {
               const article = app.data.items.find((item) => item.name === values.item)
               options = values.role === 'Base unit'
@@ -204,6 +216,8 @@ export default function FormDrawer() {
             }
             const identityLocked = false
             const fieldLocked = baseUnitLocked && fd.key === 'uom'
+            const dependencyLocked = f.entity === 'items' && fd.opts === 'itemGroups' && !values.majorGroup
+            const selectLocked = fieldLocked || dependencyLocked
             return (
               <div key={fd.key}>
                 <label><HelpLabel label={fd.label} style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 7 }} /></label>
@@ -215,11 +229,11 @@ export default function FormDrawer() {
                   </div>
                 ) : isSelect ? (
                   <div style={{ position: 'relative' }}>
-                    <select disabled={fieldLocked} value={values[fd.key] ?? ''} onChange={(e) => setVal(fd.key, e.target.value, false)} style={{ width: '100%', height: 42, border: '1px solid var(--border)', background: fieldLocked ? 'var(--surface-3)' : 'var(--surface-2)', borderRadius: 10, padding: '0 34px 0 12px', fontSize: 13.5, color: fieldLocked ? 'var(--text-muted)' : 'var(--text)', outline: 'none', cursor: fieldLocked ? 'not-allowed' : 'pointer', opacity: fieldLocked ? .82 : 1 }}>
-                      <option value="">Select an option</option>
-                      {options.map((opt) => <option key={opt} value={opt}>{fd.opts === 'categories' ? categoryOptionLabel(opt, app.data.categories) : optionLabel(opt)}</option>)}
+                    <select disabled={selectLocked} value={values[fd.key] ?? ''} onChange={(e) => setVal(fd.key, e.target.value, false)} style={{ width: '100%', height: 42, border: '1px solid var(--border)', background: selectLocked ? 'var(--surface-3)' : 'var(--surface-2)', borderRadius: 10, padding: '0 34px 0 12px', fontSize: 13.5, color: selectLocked ? 'var(--text-muted)' : 'var(--text)', outline: 'none', cursor: selectLocked ? 'not-allowed' : 'pointer', opacity: selectLocked ? .82 : 1 }}>
+                      <option value="">{dependencyLocked ? 'Select a Major Group first' : 'Select an option'}</option>
+                      {options.map((opt) => <option key={opt} value={opt}>{['categories', 'itemGroups'].includes(fd.opts || '') ? categoryOptionLabel(opt, app.data.categories) : optionLabel(opt)}</option>)}
                     </select>
-                    <Icon name={fieldLocked ? 'lock' : 'expand_more'} size={fieldLocked ? 16 : 19} color="var(--text-faint)" style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+                    <Icon name={selectLocked ? 'lock' : 'expand_more'} size={selectLocked ? 16 : 19} color="var(--text-faint)" style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
                   </div>
                 ) : fd.type === 'textarea' ? (
                   <textarea

@@ -69,7 +69,8 @@ export const cfg: Record<string, EntityConfig> = {
     fields: [
       { key: 'name', label: 'Item name', type: 'text' },
       { key: 'sku', label: 'SKU', type: 'text' },
-      { key: 'category', label: 'Item group', type: 'select', opts: 'categories', hint: 'Items sit inside an item group, for example Beverages › Soft Drinks.' },
+      { key: 'majorGroup', label: 'Major group', type: 'select', opts: 'majorGroups', hint: 'Select the top-level inventory family first.' },
+      { key: 'category', label: 'Item group', type: 'select', opts: 'itemGroups', hint: 'Only groups inside the selected Major Group are shown.' },
       { key: 'businessType', label: 'Business classification', type: 'select', opts: 'businessTypes' },
       { key: 'uom', label: 'Base stock unit', type: 'select', opts: 'uoms' },
       { key: 'reorder', label: 'Reorder level', type: 'number' },
@@ -461,7 +462,8 @@ export const reports: ReportCard[] = [
 
 export function getOptions(key: string, data: Record<EntityKey, Row[]>): string[] {
   if (key === 'categoryParents') return (data.categories || []).filter((category) => !category.parentId).map((category) => category.name)
-  if (key === 'categories') return (data.categories || []).filter((category) => Boolean(category.parentId)).map((category) => category.name)
+  if (key === 'majorGroups') return (data.categories || []).filter((category) => !category.parentId).map((category) => category.name)
+  if (key === 'categories' || key === 'itemGroups') return (data.categories || []).filter((category) => Boolean(category.parentId)).map((category) => category.name)
   if (key === 'uoms') return (data.uoms || []).map((u) => u.name)
   if (key === 'locations') return (data.locations || []).map((l) => l.name)
   if (key === 'branches') return (data.branches || []).map((branch) => branch.name)
