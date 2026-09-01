@@ -822,7 +822,17 @@ class RequisitionItem(BaseModel):
         decimal_places=2,
         null=True,
         blank=True,
-        validators=[validate_positive_decimal],
+        validators=[validate_non_negative_decimal],
+    )
+    rejection_stage = models.CharField(max_length=40, blank=True)
+    rejection_reason = models.TextField(blank=True)
+    rejected_at = models.DateTimeField(null=True, blank=True)
+    rejected_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="rejected_procurement_requisition_items",
     )
     estimated_unit_cost = models.DecimalField(
         max_digits=15,
@@ -1346,73 +1356,122 @@ class PurchaseOrder(BaseModel):
             )
         return print_record
 
-    def apply_finance_quantity_reductions(self, *, reductions, actor, comments=""):
-        """Keep Procurement's quantity intact while Finance records its limit.
+    def apply_approval_quantity_decisions(self, *, stage, decisions, actor, comments=""):
+        """Record quantity decisions without changing the Cost Controller price.
 
-        A normal model save intentionally blocks any alteration while an LPO is
-        awaiting approval.  This narrowly-scoped method is the only route for a
-        Finance decision to reduce a line without silently changing the buyer's
-        original request.
+        Each approval level may keep or reduce the quantity it receives from the
+        previous stage.  Zero is an explicit line rejection and requires a reason.
+        The original Procurement draft quantity remains available for audit.
         """
         if self.status != POStatus.PENDING_APPROVAL:
-            raise ValidationError("Finance can only reduce quantities while the LPO is pending approval.")
-        if not reductions:
-            raise ValidationError("Choose at least one LPO line to review.")
+            raise ValidationError("LPO quantities can only be reviewed while the LPO is pending approval.")
+        if stage not in (1, 2, 3):
+            raise ValidationError("Choose a valid LPO approval stage.")
+        if not decisions:
+            raise ValidationError("Review at least one LPO line.")
+
+        field_map = {
+            1: ("purchasing_approved_quantity", "purchasing_approved_base_quantity", "purchasing_reduction_reason", "Purchasing Manager"),
+            2: ("finance_approved_quantity", "finance_approved_base_quantity", "finance_reduction_reason", "Financial Manager"),
+            3: ("management_approved_quantity", "management_approved_base_quantity", "management_reduction_reason", "General Manager"),
+        }
+        quantity_field, base_field, reason_field, stage_label = field_map[stage]
+
+        def upstream_quantity(line):
+            if stage == 1:
+                return line.procurement_quantity if line.procurement_quantity is not None else line.quantity
+            if stage == 2:
+                if line.purchasing_approved_quantity is not None:
+                    return line.purchasing_approved_quantity
+                return line.procurement_quantity if line.procurement_quantity is not None else line.quantity
+            if line.finance_approved_quantity is not None:
+                return line.finance_approved_quantity
+            if line.purchasing_approved_quantity is not None:
+                return line.purchasing_approved_quantity
+            return line.procurement_quantity if line.procurement_quantity is not None else line.quantity
 
         with transaction.atomic():
             order = PurchaseOrder.objects.select_for_update().get(pk=self.pk)
-            lines = {
-                str(line.pk): line
-                for line in order.items.select_for_update().order_by("pk")
-            }
+            lines = {str(line.pk): line for line in order.items.select_for_update().select_related("item", "unit", "requisition_item").order_by("pk")}
             activity_lines = []
-            for reduction in reductions:
-                line_id = str(reduction.get("id") or reduction.get("purchase_order_item") or "")
+            positive = False
+            for decision in decisions:
+                line_id = str(decision.get("id") or decision.get("purchase_order_item") or "")
                 line = lines.get(line_id)
                 if not line:
                     raise ValidationError("One selected LPO line does not belong to this LPO.")
                 try:
-                    approved_quantity = Decimal(str(reduction.get("approved_quantity")))
+                    approved_quantity = Decimal(str(decision.get("approved_quantity")))
                 except Exception as error:
-                    raise ValidationError("Enter a valid finance-approved quantity for every reviewed line.") from error
+                    raise ValidationError("Enter a valid approved quantity for every reviewed LPO line.") from error
                 if approved_quantity < Decimal("0.00"):
-                    raise ValidationError("Finance-approved quantities cannot be negative.")
-                procurement_quantity = line.procurement_quantity or line.quantity
-                if approved_quantity > procurement_quantity:
+                    raise ValidationError("Approved quantities cannot be negative.")
+                upstream = upstream_quantity(line)
+                if approved_quantity > upstream:
                     raise ValidationError(
-                        f"Finance cannot increase {line.item} above Procurement's quantity of {procurement_quantity}."
+                        f"{stage_label} cannot increase {line.item} above the previous approved quantity of {upstream}."
                     )
-                reason = str(reduction.get("reason") or "").strip()
-                if approved_quantity < procurement_quantity and not reason:
+                reason = str(decision.get("reason") or "").strip()
+                if approved_quantity < upstream and not reason:
                     raise ValidationError(
-                        f"Record a reason for reducing {line.item} from {procurement_quantity}."
+                        f"Record a reason for reducing {line.item} from {upstream}."
                     )
-                approved_base = line.item.quantity_in_base_units(
-                    approved_quantity, line.unit
-                ).quantize(Decimal("0.01"))
+                approved_base = line.item.quantity_in_base_units(approved_quantity, line.unit).quantize(Decimal("0.01"))
                 PurchaseOrderItem.objects.filter(pk=line.pk).update(
-                    finance_approved_quantity=approved_quantity,
-                    finance_approved_base_quantity=approved_base,
-                    finance_reduction_reason=reason,
-                    updated_at=timezone.now(),
+                    **{
+                        quantity_field: approved_quantity,
+                        base_field: approved_base,
+                        reason_field: reason,
+                        "updated_at": timezone.now(),
+                    }
                 )
+                positive = positive or approved_quantity > Decimal("0.00")
+
+                # A final GM rejection is a rejection of the requisition item,
+                # not merely of one printed LPO line. Prevent it from being
+                # silently recreated on another LPO while preserving the record.
+                if stage == 3 and approved_quantity == Decimal("0.00") and line.requisition_item_id:
+                    source = RequisitionItem.objects.select_for_update().get(pk=line.requisition_item_id)
+                    if source.ordered_quantity > Decimal("0.00"):
+                        raise ValidationError(
+                            f"{source.item} has already been issued on an LPO and cannot be rejected at requisition level."
+                        )
+                    RequisitionItem.objects.filter(pk=source.pk).update(
+                        approved_quantity=Decimal("0.00"),
+                        rejection_stage="General Manager",
+                        rejection_reason=reason,
+                        rejected_at=timezone.now(),
+                        rejected_by=actor,
+                        updated_at=timezone.now(),
+                    )
+
                 activity_lines.append({
                     "line_id": str(line.pk),
                     "item": str(line.item),
-                    "procurement_quantity": str(procurement_quantity),
-                    "finance_approved_quantity": str(approved_quantity),
+                    "stage": stage_label,
+                    "upstream_quantity": str(upstream),
+                    "approved_quantity": str(approved_quantity),
+                    "rejected": approved_quantity == Decimal("0.00"),
                     "reason": reason,
                 })
+            if not positive:
+                raise ValidationError("At least one LPO item must remain approved. Reject the whole LPO if no items should proceed.")
             order.update_total_amount()
             order.record_activity(
-                action="finance_quantity_reduced",
+                action=f"approval_stage_{stage}_quantity_review",
                 actor=actor,
                 comments=comments,
-                metadata={"lines": activity_lines},
+                metadata={"stage": stage_label, "lines": activity_lines},
                 previous_status=order.status,
                 new_status=order.status,
             )
         return order
+
+    def apply_finance_quantity_reductions(self, *, reductions, actor, comments=""):
+        """Backward-compatible wrapper for older clients."""
+        return self.apply_approval_quantity_decisions(
+            stage=2, decisions=reductions, actor=actor, comments=comments
+        )
 
     def _fixed_role_group(self, role_name):
         from django.contrib.auth.models import Group
@@ -1676,13 +1735,29 @@ class PurchaseOrderItem(BaseModel):
         blank=True,
         validators=[validate_non_negative_decimal],
     )
+    purchasing_approved_quantity = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[validate_non_negative_decimal],
+        help_text="Purchasing Manager approved quantity; blank means the Procurement draft quantity was retained.",
+    )
+    purchasing_approved_base_quantity = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[validate_non_negative_decimal],
+    )
+    purchasing_reduction_reason = models.TextField(blank=True)
     finance_approved_quantity = models.DecimalField(
         max_digits=12,
         decimal_places=2,
         null=True,
         blank=True,
         validators=[validate_non_negative_decimal],
-        help_text="Finance-approved quantity; blank means Finance retained the Procurement quantity.",
+        help_text="Finance-approved quantity; blank means Finance retained the Purchasing Manager quantity.",
     )
     finance_approved_base_quantity = models.DecimalField(
         max_digits=12,
@@ -1692,6 +1767,22 @@ class PurchaseOrderItem(BaseModel):
         validators=[validate_non_negative_decimal],
     )
     finance_reduction_reason = models.TextField(blank=True)
+    management_approved_quantity = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[validate_non_negative_decimal],
+        help_text="General Manager approved quantity; blank means the Finance-approved quantity was retained.",
+    )
+    management_approved_base_quantity = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[validate_non_negative_decimal],
+    )
+    management_reduction_reason = models.TextField(blank=True)
     unit_cost = models.DecimalField(
         max_digits=15,
         decimal_places=2,
@@ -1728,11 +1819,23 @@ class PurchaseOrderItem(BaseModel):
 
     @property
     def approved_quantity(self):
-        return self.finance_approved_quantity if self.finance_approved_quantity is not None else self.quantity
+        if self.management_approved_quantity is not None:
+            return self.management_approved_quantity
+        if self.finance_approved_quantity is not None:
+            return self.finance_approved_quantity
+        if self.purchasing_approved_quantity is not None:
+            return self.purchasing_approved_quantity
+        return self.quantity
 
     @property
     def approved_base_quantity(self):
-        return self.finance_approved_base_quantity if self.finance_approved_base_quantity is not None else self.base_quantity
+        if self.management_approved_base_quantity is not None:
+            return self.management_approved_base_quantity
+        if self.finance_approved_base_quantity is not None:
+            return self.finance_approved_base_quantity
+        if self.purchasing_approved_base_quantity is not None:
+            return self.purchasing_approved_base_quantity
+        return self.base_quantity
 
     @property
     def conversion_factor(self):
@@ -1764,6 +1867,15 @@ class PurchaseOrderItem(BaseModel):
         if self.purchase_order_id and self.purchase_order.editable:
             self.procurement_quantity = self.quantity
             self.procurement_base_quantity = self.base_quantity
+            self.purchasing_approved_quantity = None
+            self.purchasing_approved_base_quantity = None
+            self.purchasing_reduction_reason = ""
+            self.finance_approved_quantity = None
+            self.finance_approved_base_quantity = None
+            self.finance_reduction_reason = ""
+            self.management_approved_quantity = None
+            self.management_approved_base_quantity = None
+            self.management_reduction_reason = ""
         self.full_clean()
         super().save(*args, **kwargs)
         self.purchase_order.update_total_amount()

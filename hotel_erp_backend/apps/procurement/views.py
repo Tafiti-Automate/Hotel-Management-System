@@ -483,6 +483,56 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
         ])
         return line
 
+    @action(detail=True, methods=["post"], url_path="reject-all-items")
+    def reject_all_items(self, request, pk=None):
+        requisition = self.get_object()
+        if not user_has_role(request.user, "System Administrator", "Procurement Manager", "Procurement Officer"):
+            raise PermissionDenied("Only Procurement can reject the procurement requisition.")
+        if requisition.status not in (PRStatus.APPROVED, PRStatus.PARTIALLY_ORDERED):
+            raise ValidationError("Only an approved Store Requisition can be rejected by Procurement.")
+        reason = str(request.data.get("reason") or "").strip()
+        if not reason:
+            raise ValidationError({"reason": "Enter the reason for rejecting the requisition."})
+        if requisition.purchase_orders.exclude(status__in=(POStatus.REJECTED, POStatus.CANCELLED)).exists():
+            raise ValidationError("An active LPO already exists. Reject the LPO through its approval workflow instead.")
+        with transaction.atomic():
+            locked = PurchaseRequisition.objects.select_for_update().get(pk=requisition.pk)
+            now = timezone.now()
+            locked.items.select_for_update().update(
+                approved_quantity=Decimal("0.00"),
+                rejection_stage="Procurement Manager",
+                rejection_reason=reason,
+                rejected_at=now,
+                rejected_by=request.user,
+                procurement_supplier=None,
+                procurement_supplier_price=None,
+                procurement_unit=None,
+                procurement_quantity=None,
+                procurement_unit_cost=None,
+                procurement_note=reason,
+                procurement_allocated_at=None,
+                procurement_allocated_by=None,
+                updated_at=now,
+            )
+            previous = locked.status
+            locked.status = PRStatus.REJECTED
+            locked.rejected_at = now
+            locked.save(update_fields=["status", "rejected_at", "updated_at"])
+            locked.record_history(
+                action="procurement_rejected_all_items",
+                previous_status=previous,
+                actor=request.user,
+                comments=reason,
+                metadata={"all_items_rejected": True},
+            )
+            source = locked.source_store_requisition
+            if source:
+                from core.constants.choices import StoreRequisitionStatus
+                source.status = StoreRequisitionStatus.REJECTED
+                source.rejection_reason = reason
+                source.save(update_fields=["status", "rejection_reason", "updated_at"])
+        return Response(self.get_serializer(locked).data)
+
     @action(detail=True, methods=["post"], url_path="allocate-line")
     def allocate_line(self, request, pk=None):
         requisition = self.get_object()
@@ -591,6 +641,75 @@ class RequisitionItemViewSet(CreatedByModelMixin, ModelViewSet):
     filterset_fields = ("requisition", "item")
     search_fields = ("item__name", "item__sku")
     ordering_fields = ("quantity", "created_at")
+
+    @action(detail=True, methods=["post"], url_path="review-quantity")
+    def review_quantity(self, request, pk=None):
+        if not user_has_role(request.user, "System Administrator", "Procurement Manager", "Procurement Officer"):
+            raise PermissionDenied("Only Procurement can change the procurement requisition quantity.")
+        line = self.get_object()
+        if line.requisition.status not in (PRStatus.APPROVED, PRStatus.PARTIALLY_ORDERED):
+            raise ValidationError("Only an approved procurement requisition can be reviewed by Procurement.")
+        if line.purchase_order_items.exists():
+            raise ValidationError("An LPO already exists for this item. Review its quantity on the LPO instead.")
+        try:
+            approved_quantity = Decimal(str(request.data.get("approved_quantity")))
+        except Exception as error:
+            raise ValidationError({"approved_quantity": "Enter a valid quantity."}) from error
+        if approved_quantity < Decimal("0.00") or approved_quantity > line.quantity:
+            raise ValidationError({
+                "approved_quantity": f"Quantity must be between 0 and the Store Keeper quantity of {line.quantity}."
+            })
+        reason = str(request.data.get("reason") or "").strip()
+        if approved_quantity < line.quantity and not reason:
+            raise ValidationError({"reason": "Enter the reason for reducing or rejecting this item."})
+        with transaction.atomic():
+            request_lines = list(
+                RequisitionItem.objects.select_for_update()
+                .filter(requisition=line.requisition)
+                .order_by("pk")
+            )
+            if approved_quantity == Decimal("0.00"):
+                other_positive = any(
+                    candidate.pk != line.pk
+                    and (candidate.approved_quantity if candidate.approved_quantity is not None else candidate.quantity) > Decimal("0.00")
+                    for candidate in request_lines
+                )
+                if not other_positive:
+                    raise ValidationError(
+                        "This is the last remaining item. Use Reject entire requisition instead."
+                    )
+            locked = next(candidate for candidate in request_lines if candidate.pk == line.pk)
+            now = timezone.now()
+            RequisitionItem.objects.filter(pk=locked.pk).update(
+                approved_quantity=approved_quantity,
+                rejection_stage="Procurement Manager" if approved_quantity == Decimal("0.00") else "",
+                rejection_reason=reason if approved_quantity == Decimal("0.00") else "",
+                rejected_at=now if approved_quantity == Decimal("0.00") else None,
+                rejected_by=request.user if approved_quantity == Decimal("0.00") else None,
+                procurement_supplier=None,
+                procurement_supplier_price=None,
+                procurement_unit=None,
+                procurement_quantity=None,
+                procurement_unit_cost=None,
+                procurement_note=reason if approved_quantity < locked.quantity else "",
+                procurement_allocated_at=None,
+                procurement_allocated_by=None,
+                updated_at=now,
+            )
+            locked.requisition.record_history(
+                action="procurement_line_quantity_review",
+                actor=request.user,
+                comments=reason,
+                metadata={
+                    "line_id": str(locked.pk),
+                    "item": str(locked.item),
+                    "previous_quantity": str(locked.approved_quantity if locked.approved_quantity is not None else locked.quantity),
+                    "approved_quantity": str(approved_quantity),
+                    "rejected": approved_quantity == Decimal("0.00"),
+                },
+            )
+            locked.refresh_from_db()
+        return Response(self.get_serializer(locked).data)
 
     def perform_destroy(self, instance):
         if not instance.requisition.editable:
@@ -950,6 +1069,24 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
         return Response(self.get_serializer(order).data)
+
+    @action(detail=True, methods=["post"], url_path="review-quantities")
+    def review_quantities(self, request, pk=None):
+        order = self.get_object()
+        try:
+            with transaction.atomic():
+                locked_order = PurchaseOrder.objects.select_for_update().get(pk=order.pk)
+                step = self._current_approval_step(locked_order, request)
+                locked_order.apply_approval_quantity_decisions(
+                    stage=step.stage,
+                    decisions=request.data.get("lines", []),
+                    actor=request.user,
+                    comments=str(request.data.get("comments", "")).strip(),
+                )
+                locked_order.refresh_from_db()
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        return Response(self.get_serializer(locked_order).data)
 
     @action(detail=True, methods=["post"], url_path="finance-reduce-quantities")
     def finance_reduce_quantities(self, request, pk=None):

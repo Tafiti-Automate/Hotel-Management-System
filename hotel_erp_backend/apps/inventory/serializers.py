@@ -692,6 +692,8 @@ class StoreRequisitionItemSerializer(serializers.ModelSerializer):
         approved = obj.quantity_approved or Decimal("0.00")
         issued = obj.quantity_issued or Decimal("0.00")
         request_status = obj.requisition.status
+        if obj.rejection_stage and approved == Decimal("0.00"):
+            return "rejected"
         if issued >= approved > 0:
             return "issued"
         if issued > 0:
@@ -715,6 +717,10 @@ class StoreRequisitionItemSerializer(serializers.ModelSerializer):
             "id",
             "base_quantity_requested",
             "hod_approved_quantity",
+            "rejection_stage",
+            "rejection_reason",
+            "rejected_at",
+            "rejected_by",
             "outstanding_quantity",
             "created_at",
             "updated_at",
@@ -759,6 +765,18 @@ class StoreRequisitionItemSerializer(serializers.ModelSerializer):
                 {"item": "This Article is already on the store request. Edit the existing line instead."}
             )
         return attrs
+
+    def update(self, instance, validated_data):
+        # A positive Store Keeper quantity restores a line that was previously
+        # rejected at the Store Keeper stage. HOD rejections remain final for
+        # Stores because their approved limit is zero.
+        quantity = validated_data.get("quantity_approved")
+        if quantity is not None and quantity > Decimal("0.00") and instance.rejection_stage == "Store Keeper":
+            instance.rejection_stage = ""
+            instance.rejection_reason = ""
+            instance.rejected_at = None
+            instance.rejected_by = None
+        return super().update(instance, validated_data)
 
 
 class StoreRequisitionSerializer(serializers.ModelSerializer):

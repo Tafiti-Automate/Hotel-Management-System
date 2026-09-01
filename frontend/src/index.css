@@ -664,12 +664,12 @@ select { appearance: none; -webkit-appearance: none; }
 
 .grn-reference-supplier {
   grid-column: 1;
-  grid-row: 1 / 3;
+  grid-row: 2;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
-  padding: 31px 20px 12px;
+  padding: 16px 20px 12px;
 }
 
 .grn-reference-supplier strong {
@@ -686,7 +686,7 @@ select { appearance: none; -webkit-appearance: none; }
 }
 
 .grn-reference-title {
-  grid-column: 2 / 4;
+  grid-column: 1 / 4;
   grid-row: 1;
   position: relative;
   display: flex;
@@ -1029,13 +1029,17 @@ select { appearance: none; -webkit-appearance: none; }
   }
 
   .grn-reference-supplier {
+    grid-column: 1;
+    grid-row: 2;
     gap: .6mm;
-    padding: 7mm 5mm 2mm;
+    padding: 3.5mm 5mm 2mm;
   }
   .grn-reference-supplier strong { font-size: 10pt !important; }
   .grn-reference-supplier span { font-size: 8.2pt !important; }
 
   .grn-reference-title {
+    grid-column: 1 / 4;
+    grid-row: 1;
     padding: 1.2mm 2mm .5mm;
   }
   .grn-reference-title::before {

@@ -6,6 +6,7 @@ from decimal import Decimal, InvalidOperation
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import Exists, OuterRef, Q
+from django.utils import timezone
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -938,6 +939,13 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
         requisition = self.get_object()
         if requisition.status == StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL:
             self._enforce_department_head(requisition)
+        elif requisition.status == StoreRequisitionStatus.SUBMITTED and not requisition.store_id and has_role(request.user, "Store Keeper"):
+            employee = getattr(request.user, "employee_profile", None)
+            requester_branch_id = getattr(requisition.requested_by, "branch_id", None)
+            if not employee or not StoreKeeperAssignment.objects.filter(
+                employee=employee, is_active=True, store__branch_id=requester_branch_id
+            ).exists():
+                raise PermissionDenied("Only a Store Keeper assigned within this branch can reject the requisition.")
         else:
             self._enforce_store_assignment(requisition)
         try:
@@ -1026,6 +1034,47 @@ class StoreRequisitionItemViewSet(CreatedByModelMixin, ModelViewSet):
     def perform_update(self, serializer):
         self._enforce_line_edit(serializer.instance.requisition)
         super().perform_update(serializer)
+
+    @action(detail=True, methods=["post"], url_path="reject-line")
+    def reject_line(self, request, pk=None):
+        line = self.get_object()
+        self._enforce_line_edit(line.requisition)
+        if line.requisition.status != StoreRequisitionStatus.SUBMITTED:
+            raise ValidationError("Store Keeper item rejection is only available while the request is awaiting Stores review.")
+        if line.department_approved_limit <= Decimal("0.00"):
+            raise ValidationError("This item was already rejected by the Department Head.")
+        reason = str(request.data.get("reason") or "").strip()
+        if not reason:
+            raise ValidationError({"reason": "Enter the reason for rejecting this item."})
+        with transaction.atomic():
+            request_lines = list(
+                StoreRequisitionItem.objects.select_for_update()
+                .filter(requisition=line.requisition)
+                .order_by("pk")
+            )
+            other_viable_lines = [
+                candidate for candidate in request_lines
+                if candidate.pk != line.pk
+                and candidate.department_approved_limit > Decimal("0.00")
+                and candidate.rejection_stage != "Store Keeper"
+            ]
+            if not other_viable_lines:
+                raise ValidationError(
+                    "This is the last remaining item. Use Reject entire requisition instead."
+                )
+            locked = next(candidate for candidate in request_lines if candidate.pk == line.pk)
+            now = timezone.now()
+            StoreRequisitionItem.objects.filter(pk=locked.pk).update(
+                quantity_approved=Decimal("0.00"),
+                storekeeper_comment=reason,
+                rejection_stage="Store Keeper",
+                rejection_reason=reason,
+                rejected_at=now,
+                rejected_by=request.user,
+                updated_at=now,
+            )
+            locked.refresh_from_db()
+        return Response(self.get_serializer(locked).data)
 
     def perform_destroy(self, instance):
         self._enforce_line_edit(instance.requisition)

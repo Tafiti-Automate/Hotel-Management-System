@@ -1272,6 +1272,10 @@ class StoreRequisition(BaseModel):
             hod_approved_quantity=None,
             quantity_approved=Decimal("0.00"),
             storekeeper_comment="",
+            rejection_stage="",
+            rejection_reason="",
+            rejected_at=None,
+            rejected_by=None,
         )
         from apps.notifications.services import notify_roles
 
@@ -1311,7 +1315,7 @@ class StoreRequisition(BaseModel):
                 raise ValidationError("The requisition has no items to approve.")
 
             supplied = item_quantities is not None
-            quantity_map = {}
+            decision_map = {}
             if supplied:
                 if not isinstance(item_quantities, (list, tuple)):
                     raise ValidationError("Item quantities must be supplied as a list.")
@@ -1319,28 +1323,38 @@ class StoreRequisition(BaseModel):
                     if not isinstance(decision, dict) or not decision.get("id"):
                         raise ValidationError("Each item decision must include the requisition item id.")
                     try:
-                        quantity_map[str(decision["id"])] = Decimal(str(decision.get("approved_quantity", "0")))
+                        quantity = Decimal(str(decision.get("approved_quantity", "0")))
                     except Exception as exc:
                         raise ValidationError("Department Head quantities must be valid numbers.") from exc
+                    decision_map[str(decision["id"])] = {
+                        "quantity": quantity,
+                        "rejected": bool(decision.get("rejected")) or quantity == Decimal("0.00"),
+                        "reason": str(decision.get("rejection_reason") or decision.get("reason") or "").strip(),
+                    }
 
             positive = False
             for line in lines:
                 if supplied:
-                    if str(line.pk) not in quantity_map:
+                    if str(line.pk) not in decision_map:
                         raise ValidationError(f"Confirm the approved quantity for {line.item}.")
-                    quantity = quantity_map[str(line.pk)]
+                    decision = decision_map[str(line.pk)]
+                    quantity = decision["quantity"]
+                    rejected = decision["rejected"]
+                    rejection_reason = decision["reason"]
                 else:
                     # Backward-compatible default for older clients/tests.
                     quantity = line.base_quantity_requested
+                    rejected = False
+                    rejection_reason = ""
                 if quantity < 0 or quantity > line.base_quantity_requested:
                     raise ValidationError(
                         f"Department Head quantity for {line.item} must be between 0 and {line.base_quantity_requested}."
                     )
-                # HOD approval changes only the HOD decision fields. Do not route this
-                # through StoreRequisitionItem.save(), because that method recalculates
-                # article/UOM base quantities and can make an otherwise valid approval
-                # fail because of unrelated master-data changes. The requester's
-                # original quantity remains immutable.
+                if rejected and quantity != Decimal("0.00"):
+                    raise ValidationError(f"A rejected item must have an approved quantity of zero: {line.item}.")
+                if quantity == Decimal("0.00") and not rejection_reason:
+                    raise ValidationError(f"Enter a reason for rejecting {line.item}.")
+                now = timezone.now()
                 line.hod_approved_quantity = quantity
                 line.quantity_approved = Decimal("0.00")
                 line.storekeeper_comment = ""
@@ -1348,7 +1362,11 @@ class StoreRequisition(BaseModel):
                     hod_approved_quantity=quantity,
                     quantity_approved=Decimal("0.00"),
                     storekeeper_comment="",
-                    updated_at=timezone.now(),
+                    rejection_stage="Department Head" if quantity == Decimal("0.00") else "",
+                    rejection_reason=rejection_reason if quantity == Decimal("0.00") else "",
+                    rejected_at=now if quantity == Decimal("0.00") else None,
+                    rejected_by_id=approved_by.user_id if quantity == Decimal("0.00") else None,
+                    updated_at=now,
                 )
                 positive = positive or quantity > 0
 
@@ -1772,6 +1790,16 @@ class StoreRequisitionItem(BaseModel):
     )
     remarks = models.TextField(blank=True)
     storekeeper_comment = models.TextField(blank=True)
+    rejection_stage = models.CharField(max_length=40, blank=True)
+    rejection_reason = models.TextField(blank=True)
+    rejected_at = models.DateTimeField(null=True, blank=True)
+    rejected_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="rejected_store_requisition_items",
+    )
 
     class Meta(BaseModel.Meta):
         constraints = [

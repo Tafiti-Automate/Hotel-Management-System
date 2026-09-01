@@ -282,6 +282,7 @@ function DepartmentApprovalWorkspace({ app, data, busy, execute, selected, onSel
   const [decision, setDecision] = useState<'approve' | 'reject' | null>(null)
   const [reason, setReason] = useState('')
   const [quantities, setQuantities] = useState<Record<string, string>>({})
+  const [lineRejectReasons, setLineRejectReasons] = useState<Record<string, string>>({})
   const unitNames = new Map<string, string>(app.data.uoms.map((row: Row): [string, string] => [id(row.id), id(row.name)]))
   const pending = data.requests.filter((row: Row) => id(row.status) === 'pending_department_approval')
   const history = data.requests.filter((row: Row) => {
@@ -307,18 +308,29 @@ function DepartmentApprovalWorkspace({ app, data, busy, execute, selected, onSel
   useEffect(() => {
     if (!selected) { setQuantities({}); return }
     const next: Record<string, string> = {}
+    const reasons: Record<string, string> = {}
     linesFor(selected).forEach((line: Row) => {
       const value = line.hod_approved_quantity ?? line.base_quantity_requested ?? line.quantity_requested ?? 0
       next[id(line.id)] = id(value)
+      reasons[id(line.id)] = id(line.rejection_reason)
     })
     setQuantities(next)
+    setLineRejectReasons(reasons)
   }, [selected, linesFor])
 
   const closeDecision = () => { setDecision(null); setReason('') }
   const approve = async () => {
     if (!selected || busy) return
     const lines = linesFor(selected)
-    const payload = lines.map((line: Row) => ({ id: id(line.id), approved_quantity: num(quantities[id(line.id)]) }))
+    const payload = lines.map((line: Row) => {
+      const approvedQuantity = num(quantities[id(line.id)])
+      return {
+        id: id(line.id),
+        approved_quantity: approvedQuantity,
+        rejected: approvedQuantity === 0,
+        rejection_reason: approvedQuantity === 0 ? id(lineRejectReasons[id(line.id)]).trim() : '',
+      }
+    })
     const ok = await execute(
       () => runBackendAction('store-requisitions', id(selected.id), 'department-approve', { comments: '', items: payload }),
       `Requisition ${id(selected.requisition_no)} approved and sent to the Store Keeper`,
@@ -340,7 +352,7 @@ function DepartmentApprovalWorkspace({ app, data, busy, execute, selected, onSel
     const validQuantities = lines.length > 0 && lines.every((line: Row) => {
       const value = num(quantities[id(line.id)])
       const requested = num(line.base_quantity_requested || line.quantity_requested)
-      return value >= 0 && value <= requested
+      return value >= 0 && value <= requested && (value > 0 || Boolean(id(lineRejectReasons[id(line.id)]).trim()))
     }) && lines.some((line: Row) => num(quantities[id(line.id)]) > 0)
     const decisionLabel = selected.department_approved_at ? 'HOD Approved' : id(selected.status) === 'rejected' ? 'Rejected' : statusLabel(id(selected.status))
     return <div style={{ display: 'grid', gap: 14 }}>
@@ -357,17 +369,20 @@ function DepartmentApprovalWorkspace({ app, data, busy, execute, selected, onSel
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 }}><h3 style={{ margin: 0, fontSize: 14 }}>Requested items</h3><span style={{ color: 'var(--text-faint)', fontSize: 11 }}>{lines.length} item{lines.length === 1 ? '' : 's'}</span></div>
           <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-            <div className="hod-items-head" style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1.5fr) 120px 150px 120px minmax(180px,1fr)', gap: 12, padding: '9px 13px', background: 'var(--surface-2)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em' }}><span>Article</span><span>Requested</span><span>HOD approved</span><span>UOM</span><span>Note</span></div>
+            <div className="hod-items-head" style={{ display: 'grid', gridTemplateColumns: 'minmax(200px,1.35fr) 105px 135px 95px minmax(150px,1fr) minmax(190px,1.1fr)', gap: 12, padding: '9px 13px', background: 'var(--surface-2)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em' }}><span>Article</span><span>Requested</span><span>HOD approved</span><span>UOM</span><span>Request note</span><span>Item decision</span></div>
             {lines.map((line: Row) => {
               const article = app.data.items.find((item: Row) => id(item.id) === id(line.item))
               const uom = unitNames.get(id(line.unit || article?.baseUnitId)) || id(article?.uom) || '—'
               const requested = num(line.base_quantity_requested || line.quantity_requested)
               const approved = quantities[id(line.id)] ?? id(line.hod_approved_quantity ?? requested)
-              return <div key={id(line.id)} className="hod-items-row" style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1.5fr) 120px 150px 120px minmax(180px,1fr)', gap: 12, padding: '13px', borderTop: '1px solid var(--border)', alignItems: 'center', fontSize: 12 }}>
+              const rejected = num(approved) === 0
+              const rejectReason = id(lineRejectReasons[id(line.id)] || line.rejection_reason)
+              return <div key={id(line.id)} className="hod-items-row" style={{ display: 'grid', gridTemplateColumns: 'minmax(200px,1.35fr) 105px 135px 95px minmax(150px,1fr) minmax(190px,1.1fr)', gap: 12, padding: '13px', borderTop: '1px solid var(--border)', alignItems: 'center', fontSize: 12 }}>
                 <span style={{ color: 'var(--text)', fontWeight: 750 }}>{itemName(app, line.item)}</span>
                 <span style={{ color: 'var(--text)', fontWeight: 700 }}>{requested}</span>
-                {isPending ? <input type="number" min="0" max={requested} step="0.01" value={approved} onChange={(event) => setQuantities({ ...quantities, [id(line.id)]: event.target.value })} style={{ ...control, height: 36 }} /> : <span style={{ color: 'var(--text)', fontWeight: 800 }}>{id(line.hod_approved_quantity ?? requested)}</span>}
+                {isPending ? <input type="number" min="0" max={requested} step="0.01" value={approved} onChange={(event) => { const next = event.target.value; setQuantities({ ...quantities, [id(line.id)]: next }); if (num(next) > 0) setLineRejectReasons({ ...lineRejectReasons, [id(line.id)]: '' }) }} style={{ ...control, height: 36 }} /> : <span style={{ color: 'var(--text)', fontWeight: 800 }}>{id(line.hod_approved_quantity ?? requested)}</span>}
                 <span style={{ color: 'var(--text-muted)' }}>{uom}</span><span style={{ color: 'var(--text-muted)' }}>{id(line.remarks) || '—'}</span>
+                {isPending ? <div style={{ display: 'grid', gap: 6 }}>{rejected ? <><span style={{ color: 'var(--bad)', fontSize: 10.5, fontWeight: 800 }}>Item rejected</span><input value={rejectReason} onChange={(event) => setLineRejectReasons({ ...lineRejectReasons, [id(line.id)]: event.target.value })} placeholder="Reason required" style={{ ...control, height: 34 }} /><button type="button" onClick={() => { setQuantities({ ...quantities, [id(line.id)]: id(requested) }); setLineRejectReasons({ ...lineRejectReasons, [id(line.id)]: '' }) }} style={{ ...secondary, height: 30, justifyContent: 'center' }}>Keep item</button></> : <button type="button" onClick={() => setQuantities({ ...quantities, [id(line.id)]: '0' })} style={{ ...secondary, height: 32, justifyContent: 'center', color: 'var(--bad)', borderColor: 'rgba(220,38,38,.35)' }}>Reject item</button>}</div> : <span style={{ color: id(line.rejection_stage) ? 'var(--bad)' : 'var(--text-muted)', fontWeight: id(line.rejection_stage) ? 700 : 500 }}>{id(line.rejection_stage) ? `${id(line.rejection_stage)} rejected · ${rejectReason || 'No reason recorded'}` : 'Approved'}</span>}
               </div>
             })}
             {!lines.length && <div style={{ padding: 30, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>This requisition has no items.</div>}
@@ -375,7 +390,7 @@ function DepartmentApprovalWorkspace({ app, data, busy, execute, selected, onSel
           {isPending && <div style={{ marginTop: 9, color: 'var(--text-muted)', fontSize: 11.5 }}>You may reduce an item quantity before approval. The requester quantity is kept unchanged for the record.</div>}
           {!isPending && id(selected.status) === 'rejected' && !selected.department_approved_at && selected.rejection_reason && <div style={{ marginTop: 16, padding: 12, borderRadius: 8, background: 'var(--bad-soft)', color: 'var(--bad)', fontSize: 12 }}><b>Rejection reason:</b> {id(selected.rejection_reason)}</div>}
         </div>
-        {isPending && <footer style={{ padding: '14px 20px', display: 'flex', justifyContent: 'flex-end', gap: 9, borderTop: '1px solid var(--border)', background: 'var(--surface-2)' }}><button type="button" disabled={busy} onClick={() => setDecision('reject')} style={{ ...secondary, color: 'var(--bad)', borderColor: 'rgba(220,38,38,.35)' }}>Reject</button><button type="button" disabled={busy || !validQuantities} onClick={() => setDecision('approve')} style={{ ...secondary, minWidth: 120, justifyContent: 'center', color: '#fff', background: 'var(--accent)', borderColor: 'var(--accent)', opacity: busy || !validQuantities ? .5 : 1 }}><Icon name="check" size={17} color="#fff" />Approve</button></footer>}
+        {isPending && <footer style={{ padding: '14px 20px', display: 'flex', justifyContent: 'flex-end', gap: 9, borderTop: '1px solid var(--border)', background: 'var(--surface-2)' }}><button type="button" disabled={busy} onClick={() => setDecision('reject')} style={{ ...secondary, color: 'var(--bad)', borderColor: 'rgba(220,38,38,.35)' }}>Reject entire requisition</button><button type="button" disabled={busy || !validQuantities} onClick={() => setDecision('approve')} style={{ ...secondary, minWidth: 120, justifyContent: 'center', color: '#fff', background: 'var(--accent)', borderColor: 'var(--accent)', opacity: busy || !validQuantities ? .5 : 1 }}><Icon name="check" size={17} color="#fff" />Approve</button></footer>}
       </section>
       {decision && <><div onClick={closeDecision} style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(15,23,42,.38)' }} /><section role="dialog" aria-modal="true" style={{ position: 'fixed', zIndex: 91, left: '50%', top: '50%', width: 460, maxWidth: 'calc(100vw - 32px)', transform: 'translate(-50%,-50%)', ...card, padding: 20 }}><h3 style={{ margin: 0, fontSize: 17 }}>{decision === 'approve' ? `Approve requisition ${id(selected.requisition_no)}?` : `Reject requisition ${id(selected.requisition_no)}`}</h3>{decision === 'approve' ? <p style={{ ...muted, margin: '8px 0 18px', fontSize: 12.5 }}>The HOD-approved quantities shown on this requisition will be sent to the Store Keeper.</p> : <div style={{ margin: '14px 0' }}><label style={labelStyle}>Reason for rejection *</label><textarea autoFocus value={reason} onChange={(event) => setReason(event.target.value)} rows={4} placeholder="Enter the reason" style={{ ...control, height: 96, padding: 10, resize: 'vertical' }} /></div>}<div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}><button type="button" onClick={closeDecision} disabled={busy} style={secondary}>Cancel</button>{decision === 'approve' ? <button type="button" onClick={() => void approve()} disabled={busy} style={{ ...secondary, color: '#fff', background: 'var(--accent)', borderColor: 'var(--accent)' }}>Approve</button> : <button type="button" onClick={() => void reject()} disabled={busy || !reason.trim()} style={{ ...secondary, color: '#fff', background: 'var(--bad)', borderColor: 'var(--bad)', opacity: busy || !reason.trim() ? .5 : 1 }}>Reject requisition</button>}</div></section></>}
     </div>
@@ -405,6 +420,8 @@ function StoreKeeperRequestWorkspace({ app, data, busy, execute, selected, onSel
   const [query, setQuery] = useState('')
   const [destinationStore, setDestinationStore] = useState('')
   const [lineValues, setLineValues] = useState<Record<string, { quantity: string; note: string }>>({})
+  const [showRejectAll, setShowRejectAll] = useState(false)
+  const [rejectAllReason, setRejectAllReason] = useState('')
   const unitNames = new Map<string, string>(app.data.uoms.map((row: Row): [string, string] => [id(row.id), id(row.name)]))
   const linesFor = useCallback((row: Row) => data.requestItems.filter((line: Row) => id(line.requisition) === id(row.id)), [data.requestItems])
   const pending = data.requests.filter((row: Row) => id(row.status) === 'submitted')
@@ -423,7 +440,8 @@ function StoreKeeperRequestWorkspace({ app, data, busy, execute, selected, onSel
     linesFor(selected).forEach((line: Row) => {
       const limit = num(line.hod_approved_quantity ?? line.base_quantity_requested ?? line.quantity_requested)
       const saved = num(line.quantity_approved)
-      next[id(line.id)] = { quantity: id(saved > 0 ? saved : limit), note: id(line.storekeeper_comment) }
+      const rejected = Boolean(id(line.rejection_stage))
+      next[id(line.id)] = { quantity: id(rejected ? 0 : saved > 0 ? saved : limit), note: id(line.storekeeper_comment || line.rejection_reason) }
     })
     setLineValues(next)
   }, [selected, app.data.locations, linesFor])
@@ -443,7 +461,12 @@ function StoreKeeperRequestWorkspace({ app, data, busy, execute, selected, onSel
         if (id(selected.store) !== destinationStore) await runBackendAction('store-requisitions', id(selected.id), 'assign-store', { store: destinationStore })
         for (const line of lines) {
           const value = lineValues[id(line.id)] || { quantity: '0', note: '' }
-          await updateBackendRecord('store-requisition-items', id(line.id), { quantity_approved: num(value.quantity), storekeeper_comment: id(value.note).trim() })
+          const hodLimit = num(line.hod_approved_quantity ?? line.base_quantity_requested ?? line.quantity_requested)
+          if (num(value.quantity) === 0 && hodLimit > 0) {
+            await runBackendAction('store-requisition-items', id(line.id), 'reject-line', { reason: id(value.note).trim() })
+          } else {
+            await updateBackendRecord('store-requisition-items', id(line.id), { quantity_approved: num(value.quantity), storekeeper_comment: id(value.note).trim() })
+          }
         }
         await runBackendAction('store-requisitions', id(selected.id), 'send-to-procurement', {})
       }, `Requisition ${id(selected.requisition_no)} forwarded to Procurement`)
@@ -462,14 +485,16 @@ function StoreKeeperRequestWorkspace({ app, data, busy, execute, selected, onSel
           </div>
           <div style={{ marginBottom: 9, display: 'flex', alignItems: 'baseline', gap: 8 }}><h3 style={{ margin: 0, fontSize: 14 }}>Items</h3><span style={{ color: 'var(--text-faint)', fontSize: 11 }}>{lines.length} item{lines.length === 1 ? '' : 's'}</span></div>
           <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-            <div className="storekeeper-items-head" style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1.5fr) 110px 120px 150px 110px minmax(180px,1fr)', gap: 12, padding: '9px 13px', background: 'var(--surface-2)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}><span>Article</span><span>Requested</span><span>HOD approved</span><span>Forward to Procurement</span><span>UOM</span><span>Note</span></div>
+            <div className="storekeeper-items-head" style={{ display: 'grid', gridTemplateColumns: 'minmax(190px,1.35fr) 90px 105px 135px 90px minmax(150px,1fr) 115px', gap: 10, padding: '9px 13px', background: 'var(--surface-2)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}><span>Article</span><span>Requested</span><span>HOD approved</span><span>Forward</span><span>UOM</span><span>Note / reason</span><span>Decision</span></div>
             {lines.map((line: Row) => {
               const article = app.data.items.find((item: Row) => id(item.id) === id(line.item)); const uom = unitNames.get(id(line.unit || article?.baseUnitId)) || id(article?.uom) || '—'; const requested = num(line.base_quantity_requested || line.quantity_requested); const hodLimit = num(line.hod_approved_quantity ?? requested); const value = lineValues[id(line.id)] || { quantity: id(line.quantity_approved || hodLimit), note: id(line.storekeeper_comment) }
-              return <div key={id(line.id)} className="storekeeper-items-row" style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1.5fr) 110px 120px 150px 110px minmax(180px,1fr)', gap: 12, padding: 13, borderTop: '1px solid var(--border)', alignItems: 'center', fontSize: 12 }}><span style={{ fontWeight: 750 }}>{itemName(app, line.item)}</span><span>{requested}</span><span style={{ fontWeight: 800 }}>{hodLimit}</span>{active ? <input type="number" min="0" max={hodLimit} step="0.01" disabled={hodLimit === 0} value={value.quantity} onChange={(event) => setLineValues({ ...lineValues, [id(line.id)]: { ...value, quantity: event.target.value } })} style={{ ...control, height: 36 }} /> : <span style={{ fontWeight: 800 }}>{id(line.quantity_approved)}</span>}<span style={{ color: 'var(--text-muted)' }}>{uom}</span>{active ? <input value={value.note} placeholder={num(value.quantity) === 0 && hodLimit > 0 ? 'Reason required' : 'Optional'} onChange={(event) => setLineValues({ ...lineValues, [id(line.id)]: { ...value, note: event.target.value } })} style={{ ...control, height: 36 }} /> : <span style={{ color: 'var(--text-muted)' }}>{id(line.storekeeper_comment) || '—'}</span>}</div>
+              const lineRejected = num(value.quantity) === 0
+              return <div key={id(line.id)} className="storekeeper-items-row" style={{ display: 'grid', gridTemplateColumns: 'minmax(190px,1.35fr) 90px 105px 135px 90px minmax(150px,1fr) 115px', gap: 10, padding: 13, borderTop: '1px solid var(--border)', alignItems: 'center', fontSize: 12 }}><span style={{ fontWeight: 750 }}>{itemName(app, line.item)}</span><span>{requested}</span><span style={{ fontWeight: 800 }}>{hodLimit}</span>{active ? <input type="number" min="0" max={hodLimit} step="0.01" disabled={hodLimit === 0} value={value.quantity} onChange={(event) => setLineValues({ ...lineValues, [id(line.id)]: { ...value, quantity: event.target.value, note: num(event.target.value) > 0 && id(line.rejection_stage) === 'Store Keeper' ? '' : value.note } })} style={{ ...control, height: 36 }} /> : <span style={{ fontWeight: 800 }}>{id(line.quantity_approved)}</span>}<span style={{ color: 'var(--text-muted)' }}>{uom}</span>{active ? <input value={value.note} placeholder={lineRejected && hodLimit > 0 ? 'Reason required' : 'Optional'} onChange={(event) => setLineValues({ ...lineValues, [id(line.id)]: { ...value, note: event.target.value } })} style={{ ...control, height: 36 }} /> : <span style={{ color: 'var(--text-muted)' }}>{id(line.storekeeper_comment || line.rejection_reason) || '—'}</span>}{active ? (hodLimit === 0 ? <span style={{ color: 'var(--bad)', fontSize: 10.5, fontWeight: 750 }}>HOD rejected</span> : lineRejected ? <button type="button" onClick={() => setLineValues({ ...lineValues, [id(line.id)]: { quantity: id(hodLimit), note: '' } })} style={{ ...secondary, height: 30, justifyContent: 'center' }}>Keep item</button> : <button type="button" onClick={() => setLineValues({ ...lineValues, [id(line.id)]: { quantity: '0', note: value.note } })} style={{ ...secondary, height: 30, justifyContent: 'center', color: 'var(--bad)', borderColor: 'rgba(220,38,38,.35)' }}>Reject item</button>) : <span style={{ color: id(line.rejection_stage) ? 'var(--bad)' : 'var(--text-muted)', fontSize: 10.5 }}>{id(line.rejection_stage) || 'Kept'}</span>}</div>
             })}
           </div>
+          {active && showRejectAll && <div style={{ marginTop: 14, padding: 13, border: '1px solid rgba(220,38,38,.25)', borderRadius: 8, background: 'var(--bad-soft)' }}><label style={{ ...labelStyle, color: 'var(--bad)' }}>Reason for rejecting the whole requisition *</label><textarea value={rejectAllReason} onChange={(event) => setRejectAllReason(event.target.value)} rows={3} placeholder="Explain why the entire requisition should not proceed" style={{ ...control, minHeight: 80, padding: 10, resize: 'vertical' }} /></div>}
         </div>
-        {active && <footer style={{ padding: '14px 20px', display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--border)', background: 'var(--surface-2)' }}><button type="button" disabled={busy || !valid} onClick={() => void forward()} style={{ ...secondary, color: '#fff', background: 'var(--accent)', borderColor: 'var(--accent)', opacity: busy || !valid ? .5 : 1 }}><Icon name="send" size={16} color="#fff" />Forward to Procurement</button></footer>}
+        {active && <footer style={{ padding: '14px 20px', display: 'flex', justifyContent: 'space-between', gap: 9, borderTop: '1px solid var(--border)', background: 'var(--surface-2)' }}><div>{!showRejectAll ? <button type="button" disabled={busy} onClick={() => setShowRejectAll(true)} style={{ ...secondary, color: 'var(--bad)', borderColor: 'rgba(220,38,38,.35)' }}>Reject entire requisition</button> : <div style={{ display: 'flex', gap: 8 }}><button type="button" disabled={busy} onClick={() => { setShowRejectAll(false); setRejectAllReason('') }} style={secondary}>Cancel</button><button type="button" disabled={busy || !rejectAllReason.trim()} onClick={() => void execute(() => runBackendAction('store-requisitions', id(selected.id), 'reject', { reason: rejectAllReason.trim() }), `Requisition ${id(selected.requisition_no)} rejected`).then((ok) => { if (ok) onSelect(null) })} style={{ ...secondary, color: '#fff', background: 'var(--bad)', borderColor: 'var(--bad)', opacity: busy || !rejectAllReason.trim() ? .5 : 1 }}>Confirm rejection</button></div>}</div><button type="button" disabled={busy || !valid} onClick={() => void forward()} style={{ ...secondary, color: '#fff', background: 'var(--accent)', borderColor: 'var(--accent)', opacity: busy || !valid ? .5 : 1 }}><Icon name="send" size={16} color="#fff" />Forward to Procurement</button></footer>}
       </section>
     </div>
   }

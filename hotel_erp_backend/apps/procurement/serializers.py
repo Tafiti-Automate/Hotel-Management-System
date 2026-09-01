@@ -320,6 +320,10 @@ class RequisitionItemSerializer(serializers.ModelSerializer):
         read_only_fields = (
             "id",
             "approved_quantity",
+            "rejection_stage",
+            "rejection_reason",
+            "rejected_at",
+            "rejected_by",
             "procurement_supplier",
             "procurement_supplier_price",
             "procurement_unit",
@@ -349,6 +353,13 @@ class RequisitionItemSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         requisition = attrs.get("requisition") or getattr(self.instance, "requisition", None)
         item = attrs.get("item") or getattr(self.instance, "item", None)
+        request = self.context.get("request")
+        if "estimated_unit_cost" in attrs and lpo_price_is_read_only_for_user(getattr(request, "user", None)):
+            current_price = getattr(self.instance, "estimated_unit_cost", Decimal("0.00")) if self.instance else Decimal("0.00")
+            if attrs["estimated_unit_cost"] != current_price:
+                raise serializers.ValidationError({
+                    "estimated_unit_cost": "Prices are controlled by the Cost Controller and are read-only for this role."
+                })
         destination_type = attrs.get("destination_type", getattr(self.instance, "destination_type", RequisitionItem.DESTINATION_STORE))
         if destination_type == RequisitionItem.DESTINATION_WORKSPACE:
             attrs.setdefault("destination_department", attrs.get("destination_department") or (requisition.department if requisition else None))
@@ -644,9 +655,15 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
             "destination_justification",
             "procurement_quantity",
             "procurement_base_quantity",
+            "purchasing_approved_quantity",
+            "purchasing_approved_base_quantity",
+            "purchasing_reduction_reason",
             "finance_approved_quantity",
             "finance_approved_base_quantity",
             "finance_reduction_reason",
+            "management_approved_quantity",
+            "management_approved_base_quantity",
+            "management_reduction_reason",
             "approved_quantity",
             "approved_base_quantity",
         )
