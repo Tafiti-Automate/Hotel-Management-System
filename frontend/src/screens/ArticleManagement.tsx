@@ -152,7 +152,7 @@ export default function ArticleManagement() {
     URL.revokeObjectURL(url)
   }
 
-  return <div style={{ maxWidth: 1500, margin: '0 auto' }}>
+  return <div className="article-master-screen" style={{ width: '100%', maxWidth: 1500, height: '100%', minHeight: 0, margin: '0 auto', display: 'flex', flexDirection: 'column' }}>
     <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 14 }}>
       <div>
         <h1 style={{ margin: '0 0 5px', color: 'var(--text)', fontSize: 29, fontWeight: 750 }}>Articles / Items</h1>
@@ -170,10 +170,10 @@ export default function ArticleManagement() {
       {query && <button type="button" onClick={() => setQuery('')} aria-label="Clear article search" style={{ ...iconButton, position: 'absolute', right: 5, top: 4, border: 0 }}><Icon name="close" size={17} /></button>}
     </div>
 
-    <div className="catalogue-layout article-master-layout" style={{ display: 'grid', gridTemplateColumns: '360px minmax(0,1fr)', minHeight: 650, border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', background: 'var(--surface)' }}>
-      <aside style={{ borderRight: '1px solid var(--border)', background: 'var(--surface-2)', minWidth: 0 }}>
+    <div className="catalogue-layout article-master-layout" style={{ display: 'grid', gridTemplateColumns: '360px minmax(0,1fr)', flex: '1 1 auto', minHeight: 0, border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', background: 'var(--surface)' }}>
+      <aside className="article-master-explorer" style={{ borderRight: '1px solid var(--border)', background: 'var(--surface-2)', minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={panelHeader}><span>Article explorer</span><small>{items.filter(visibleItem).length} item{items.filter(visibleItem).length === 1 ? '' : 's'}</small></div>
-        <div style={{ padding: '8px 7px' }}>
+        <div className="article-master-explorer-tree" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '8px 7px' }}>
           {roots.map((root) => {
             const rootId = text(root.id)
             const groups = visibleGroups(rootId)
@@ -212,7 +212,7 @@ export default function ArticleManagement() {
         </div>
       </aside>
 
-      <section style={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+      <section className="article-master-detail" style={{ minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
         {selectedItem && state ? <>
           <div style={{ padding: '16px 18px 14px', borderBottom: '1px solid var(--border)' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
