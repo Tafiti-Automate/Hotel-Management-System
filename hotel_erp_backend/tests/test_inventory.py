@@ -5,6 +5,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
 
 from apps.departments.models import Branch, Department
@@ -138,6 +139,40 @@ def test_category_hierarchy_reports_descendant_items_and_prevents_cycles():
     )
     assert not serializer.is_valid()
     assert "parent" in serializer.errors
+
+
+@pytest.mark.django_db
+def test_item_import_creates_major_group_item_group_and_article_atomically():
+    user = get_user_model().objects.create_superuser(
+        username="item-import-admin",
+        employee_code="ITEM-IMPORT-ADMIN",
+        password="test-pass-123",
+    )
+    UnitOfMeasure.objects.create(name="Pieces", abbreviation="pcs")
+    upload = SimpleUploadedFile(
+        "items.csv",
+        (
+            "major_group,item_group,item_name,sku,base_unit,reorder_level,"
+            "maximum_level,business_type,is_active\n"
+            "Beverages,Soft Drinks,Cola,BEV-SD-001,pcs,100,1000,"
+            "Resale / Revenue Item,yes\n"
+        ).encode(),
+        content_type="text/csv",
+    )
+    client = APIClient()
+    client.force_authenticate(user)
+
+    response = client.post("/api/v1/items/import/", {"file": upload}, format="multipart")
+
+    assert response.status_code == 200
+    assert response.data == {"created": 1, "updated": 0, "total": 1}
+    major = Category.objects.get(name="Beverages")
+    group = Category.objects.get(name="Soft Drinks")
+    item = Item.objects.get(sku="BEV-SD-001")
+    assert major.parent_id is None
+    assert group.parent == major
+    assert item.category == group
+    assert item.maximum_level == Decimal("1000")
 
 
 @pytest.mark.django_db

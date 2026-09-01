@@ -2414,6 +2414,21 @@ html:not([data-theme="dark"]) .form-drawer {
   }
 }
 
+@media (max-width: 980px) {
+  .requester-item-entry.cascade {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+  .requester-item-entry.cascade > :nth-child(4) { grid-column: auto; }
+  .requester-item-entry.cascade > :nth-child(7) { grid-column: 1 / -1; }
+  .requester-item-entry.cascade > :nth-child(7) > button { width: 100%; justify-content: center; }
+}
+
+@media (max-width: 720px) {
+  .requester-item-entry.cascade { grid-template-columns: 1fr !important; }
+  .requester-item-entry.cascade > :nth-child(4),
+  .requester-item-entry.cascade > :nth-child(7) { grid-column: auto; }
+}
+
 /* Department Head approval workspace */
 @media (max-width: 900px) {
   .hod-approval-filters {

@@ -682,8 +682,8 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
             <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>{orderLines.length} item{orderLines.length === 1 ? '' : 's'} on LPO</span>
           </div>
           <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-            <div className="receiving-line-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(210px,1.4fr) .55fr .7fr .65fr .75fr .9fr .5fr', gap: 10, padding: '10px 12px', background: 'var(--surface-2)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}>
-              <span>Article</span><span>LPO Qty</span><span>Previously received</span><span>Outstanding</span><span>Receive now</span><span>Expiry date</span><span>UOM</span>
+            <div className="receiving-line-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(240px,1.6fr) .6fr .8fr 1fr .55fr', gap: 10, padding: '10px 12px', background: 'var(--surface-2)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}>
+              <span>Article</span><span>LPO Qty</span><span>Receive now</span><span>Expiry date</span><span>UOM</span>
             </div>
             {orderLines.map((line) => {
               const lineId = id(line.id)
@@ -696,14 +696,12 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
               const expiryRequired = Boolean(article?.expiryTracking)
               const expiry = expiryDates[lineId] || ''
               const invalidExpiry = Boolean(entered > 0 && ((expiryRequired && !expiry) || (expiry && expiry < receivedDate)))
-              return <div key={lineId} className="receiving-line-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(210px,1.4fr) .55fr .7fr .65fr .75fr .9fr .5fr', gap: 10, alignItems: 'center', padding: '12px', borderTop: '1px solid var(--border)', fontSize: 11.5 }}>
+              return <div key={lineId} className="receiving-line-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(240px,1.6fr) .6fr .8fr 1fr .55fr', gap: 10, alignItems: 'center', padding: '12px', borderTop: '1px solid var(--border)', fontSize: 11.5 }}>
                 <strong style={{ color: 'var(--text)' }}>{names.items.get(id(line.item)) || id(line.item)}</strong>
                 <span style={{ color: 'var(--text-muted)' }}>{ordered}</span>
-                <span style={{ color: 'var(--text-muted)' }}>{previous}</span>
-                <strong style={{ color: outstanding > 0 ? 'var(--text)' : 'var(--good)' }}>{outstanding}</strong>
                 <div>
                   <Input type="number" value={quantities[lineId] || ''} onChange={(value) => setQuantities((current) => ({ ...current, [lineId]: value }))} placeholder="0" />
-                  {invalid && <div style={{ marginTop: 4, color: 'var(--bad)', fontSize: 9.5 }}>Maximum {outstanding}</div>}
+                  {invalid && <div style={{ marginTop: 4, color: 'var(--bad)', fontSize: 9.5 }}>Above the remaining LPO balance</div>}
                 </div>
                 <div>
                   <Input type="date" value={expiry} onChange={(value) => setExpiryDates((current) => ({ ...current, [lineId]: value }))} />
@@ -1366,16 +1364,14 @@ function ReceiptPanel({ data, form, setForm, busy, run, orderLabel, receiptLabel
     <Divider />
     <Field label="Draft / existing GRN"><Select value={form.receipt} onChange={(v) => { const found = data.receipts.find((row: Row) => id(row.id) === v); setForm({ receipt: v, order: found?.purchase_order || form.order }) }} rows={data.receipts.filter((row: Row) => readyOrders.some((order: Row) => id(order.id) === id(row.purchase_order)))} label={receiptLabel} /></Field>
     <Field label="LPO item"><Select value={form.orderLine} onChange={(v) => setForm({ ...form, orderLine: v, quantity: '', expiryDate: '' })} rows={lines} label={(row: Row) => `${names.items.get(id(row.item)) || id(row.item)} · approved ${row.approved_quantity ?? row.quantity}`} /></Field>
-    {line && <section style={{ margin: '10px 0 12px', display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 8 }}>
+    {line && <section style={{ margin: '10px 0 12px' }}>
       <ReadOnlyValue label="LPO approved" value={orderedQuantity} />
-      <ReadOnlyValue label="Previously received" value={previouslyReceived} />
-      <ReadOnlyValue label="Outstanding" value={outstanding} />
     </section>}
     {line && <Hint>Destination: {line.destination_type === 'workspace' ? `Department · ${names.departments.get(id(line.destination_department)) || 'inherited'}` : names.stores.get(id(line.destination_store)) || stores.find((store: Row) => id(store.id) === id(line.destination_store))?.name || 'Inherited LPO store'} · read only.</Hint>}
     <Field label={`Quantity received now (${names.units.get(id(line?.unit)) || 'LPO unit'})`}><Input type="number" value={form.quantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field>
     <Field label={`Expiry date${expiryRequired ? ' *' : ' (optional)'}`}><Input type="date" value={form.expiryDate || ''} onChange={(v) => setForm({ ...form, expiryDate: v })} /></Field>
     {invalidExpiry && <Hint>Expiry date cannot be earlier than the received date.</Hint>}
-    {line && num(form.quantity) > outstanding && <Hint>Cannot receive more than the outstanding quantity of {outstanding}.</Hint>}
+    {line && num(form.quantity) > outstanding && <Hint>The entered quantity is above the remaining receivable quantity on this LPO.</Hint>}
     {duplicate && <Hint>This LPO line is already on this GRN. Use a new GRN for a later partial delivery.</Hint>}
     <Action disabled={busy || duplicate || !form.receipt || !form.orderLine || num(form.quantity) <= 0 || num(form.quantity) > outstanding || (expiryRequired && !form.expiryDate) || invalidExpiry} onClick={() => run(() => createBackendRecord('grn-items', { goods_receipt: form.receipt, purchase_order_item: form.orderLine, quantity_received: num(form.quantity), expiry_date: form.expiryDate || null }), 'Received quantity and expiry date recorded; original LPO quantity remains unchanged')}>Record received quantity</Action>
     {receiptLines.length > 0 && <Hint>Next: open “2. Confirm & post GRN” to record accepted/rejected quantities and post accepted stock. The LPO quantity remains unchanged.</Hint>}

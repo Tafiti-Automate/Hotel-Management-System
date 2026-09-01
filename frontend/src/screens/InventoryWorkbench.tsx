@@ -620,14 +620,20 @@ function RequesterDraftEditor({ app, data, form, setForm, busy, execute, draftRe
   const requestPurpose = id(form.requestPurpose ?? draftRequest.purpose)
   const requiredDate = id(form.requiredDate ?? draftRequest.required_date)
   const article = app.data.items.find((row: Row) => id(row.id) === id(form.item || draftLine?.item))
+  const majorGroups = app.data.categories.filter((category: Row) => !category.parentId)
+  const itemGroups = app.data.categories.filter((category: Row) => id(category.parentId) === id(form.majorGroup))
+  const selectableItems = app.data.items.filter((item: Row) => id(item.categoryId) === id(form.itemGroup))
   const selectedUom = uomNames.get(id(form.unit || draftLine?.unit || article?.baseUnitId)) || id(article?.uom) || 'Base unit'
   const createdLabel = draftRequest.created_at ? new Date(id(draftRequest.created_at)).toLocaleDateString() : 'Today'
-  const clearItemForm = () => setForm({ ...form, requestLine: '', item: '', unit: '', quantity: '', note: '' })
+  const clearItemForm = () => setForm({ ...form, requestLine: '', majorGroup: '', itemGroup: '', item: '', unit: '', quantity: '', note: '' })
   const editLine = (line: Row) => {
     const lineArticle = app.data.items.find((row: Row) => id(row.id) === id(line.item))
+    const lineGroup = app.data.categories.find((category: Row) => id(category.id) === id(lineArticle?.categoryId))
     setForm({
       ...form,
       requestLine: id(line.id),
+      majorGroup: lineGroup?.parentId || '',
+      itemGroup: lineGroup?.id || '',
       item: line.item || '',
       unit: line.unit || lineArticle?.baseUnitId || '',
       quantity: line.quantity_requested || line.base_quantity_requested || '',
@@ -727,15 +733,18 @@ function RequesterDraftEditor({ app, data, form, setForm, busy, execute, draftRe
           <div>{draftLine ? 'Edit item' : 'Add item'}</div>
           {draftLine && <button type="button" onClick={clearItemForm} style={{ ...secondary, marginLeft: 'auto', height: 32 }}>Cancel edit</button>}
         </div>
-        <div className="requester-item-entry" style={{ display: 'grid', gridTemplateColumns: 'minmax(240px,1.55fr) 110px 100px minmax(180px,1fr) auto', gap: 10, alignItems: 'end' }}>
-          <Field label="Article"><Select value={form.item} change={(value) => { const selected = app.data.items.find((row: Row) => id(row.id) === value); setForm({ ...form, item: value, unit: selected?.baseUnitId || '', quantity: form.quantity || '', note: form.note || '' }) }} rows={app.data.items} emptyLabel="Choose article" label={(row) => itemName(app, row.id)} /></Field>
+        <div className="requester-item-entry cascade" style={{ display: 'grid', gridTemplateColumns: 'minmax(145px,.85fr) minmax(150px,.9fr) minmax(190px,1.2fr) 90px 90px minmax(150px,.9fr) auto', gap: 10, alignItems: 'end' }}>
+          <Field label="1. Major Group"><Select value={form.majorGroup} change={(value) => setForm({ ...form, majorGroup: value, itemGroup: '', item: '', unit: '' })} rows={majorGroups} emptyLabel="Choose Major Group" /></Field>
+          <Field label="2. Item Group"><Select disabled={!form.majorGroup} value={form.itemGroup} change={(value) => setForm({ ...form, itemGroup: value, item: '', unit: '' })} rows={itemGroups} emptyLabel={form.majorGroup ? 'Choose Item Group' : 'Select Major Group first'} /></Field>
+          <Field label="3. Target Item"><Select disabled={!form.itemGroup} value={form.item} change={(value) => { const selected = app.data.items.find((row: Row) => id(row.id) === value); setForm({ ...form, item: value, unit: selected?.baseUnitId || '', quantity: form.quantity || '', note: form.note || '' }) }} rows={selectableItems} emptyLabel={form.itemGroup ? 'Choose item' : 'Select Item Group first'} label={(row) => itemName(app, row.id)} /></Field>
           <Field label="Quantity"><Input type="number" value={form.quantity} change={(value) => setForm({ ...form, quantity: value })} /></Field>
           <div style={{ marginBottom: 10 }}><HelpLabel label="UOM" style={labelStyle} /><div style={{ ...control, display: 'flex', alignItems: 'center', background: 'var(--surface-2)', color: form.item ? 'var(--text)' : 'var(--text-faint)' }}>{form.item ? selectedUom : '—'}</div></div>
           <Field label="Note (optional)"><Input value={form.note} change={(value) => setForm({ ...form, note: value })} /></Field>
           <div style={{ marginBottom: 10 }}>
-            {draftLine ? <button type="button" disabled={busy || !form.item || num(form.quantity) <= 0} onClick={() => execute(() => updateBackendRecord('store-requisition-items', id(draftLine.id), { item: form.item, unit: form.unit || null, quantity_requested: num(form.quantity), remarks: id(form.note).trim() }), 'Item updated', { request: form.request, requestLine: '', item: '', unit: '', quantity: '', note: '' })} style={{ ...secondary, height: 38, color: '#fff', background: 'var(--accent)', borderColor: 'var(--accent)', opacity: busy || !form.item || num(form.quantity) <= 0 ? .5 : 1 }}><Icon name="save" size={16} color="#fff" />Update</button> : <button type="button" disabled={busy || !form.item || num(form.quantity) <= 0} onClick={() => execute(() => createBackendRecord('store-requisition-items', { requisition: form.request, item: form.item, unit: form.unit || null, quantity_requested: num(form.quantity), quantity_approved: 0, quantity_issued: 0, remarks: id(form.note).trim() }), 'Item added', { request: form.request, item: '', unit: '', quantity: '', note: '', requestLine: '' })} style={{ ...secondary, height: 38, color: '#fff', background: 'var(--accent)', borderColor: 'var(--accent)', opacity: busy || !form.item || num(form.quantity) <= 0 ? .5 : 1 }}><Icon name="add" size={16} color="#fff" />Add</button>}
+            {draftLine ? <button type="button" disabled={busy || !form.item || num(form.quantity) <= 0} onClick={() => execute(() => updateBackendRecord('store-requisition-items', id(draftLine.id), { item: form.item, unit: form.unit || null, quantity_requested: num(form.quantity), remarks: id(form.note).trim() }), 'Item updated', { request: form.request, requestLine: '', majorGroup: '', itemGroup: '', item: '', unit: '', quantity: '', note: '' })} style={{ ...secondary, height: 38, color: '#fff', background: 'var(--accent)', borderColor: 'var(--accent)', opacity: busy || !form.item || num(form.quantity) <= 0 ? .5 : 1 }}><Icon name="save" size={16} color="#fff" />Update</button> : <button type="button" disabled={busy || !form.item || num(form.quantity) <= 0} onClick={() => execute(() => createBackendRecord('store-requisition-items', { requisition: form.request, item: form.item, unit: form.unit || null, quantity_requested: num(form.quantity), quantity_approved: 0, quantity_issued: 0, remarks: id(form.note).trim() }), 'Item added', { request: form.request, majorGroup: '', itemGroup: '', item: '', unit: '', quantity: '', note: '', requestLine: '' })} style={{ ...secondary, height: 38, color: '#fff', background: 'var(--accent)', borderColor: 'var(--accent)', opacity: busy || !form.item || num(form.quantity) <= 0 ? .5 : 1 }}><Icon name="add" size={16} color="#fff" />Add</button>}
           </div>
         </div>
+        {article && <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 2, padding: '9px 11px', border: '1px solid var(--accent)', borderRadius: 7, background: 'var(--accent-soft)', color: 'var(--text)', fontSize: 11.5 }}><Icon name="monitoring" size={17} color="var(--accent)" /><strong>Stock info</strong><span>Min: {num(article.reorder)}</span><span>Current: {num(article.onHand)}</span><span>Max: {article.maximumLevel == null ? '—' : num(article.maximumLevel)}</span></div>}
       </div>
       </div>
 
@@ -1141,7 +1150,7 @@ const statusLabel = (value: string) => ({ draft: 'Draft', pending_department_app
 const formatDateTime = (value: string) => value ? new Date(value).toLocaleString() : ''
 function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="inventory-form-field" style={{ display: 'block', marginBottom: 10 }}><HelpLabel label={label} style={labelStyle} />{children}</label> }
 function Input({ value, change, type = 'text' }: { value: unknown; change: (value: string) => void; type?: string }) { return <input className="inventory-control" type={type} value={id(value)} onChange={(e) => change(e.target.value)} style={control} /> }
-function Select({ value, change, rows, label = (r: Row) => id(r.name), optional = false, emptyLabel }: { value: unknown; change: (value: string) => void; rows: Row[]; label?: (row: Row) => string; optional?: boolean; emptyLabel?: string }) { return <select className="inventory-control" value={id(value)} onChange={(e) => change(e.target.value)} style={control}><option value="">{emptyLabel || (optional ? 'None' : 'Select…')}</option>{rows.map((row) => <option key={id(row.id)} value={id(row.id)}>{label(row)}</option>)}</select> }
+function Select({ value, change, rows, label = (r: Row) => id(r.name), optional = false, emptyLabel, disabled = false }: { value: unknown; change: (value: string) => void; rows: Row[]; label?: (row: Row) => string; optional?: boolean; emptyLabel?: string; disabled?: boolean }) { return <select className="inventory-control" disabled={disabled} value={id(value)} onChange={(e) => change(e.target.value)} style={{ ...control, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? .65 : 1 }}><option value="">{emptyLabel || (optional ? 'None' : 'Select…')}</option>{rows.map((row) => <option key={id(row.id)} value={id(row.id)}>{label(row)}</option>)}</select> }
 function Action({ children, click, disabled, tone = 'accent' }: any) { return <button className="inventory-primary-action" type="button" onClick={click} disabled={disabled} style={{ ...action, opacity: disabled ? .45 : 1, background: tone === 'good' ? 'var(--good)' : tone === 'danger' ? 'var(--bad)' : 'var(--accent)' }}>{children}</button> }
 function Rule() { return <div className="inventory-form-rule" style={{ borderTop: '1px solid var(--border)', margin: '16px 0' }} /> }
 function Hint({ children }: { children: ReactNode }) { return <div className="inventory-form-hint" role="note" style={{ padding: 9, color: 'var(--warn)', background: 'var(--warn-soft)', borderRadius: 6, fontSize: 11 }}>{children}</div> }
