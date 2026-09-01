@@ -70,6 +70,9 @@ export default function FormDrawer() {
             : ''
       seed[fd.key] = existing && existing[fd.key] != null ? existing[fd.key] : fallback
     })
+    if (!existing && f.initialValues) {
+      Object.assign(seed, f.initialValues)
+    }
     if (f.entity === 'requisitions') {
       seed.request_type = existing?.request_type || 'department'
       seed.procurement_source = existing?.procurement_source || 'manual'
@@ -90,7 +93,7 @@ export default function FormDrawer() {
     setValues(seed)
     setStep(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [f?.entity, f?.id, canPurchaseOnBehalf, canRequestOnBehalf, signedInEmployee?.id])
+  }, [f?.entity, f?.id, f?.preset, f?.initialValues, canPurchaseOnBehalf, canRequestOnBehalf, signedInEmployee?.id])
 
   if (!f) return null
   const conf = cfg[f.entity]

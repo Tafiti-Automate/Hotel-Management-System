@@ -27,10 +27,9 @@ ROLE_SPECS = {
     "Cost Controller": {
         "crud": {
             "vendors": ["supplier"],
-            "inventory": ["item", "itemunitprice", "supplieritemprice", "unitofmeasure"],
+            "inventory": ["category", "item", "itemunitprice", "supplieritemprice", "unitofmeasure"],
             "procurement": ["procurementattachment"],
         },
-        "view": {"inventory": ["category"]},
     },
     "Store Keeper": {
         # The Department request is predecessor data. Store Keeper may process it,

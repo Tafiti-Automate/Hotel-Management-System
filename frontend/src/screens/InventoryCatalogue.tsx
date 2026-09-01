@@ -26,6 +26,12 @@ function ItemTreeIcon({ color = 'currentColor', size = 17 }: { color?: string; s
   </svg>
 }
 
+function PlusTreeIcon({ size = 15 }: { size?: number }) {
+  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 20 20" fill="none" style={{ display: 'block' }}>
+    <path d="M10 4.25v11.5M4.25 10h11.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+  </svg>
+}
+
 function stockPresentation(item: Row) {
   const stock = num(item.onHand)
   const reorder = num(item.reorder)
@@ -118,10 +124,14 @@ export default function InventoryCatalogue() {
         ? `${id(selectedParent.name)} › ${id(selectedCategory?.name)}`
         : id(selectedCategory?.name) || 'All inventory'
   const permissionMetadata = app.user.permissions.length > 0
+  const roleKey = String(app.user.role || '').trim().toLowerCase()
+  const isCostController = roleKey === 'cost controller'
   const canMaintainCategories = app.user.isSuperuser
+    || isCostController
     || app.user.permissions.includes('inventory.add_category')
     || (!permissionMetadata && app.user.isStaff)
   const canMaintainItems = app.user.isSuperuser
+    || isCostController
     || app.user.permissions.includes('inventory.add_item')
     || (!permissionMetadata && app.user.isStaff)
 
@@ -211,6 +221,22 @@ export default function InventoryCatalogue() {
     }
     app.openCreate('items', 'Inventory Catalogue Setup', 'item')
   }
+  const openItemGroupForMajor = (majorGroup: Row) => {
+    if (!canMaintainCategories) return
+    app.openCreate('categories', 'Inventory Catalogue Setup', 'itemGroup', { parent: id(majorGroup.name) })
+  }
+  const openItemForGroup = (itemGroup: Row) => {
+    if (!canMaintainItems) return
+    const majorGroup = categories.find((category) => id(category.id) === id(itemGroup.parentId))
+    if (!majorGroup) {
+      app.showWorkflowAlert('Major Group not found', 'This Item Group is not attached to a valid Major Group.', 'warning')
+      return
+    }
+    app.openCreate('items', 'Inventory Catalogue Setup', 'item', {
+      majorGroup: id(majorGroup.name),
+      category: id(itemGroup.name),
+    })
+  }
 
   return <div style={{ maxWidth: 1500, margin: '0 auto' }}>
     <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, marginBottom: 14, flexWrap: 'wrap' }}>
@@ -221,13 +247,13 @@ export default function InventoryCatalogue() {
     {(canMaintainCategories || canMaintainItems) && <section style={{ marginBottom: 14, padding: 14, border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 11 }}><Icon name="account_tree" size={18} color="var(--accent)" /><strong style={{ color: 'var(--text)', fontSize: 13 }}>Catalogue setup</strong><span style={{ color: 'var(--text-faint)', fontSize: 11.5 }}>Create each level in sequence.</span></div>
       <div className="catalogue-setup-actions" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 10 }}>
-        <button type="button" disabled={!canMaintainCategories} onClick={openMajorGroup} style={{ ...setupAction, opacity: canMaintainCategories ? 1 : .55 }}>
+        <button type="button" disabled={!canMaintainCategories} onClick={openMajorGroup} className="catalogue-setup-action" style={{ ...setupAction, opacity: canMaintainCategories ? 1 : .55 }}>
           <span style={setupStep}>1</span><FolderTreeIcon size={21} color="var(--accent)" /><span style={setupCopy}><strong>Create Major Group</strong><small>Top-level family, e.g. Beverages</small></span><span style={setupCount}>{majorGroupCount}</span>
         </button>
-        <button type="button" disabled={!canMaintainCategories || !majorGroupCount} onClick={openItemGroup} style={{ ...setupAction, opacity: canMaintainCategories && majorGroupCount ? 1 : .55 }}>
+        <button type="button" disabled={!canMaintainCategories || !majorGroupCount} onClick={openItemGroup} className="catalogue-setup-action" style={{ ...setupAction, opacity: canMaintainCategories && majorGroupCount ? 1 : .55 }}>
           <span style={setupStep}>2</span><FolderTreeIcon size={20} color="var(--text-muted)" /><span style={setupCopy}><strong>Create Item Group</strong><small>Group inside a Major Group, e.g. Soft Drinks</small></span><span style={setupCount}>{itemGroupCount}</span>
         </button>
-        <button type="button" disabled={!canMaintainItems || !itemGroupCount} onClick={openItem} style={{ ...setupAction, opacity: canMaintainItems && itemGroupCount ? 1 : .55 }}>
+        <button type="button" disabled={!canMaintainItems || !itemGroupCount} onClick={openItem} className="catalogue-setup-action" style={{ ...setupAction, opacity: canMaintainItems && itemGroupCount ? 1 : .55 }}>
           <span style={setupStep}>3</span><ItemTreeIcon size={20} color="var(--text-muted)" /><span style={setupCopy}><strong>Create Item</strong><small>Article stored inside an Item Group</small></span><span style={setupCount}>{items.length}</span>
         </button>
       </div>
@@ -256,6 +282,7 @@ export default function InventoryCatalogue() {
                   <span style={{ flex: 1 }}>{id(root.name)}</span>
                   <small>{children.length} group{children.length === 1 ? '' : 's'} · {num(root.itemsCount)} item{num(root.itemsCount) === 1 ? '' : 's'}</small>
                 </button>
+                {canMaintainCategories && <button type="button" onClick={() => openItemGroupForMajor(root)} title={`Add Item Group to ${id(root.name)}`} aria-label={`Add Item Group to ${id(root.name)}`} style={treeAddButton}><PlusTreeIcon /></button>}
               </div>
               {rootOpen && <div>
                 {children.map((child) => {
@@ -271,6 +298,7 @@ export default function InventoryCatalogue() {
                         <span style={{ flex: 1 }}>{id(child.name)}</span>
                         <small>{childItems.length}</small>
                       </button>
+                      {canMaintainItems && <button type="button" onClick={() => openItemForGroup(child)} title={`Add item to ${id(child.name)}`} aria-label={`Add item to ${id(child.name)}`} style={treeAddButton}><PlusTreeIcon /></button>}
                     </div>
                     {childOpen && childItems.length > 0 && <div style={{ marginLeft: 49, borderLeft: '1px solid var(--border)', paddingLeft: 12 }}>
                       {childItems.map((item) => {
@@ -331,7 +359,7 @@ export default function InventoryCatalogue() {
   </div>
 }
 
-const setupAction: CSSProperties = { minHeight: 72, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface-2)', color: 'var(--text)', cursor: 'pointer', font: 'inherit', textAlign: 'left' }
+const setupAction: CSSProperties = { minHeight: 72, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid var(--border-strong, var(--border))', borderRadius: 8, background: 'var(--surface)', color: 'var(--text)', cursor: 'pointer', font: 'inherit', textAlign: 'left', boxShadow: '0 1px 2px rgba(15,23,42,.04)' }
 const setupStep: CSSProperties = { width: 22, height: 22, borderRadius: 999, display: 'grid', placeItems: 'center', flex: 'none', background: 'var(--accent-soft)', color: 'var(--accent)', fontSize: 11, fontWeight: 800 }
 const setupCopy: CSSProperties = { minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12.5 }
 const setupCount: CSSProperties = { minWidth: 24, textAlign: 'right', color: 'var(--text-faint)', fontSize: 11.5, fontWeight: 750 }
@@ -339,6 +367,7 @@ const secondary: CSSProperties = { height: 38, display: 'inline-flex', alignItem
 const iconButton: CSSProperties = { width: 34, height: 34, display: 'grid', placeItems: 'center', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer' }
 const panelHeader: CSSProperties = { minHeight: 48, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '10px 13px', borderBottom: '1px solid var(--border)', color: 'var(--text)', fontSize: 11.5, fontWeight: 750 }
 const treeToggle: CSSProperties = { width: 26, height: 34, display: 'grid', placeItems: 'center', flex: 'none', border: 0, background: 'transparent', color: 'var(--text-faint)', cursor: 'pointer' }
+const treeAddButton: CSSProperties = { width: 30, height: 30, display: 'grid', placeItems: 'center', flex: 'none', marginRight: 3, border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface)', color: 'var(--accent)', cursor: 'pointer' }
 const treeRow: CSSProperties = { minWidth: 0, flex: 1, minHeight: 36, display: 'flex', alignItems: 'center', gap: 7, padding: '0 8px', border: 0, borderRadius: 6, textAlign: 'left', cursor: 'pointer', font: 'inherit', fontSize: 12 }
 const treeLeaf: CSSProperties = { width: 'calc(100% - 62px)', minHeight: 34, display: 'flex', alignItems: 'center', gap: 7, padding: '0 8px', border: 0, borderRadius: 6, textAlign: 'left', cursor: 'pointer', font: 'inherit', fontSize: 11.5 }
 const headCell: CSSProperties = { minWidth: 0, minHeight: 38, display: 'flex', alignItems: 'center', padding: '0 9px', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase' }
