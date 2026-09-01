@@ -5914,3 +5914,20 @@ html[data-theme="dark"] .screen-app .app-content {
 @media (max-width: 680px) {
   .supplier-summary-grid { grid-template-columns: 1fr !important; }
 }
+
+/* Article master explorer */
+@media (max-width: 1120px) {
+  .article-summary-grid { grid-template-columns: repeat(3,minmax(0,1fr)) !important; }
+}
+@media (max-width: 860px) {
+  .article-master-layout { grid-template-columns: 285px minmax(0,1fr) !important; }
+  .article-control-grid { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
+}
+@media (max-width: 680px) {
+  .article-master-layout { display: block !important; }
+  .article-master-layout > aside { max-height: 340px; overflow-y: auto; border-right: 0 !important; border-bottom: 1px solid var(--border); }
+  .article-summary-grid { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
+}
+@media (max-width: 430px) {
+  .article-summary-grid, .article-control-grid { grid-template-columns: 1fr !important; }
+}

@@ -16,6 +16,7 @@ const ProcurementWorkbench = lazy(() => import('./ProcurementWorkbench'))
 const FinanceWorkbench = lazy(() => import('./FinanceWorkbench'))
 const InventoryWorkbench = lazy(() => import('./InventoryWorkbench'))
 const InventoryCatalogue = lazy(() => import('./InventoryCatalogue'))
+const ArticleManagement = lazy(() => import('./ArticleManagement'))
 const AuditLog = lazy(() => import('./AuditLog'))
 const AccessManagement = lazy(() => import('./AccessManagement'))
 const SupplierManagement = lazy(() => import('./SupplierManagement'))
@@ -42,6 +43,7 @@ export default function AppShell() {
   else if (route === 'workflow-stores') content = <InventoryWorkbench />
   else if (route === 'workflow-consume') content = <InventoryWorkbench />
   else if (route === 'categories') content = <InventoryCatalogue />
+  else if (route === 'items') content = <ArticleManagement />
   else if (route === 'workflow-pay') content = <FinanceWorkbench />
   else if (route === 'workflow-configure') content = <WorkflowHub kind="configure" />
   else if (route === 'suppliers') content = <SupplierManagement />
