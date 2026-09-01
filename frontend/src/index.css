@@ -5906,3 +5906,11 @@ html[data-theme="dark"] .screen-app .app-content {
 @media (max-width: 900px) {
   .catalogue-setup-actions { grid-template-columns: 1fr !important; }
 }
+
+/* Supplier explorer follows the catalogue hierarchy pattern. */
+@media (max-width: 1120px) {
+  .supplier-summary-grid { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
+}
+@media (max-width: 680px) {
+  .supplier-summary-grid { grid-template-columns: 1fr !important; }
+}
