@@ -5,6 +5,25 @@ import { Icon } from './Icon'
 import { cfg, getOptions, type Row } from '../lib/data'
 import { normalizeUgandaPhone, UGANDA_PHONE_HINT } from '../lib/ugandaPhone'
 
+
+function SmallFolderGraphic({ open = false, color = "var(--accent)" }: { open?: boolean; color?: string }) {
+  return <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" style={{ flex: 'none', display: 'block' }}>
+    <path d="M3.5 6.4c0-1 .8-1.8 1.8-1.8h4l1.7 1.8h7.7c1 0 1.8.8 1.8 1.8v1H3.5V6.4Z" fill={color} opacity={open ? .72 : .58} />
+    {open
+      ? <path d="M3.9 9.2h16.6c.8 0 1.4.7 1.2 1.5L19.1 18c-.2.8-.9 1.3-1.7 1.3H5.8c-.8 0-1.4-.5-1.6-1.2l-1.5-7c-.2-.9.4-1.9 1.2-1.9Z" fill={color} />
+      : <path d="M3.5 8.8h17v8.3c0 1-.8 1.8-1.8 1.8H5.3c-1 0-1.8-.8-1.8-1.8V8.8Z" fill={color} />}
+  </svg>
+}
+
+function SmallItemGraphic({ color = "var(--accent)" }: { color?: string }) {
+  return <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" style={{ flex: 'none', display: 'block' }}>
+    <path d="M5 7.2 12 3l7 4.2v9.6L12 21l-7-4.2V7.2Z" stroke={color} strokeWidth="1.7" strokeLinejoin="round" />
+    <path d="m5.3 7.4 6.7 4 6.7-4M12 11.4V21" stroke={color} strokeWidth="1.7" strokeLinejoin="round" />
+  </svg>
+}
+
+const helperCardStyle = { display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px', borderRadius: 8, background: 'var(--accent-soft)', color: 'var(--text)', fontSize: 12, lineHeight: 1.5, border: '1px solid color-mix(in srgb, var(--accent) 32%, white)' } as const
+
 function optionLabel(value: string): string {
   if (value === 'hotel_purchase') return 'Hotel purchase'
   if (value === 'department') return 'Department'
@@ -227,10 +246,10 @@ export default function FormDrawer() {
         {wizard && <div style={{ display: 'grid', gridTemplateColumns: `repeat(${pageCount},1fr)`, gap: 5, padding: '12px 22px', borderBottom: '1px solid var(--border)' }}>{Array.from({ length: pageCount }).map((_, index) => <span key={index} style={{ height: 3, borderRadius: 2, background: index <= step ? 'var(--accent)' : 'var(--border)' }} />)}</div>}
 
         <div className="form-body" style={{ flex: 1, overflowY: 'auto', padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {f.entity === 'categories' && !f.id && f.preset === 'majorGroup' && <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: 12, border: '1px solid var(--accent)', borderRadius: 8, background: 'var(--accent-soft)', color: 'var(--text)', fontSize: 12, lineHeight: 1.5 }}><Icon name="folder" size={18} color="var(--accent)" style={{ marginTop: 1 }} /><div><strong>Major Group:</strong> the top level of the catalogue, such as Beverages, Food Supplies or Stationery.</div></div>}
-          {f.entity === 'categories' && !f.id && f.preset === 'itemGroup' && <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: 12, border: '1px solid var(--accent)', borderRadius: 8, background: 'var(--accent-soft)', color: 'var(--text)', fontSize: 12, lineHeight: 1.5 }}><Icon name="folder_open" size={18} color="var(--accent)" style={{ marginTop: 1 }} /><div><strong>Item Group:</strong> select the Major Group first, then name the group beneath it. Example: Beverages → Soft Drinks.</div></div>}
+          {f.entity === 'categories' && !f.id && f.preset === 'majorGroup' && <div style={helperCardStyle}><span style={{ display: 'grid', placeItems: 'center', width: 24, height: 24, borderRadius: 6, background: 'rgba(37,99,235,.10)' }}><SmallFolderGraphic color="var(--accent)" /></span><div><strong>Major Group:</strong> the top level of the catalogue, such as Beverages, Food Supplies or Stationery.</div></div>}
+          {f.entity === 'categories' && !f.id && f.preset === 'itemGroup' && <div style={helperCardStyle}><span style={{ display: 'grid', placeItems: 'center', width: 24, height: 24, borderRadius: 6, background: 'rgba(37,99,235,.10)' }}><SmallFolderGraphic open color="var(--accent)" /></span><div><strong>Item Group:</strong> select the Major Group first, then name the group beneath it. Example: Beverages → Soft Drinks.</div></div>}
           {f.entity === 'categories' && (f.id || !f.preset) && <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: 12, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface-2)', color: 'var(--text-muted)', fontSize: 12, lineHeight: 1.5 }}><Icon name="account_tree" size={18} color="var(--accent)" style={{ marginTop: 1 }} /><div>Catalogue hierarchy: <strong>Major Group → Item Group → Item</strong>.</div></div>}
-          {f.entity === 'items' && !f.id && f.preset === 'item' && <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: 12, border: '1px solid var(--accent)', borderRadius: 8, background: 'var(--accent-soft)', color: 'var(--text)', fontSize: 12, lineHeight: 1.5 }}><Icon name="inventory_2" size={18} color="var(--accent)" style={{ marginTop: 1 }} /><div><strong>Item:</strong> choose its Major Group, then choose the Item Group inside that Major Group.</div></div>}
+          {f.entity === 'items' && !f.id && f.preset === 'item' && <div style={helperCardStyle}><span style={{ display: 'grid', placeItems: 'center', width: 24, height: 24, borderRadius: 6, background: 'rgba(37,99,235,.10)' }}><SmallItemGraphic color="var(--accent)" /></span><div><strong>Item:</strong> choose its Major Group, then choose the Item Group inside that Major Group.</div></div>}
           {f.entity === 'itemUnits' && values.item && values.unit && Number(values.conversionFactor || 0) > 0 && <div style={{ padding: 12, borderRadius: 8, background: 'var(--good-soft)', color: 'var(--good)', fontSize: 12, fontWeight: 750 }}>1 {String(values.unit)} = {Number(values.conversionFactor)} {String(app.data.items.find((item) => item.name === values.item)?.uom || 'base units')}</div>}
           {pageFields.map((fd) => {
             const isSelect = fd.type === 'select'
