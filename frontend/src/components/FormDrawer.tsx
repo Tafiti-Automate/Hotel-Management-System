@@ -33,6 +33,11 @@ function categoryParentOptions(options: string[], categories: Row[], editingName
   })
 }
 
+function categoryOptionLabel(option: string, categories: Row[]): string {
+  const category = categories.find((candidate) => String(candidate.name) === option)
+  return String(category?.path || option)
+}
+
 export default function FormDrawer() {
   const app = useApp()
   const f = app.form
@@ -173,6 +178,7 @@ export default function FormDrawer() {
         {wizard && <div style={{ display: 'grid', gridTemplateColumns: `repeat(${pageCount},1fr)`, gap: 5, padding: '12px 22px', borderBottom: '1px solid var(--border)' }}>{Array.from({ length: pageCount }).map((_, index) => <span key={index} style={{ height: 3, borderRadius: 2, background: index <= step ? 'var(--accent)' : 'var(--border)' }} />)}</div>}
 
         <div className="form-body" style={{ flex: 1, overflowY: 'auto', padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {f.entity === 'categories' && <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: 12, border: '1px solid var(--accent)', borderRadius: 8, background: 'var(--accent-soft)', color: 'var(--text)', fontSize: 12, lineHeight: 1.5 }}><Icon name="account_tree" size={18} color="var(--accent)" style={{ marginTop: 1 }} /><div><strong>Catalogue structure:</strong> create <strong>Beverages</strong> with no parent, then create <strong>Soft Drinks</strong> under Beverages. Articles such as Water and Soda are added from the Items screen.</div></div>}
           {f.entity === 'itemUnits' && values.item && values.unit && Number(values.conversionFactor || 0) > 0 && <div style={{ padding: 12, borderRadius: 8, background: 'var(--good-soft)', color: 'var(--good)', fontSize: 12, fontWeight: 750 }}>1 {String(values.unit)} = {Number(values.conversionFactor)} {String(app.data.items.find((item) => item.name === values.item)?.uom || 'base units')}</div>}
           {pageFields.map((fd) => {
             const isSelect = fd.type === 'select'
@@ -180,6 +186,9 @@ export default function FormDrawer() {
             let options = fd.opts === 'categoryParents'
               ? categoryParentOptions(getOptions(fd.opts, app.data), app.data.categories, editingCategoryName)
               : getOptions(fd.opts || '', app.data)
+            if (fd.opts === 'categories' && values[fd.key] && !options.includes(String(values[fd.key]))) {
+              options = [String(values[fd.key]), ...options]
+            }
             if (fd.opts === 'uoms' && f.entity === 'itemUnits' && values.item) {
               const article = app.data.items.find((item) => item.name === values.item)
               options = values.role === 'Base unit'
@@ -208,7 +217,7 @@ export default function FormDrawer() {
                   <div style={{ position: 'relative' }}>
                     <select disabled={fieldLocked} value={values[fd.key] ?? ''} onChange={(e) => setVal(fd.key, e.target.value, false)} style={{ width: '100%', height: 42, border: '1px solid var(--border)', background: fieldLocked ? 'var(--surface-3)' : 'var(--surface-2)', borderRadius: 10, padding: '0 34px 0 12px', fontSize: 13.5, color: fieldLocked ? 'var(--text-muted)' : 'var(--text)', outline: 'none', cursor: fieldLocked ? 'not-allowed' : 'pointer', opacity: fieldLocked ? .82 : 1 }}>
                       <option value="">Select an option</option>
-                      {options.map((opt) => <option key={opt} value={opt}>{optionLabel(opt)}</option>)}
+                      {options.map((opt) => <option key={opt} value={opt}>{fd.opts === 'categories' ? categoryOptionLabel(opt, app.data.categories) : optionLabel(opt)}</option>)}
                     </select>
                     <Icon name={fieldLocked ? 'lock' : 'expand_more'} size={fieldLocked ? 16 : 19} color="var(--text-faint)" style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
                   </div>

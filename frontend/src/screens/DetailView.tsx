@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from 'react'
 import { useApp } from '../state/AppContext'
 import { Icon } from '../components/Icon'
+import LpoPreviewModal from '../components/LpoPreviewModal'
 import type { Line } from '../lib/data'
 import { chipStyleFor, money } from '../lib/theme'
 
@@ -13,6 +14,7 @@ const lineHead: CSSProperties = { padding: '9px 12px', fontSize: 12, fontWeight:
 export default function DetailView() {
   const app = useApp()
   const [decisionComment, setDecisionComment] = useState('')
+  const [previewOpen, setPreviewOpen] = useState(false)
   const d = app.detail
   if (!d) return null
   const r = app.data[d.entity].find((x) => x.id === d.id)
@@ -78,7 +80,10 @@ export default function DetailView() {
               <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '.05em' }}>{kind}</div>
               <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', fontFamily: "'JetBrains Mono',monospace", letterSpacing: '-.01em', marginTop: 3 }}>{r.id}</div>
             </div>
-            <span style={chipStyleFor(r.status)}>{r.status}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {!isReq && <button type="button" onClick={() => setPreviewOpen(true)} style={{ height: 36, display: 'inline-flex', alignItems: 'center', gap: 7, padding: '0 12px', border: '1px solid var(--accent)', borderRadius: 7, background: 'var(--accent-soft)', color: 'var(--accent)', cursor: 'pointer', font: 'inherit', fontSize: 12.5, fontWeight: 750 }}><Icon name="visibility" size={18} />View LPO</button>}
+              <span style={chipStyleFor(r.status)}>{r.status}</span>
+            </div>
           </div>
           {isReq && awaitingApproval && (
             <div style={{ padding: '10px 22px', borderBottom: '1px solid var(--border)', background: 'var(--accent-soft)', color: 'var(--text)', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -190,6 +195,7 @@ export default function DetailView() {
           </div>
         </div>
       </div>
+      {previewOpen && !isReq && <LpoPreviewModal orderId={String(r.apiId || r.id)} reference={String(r.id)} onClose={() => setPreviewOpen(false)} />}
     </div>
   )
 }

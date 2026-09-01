@@ -55,6 +55,28 @@ class Category(BaseModel):
                 )
             visited.add(ancestor.pk)
             ancestor = ancestor.parent
+        if self.parent_id and self.parent.parent_id:
+            raise ValidationError(
+                {
+                    "parent": (
+                        "An item group must belong directly to a major group. "
+                        "Major groups cannot have a parent."
+                    )
+                }
+            )
+
+    @property
+    def hierarchy_level(self):
+        """Zero-based catalogue level used by the API and client tree."""
+        return 1 if self.parent_id else 0
+
+    @property
+    def group_type(self):
+        return "Item Group" if self.parent_id else "Major Group"
+
+    @property
+    def hierarchy_path(self):
+        return f"{self.parent.name} › {self.name}" if self.parent_id else self.name
 
     @classmethod
     def next_code(cls, name, exclude_id=None):

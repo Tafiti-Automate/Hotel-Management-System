@@ -106,10 +106,25 @@ def test_category_hierarchy_reports_descendant_items_and_prevents_cycles():
     root_row, child_row = rows
 
     assert beverages.code == "BEV"
+    assert root_row["group_type"] == "Major Group"
+    assert root_row["hierarchy_level"] == 0
+    assert root_row["hierarchy_path"] == "Beverages"
     assert root_row["children_count"] == 1
     assert root_row["item_count"] == 1
     assert child_row["parent_name"] == "Beverages"
+    assert child_row["group_type"] == "Item Group"
+    assert child_row["hierarchy_level"] == 1
+    assert child_row["hierarchy_path"] == "Beverages › Soft Drinks"
+    assert child_row["direct_item_count"] == 1
     assert child_row["item_count"] == 1
+
+    nested_serializer = CategorySerializer(
+        data={"name": "Cola", "parent": str(soft_drinks.id)},
+    )
+    assert not nested_serializer.is_valid()
+    assert "Major Group → Item Group → Items" in str(
+        nested_serializer.errors["parent"][0]
+    )
 
     beverages.parent = soft_drinks
     with pytest.raises(ValidationError, match="own parent or descendant"):

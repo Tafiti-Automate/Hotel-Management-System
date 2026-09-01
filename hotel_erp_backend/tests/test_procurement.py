@@ -1078,6 +1078,53 @@ def test_controlled_lpo_endpoint_accepts_pdf_content_negotiation():
 
 
 @pytest.mark.django_db
+def test_lpo_preview_is_inline_and_does_not_consume_controlled_print():
+    employee, department, supplier, item = create_procurement_context()
+    procurement_group, _ = Group.objects.get_or_create(name="Procurement Manager")
+    procurement_group.permissions.add(
+        Permission.objects.get(codename="view_purchaseorder")
+    )
+    employee.user.groups.add(procurement_group)
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        reason="Preview the LPO without downloading it",
+        status=PRStatus.APPROVED,
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity=Decimal("2.00"),
+        approved_quantity=Decimal("2.00"),
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition,
+        supplier=supplier,
+        ordered_by=employee,
+    )
+    PurchaseOrderItem.objects.create(
+        purchase_order=order,
+        item=item,
+        quantity=Decimal("2.00"),
+        unit_cost=Decimal("7000.00"),
+    )
+    client = APIClient()
+    client.force_authenticate(employee.user)
+
+    response = client.get(
+        f"/api/v1/purchase-orders/{order.pk}/preview-document/",
+        HTTP_ACCEPT="application/pdf",
+    )
+
+    assert response.status_code == 200
+    assert response["Content-Type"] == "application/pdf"
+    assert response["Content-Disposition"].startswith("inline;")
+    assert response["X-LPO-Document-Type"] == "PREVIEW"
+    assert response.content.startswith(b"%PDF")
+    assert order.print_records.count() == 0
+
+
+@pytest.mark.django_db
 @override_settings(
     EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend",
     EMAIL_HOST="",

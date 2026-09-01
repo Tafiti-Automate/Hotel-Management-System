@@ -48,7 +48,11 @@ def validate_configured_item_unit(item, unit):
 
 class CategorySerializer(serializers.ModelSerializer):
     parent_name = serializers.CharField(source="parent.name", read_only=True)
+    hierarchy_level = serializers.IntegerField(read_only=True)
+    group_type = serializers.CharField(read_only=True)
+    hierarchy_path = serializers.CharField(read_only=True)
     children_count = serializers.SerializerMethodField()
+    direct_item_count = serializers.SerializerMethodField()
     item_count = serializers.SerializerMethodField()
 
     class Meta:
@@ -59,9 +63,13 @@ class CategorySerializer(serializers.ModelSerializer):
             "code",
             "parent",
             "parent_name",
+            "hierarchy_level",
+            "group_type",
+            "hierarchy_path",
             "description",
             "is_active",
             "children_count",
+            "direct_item_count",
             "item_count",
             "created_at",
             "updated_at",
@@ -70,7 +78,11 @@ class CategorySerializer(serializers.ModelSerializer):
         read_only_fields = (
             "id",
             "parent_name",
+            "hierarchy_level",
+            "group_type",
+            "hierarchy_path",
             "children_count",
+            "direct_item_count",
             "item_count",
             "created_at",
             "updated_at",
@@ -110,15 +122,19 @@ class CategorySerializer(serializers.ModelSerializer):
         for category_id in parent_by_id:
             total_for(category_id)
 
-        self._cached_category_stats = (children_by_id, totals)
+        self._cached_category_stats = (children_by_id, direct_counts, totals)
         return self._cached_category_stats
 
     def get_children_count(self, category):
-        children_by_id, _ = self._category_stats()
+        children_by_id, _, _ = self._category_stats()
         return len(children_by_id.get(category.id, ()))
 
+    def get_direct_item_count(self, category):
+        _, direct_counts, _ = self._category_stats()
+        return direct_counts.get(category.id, 0)
+
     def get_item_count(self, category):
-        _, totals = self._category_stats()
+        _, _, totals = self._category_stats()
         return totals.get(category.id, 0)
 
     def validate_code(self, value):
@@ -133,6 +149,15 @@ class CategorySerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         attrs = super().validate(attrs)
         parent = attrs.get("parent", getattr(self.instance, "parent", None))
+        if parent and parent.parent_id:
+            raise serializers.ValidationError(
+                {
+                    "parent": (
+                        "Choose a major group as the parent. "
+                        "The catalogue supports Major Group → Item Group → Items."
+                    )
+                }
+            )
         if not self.instance or not parent:
             return attrs
 

@@ -94,6 +94,7 @@ def build_purchase_order_pdf(
     classification,
     printed_by=None,
     delivery_date=None,
+    actor_label="Printed By",
 ):
     """Return a complete LPO PDF suitable for printing or email attachment."""
     buffer = BytesIO()
@@ -359,7 +360,7 @@ def build_purchase_order_pdf(
         Spacer(1, 3 * mm),
         Paragraph(
             f"<i>Requested By :</i> &nbsp; {_text(requested_by)}"
-            f" &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <i>Printed By :</i> &nbsp; {_text(printed_name)}",
+            f" &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <i>{_text(actor_label)} :</i> &nbsp; {_text(printed_name)}",
             normal,
         ),
         Spacer(1, 1 * mm),

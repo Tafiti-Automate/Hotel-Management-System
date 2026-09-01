@@ -1150,6 +1150,33 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
 
     @action(
         detail=True,
+        methods=["get"],
+        url_path="preview-document",
+        renderer_classes=[PDFRenderer, JSONRenderer],
+    )
+    def preview_document(self, request, pk=None):
+        """Return an inline, non-controlled LPO preview without recording a print."""
+        order = self.get_object()
+        try:
+            pdf = build_purchase_order_pdf(
+                order,
+                classification="PREVIEW - NOT A CONTROLLED COPY",
+                printed_by=request.user,
+                actor_label="Previewed By",
+            )
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        response = HttpResponse(pdf, content_type="application/pdf")
+        response["Content-Disposition"] = content_disposition_header(
+            False,
+            f"LPO-{order.lpo_number}-preview.pdf",
+        )
+        response["Cache-Control"] = "private, no-store"
+        response["X-LPO-Document-Type"] = "PREVIEW"
+        return response
+
+    @action(
+        detail=True,
         methods=["post"],
         url_path="controlled-document",
         renderer_classes=[PDFRenderer, JSONRenderer],

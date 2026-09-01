@@ -101,6 +101,9 @@ export default function ListView() {
       : String(left ?? '').localeCompare(String(right ?? ''), undefined, { numeric: true })
     return sortDirection === 'asc' ? result : -result
   })
+  if (route === 'categories' && !sortKey) {
+    rows.sort((left, right) => String(left.path || left.name).localeCompare(String(right.path || right.name), undefined, { numeric: true }))
+  }
 
   const visibleColumns = config.cols.filter((column) => !hiddenColumns.has(column.key))
   const columns = `36px ${visibleColumns.map((column) => column.w).join(' ')} 96px`
@@ -193,6 +196,8 @@ export default function ListView() {
         </div>
       </div>
 
+      {route === 'categories' && <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)', color: 'var(--text-muted)', fontSize: 12 }}><Icon name="account_tree" size={18} color="var(--accent)" /><span><strong style={{ color: 'var(--text)' }}>{app.data.categories.filter((category) => !category.parentId).length} major groups</strong> contain {app.data.categories.filter((category) => category.parentId).length} item groups. Add articles such as Water or Soda from Items and assign them to an item group.</span></div>}
+
       <div className="table-command-bar" style={{ minHeight: 50, display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: 'var(--surface)', border: '1px solid var(--border)', borderBottom: 0, borderRadius: '8px 8px 0 0' }}>
         <div className="list-search" style={{ position: 'relative' }}>
           <Icon name="search" size={18} color="var(--text-faint)" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
@@ -226,6 +231,10 @@ export default function ListView() {
             <div style={{ display: 'grid', placeItems: 'center' }}><input type="checkbox" checked={selected.has(row.id)} onClick={(event) => event.stopPropagation()} onChange={(event) => setSelected((current) => { const next = new Set(current); event.target.checked ? next.add(row.id) : next.delete(row.id); return next })} /></div>
             {visibleColumns.map((column, index) => {
               const value = valueFor(column, row)
+              if (route === 'categories' && column.key === 'name') {
+                const child = Number(row.level || 0) > 0
+                return <div key={column.key} className="data-cell" data-label={column.label} data-primary={index === 0 ? 'true' : undefined} style={{ ...cellStyle(column), paddingLeft: child ? 32 : 12, gap: 8 }}><Icon name={child ? 'subdirectory_arrow_right' : 'folder'} size={17} color={child ? 'var(--text-faint)' : 'var(--accent)'} /><span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</span></div>
+              }
               if (route === 'categories' && column.key === 'itemsCount') {
                 return <div key={column.key} className="data-cell" data-label={column.label} style={cellStyle(column)}><button type="button" title={`View articles in ${row.name}`} onClick={(event) => { event.stopPropagation(); app.viewCategoryItems(row) }} style={countLink}>{value}</button></div>
               }

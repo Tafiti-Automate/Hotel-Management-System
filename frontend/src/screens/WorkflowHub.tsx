@@ -121,7 +121,7 @@ export default function WorkflowHub({ kind }: { kind: WorkflowKind }) {
       steps: [
         { label: 'Organization', route: 'hotel-profile', icon: 'domain', description: 'Hotels, branches and departments' },
         { label: 'Articles', route: 'items', icon: 'inventory_2', description: 'SKU, barcode and control rules', count: data.items.length },
-        { label: 'Categories', route: 'categories', icon: 'category', description: 'Category and subcategory tree', count: data.categories.length },
+        { label: 'Item Groups', route: 'categories', icon: 'account_tree', description: 'Major groups and their item groups', count: data.categories.length },
         { label: 'Units', route: 'uoms', icon: 'straighten', description: 'Shared unit names and abbreviations', count: data.uoms.length },
         { label: 'Conversions', route: 'itemUnits', icon: 'calculate', description: 'Article-specific carton and pallet ratios', count: data.itemUnits.length },
         { label: 'Suppliers', route: 'suppliers', icon: 'local_shipping', description: 'Pricing, terms and performance', count: data.suppliers.length },

@@ -58,7 +58,7 @@ export const cfg: Record<string, EntityConfig> = {
     cols: [
       { key: 'name', label: 'Item', w: 'minmax(0,1.7fr)', kind: 'bold' },
       { key: 'sku', label: 'SKU', w: '1fr', kind: 'mono' },
-      { key: 'category', label: 'Category', w: '1.1fr', kind: 'text' },
+      { key: 'categoryPath', label: 'Major / item group', w: '1.35fr', kind: 'text' },
       { key: 'businessType', label: 'Type', w: '1.15fr', kind: 'status' },
       { key: 'store', label: 'Store', w: '1.1fr', kind: 'text' },
       { key: 'onHand', label: 'On hand', w: '90px', kind: 'num', align: 'right' },
@@ -69,25 +69,26 @@ export const cfg: Record<string, EntityConfig> = {
     fields: [
       { key: 'name', label: 'Item name', type: 'text' },
       { key: 'sku', label: 'SKU', type: 'text' },
-      { key: 'category', label: 'Category', type: 'select', opts: 'categories' },
+      { key: 'category', label: 'Item group', type: 'select', opts: 'categories', hint: 'Items sit inside an item group, for example Beverages › Soft Drinks.' },
       { key: 'businessType', label: 'Business classification', type: 'select', opts: 'businessTypes' },
       { key: 'uom', label: 'Base stock unit', type: 'select', opts: 'uoms' },
       { key: 'reorder', label: 'Reorder level', type: 'number' },
     ],
   },
   categories: {
-    title: 'Categories', sub: 'Item categories and groupings', icon: 'category', add: 'Add category', singular: 'Category', prefix: 'CAT-', editable: true,
+    title: 'Item Groups', sub: 'Major Group → Item Group → Items', icon: 'account_tree', add: 'Add group', singular: 'Group', prefix: 'CAT-', editable: true,
     cols: [
-      { key: 'name', label: 'Category', w: 'minmax(0,1.8fr)', kind: 'bold' },
+      { key: 'name', label: 'Group', w: 'minmax(0,1.8fr)', kind: 'bold' },
+      { key: 'groupType', label: 'Level', w: '1fr', kind: 'status' },
       { key: 'code', label: 'Code', w: '1fr', kind: 'mono' },
-      { key: 'parent', label: 'Parent', w: '1.2fr', kind: 'text' },
+      { key: 'parent', label: 'Major group', w: '1.2fr', kind: 'text' },
       { key: 'itemsCount', label: 'Items', w: '90px', kind: 'num', align: 'right' },
       { key: 'status', label: 'Status', w: '110px', kind: 'status', align: 'right' },
     ],
     fields: [
-      { key: 'name', label: 'Category name', type: 'text' },
+      { key: 'name', label: 'Group name', type: 'text', placeholder: 'e.g. Beverages or Soft Drinks' },
       { key: 'code', label: 'Code', type: 'text' },
-      { key: 'parent', label: 'Parent category (optional)', type: 'select', opts: 'categoryParents' },
+      { key: 'parent', label: 'Major group (optional)', type: 'select', opts: 'categoryParents', hint: 'Leave blank to create a Major Group. Select a Major Group to create an Item Group beneath it.' },
       { key: 'description', label: 'Description', type: 'textarea' },
       { key: 'status', label: 'Status', type: 'select', opts: 'genStatus' },
     ],
@@ -459,7 +460,8 @@ export const reports: ReportCard[] = [
 
 
 export function getOptions(key: string, data: Record<EntityKey, Row[]>): string[] {
-  if (key === 'categories' || key === 'categoryParents') return (data.categories || []).map((c) => c.name)
+  if (key === 'categoryParents') return (data.categories || []).filter((category) => !category.parentId).map((category) => category.name)
+  if (key === 'categories') return (data.categories || []).filter((category) => Boolean(category.parentId)).map((category) => category.name)
   if (key === 'uoms') return (data.uoms || []).map((u) => u.name)
   if (key === 'locations') return (data.locations || []).map((l) => l.name)
   if (key === 'branches') return (data.branches || []).map((branch) => branch.name)

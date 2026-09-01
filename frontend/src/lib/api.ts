@@ -284,6 +284,17 @@ export async function downloadControlledPurchaseOrder(id: string): Promise<{ cla
   }
 }
 
+export async function fetchPurchaseOrderPreview(id: string): Promise<string> {
+  const response = await fetchWithTimeout(`${apiRoot()}/purchase-orders/${id}/preview-document/`, {
+    headers: { Accept: 'application/pdf', ...authHeaders() },
+  })
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({})) as Record<string, unknown>
+    throw new Error(String(body.detail || `The LPO preview could not be opened (${response.status}).`))
+  }
+  return URL.createObjectURL(await response.blob())
+}
+
 export async function login(username: string, password: string, remember = true): Promise<AuthUser> {
   const response = await fetch(`${apiRoot()}/auth/login/`, {
     method: 'POST',
@@ -992,6 +1003,10 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
 
   const raw = Object.fromEntries(entries.map(([key, result]) => [key, result.rows])) as Record<keyof typeof endpoints, ApiRecord[]>
   const categoryNames = mapById(raw.categories)
+  const categoryPaths = new Map(raw.categories.map((row) => [
+    idOf(row),
+    text(row.hierarchy_path) || text(row.name),
+  ]))
   const unitNames = mapById(raw.units)
   const storeNames = mapById(raw.stores)
   const supplierNames = mapById(raw.vendors)
@@ -1055,8 +1070,12 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
       code: text(row.code),
       parentId: text(row.parent),
       parent: text(row.parent_name) || categoryNames.get(text(row.parent)) || '—',
+      level: num(row.hierarchy_level),
+      groupType: text(row.group_type, text(row.parent) ? 'Item Group' : 'Major Group'),
+      path: text(row.hierarchy_path) || text(row.name),
       description: text(row.description),
       childrenCount: num(row.children_count),
+      directItemsCount: num(row.direct_item_count),
       itemsCount: num(row.item_count),
       status: activeStatus(row.is_active),
     })),
@@ -1141,6 +1160,7 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
       sku: text(row.sku),
       categoryId: text(row.category),
       category: categoryNames.get(text(row.category)) || shortId(row.category),
+      categoryPath: categoryPaths.get(text(row.category)) || categoryNames.get(text(row.category)) || shortId(row.category),
       businessType: fromBackendBusinessType(row.business_type),
       uom: unitNames.get(text(row.base_unit)) || text(row.unit),
       baseUnitId: text(row.base_unit),

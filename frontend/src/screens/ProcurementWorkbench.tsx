@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Icon } from '../components/Icon'
 import { HelpLabel } from '../components/HelpLabel'
+import LpoPreviewModal from '../components/LpoPreviewModal'
 import { WorkflowPath } from '../components/WorkflowPath'
 import { createBackendRecord, downloadControlledPurchaseOrder, downloadProcurementAttachment, errorMessage, fetchHotels, readBackendPayload, readBackendRecords, runBackendAction, updateBackendRecord, uploadProcurementAttachment, type HotelRecord } from '../lib/api'
 import type { Row } from '../lib/data'
@@ -1059,6 +1060,7 @@ function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplier
 }
 
 function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, items, itemUnits, canManage, role, userName, lpoQueue, setLpoQueue }: any) {
+  const [previewOpen, setPreviewOpen] = useState(false)
   const activeOrderRequisitions = new Set(
     data.orders.filter((row: Row) => id(row.status) !== 'cancelled').map((row: Row) => id(row.requisition)),
   )
@@ -1127,6 +1129,7 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, ite
   </Panel>
 
   return <Panel title={panelTitle} note="">
+    {order && <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}><Action onClick={() => setPreviewOpen(true)}><Icon name="visibility" size={17} />View LPO in system</Action></div>}
     {lpoQueue === 'prepare' && selectedRequisition && canManage && <>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8, marginBottom: 13 }}>
         <ReadOnlyValue label="Store Requisition" value={id(selectedRequisition.source_store_requisition_no) || id(selectedRequisition.requisition_number)} />
@@ -1245,6 +1248,7 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, ite
         <ReadOnlyValue label="Status" value={friendlyLpoStatus(id(order.status), Array.isArray(order.approval_steps) ? order.approval_steps as Row[] : [])} />
       </div>}
     </>}
+    {previewOpen && order && <LpoPreviewModal orderId={id(order.id)} reference={id(order.lpo_number) || id(order.po_number) || id(order.id)} onClose={() => setPreviewOpen(false)} />}
   </Panel>
 }
 
@@ -1469,6 +1473,7 @@ function ProcurementRecordDrawer({ stage, row, data, names, canAttach, onClose, 
   const [downloadingId, setDownloadingId] = useState('')
   const [printing, setPrinting] = useState(false)
   const [printClassification, setPrintClassification] = useState('')
+  const [previewOpen, setPreviewOpen] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
   const requisition = stage === 'request'
     ? data.requisitions.find((record) => id(record.id) === id(row.requisition))
@@ -1740,10 +1745,12 @@ function ProcurementRecordDrawer({ stage, row, data, names, canAttach, onClose, 
         />
       )}
       <footer className="screen-document-view" style={{ padding: '14px 22px', display: 'flex', justifyContent: 'flex-end', gap: 8, borderTop: '1px solid var(--border)' }}>
+        {stage === 'lpo' && <button type="button" onClick={() => setPreviewOpen(true)} style={secondary}><Icon name="visibility" size={17} />View LPO</button>}
         {['lpo', 'receipt', 'return'].includes(stage) && <button type="button" disabled={printing} onClick={() => void printDocument()} style={secondary}><Icon name="print" size={17} />{printing ? 'Preparing…' : stage === 'lpo' ? 'Generate controlled LPO PDF' : 'Print document'}</button>}
         <button type="button" onClick={onClose} style={secondary}>Close</button>
       </footer>
     </aside>
+    {previewOpen && stage === 'lpo' && <LpoPreviewModal orderId={id(row.id)} reference={reference} onClose={() => setPreviewOpen(false)} />}
   </>
 }
 
