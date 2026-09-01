@@ -15,6 +15,7 @@ const HRDashboard = lazy(() => import('./HRDashboard'))
 const ProcurementWorkbench = lazy(() => import('./ProcurementWorkbench'))
 const FinanceWorkbench = lazy(() => import('./FinanceWorkbench'))
 const InventoryWorkbench = lazy(() => import('./InventoryWorkbench'))
+const StorePurchaseRequests = lazy(() => import('./StorePurchaseRequests'))
 const InventoryCatalogue = lazy(() => import('./InventoryCatalogue'))
 const ArticleManagement = lazy(() => import('./ArticleManagement'))
 const AuditLog = lazy(() => import('./AuditLog'))
@@ -42,6 +43,7 @@ export default function AppShell() {
   else if (route === 'hr-dashboard') content = <HRDashboard />
   else if (route === 'workflow-procure') content = <ProcurementWorkbench />
   else if (route === 'workflow-stores') content = <InventoryWorkbench />
+  else if (route === 'store-purchase-requests') content = <StorePurchaseRequests />
   else if (route === 'workflow-consume') content = <InventoryWorkbench />
   else if (route === 'categories') content = <InventoryCatalogue />
   else if (route === 'items') content = <ArticleManagement />

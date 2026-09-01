@@ -18,6 +18,7 @@ const routePermissions: Record<string, string[]> = {
   stockIssues: ['inventory.view_stockissue'],
   storeReturns: ['inventory.view_storereturn'],
   'workflow-stores': ['inventory.view_storerequisition', 'inventory.view_stocktransfer', 'inventory.view_stockcount'],
+  'store-purchase-requests': ['inventory.view_storekeeperassignment', 'inventory.view_item'],
   'workflow-consume': ['inventory.view_storerequisition', 'inventory.view_stockissue'],
   suppliers: ['vendors.view_supplier'],
   supplierItems: ['inventory.view_supplieritemprice'],
@@ -44,7 +45,7 @@ const hrApps = new Set(['employees', 'departments', 'accounts'])
 const strictRoleRoutes: Record<string, Set<string>> = {
   requester: new Set(['dashboard', 'detail', 'workflow-stores', 'reports', 'reportview']),
   'department head': new Set(['dashboard', 'detail', 'workflow-stores', 'reports', 'reportview']),
-  'store keeper': new Set(['dashboard', 'detail', 'workflow-stores', 'reports', 'reportview']),
+  'store keeper': new Set(['dashboard', 'detail', 'workflow-stores', 'store-purchase-requests', 'reports', 'reportview']),
   'cost controller': new Set(['dashboard', 'detail', 'items', 'categories', 'uoms', 'itemUnits', 'suppliers', 'supplierItems', 'reports', 'reportview']),
   'procurement manager': new Set(['dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
   'procurement officer': new Set(['dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
@@ -118,6 +119,7 @@ export function canAccessRoute(user: AccessUser, route: string): boolean {
   // landing in Department/Stores queues.
   const role = roleKey(user)
   if (route === 'workflow-stores' && !['department head', 'store keeper', 'requester'].includes(role)) return false
+  if (route === 'store-purchase-requests' && role !== 'store keeper') return false
   if (route === 'storeRequisitions' && role !== 'requester') return false
   if (route === 'dashboard' || route === 'detail') return true
   if (route === 'reports' || route === 'reportview') return hasReportAccess(user)

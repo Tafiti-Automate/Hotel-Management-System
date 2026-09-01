@@ -341,7 +341,7 @@ export default function ProcurementWorkbench() {
     units: new Map(app.data.uoms.map((row) => [id(row.id), id(row.name)])),
   }), [app.data])
 
-  const requisitionLabel = (row: Row) => `${id(row.source_store_requisition_no) || id(row.requisition_number) || `PR-${id(row.id).slice(0, 8).toUpperCase()}`} · ${['store_requisition','store_shortage'].includes(id(row.procurement_source)) ? 'Store Requisition' : 'Manual'} · ${id(row.reason)}`
+  const requisitionLabel = (row: Row) => `${id(row.source_store_requisition_no) || id(row.requisition_number) || `PR-${id(row.id).slice(0, 8).toUpperCase()}`} · ${id(row.procurement_source) === 'store_purchase' ? 'Store Purchase Request' : ['store_requisition','store_shortage'].includes(id(row.procurement_source)) ? 'Store Requisition' : 'Manual'} · ${id(row.reason)}`
   const orderLabel = (row: Row) => `${id(row.lpo_number) || id(row.po_number) || id(row.id).slice(0, 8)} · ${names.suppliers.get(id(row.supplier)) || 'Supplier'}`
   const receiptLabel = (row: Row) => id(row.grn_number) || `GRN-${id(row.id).slice(0, 8).toUpperCase()}`
 

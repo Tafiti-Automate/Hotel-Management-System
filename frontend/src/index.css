@@ -5961,3 +5961,14 @@ html[data-theme="dark"] .screen-app .app-content {
   .unit-master-layout > aside { max-height: 340px; overflow-y: auto; border-right: 0 !important; border-bottom: 1px solid var(--border); }
   .unit-overview-grid { grid-template-columns: 1fr !important; }
 }
+
+/* Store Keeper direct replenishment workspace */
+@media (max-width: 1050px) {
+  .store-purchase-grid { grid-template-columns: 1fr !important; }
+}
+@media (max-width: 760px) {
+  .store-purchase-metrics { grid-template-columns: 1fr !important; }
+  .store-purchase-form-grid { grid-template-columns: 1fr !important; }
+  .store-purchase-line { grid-template-columns: 1fr !important; align-items: stretch !important; }
+  .store-purchase-line > button { width: 100% !important; }
+}

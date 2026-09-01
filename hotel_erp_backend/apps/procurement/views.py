@@ -46,6 +46,8 @@ from core.constants.choices import (
     GoodsReceiptStatus,
     POStatus,
     PRStatus,
+    ProcurementSource,
+    RequisitionType,
 )
 from apps.procurement.serializers import (
     GoodsInspectionItemSerializer,
@@ -222,9 +224,290 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     ordering_fields = ("requisition_number", "status", "created_at", "expected_date")
 
     def get_permissions(self):
-        if self.action == "workspace":
+        if self.action in ("workspace", "store_purchase_requests", "cancel_store_purchase_request"):
             return [IsAuthenticated()]
         return super().get_permissions()
+
+    def _store_purchase_employee(self, request):
+        if not user_has_role(request.user, "System Administrator", "Store Keeper"):
+            raise PermissionDenied("Only an assigned Store Keeper can create store purchase requests.")
+        employee = getattr(request.user, "employee_profile", None)
+        if not employee or not employee.is_active:
+            raise PermissionDenied("An active Store Keeper employee profile is required.")
+        return employee
+
+    @action(detail=False, methods=["get", "post"], url_path="store-purchase-requests")
+    def store_purchase_requests(self, request):
+        """Create and list Store Keeper purchase requests for assigned stores.
+
+        Store Keepers never enter supplier or price information here.  The
+        request moves directly to Procurement with quantities and destination
+        store only; supplier selection and all commercial values remain under
+        Procurement/Cost Controller controls.
+        """
+        from apps.inventory.models import (
+            InventoryBalance,
+            Item,
+            StoreKeeperAssignment,
+            StoreLocation,
+            SupplierItemPrice,
+        )
+        from apps.notifications.services import notify_roles
+        from django.utils.dateparse import parse_date
+
+        employee = self._store_purchase_employee(request)
+        assignments = StoreKeeperAssignment.objects.select_related("store__branch").filter(
+            employee=employee,
+            is_active=True,
+            store__is_active=True,
+        ).order_by("store__name")
+        store_ids = list(assignments.values_list("store_id", flat=True))
+
+        if request.method == "GET":
+            requests = (
+                PurchaseRequisition.objects.filter(
+                    requester=employee,
+                    procurement_source=ProcurementSource.STORE_PURCHASE,
+                )
+                .select_related("branch", "requester", "department")
+                .order_by("-created_at")
+            )
+            request_ids = list(requests.values_list("id", flat=True))
+            lines = list(
+                RequisitionItem.objects.filter(requisition_id__in=request_ids)
+                .select_related("item", "unit", "destination_store")
+                .order_by("requisition_id", "item__name")
+            )
+            lines_by_request = {}
+            for line in lines:
+                lines_by_request.setdefault(str(line.requisition_id), []).append(line)
+
+            serialized_requests = []
+            for requisition in requests:
+                row = PurchaseRequisitionSerializer(
+                    requisition, context={"request": request}
+                ).data
+                req_lines = lines_by_request.get(str(requisition.id), [])
+                destination = next(
+                    (line.destination_store for line in req_lines if line.destination_store_id),
+                    None,
+                )
+                row["destination_store"] = str(getattr(destination, "pk", "") or "")
+                row["destination_store_name"] = str(destination or "")
+                row["item_count"] = len(req_lines)
+                row["item_summary"] = ", ".join(
+                    f"{line.item.name} × {line.quantity:g}" for line in req_lines[:3]
+                ) + ("…" if len(req_lines) > 3 else "")
+                row["can_cancel"] = (
+                    requisition.status in (PRStatus.APPROVED, PRStatus.DRAFT)
+                    and not requisition.purchase_orders.exists()
+                )
+                serialized_requests.append(row)
+
+            balances = InventoryBalance.objects.filter(
+                store_id__in=store_ids
+            ).values("store_id", "item_id", "quantity_in_stock", "quantity_reserved")
+
+            return Response({
+                "requests": serialized_requests,
+                "lines": RequisitionItemSerializer(
+                    lines, many=True, context={"request": request}
+                ).data,
+                "stores": [
+                    {
+                        "id": str(assignment.store_id),
+                        "name": assignment.store.name,
+                        "branch": str(assignment.store.branch_id or ""),
+                        "branch_name": str(assignment.store.branch or ""),
+                    }
+                    for assignment in assignments
+                ],
+                "balances": [
+                    {
+                        "store": str(balance["store_id"]),
+                        "item": str(balance["item_id"]),
+                        "on_hand": str(balance["quantity_in_stock"]),
+                        "reserved": str(balance["quantity_reserved"]),
+                    }
+                    for balance in balances
+                ],
+            })
+
+        store_id = str(request.data.get("store") or "").strip()
+        reason = str(request.data.get("reason") or "").strip()
+        expected_date_raw = str(request.data.get("expected_date") or "").strip()
+        payload_lines = request.data.get("lines") or []
+
+        if not reason:
+            raise ValidationError({"reason": "Enter the reason for this store purchase request."})
+        if not isinstance(payload_lines, list) or not payload_lines:
+            raise ValidationError({"lines": "Add at least one Article to the purchase request."})
+        if not store_id and len(store_ids) == 1:
+            store_id = str(store_ids[0])
+        assignment = assignments.filter(store_id=store_id).first()
+        if not assignment:
+            raise PermissionDenied("Choose a store assigned to your Store Keeper account.")
+        store = assignment.store
+
+        expected_date = None
+        if expected_date_raw:
+            expected_date = parse_date(expected_date_raw)
+            if not expected_date:
+                raise ValidationError({"expected_date": "Enter a valid required date."})
+            if expected_date < timezone.localdate():
+                raise ValidationError({"expected_date": "The required date cannot be in the past."})
+
+        prepared_lines = []
+        seen_items = set()
+        today = timezone.localdate()
+        for index, payload in enumerate(payload_lines, start=1):
+            if not isinstance(payload, dict):
+                raise ValidationError({"lines": f"Line {index} is not valid."})
+            item_id = str(payload.get("item") or "").strip()
+            if not item_id:
+                raise ValidationError({"lines": f"Choose an Article on line {index}."})
+            if item_id in seen_items:
+                raise ValidationError({"lines": "The same Article cannot be added twice."})
+            seen_items.add(item_id)
+            try:
+                quantity = Decimal(str(payload.get("quantity") or "0"))
+            except (InvalidOperation, TypeError, ValueError):
+                raise ValidationError({"lines": f"Enter a valid quantity on line {index}."})
+            if quantity <= 0:
+                raise ValidationError({"lines": f"Quantity on line {index} must be greater than zero."})
+
+            item = Item.objects.select_related("base_unit").filter(
+                pk=item_id, is_active=True
+            ).first()
+            if not item:
+                raise ValidationError({"lines": f"Article on line {index} is unavailable."})
+
+            quotations = SupplierItemPrice.objects.filter(
+                item=item,
+                is_active=True,
+                effective_from__lte=today,
+            ).filter(
+                models.Q(quotation_valid_until__isnull=True)
+                | models.Q(quotation_valid_until__gte=today)
+            ).select_related("unit", "item__base_unit")
+            reference_costs = [
+                quotation.base_unit_price
+                for quotation in quotations
+                if quotation.unit_price > 0
+            ]
+            reference_cost = min(reference_costs) if reference_costs else Decimal("0.00")
+            prepared_lines.append((item, quantity, reference_cost, str(payload.get("note") or "").strip()))
+
+        with transaction.atomic():
+            # Serialize purchase-request creation per destination store so two
+            # browser sessions cannot create the same replenishment line at once.
+            StoreLocation.objects.select_for_update().get(pk=store.pk)
+            for item, quantity, reference_cost, note in prepared_lines:
+                duplicate = RequisitionItem.objects.filter(
+                    item=item,
+                    destination_store=store,
+                    requisition__procurement_source=ProcurementSource.STORE_PURCHASE,
+                    requisition__status__in=(
+                        PRStatus.APPROVED,
+                        PRStatus.PARTIALLY_ORDERED,
+                        PRStatus.ORDERED,
+                        PRStatus.PARTIALLY_RECEIVED,
+                    ),
+                ).exists()
+                if duplicate:
+                    raise ValidationError({
+                        "lines": (
+                            f"{item.name} already has an open Store Purchase Request for {store}. "
+                            "Complete or cancel that request before creating another."
+                        )
+                    })
+
+            purchase = PurchaseRequisition.objects.create(
+                request_type=RequisitionType.HOTEL_PURCHASE,
+                procurement_source=ProcurementSource.STORE_PURCHASE,
+                requester=employee,
+                department=employee.department,
+                branch=store.branch,
+                expected_date=expected_date,
+                reason=reason,
+                control_notes=(
+                    f"Store Purchase Request for {store}. Supplier and price selection "
+                    "remain controlled by Procurement and the Cost Controller."
+                ),
+                created_by=request.user,
+            )
+            for item, quantity, reference_cost, note in prepared_lines:
+                RequisitionItem.objects.create(
+                    requisition=purchase,
+                    item=item,
+                    unit=item.base_unit,
+                    quantity=quantity,
+                    approved_quantity=quantity,
+                    estimated_unit_cost=reference_cost,
+                    description=note or f"Store replenishment for {store}.",
+                    destination_type=RequisitionItem.DESTINATION_STORE,
+                    destination_store=store,
+                    created_by=request.user,
+                )
+            purchase.status = PRStatus.APPROVED
+            purchase.approved_at = timezone.now()
+            purchase.save(update_fields=["status", "approved_at", "updated_at"])
+            purchase.record_history(
+                action="store_purchase_request_created",
+                previous_status=PRStatus.DRAFT,
+                actor=request.user,
+                comments=f"Store Keeper created a purchase request for {store}.",
+                metadata={
+                    "destination_store": str(store.pk),
+                    "destination_store_name": store.name,
+                    "item_count": len(prepared_lines),
+                },
+            )
+
+        notify_roles(
+            ("Procurement Manager", "Procurement Officer"),
+            title=f"{purchase.requisition_number} is ready for Procurement",
+            message=(
+                f"{employee} created a Store Purchase Request for {store}. "
+                "Review quantities, select vetted supplier quotations, and prepare the LPO."
+            ),
+            branch=store.branch,
+            created_by=request.user,
+        )
+
+        row = PurchaseRequisitionSerializer(purchase, context={"request": request}).data
+        row["destination_store"] = str(store.pk)
+        row["destination_store_name"] = store.name
+        row["item_count"] = len(prepared_lines)
+        return Response(row, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="cancel-store-purchase-request")
+    def cancel_store_purchase_request(self, request, pk=None):
+        employee = self._store_purchase_employee(request)
+        requisition = self.get_object()
+        if (
+            requisition.procurement_source != ProcurementSource.STORE_PURCHASE
+            or requisition.requester_id != employee.id
+        ):
+            raise PermissionDenied("You can only cancel a Store Purchase Request that you created.")
+        if requisition.purchase_orders.exists() or requisition.status not in (
+            PRStatus.APPROVED,
+            PRStatus.DRAFT,
+        ):
+            raise ValidationError(
+                "This purchase request has already entered Procurement processing and can no longer be cancelled here."
+            )
+        previous = requisition.status
+        requisition.status = PRStatus.CANCELLED
+        requisition.cancelled_at = timezone.now()
+        requisition.save(update_fields=["status", "cancelled_at", "updated_at"])
+        requisition.record_history(
+            action="store_purchase_request_cancelled",
+            previous_status=previous,
+            actor=request.user,
+            comments=str(request.data.get("comments") or "Cancelled by Store Keeper.").strip(),
+        )
+        return Response(PurchaseRequisitionSerializer(requisition, context={"request": request}).data)
 
     @action(detail=False, methods=["get"], url_path="workspace")
     def workspace(self, request):
