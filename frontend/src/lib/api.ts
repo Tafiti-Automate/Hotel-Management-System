@@ -1352,7 +1352,7 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
       request_type: text(row.request_type, 'department'),
       procurement_source: text(row.procurement_source, 'manual'),
       sourceStoreRequestId: text(row.source_store_requisition),
-      sourceLabel: ['store_requisition','store_shortage'].includes(text(row.procurement_source)) ? 'Store Requisition' : titleCaseStatus(row.procurement_source || 'manual'),
+      sourceLabel: text(row.procurement_source) === 'store_purchase' ? 'Store Purchase Request' : ['store_requisition','store_shortage'].includes(text(row.procurement_source)) ? 'Store Requisition' : titleCaseStatus(row.procurement_source || 'manual'),
       branch: branchNames.get(text(row.branch)) || '',
       dept: departmentNames.get(text(row.department)) || titleCaseStatus(row.request_type),
       department: departmentNames.get(text(row.department)) || '',

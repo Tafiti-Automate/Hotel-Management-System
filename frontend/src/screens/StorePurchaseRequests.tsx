@@ -173,7 +173,7 @@ export default function StorePurchaseRequests() {
 
           <div style={{ marginTop: 18, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 9 }}>
-              <div><strong style={{ color: 'var(--text)', fontSize: 13 }}>Articles requested</strong><div style={{ color: 'var(--text-faint)', fontSize: 12, marginTop: 2 }}>Enter quantities only. Supplier and price fields are intentionally not available.</div></div>
+              <div><strong style={{ color: 'var(--text)', fontSize: 13 }}>Articles requested</strong></div>
               <button type="button" onClick={addLine} style={secondary}><Icon name="add" size={16} />Add Article</button>
             </div>
             <div style={{ display: 'grid', gap: 8 }}>

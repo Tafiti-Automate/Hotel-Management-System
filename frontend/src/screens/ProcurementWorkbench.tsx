@@ -3,7 +3,7 @@ import { Icon } from '../components/Icon'
 import { HelpLabel } from '../components/HelpLabel'
 import LpoPreviewModal from '../components/LpoPreviewModal'
 import { WorkflowPath } from '../components/WorkflowPath'
-import { createBackendRecord, downloadControlledPurchaseOrder, downloadProcurementAttachment, errorMessage, fetchHotels, readBackendPayload, readBackendRecords, runBackendAction, updateBackendRecord, uploadProcurementAttachment, type HotelRecord } from '../lib/api'
+import { createBackendRecord, downloadControlledPurchaseOrder, downloadProcurementAttachment, errorMessage, fetchHotels, readBackendPayload, readBackendRecords, runBackendAction, uploadProcurementAttachment, type HotelRecord } from '../lib/api'
 import type { Row } from '../lib/data'
 import { chipStyleFor, money } from '../lib/theme'
 import { useApp } from '../state/AppContext'
@@ -59,6 +59,7 @@ const empty: Datasets = Object.fromEntries(Object.keys(paths).map((key) => [key,
 
 function id(value: unknown) { return String(value || '') }
 function num(value: unknown) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0 }
+function isProcurementHandoffSource(value: unknown) { return ['store_purchase', 'store_requisition', 'store_shortage'].includes(id(value)) }
 function currentApprovalStep(order: Row): Row | undefined {
   const steps = Array.isArray(order.approval_steps) ? order.approval_steps as Row[] : []
   return steps.find((step) => id(step.status) === 'pending')
@@ -137,7 +138,7 @@ export default function ProcurementWorkbench() {
     setMessage('')
     try {
       const payload = await readBackendPayload(`requisitions/workspace?stage=${stage}`)
-      if (stage === 'lpo' && ['procurement manager', 'procurement officer', 'financial manager', 'general manager'].includes(role)) {
+      if (stage === 'lpo' && ['procurement manager', 'financial manager', 'general manager'].includes(role)) {
         payload.approvalQueueOrders = await readBackendRecords('purchase-orders/approval-inbox')
         if (role === 'general manager') {
           payload.decisionHistoryOrders = await readBackendRecords('purchase-orders/decision-history')
@@ -286,7 +287,7 @@ export default function ProcurementWorkbench() {
     const status = id(row.status)
     // Approval records come from the backend's authoritative role queue.
     // Do not infer ownership from a stale or partially serialized timeline.
-    if (['procurement manager', 'procurement officer'].includes(role) && status === 'pending_approval' && isPurchasingApproval(row)) {
+    if (role === 'procurement manager' && status === 'pending_approval' && isPurchasingApproval(row)) {
       setSelectedRecord(null)
       setLpoQueue('purchasing')
       setForm({ order: id(row.id) })
@@ -341,7 +342,7 @@ export default function ProcurementWorkbench() {
     units: new Map(app.data.uoms.map((row) => [id(row.id), id(row.name)])),
   }), [app.data])
 
-  const requisitionLabel = (row: Row) => `${id(row.source_store_requisition_no) || id(row.requisition_number) || `PR-${id(row.id).slice(0, 8).toUpperCase()}`} · ${id(row.procurement_source) === 'store_purchase' ? 'Store Purchase Request' : ['store_requisition','store_shortage'].includes(id(row.procurement_source)) ? 'Store Requisition' : 'Manual'} · ${id(row.reason)}`
+  const requisitionLabel = (row: Row) => `${id(row.source_store_requisition_no) || id(row.requisition_number) || `PR-${id(row.id).slice(0, 8).toUpperCase()}`} · ${id(row.procurement_source) === 'store_purchase' ? 'Store Purchase Request' : isProcurementHandoffSource(row.procurement_source) ? 'Store Requisition' : 'Manual'} · ${id(row.reason)}`
   const orderLabel = (row: Row) => `${id(row.lpo_number) || id(row.po_number) || id(row.id).slice(0, 8)} · ${names.suppliers.get(id(row.supplier)) || 'Supplier'}`
   const receiptLabel = (row: Row) => id(row.grn_number) || `GRN-${id(row.id).slice(0, 8).toUpperCase()}`
 
@@ -392,9 +393,10 @@ export default function ProcurementWorkbench() {
   const roleApprovalQueueOrders = useMemo(() => {
     const serverQueue = scopedData.approvalQueueOrders
     if (Array.isArray(serverQueue)) return serverQueue
-    if (['procurement manager', 'procurement officer'].includes(role)) {
+    if (role === 'procurement manager') {
       return scopedData.orders.filter((row) => id(row.status) === 'pending_approval' && isPurchasingApproval(row))
     }
+    if (role === 'procurement officer') return []
     if (role === 'financial manager') {
       return scopedData.orders.filter((row) => id(row.status) === 'pending_approval' && isFinanceApproval(row))
     }
@@ -406,7 +408,7 @@ export default function ProcurementWorkbench() {
 
   useEffect(() => {
     if (stage !== 'lpo' || loading || form.order || !roleApprovalQueueOrders.length) return
-    if (['procurement manager', 'procurement officer'].includes(role)) {
+    if (role === 'procurement manager') {
       setLpoQueue('purchasing')
       setForm({ order: id(roleApprovalQueueOrders[0].id) })
     } else if (role === 'financial manager') {
@@ -425,7 +427,7 @@ export default function ProcurementWorkbench() {
 
   const procurementQueues = useMemo(() => {
     const storeRequisitions = scopedData.requisitions.filter((row) =>
-      ['store_requisition', 'store_shortage'].includes(id(row.procurement_source)) &&
+      isProcurementHandoffSource(row.procurement_source) &&
       ['approved', 'partially_ordered'].includes(id(row.status)),
     )
     const activeOrderRequisitions = new Set(
@@ -488,9 +490,9 @@ export default function ProcurementWorkbench() {
       </div>
       {isProcurementRole ? <div style={{ ...card, padding: 8, marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 6 }}>
         {([
-          ['allocation', 'New Store Requisitions', procurementQueues.allocation],
+          ['allocation', 'New Purchase Requests', procurementQueues.allocation],
           ['prepare', 'Prepare LPO', procurementQueues.prepare],
-          ['purchasing', 'Level 1 Approval', procurementQueues.purchasing],
+          ...(role === 'procurement manager' ? [['purchasing', 'Level 1 Approval', procurementQueues.purchasing] as ['allocation' | LpoQueue, string, number]] : []),
           ['finance', 'Level 2 · Finance', procurementQueues.finance],
           ['management', 'Level 3 · GM', procurementQueues.management],
           ['approved', 'Approved to Send', procurementQueues.approved],
@@ -542,7 +544,7 @@ export default function ProcurementWorkbench() {
             {!canChangeStage && stage !== 'lpo' && <ReadOnlyStage />}
             {canChangeStage && stage === 'request' && <RequestPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel }} items={app.data.items} stores={app.data.locations} departments={app.data.departments} />}
             {canChangeStage && stage === 'quote' && <QuotePanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, names }} suppliers={app.data.suppliers} supplierItems={app.data.supplierItems} items={app.data.items} itemUnits={app.data.itemUnits} onContinueToLpo={(requisitionId: string) => { setStage('lpo'); setLpoQueue('prepare'); setForm({ requisition: requisitionId }) }} />}
-            {stage === 'lpo' && <LpoPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, orderLabel, names, lpoQueue, setLpoQueue }} role={role} canManage={canManageLpo} userName={app.user.name} suppliers={app.data.suppliers} units={app.data.uoms} items={app.data.items} itemUnits={app.data.itemUnits} />}
+            {stage === 'lpo' && <LpoPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, orderLabel, names, lpoQueue, setLpoQueue }} role={role} canManage={canManageLpo} userName={app.user.name} suppliers={app.data.suppliers} items={app.data.items} itemUnits={app.data.itemUnits} />}
             {canChangeStage && stage === 'receipt' && <ReceiptPanel {...{ data: scopedData, form, setForm, busy, run, orderLabel, receiptLabel, names }} employees={app.data.employees} stores={app.data.locations} items={app.data.items} />}
             {canChangeStage && stage === 'inspect' && <InspectionPanel {...{ data: scopedData, form, setForm, busy, run, receiptLabel, names }} employees={app.data.employees} />}
             {canChangeStage && stage === 'return' && <ReturnPanel {...{ data: scopedData, form, setForm, busy, run, receiptLabel, names }} employees={app.data.employees} stores={app.data.locations} />}
@@ -931,12 +933,12 @@ function GoodsReceiptDocument({ receipt, lines, hotel, propertyName, preparedBy,
 }
 
 function RequestPanel({ data, form, setForm, requisitionLabel, items }: any) {
-  const incoming = data.requisitions.filter((row: Row) => ['store_requisition','store_shortage'].includes(id(row.procurement_source)))
+  const incoming = data.requisitions.filter((row: Row) => isProcurementHandoffSource(row.procurement_source))
   const selected = incoming.find((row: Row) => id(row.id) === id(form.requisition))
   const lines = data.requisitionItems.filter((row: Row) => id(row.requisition) === id(form.requisition))
-  return <Panel title="Incoming Store requisitions" note="Select the Store Keeper's requisition. Item, quantity and destination are inherited and are not re-entered here.">
-    <Field label="Store requisition / procurement hand-off"><Select value={form.requisition} onChange={(v) => setForm({ requisition: v })} rows={incoming} label={requisitionLabel} /></Field>
-    {!incoming.length && <Hint>No Store Keeper requisitions are waiting for Procurement.</Hint>}
+  return <Panel title="Incoming purchase requests" note="Select a purchase request to review its articles, quantities and destination.">
+    <Field label="Purchase request"><Select value={form.requisition} onChange={(v) => setForm({ requisition: v })} rows={incoming} label={requisitionLabel} /></Field>
+    {!incoming.length && <Hint>No purchase requests are waiting for Procurement.</Hint>}
     {selected && <section style={{ margin: '10px 0 12px', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
       <div style={{ padding: '10px 12px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)', color: 'var(--text)', fontSize: 11.5, fontWeight: 800 }}>Inherited demand · read only</div>
       {lines.map((line: Row) => <div key={id(line.id)} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.5fr) .7fr minmax(120px,1fr)', gap: 10, padding: '10px 12px', borderBottom: '1px solid var(--border)', fontSize: 11.5 }}>
@@ -946,12 +948,12 @@ function RequestPanel({ data, form, setForm, requisitionLabel, items }: any) {
       </div>)}
       {!lines.length && <div style={{ padding: 16, color: 'var(--text-faint)', fontSize: 11.5 }}>No inherited lines are available.</div>}
     </section>}
-    <Hint>Supplier and price decisions are made in the next step. Procurement may reduce quantity later on the LPO, but this source demand remains unchanged for audit.</Hint>
+    
   </Panel>
 }
 
 function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplierItems, items, itemUnits, onContinueToLpo }: any) {
-  const requisitions = data.requisitions.filter((row: Row) => ['store_requisition','store_shortage'].includes(id(row.procurement_source)) && ['approved','partially_ordered'].includes(id(row.status)))
+  const requisitions = data.requisitions.filter((row: Row) => isProcurementHandoffSource(row.procurement_source) && ['approved','partially_ordered'].includes(id(row.status)))
   const selectedRequisition = requisitions.find((row: Row) => id(row.id) === id(form.requisition))
   const reqLines = data.requisitionItems.filter((row: Row) => id(row.requisition) === id(form.requisition))
   const selectedReqLine = reqLines.find((row: Row) => id(row.id) === id(form.reqLine))
@@ -1077,7 +1079,7 @@ function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplier
   </Panel>
 }
 
-function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, items, itemUnits, canManage, role, userName, lpoQueue, setLpoQueue }: any) {
+function LpoPanel({ data, form, setForm, busy, run, names, suppliers, items, itemUnits, canManage, role, userName, lpoQueue, setLpoQueue }: any) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const activeOrderRequisitions = new Set(
     data.orders.filter((row: Row) => id(row.status) !== 'cancelled').map((row: Row) => id(row.requisition)),
@@ -1095,14 +1097,6 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, ite
   const registeredSupplier = suppliers.find((row: Row) => id(row.id) === id(order?.supplier))
   const registeredSupplierEmail = id(order?.supplier_email || registeredSupplier?.email).trim()
   const lines = data.orderItems.filter((row: Row) => id(row.purchase_order) === id(form.order))
-  const line = lines.find((row: Row) => id(row.id) === id(form.orderLine))
-  const selectedItem = items.find((item: Row) => id(item.id) === id(line?.item))
-  const availableUnits = configuredUnitsForItem(selectedItem, units, itemUnits)
-  const conversion = conversionFactorFor(selectedItem, form.unit || line?.unit, itemUnits)
-  const sourceLine = data.requisitionItems.find((row: Row) => id(row.id) === id(line?.requisition_item))
-  const approvedBaseLimit = num(sourceLine?.remaining_order_quantity ?? sourceLine?.approved_base_quantity)
-  const enteredBaseQuantity = num(form.quantity ?? line?.quantity) * conversion
-  const quantityExceedsApproval = Boolean(line && conversion > 0 && approvedBaseLimit >= 0 && enteredBaseQuantity > approvedBaseLimit + 0.000001)
   const currentApproval = order ? currentApprovalStep(order) : undefined
   const canDecidePurchasing = ['procurement manager', 'procurement officer', 'system administrator'].includes(role)
   const canDecideFinance = role === 'financial manager' || role === 'system administrator'
@@ -1162,19 +1156,28 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, ite
     await runBackendAction('purchase-orders', id(order.id), 'review-quantities', { lines: approvalDecisions(approvalStage), comments: '' })
     return runBackendAction('purchase-orders', id(order.id), 'approve', { comments: '' })
   }
-  const draftHasQuantityOverage = lines.some((orderLine: Row) => {
-    const requisitionLine = data.requisitionItems.find((row: Row) => id(row.id) === id(orderLine.requisition_item))
-    if (!requisitionLine) return false
-    return num(orderLine.base_quantity) > num(requisitionLine.remaining_order_quantity ?? requisitionLine.approved_base_quantity) + 0.000001
-  })
-  const safeQuantityForLine = (orderLine: Row, unitId: unknown = orderLine.unit) => {
+  const draftQuantityKey = (orderLine: Row) => `draftQty:${id(orderLine.id)}`
+  const draftQuantity = (orderLine: Row) => num(form[draftQuantityKey(orderLine)] ?? orderLine.quantity)
+  const setDraftQuantity = (orderLine: Row, value: unknown) => setForm({ ...form, [draftQuantityKey(orderLine)]: value })
+  const maxDraftQuantity = (orderLine: Row) => {
     const article = items.find((item: Row) => id(item.id) === id(orderLine.item))
-    const factor = conversionFactorFor(article, unitId, itemUnits)
+    const factor = conversionFactorFor(article, orderLine.unit, itemUnits)
     if (factor <= 0) return num(orderLine.quantity)
     const requisitionLine = data.requisitionItems.find((row: Row) => id(row.id) === id(orderLine.requisition_item))
     const remainingBase = num(requisitionLine?.remaining_order_quantity ?? requisitionLine?.approved_base_quantity)
-    const targetBase = requisitionLine ? Math.min(num(orderLine.base_quantity), remainingBase) : num(orderLine.base_quantity)
-    return floorPurchaseQuantity(targetBase / factor)
+    return Math.max(0, floorPurchaseQuantity(remainingBase / factor))
+  }
+  const draftQuantitiesValid = Boolean(lines.length) && lines.every((orderLine: Row) => {
+    const quantity = draftQuantity(orderLine)
+    const maximum = maxDraftQuantity(orderLine)
+    return quantity > 0 && maximum > 0 && quantity <= maximum + 0.000001
+  })
+  const draftTotal = lines.reduce((sum: number, orderLine: Row) => sum + (draftQuantity(orderLine) * num(orderLine.unit_cost)), 0)
+  const saveDraftQuantitiesAndSubmit = async () => {
+    await runBackendAction('purchase-orders', id(order.id), 'update-draft-quantities', {
+      lines: lines.map((orderLine: Row) => ({ id: id(orderLine.id), quantity: draftQuantity(orderLine) })),
+    })
+    return runBackendAction('purchase-orders', id(order.id), 'submit-for-approval')
   }
   const panelTitle = lpoQueue === 'prepare' ? 'LPO Preparation'
     : lpoQueue === 'purchasing' ? 'Level 1 · Purchasing Manager'
@@ -1223,14 +1226,16 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, ite
     </>}
 
     {lpoQueue === 'prepare' && order && canManage && <>
-      <LpoSummary order={order} lines={lines} names={names} />
-      {draftHasQuantityOverage ? <>
-        <Hint>This draft contains a quantity that must be corrected before it can enter the approval route.</Hint>
-        <Field label="Item to correct"><Select value={form.orderLine} onChange={(v) => { const found = lines.find((row: Row) => id(row.id) === v); setForm({ ...form, orderLine: v, quantity: found ? safeQuantityForLine(found) : '', unit: found?.unit }) }} rows={lines} label={(row: Row) => names.items.get(id(row.item)) || id(row.item)} /></Field>
-        {line && <><Field label="Purchase unit"><Select value={form.unit} onChange={(v) => setForm({ ...form, unit: v, quantity: safeQuantityForLine(line, v) })} rows={availableUnits} /></Field><Two><Field label="Quantity"><Input type="number" value={form.quantity ?? line.quantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><ReadOnlyValue label="Unit price" value={money(line.unit_cost)} /></Two></>}
-        {quantityExceedsApproval && <Hint>Quantity is above the approved limit.</Hint>}
-        <Action disabled={busy || !form.orderLine || conversion <= 0 || quantityExceedsApproval || num(form.quantity) <= 0} onClick={() => run(() => updateBackendRecord('purchase-order-items', id(form.orderLine), { quantity: num(form.quantity), unit: form.unit || null }), 'LPO item corrected', { ...form })}>Save correction</Action>
-      </> : <Action tone="good" disabled={busy || !lines.length} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'submit-for-approval'), 'LPO sent to Purchasing Manager')}>Send for Level 1 Approval</Action>}
+      <LpoSummary
+        order={order}
+        lines={lines}
+        names={names}
+        quantityValue={draftQuantity}
+        quantityMax={maxDraftQuantity}
+        onQuantityChange={setDraftQuantity}
+        totalOverride={draftTotal}
+      />
+      <Action tone="good" disabled={busy || !draftQuantitiesValid} onClick={() => run(() => saveDraftQuantitiesAndSubmit(), 'LPO sent to Purchasing Manager')}>Send for Level 1 Approval</Action>
     </>}
 
     {lpoQueue === 'purchasing' && order && <>
@@ -1310,14 +1315,14 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, units, ite
 
 function friendlyLpoStatus(status: string, steps: Row[]) { if (status === 'pending_approval') { const pending = steps.find((step) => id(step.status) === 'pending'); if (/(purchasing manager|procurement manager|purchasing)/i.test(id(pending?.stage_name))) return 'Level 1 · Purchasing Manager'; if (/finance/i.test(id(pending?.stage_name))) return 'Level 2 · Financial Manager'; if (/(general manager|management)/i.test(id(pending?.stage_name))) return 'Level 3 · General Manager'; return 'Awaiting Approval' } if (status === 'approved') return 'Approved · Print & Send'; if (status === 'issued') return 'Not Received'; if (status === 'partially_received') return 'Partially Received'; if (status === 'received') return 'Received'; return status.replace(/_/g, ' ') }
 
-function LpoSummary({ order, lines, names }: { order: Row; lines: Row[]; names: Record<string, Map<string, string>> }) {
+function LpoSummary({ order, lines, names, quantityValue, quantityMax, onQuantityChange, totalOverride }: { order: Row; lines: Row[]; names: Record<string, Map<string, string>>; quantityValue?: (row: Row) => number; quantityMax?: (row: Row) => number; onQuantityChange?: (row: Row, value: unknown) => void; totalOverride?: number }) {
   const approvalSteps = Array.isArray(order.approval_steps) ? order.approval_steps as Row[] : []
   return <section style={{ margin: '10px 0 14px', overflow: 'hidden', border: '1px solid var(--border)', borderRadius: 8 }}>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8, padding: 11, background: 'var(--surface-2)' }}>
       <ReadOnlyValue label="LPO number" value={id(order.lpo_number) || id(order.po_number)} />
       <ReadOnlyValue label="Supplier" value={names.suppliers.get(id(order.supplier)) || 'Inherited supplier'} />
       <ReadOnlyValue label="Status" value={friendlyLpoStatus(id(order.status), approvalSteps)} />
-      <ReadOnlyValue label="LPO total" value={money(order.total_amount)} />
+      <ReadOnlyValue label="LPO total" value={money(totalOverride ?? order.total_amount)} />
     </div>
     {approvalSteps.length > 0 && (() => {
       const firstPending = approvalSteps.findIndex((step) => id(step.status) === 'pending')
@@ -1330,7 +1335,16 @@ function LpoSummary({ order, lines, names }: { order: Row; lines: Row[]; names: 
       })}</div></div>
     })()}
     <div style={{ padding: '8px 11px', display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) .6fr .7fr .8fr', gap: 8, borderTop: '1px solid var(--border)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}><span>Article</span><span>Quantity</span><span>Unit price</span><span>Total</span></div>
-    {lines.map((row) => <div key={id(row.id)} style={{ padding: '9px 11px', display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) .6fr .7fr .8fr', gap: 8, borderTop: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 10.8 }}><strong style={{ color: 'var(--text)' }}>{names.items.get(id(row.item)) || id(row.item)}</strong><span>{id(row.approved_quantity ?? row.quantity)}</span><span>{money(row.unit_cost)}</span><span>{money(num(row.approved_quantity ?? row.quantity) * num(row.unit_cost))}</span></div>)}
+    {lines.map((row) => {
+      const shownQuantity = quantityValue ? quantityValue(row) : num(row.approved_quantity ?? row.quantity)
+      const maximum = quantityMax ? quantityMax(row) : undefined
+      return <div key={id(row.id)} style={{ padding: '9px 11px', display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) .6fr .7fr .8fr', gap: 8, alignItems: 'center', borderTop: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 10.8 }}>
+        <strong style={{ color: 'var(--text)' }}>{names.items.get(id(row.item)) || id(row.item)}</strong>
+        {onQuantityChange ? <input type="number" min="0.01" max={maximum} step="0.01" value={shownQuantity} onChange={(event) => onQuantityChange(row, event.target.value)} aria-label={`Quantity for ${names.items.get(id(row.item)) || id(row.item)}`} style={{ ...control, height: 34, minWidth: 0 }} /> : <span>{id(row.approved_quantity ?? row.quantity)}</span>}
+        <span>{money(row.unit_cost)}</span>
+        <span>{money(shownQuantity * num(row.unit_cost))}</span>
+      </div>
+    })}
     {!lines.length && <div style={{ padding: 13, borderTop: '1px solid var(--border)', color: 'var(--text-faint)', fontSize: 10.5 }}>No LPO items are available.</div>}
   </section>
 }
@@ -1436,12 +1450,12 @@ function StageTable({ stage, lpoQueue, data, names, role, onSelect }: { stage: S
 
   if (stage === 'quote') {
     const requisitions = data.requisitions.filter((row) => {
-      if (!['store_requisition','store_shortage'].includes(id(row.procurement_source)) || !['approved','partially_ordered'].includes(id(row.status))) return false
+      if (!isProcurementHandoffSource(row.procurement_source) || !['approved','partially_ordered'].includes(id(row.status))) return false
       const lines = data.requisitionItems.filter((line) => id(line.requisition) === id(row.id))
       return lines.some((line) => !line.procurement_supplier_price || num(line.procurement_quantity) <= 0 || num(line.procurement_unit_cost) <= 0)
     })
     return <div>
-      <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}><strong style={{ fontSize: 12.8 }}>New Store Requisitions</strong><span style={{ color: 'var(--text-faint)', fontSize: 10.5 }}>{requisitions.length} pending</span></div>
+      <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}><strong style={{ fontSize: 12.8 }}>New Purchase Requests</strong><span style={{ color: 'var(--text-faint)', fontSize: 10.5 }}>{requisitions.length} pending</span></div>
       {requisitions.map((requisition) => {
         const lines = data.requisitionItems.filter((line) => id(line.requisition) === id(requisition.id))
         const allocated = lines.filter((line) => line.procurement_supplier_price && num(line.procurement_quantity) > 0 && num(line.procurement_unit_cost) > 0).length
@@ -1453,7 +1467,7 @@ function StageTable({ stage, lpoQueue, data, names, role, onSelect }: { stage: S
           <span style={{ color: 'var(--accent)', fontSize: 10.8, fontWeight: 800 }}>Review</span>
         </button>
       })}
-      {!requisitions.length && <div style={{ padding: 42, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>No new Store Requisitions are waiting for Procurement.</div>}
+      {!requisitions.length && <div style={{ padding: 42, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>No new purchase requests are waiting for Procurement.</div>}
     </div>
   }
 
@@ -1475,7 +1489,7 @@ function StageTable({ stage, lpoQueue, data, names, role, onSelect }: { stage: S
       })}
       {drafts.length > 0 && <div style={{ padding: '11px 16px 6px', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}>Draft LPOs</div>}
       {drafts.map((row) => <button type="button" key={id(row.id)} onClick={() => onSelect(row)} style={{ width: '100%', display: 'grid', gridTemplateColumns: '1fr 1.3fr .8fr auto', gap: 12, alignItems: 'center', padding: '12px 16px', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}><strong style={{ color: 'var(--text)', fontSize: 12 }}>LPO {id(row.lpo_number) || id(row.po_number)}</strong><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{names.suppliers.get(id(row.supplier)) || id(row.supplier)}</span><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{money(row.total_amount)}</span><span style={{ color: 'var(--accent)', fontSize: 10.8, fontWeight: 800 }}>Review</span></button>)}
-      {!readyRequisitions.length && !drafts.length && <div style={{ padding: 42, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>No requisition is ready for LPO preparation. Complete supplier allocation under New Store Requisitions first.</div>}
+      {!readyRequisitions.length && !drafts.length && <div style={{ padding: 42, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>No requisition is ready for LPO preparation. Complete supplier allocation under New Purchase Requests first.</div>}
     </div>
   }
 
@@ -1483,7 +1497,7 @@ function StageTable({ stage, lpoQueue, data, names, role, onSelect }: { stage: S
   let title = ''
   if (stage === 'request') { rows = data.requisitionItems; title = 'Requisition lines' }
   if (stage === 'lpo') {
-    if (lpoQueue === 'purchasing') { rows = Array.isArray(data.approvalQueueOrders) && ['procurement manager', 'procurement officer'].includes(role) ? data.approvalQueueOrders : data.orders.filter((row) => id(row.status) === 'pending_approval' && isPurchasingApproval(row)); title = 'Level 1 · Purchasing Manager' }
+    if (lpoQueue === 'purchasing') { rows = role === 'procurement manager' ? (Array.isArray(data.approvalQueueOrders) ? data.approvalQueueOrders : data.orders.filter((row) => id(row.status) === 'pending_approval' && isPurchasingApproval(row))) : []; title = 'Level 1 · Purchasing Manager' }
     if (lpoQueue === 'finance') { rows = Array.isArray(data.approvalQueueOrders) && role === 'financial manager' ? data.approvalQueueOrders : data.orders.filter((row) => id(row.status) === 'pending_approval' && isFinanceApproval(row)); title = 'Level 2 · Financial Manager' }
     if (lpoQueue === 'management') { rows = Array.isArray(data.approvalQueueOrders) ? data.approvalQueueOrders : data.orders.filter((row) => id(row.status) === 'pending_approval' && isManagementApproval(row)); title = 'Level 3 · General Manager' }
     if (lpoQueue === 'approved') { rows = data.orders.filter((row) => id(row.status) === 'approved'); title = 'Approved to Send' }
@@ -1864,15 +1878,6 @@ function ProcurementPrintSheet({ propertyName, stage, title, reference, status, 
       <footer className="print-sheet-footer">Generated from the Hotel Management System · {reference}</footer>
     </article>
   )
-}
-
-function configuredUnitsForItem(item: Row | undefined, units: Row[], itemUnits: Row[]): Row[] {
-  if (!item) return []
-  const allowed = new Set<string>([id(item.baseUnitId)])
-  itemUnits
-    .filter((entry: Row) => id(entry.itemId) === id(item.id) && id(entry.status) === 'Active')
-    .forEach((entry: Row) => allowed.add(id(entry.unitId)))
-  return units.filter((unit: Row) => allowed.has(id(unit.id)))
 }
 
 function conversionFactorFor(item: Row | undefined, unitId: unknown, itemUnits: Row[]): number {

@@ -430,10 +430,7 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
                 branch=store.branch,
                 expected_date=expected_date,
                 reason=reason,
-                control_notes=(
-                    f"Store Purchase Request for {store}. Supplier and price selection "
-                    "remain controlled by Procurement and the Cost Controller."
-                ),
+                control_notes=f"Store replenishment request for {store}.",
                 created_by=request.user,
             )
             for item, quantity, reference_cost, note in prepared_lines:
@@ -467,10 +464,7 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
         notify_roles(
             ("Procurement Manager", "Procurement Officer"),
             title=f"{purchase.requisition_number} is ready for Procurement",
-            message=(
-                f"{employee} created a Store Purchase Request for {store}. "
-                "Review quantities, select vetted supplier quotations, and prepare the LPO."
-            ),
+            message=f"{employee} created a Store Purchase Request for {store}. Review and prepare the purchase.",
             branch=store.branch,
             created_by=request.user,
         )
@@ -1299,6 +1293,91 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
     def approval_readiness(self, request, pk=None):
         return Response(self.get_object().approval_readiness())
 
+    @action(detail=True, methods=["post"], url_path="update-draft-quantities")
+    def update_draft_quantities(self, request, pk=None):
+        """Allow Procurement to revise draft LPO quantities without changing prices."""
+        self._require_procurement_manager(request)
+        decisions = request.data.get("lines", [])
+        if not isinstance(decisions, list) or not decisions:
+            raise ValidationError({"lines": "Provide at least one LPO line quantity."})
+
+        try:
+            with transaction.atomic():
+                order = PurchaseOrder.objects.select_for_update().get(pk=self.get_object().pk)
+                if not order.editable:
+                    raise ValidationError("LPO quantities can only be changed while the LPO is draft.")
+
+                locked_lines = {
+                    str(line.pk): line
+                    for line in PurchaseOrderItem.objects.select_for_update().select_related(
+                        "item", "unit", "requisition_item"
+                    ).filter(purchase_order=order)
+                }
+                seen = set()
+                for decision in decisions:
+                    line_id = str(decision.get("id", "")).strip()
+                    if not line_id or line_id in seen or line_id not in locked_lines:
+                        raise ValidationError({"lines": "Every quantity decision must reference one unique LPO line."})
+                    seen.add(line_id)
+                    try:
+                        quantity = Decimal(str(decision.get("quantity", "")))
+                    except (InvalidOperation, TypeError, ValueError):
+                        raise ValidationError({"quantity": "Enter a valid quantity."})
+                    if quantity <= Decimal("0.00"):
+                        raise ValidationError({"quantity": "LPO quantity must be greater than zero."})
+
+                    line = locked_lines[line_id]
+                    requisition_line = line.requisition_item or order.requisition.items.filter(item=line.item).first()
+                    if not requisition_line:
+                        raise ValidationError({"lines": f"{line.item} is not linked to the source requisition."})
+
+                    ordered_elsewhere = sum(
+                        (
+                            other.approved_base_quantity
+                            for other in PurchaseOrderItem.objects.filter(
+                                purchase_order__requisition=order.requisition,
+                                item=line.item,
+                                purchase_order__status__in=(
+                                    POStatus.APPROVED,
+                                    POStatus.ISSUED,
+                                    POStatus.PARTIALLY_RECEIVED,
+                                    POStatus.RECEIVED,
+                                ),
+                            ).exclude(purchase_order=order)
+                        ),
+                        Decimal("0.00"),
+                    )
+                    available_base = max(
+                        requisition_line.approved_base_quantity - ordered_elsewhere,
+                        Decimal("0.00"),
+                    )
+                    requested_base = line.item.quantity_in_base_units(quantity, line.unit).quantize(Decimal("0.01"))
+                    if requested_base > available_base:
+                        raise ValidationError({
+                            "quantity": (
+                                f"{line.item}: quantity exceeds the approved requisition balance "
+                                f"({available_base} base units available)."
+                            )
+                        })
+                    line.quantity = quantity
+                    line.save(update_fields=[
+                        "quantity", "base_quantity", "procurement_quantity",
+                        "procurement_base_quantity", "purchasing_approved_quantity",
+                        "purchasing_approved_base_quantity", "purchasing_reduction_reason",
+                        "finance_approved_quantity", "finance_approved_base_quantity",
+                        "finance_reduction_reason", "management_approved_quantity",
+                        "management_approved_base_quantity", "management_reduction_reason",
+                        "updated_at",
+                    ])
+
+                if seen != set(locked_lines):
+                    raise ValidationError({"lines": "Submit a quantity for every LPO line."})
+                order.refresh_from_db()
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+
+        return Response(self.get_serializer(order).data)
+
     @action(detail=True, methods=["post"], url_path="submit-for-approval")
     def submit_for_approval(self, request, pk=None):
         order = self.get_object()
@@ -1479,6 +1558,17 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
             communication.error_message = "Email sent, but the LPO issue state could not be committed."
             communication.save(update_fields=["status", "error_message", "updated_at"])
             raise_drf_validation_error(error)
+        try:
+            from apps.notifications.services import notify_roles
+            notify_roles(
+                ["Receiving Clerk"],
+                branch=order.requisition.branch,
+                title=f"LPO {order.lpo_number} is ready for receiving",
+                message=f"The LPO for {order.supplier} has been sent and can now be received against the supplier delivery.",
+                created_by=request.user,
+            )
+        except Exception:
+            pass
         serializer = self.get_serializer(order)
         return Response(serializer.data)
 
