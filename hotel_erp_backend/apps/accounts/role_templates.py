@@ -13,7 +13,10 @@ ROLE_SPECS = {
         "crud": {"inventory": ["storerequisition", "storerequisitionitem"]},
         "view": {
             "departments": ["department", "branch"],
-            "inventory": ["item", "unitofmeasure"],
+            # Requesters need read-only catalogue hierarchy data so the
+            # Major Group -> Item Group -> Item selectors can be populated.
+            # No category/item maintenance or supplier-price permissions are granted.
+            "inventory": ["category", "item", "unitofmeasure"],
         },
     },
     "Department Head": {

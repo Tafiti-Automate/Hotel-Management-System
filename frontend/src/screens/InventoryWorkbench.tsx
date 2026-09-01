@@ -620,9 +620,10 @@ function RequesterDraftEditor({ app, data, form, setForm, busy, execute, draftRe
   const requestPurpose = id(form.requestPurpose ?? draftRequest.purpose)
   const requiredDate = id(form.requiredDate ?? draftRequest.required_date)
   const article = app.data.items.find((row: Row) => id(row.id) === id(form.item || draftLine?.item))
-  const majorGroups = app.data.categories.filter((category: Row) => !category.parentId)
-  const itemGroups = app.data.categories.filter((category: Row) => id(category.parentId) === id(form.majorGroup))
-  const selectableItems = app.data.items.filter((item: Row) => id(item.categoryId) === id(form.itemGroup))
+  const catalogueCategories = app.data.categories.filter((category: Row) => id(category.status).toLowerCase() !== 'inactive')
+  const majorGroups = catalogueCategories.filter((category: Row) => !category.parentId).sort((a: Row, b: Row) => id(a.name).localeCompare(id(b.name)))
+  const itemGroups = catalogueCategories.filter((category: Row) => id(category.parentId) === id(form.majorGroup)).sort((a: Row, b: Row) => id(a.name).localeCompare(id(b.name)))
+  const selectableItems = app.data.items.filter((item: Row) => id(item.categoryId) === id(form.itemGroup)).sort((a: Row, b: Row) => id(a.name).localeCompare(id(b.name)))
   const selectedUom = uomNames.get(id(form.unit || draftLine?.unit || article?.baseUnitId)) || id(article?.uom) || 'Base unit'
   const createdLabel = draftRequest.created_at ? new Date(id(draftRequest.created_at)).toLocaleDateString() : 'Today'
   const clearItemForm = () => setForm({ ...form, requestLine: '', majorGroup: '', itemGroup: '', item: '', unit: '', quantity: '', note: '' })
@@ -733,6 +734,7 @@ function RequesterDraftEditor({ app, data, form, setForm, busy, execute, draftRe
           <div>{draftLine ? 'Edit item' : 'Add item'}</div>
           {draftLine && <button type="button" onClick={clearItemForm} style={{ ...secondary, marginLeft: 'auto', height: 32 }}>Cancel edit</button>}
         </div>
+        {!majorGroups.length && <div role="alert" style={{ margin: '0 0 12px', padding: '10px 12px', border: '1px solid var(--warn)', borderRadius: 8, background: 'var(--warn-soft)', color: 'var(--text)', fontSize: 12, lineHeight: 1.45 }}><strong>Catalogue groups are not available.</strong> Refresh the page after the Requester catalogue permissions have been synchronized.</div>}
         <div className="requester-item-entry cascade" style={{ display: 'grid', gridTemplateColumns: 'minmax(145px,.85fr) minmax(150px,.9fr) minmax(190px,1.2fr) 90px 90px minmax(150px,.9fr) auto', gap: 10, alignItems: 'end' }}>
           <Field label="1. Major Group"><Select value={form.majorGroup} change={(value) => setForm({ ...form, majorGroup: value, itemGroup: '', item: '', unit: '' })} rows={majorGroups} emptyLabel="Choose Major Group" /></Field>
           <Field label="2. Item Group"><Select disabled={!form.majorGroup} value={form.itemGroup} change={(value) => setForm({ ...form, itemGroup: value, item: '', unit: '' })} rows={itemGroups} emptyLabel={form.majorGroup ? 'Choose Item Group' : 'Select Major Group first'} /></Field>
