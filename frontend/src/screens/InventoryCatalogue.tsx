@@ -194,15 +194,44 @@ export default function InventoryCatalogue() {
     URL.revokeObjectURL(url)
   }
 
+  const majorGroupCount = roots.length
+  const itemGroupCount = categories.length - roots.length
+  const openMajorGroup = () => app.openCreate('categories', 'Inventory Catalogue Setup', 'majorGroup')
+  const openItemGroup = () => {
+    if (!majorGroupCount) {
+      app.showWorkflowAlert('Create a Major Group first', 'An Item Group must belong to a Major Group.', 'warning')
+      return
+    }
+    app.openCreate('categories', 'Inventory Catalogue Setup', 'itemGroup')
+  }
+  const openItem = () => {
+    if (!itemGroupCount) {
+      app.showWorkflowAlert('Create an Item Group first', 'An item must belong to an Item Group inside a Major Group.', 'warning')
+      return
+    }
+    app.openCreate('items', 'Inventory Catalogue Setup', 'item')
+  }
+
   return <div style={{ maxWidth: 1500, margin: '0 auto' }}>
     <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, marginBottom: 14, flexWrap: 'wrap' }}>
-      <div><h1 style={{ margin: 0, color: 'var(--text)', fontSize: 24 }}>Inventory Catalogue</h1><p style={{ margin: '5px 0 0', color: 'var(--text-muted)', fontSize: 12.5 }}>Browse major categories, item groups and the items stored in each group.</p></div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {canMaintainCategories && <button type="button" onClick={() => app.openCreate('categories', 'Create category')} style={primary}><Icon name="create_new_folder" size={17} />Create Category</button>}
-        {canMaintainItems && <button type="button" onClick={() => app.openCreate('items', 'Create item')} style={secondary}><Icon name="inventory_2" size={17} />Create Item</button>}
-        {canMaintainItems && <><input ref={importInput} type="file" accept=".csv,.xlsx" hidden onChange={(event) => void importFile(event.target.files?.[0])} /><button type="button" disabled={importing} onClick={() => importInput.current?.click()} style={secondary}><Icon name="upload_file" size={17} />{importing ? 'Importing…' : 'Import Items'}</button><button type="button" onClick={downloadTemplate} title="Download the required CSV column template" style={iconButton}><Icon name="download" size={17} /></button></>}
-      </div>
+      <div><h1 style={{ margin: 0, color: 'var(--text)', fontSize: 24 }}>Inventory Catalogue Setup</h1><p style={{ margin: '5px 0 0', color: 'var(--text-muted)', fontSize: 12.5 }}>Maintain the catalogue in the order Major Group → Item Group → Item.</p></div>
+      {canMaintainItems && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><input ref={importInput} type="file" accept=".csv,.xlsx" hidden onChange={(event) => void importFile(event.target.files?.[0])} /><button type="button" disabled={importing} onClick={() => importInput.current?.click()} style={secondary}><Icon name="upload_file" size={17} />{importing ? 'Importing…' : 'Import Items'}</button><button type="button" onClick={downloadTemplate} title="Download item import template" style={iconButton}><Icon name="download" size={17} /></button></div>}
     </header>
+
+    {(canMaintainCategories || canMaintainItems) && <section style={{ marginBottom: 14, padding: 14, border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 11 }}><Icon name="account_tree" size={18} color="var(--accent)" /><strong style={{ color: 'var(--text)', fontSize: 13 }}>Catalogue setup</strong><span style={{ color: 'var(--text-faint)', fontSize: 11.5 }}>Create each level in sequence.</span></div>
+      <div className="catalogue-setup-actions" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 10 }}>
+        <button type="button" disabled={!canMaintainCategories} onClick={openMajorGroup} style={{ ...setupAction, opacity: canMaintainCategories ? 1 : .55 }}>
+          <span style={setupStep}>1</span><FolderTreeIcon size={21} color="var(--accent)" /><span style={setupCopy}><strong>Create Major Group</strong><small>Top-level family, e.g. Beverages</small></span><span style={setupCount}>{majorGroupCount}</span>
+        </button>
+        <button type="button" disabled={!canMaintainCategories || !majorGroupCount} onClick={openItemGroup} style={{ ...setupAction, opacity: canMaintainCategories && majorGroupCount ? 1 : .55 }}>
+          <span style={setupStep}>2</span><FolderTreeIcon size={20} color="var(--text-muted)" /><span style={setupCopy}><strong>Create Item Group</strong><small>Group inside a Major Group, e.g. Soft Drinks</small></span><span style={setupCount}>{itemGroupCount}</span>
+        </button>
+        <button type="button" disabled={!canMaintainItems || !itemGroupCount} onClick={openItem} style={{ ...setupAction, opacity: canMaintainItems && itemGroupCount ? 1 : .55 }}>
+          <span style={setupStep}>3</span><ItemTreeIcon size={20} color="var(--text-muted)" /><span style={setupCopy}><strong>Create Item</strong><small>Article stored inside an Item Group</small></span><span style={setupCount}>{items.length}</span>
+        </button>
+      </div>
+    </section>}
 
     <div style={{ position: 'relative', marginBottom: 12 }}>
       <Icon name="search" size={19} color="var(--text-faint)" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
@@ -302,7 +331,10 @@ export default function InventoryCatalogue() {
   </div>
 }
 
-const primary: CSSProperties = { height: 38, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '0 13px', border: '1px solid var(--accent)', borderRadius: 7, background: 'var(--accent)', color: '#fff', cursor: 'pointer', font: 'inherit', fontSize: 12, fontWeight: 700 }
+const setupAction: CSSProperties = { minHeight: 72, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface-2)', color: 'var(--text)', cursor: 'pointer', font: 'inherit', textAlign: 'left' }
+const setupStep: CSSProperties = { width: 22, height: 22, borderRadius: 999, display: 'grid', placeItems: 'center', flex: 'none', background: 'var(--accent-soft)', color: 'var(--accent)', fontSize: 11, fontWeight: 800 }
+const setupCopy: CSSProperties = { minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12.5 }
+const setupCount: CSSProperties = { minWidth: 24, textAlign: 'right', color: 'var(--text-faint)', fontSize: 11.5, fontWeight: 750 }
 const secondary: CSSProperties = { height: 38, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '0 12px', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer', font: 'inherit', fontSize: 12, fontWeight: 650 }
 const iconButton: CSSProperties = { width: 34, height: 34, display: 'grid', placeItems: 'center', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer' }
 const panelHeader: CSSProperties = { minHeight: 48, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '10px 13px', borderBottom: '1px solid var(--border)', color: 'var(--text)', fontSize: 11.5, fontWeight: 750 }

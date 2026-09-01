@@ -101,13 +101,22 @@ export default function FormDrawer() {
     if (locksStoreIdentity && ['department', 'requester', 'store'].includes(fd.key)) return false
     if (locksPurchaseIdentity && ['request_type', 'department', 'requester'].includes(fd.key)) return false
     if (f.entity === 'employees' && !f.id && fd.key === 'status') return false
+    if (f.entity === 'categories' && !f.id && f.preset === 'majorGroup' && fd.key === 'parent') return false
     return true
   })
   const wizard = visibleFields.length > 6
   const pageSize = 4
   const pageCount = wizard ? Math.ceil(visibleFields.length / pageSize) : 1
   const pageFields = wizard ? visibleFields.slice(step * pageSize, (step + 1) * pageSize) : visibleFields
-  const title = (f.id ? 'Edit ' : 'Add ') + (conf.singular || '')
+  const title = f.id
+    ? `Edit ${conf.singular || ''}`
+    : f.preset === 'majorGroup'
+      ? 'Create Major Group'
+      : f.preset === 'itemGroup'
+        ? 'Create Item Group'
+        : f.preset === 'item'
+          ? 'Create Item'
+          : `Add ${conf.singular || ''}`
   const editingRecord = f.id
     ? app.data[f.entity].find((record) => record.id === f.id)
     : null
@@ -167,6 +176,22 @@ export default function FormDrawer() {
       app.showWorkflowAlert('Purpose required', 'Enter the reason for this store request before continuing.', 'warning')
       return
     }
+    if (f.entity === 'categories' && !f.id) {
+      if (f.preset === 'majorGroup') {
+        out.parent = ''
+      }
+      if (f.preset === 'itemGroup') {
+        if (!String(values.parent || '').trim()) {
+          app.showWorkflowAlert('Major Group required', 'Select the Major Group that will contain this Item Group.', 'warning')
+          return
+        }
+        const parent = app.data.categories.find((category) => String(category.name) === String(values.parent))
+        if (!parent || parent.parentId) {
+          app.showWorkflowAlert('Choose a Major Group', 'An Item Group must be created directly under a Major Group.', 'warning')
+          return
+        }
+      }
+    }
     if (f.entity === 'items') {
       if (!String(values.majorGroup || '').trim()) {
         app.showWorkflowAlert('Major Group required', 'Choose the Major Group before selecting an Item Group.', 'warning')
@@ -199,7 +224,10 @@ export default function FormDrawer() {
         {wizard && <div style={{ display: 'grid', gridTemplateColumns: `repeat(${pageCount},1fr)`, gap: 5, padding: '12px 22px', borderBottom: '1px solid var(--border)' }}>{Array.from({ length: pageCount }).map((_, index) => <span key={index} style={{ height: 3, borderRadius: 2, background: index <= step ? 'var(--accent)' : 'var(--border)' }} />)}</div>}
 
         <div className="form-body" style={{ flex: 1, overflowY: 'auto', padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {f.entity === 'categories' && <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: 12, border: '1px solid var(--accent)', borderRadius: 8, background: 'var(--accent-soft)', color: 'var(--text)', fontSize: 12, lineHeight: 1.5 }}><Icon name="account_tree" size={18} color="var(--accent)" style={{ marginTop: 1 }} /><div><strong>Catalogue structure:</strong> create <strong>Beverages</strong> with no parent, then create <strong>Soft Drinks</strong> under Beverages. Articles such as Water and Soda are added from the Items screen.</div></div>}
+          {f.entity === 'categories' && !f.id && f.preset === 'majorGroup' && <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: 12, border: '1px solid var(--accent)', borderRadius: 8, background: 'var(--accent-soft)', color: 'var(--text)', fontSize: 12, lineHeight: 1.5 }}><Icon name="folder" size={18} color="var(--accent)" style={{ marginTop: 1 }} /><div><strong>Major Group:</strong> the top level of the catalogue, such as Beverages, Food Supplies or Stationery.</div></div>}
+          {f.entity === 'categories' && !f.id && f.preset === 'itemGroup' && <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: 12, border: '1px solid var(--accent)', borderRadius: 8, background: 'var(--accent-soft)', color: 'var(--text)', fontSize: 12, lineHeight: 1.5 }}><Icon name="folder_open" size={18} color="var(--accent)" style={{ marginTop: 1 }} /><div><strong>Item Group:</strong> select the Major Group first, then name the group beneath it. Example: Beverages → Soft Drinks.</div></div>}
+          {f.entity === 'categories' && (f.id || !f.preset) && <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: 12, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface-2)', color: 'var(--text-muted)', fontSize: 12, lineHeight: 1.5 }}><Icon name="account_tree" size={18} color="var(--accent)" style={{ marginTop: 1 }} /><div>Catalogue hierarchy: <strong>Major Group → Item Group → Item</strong>.</div></div>}
+          {f.entity === 'items' && !f.id && f.preset === 'item' && <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: 12, border: '1px solid var(--accent)', borderRadius: 8, background: 'var(--accent-soft)', color: 'var(--text)', fontSize: 12, lineHeight: 1.5 }}><Icon name="inventory_2" size={18} color="var(--accent)" style={{ marginTop: 1 }} /><div><strong>Item:</strong> choose its Major Group, then choose the Item Group inside that Major Group.</div></div>}
           {f.entity === 'itemUnits' && values.item && values.unit && Number(values.conversionFactor || 0) > 0 && <div style={{ padding: 12, borderRadius: 8, background: 'var(--good-soft)', color: 'var(--good)', fontSize: 12, fontWeight: 750 }}>1 {String(values.unit)} = {Number(values.conversionFactor)} {String(app.data.items.find((item) => item.name === values.item)?.uom || 'base units')}</div>}
           {pageFields.map((fd) => {
             const isSelect = fd.type === 'select'
@@ -235,7 +263,7 @@ export default function FormDrawer() {
             const selectLocked = fieldLocked || dependencyLocked
             return (
               <div key={fd.key}>
-                <label><HelpLabel label={fd.label} style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 7 }} /></label>
+                <label><HelpLabel label={f.entity === 'categories' && f.preset === 'itemGroup' && fd.key === 'parent' ? 'Major group' : fd.label} style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 7 }} /></label>
                 {identityLocked ? (
                   <div style={{ minHeight: 42, display: 'flex', alignItems: 'center', gap: 9, border: '1px solid var(--border)', background: 'var(--surface-2)', borderRadius: 10, padding: '0 12px', color: 'var(--text)', fontSize: 13.5 }}>
                     <Icon name={fd.key === 'department' ? 'account_tree' : fd.key === 'request_type' ? 'request_quote' : fd.key === 'store' ? 'warehouse' : 'person'} size={18} color="var(--text-faint)" />

@@ -26,7 +26,8 @@ export type ActiveModule = 'operations' | 'hr'
 
 export interface User { name: string; role: string; designation: string; id: string; employeeId: string; employeeCode: string; branchId: string; branchName: string; departmentId: string; departmentName: string; isStaff: boolean; isSuperuser: boolean; permissions: string[] }
 
-interface FormTarget { entity: EntityKey; id: string | null }
+export type FormPreset = 'majorGroup' | 'itemGroup' | 'item'
+interface FormTarget { entity: EntityKey; id: string | null; preset?: FormPreset }
 interface ConfirmTarget { entity: EntityKey; id: string; name: string }
 interface DetailTarget { entity: EntityKey; id: string; from: string }
 type WorkflowAlertTone = 'failure' | 'warning'
@@ -92,7 +93,7 @@ export interface AppContextValue extends AppState {
   viewCategoryItems: (category: Row) => void
   clearItemCategoryFilter: () => void
   // forms + crud
-  openCreate: (entity?: EntityKey, label?: string) => void
+  openCreate: (entity?: EntityKey, label?: string, preset?: FormPreset) => void
   openEdit: (id: string, entity?: EntityKey) => void
   closeForm: () => void
   saveForm: (values: Row) => Promise<void>
@@ -655,10 +656,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     clearItemCategoryFilter: () => patch({ itemCategoryFilter: null }),
     consumeProcurementDraft: () => patch({ procurementDraftId: null }),
     consumeInventoryDraft: () => patch({ inventoryDraftId: null }),
-    openCreate: (entity, label) => {
+    openCreate: (entity, label, preset) => {
       const target = (typeof entity === 'string' ? entity : state.route) as EntityKey
       const next: Partial<AppState> = {
-        form: { entity: target, id: null },
+        form: { entity: target, id: null, preset },
         branchOpen: false,
         settingsOpen: false,
       }
