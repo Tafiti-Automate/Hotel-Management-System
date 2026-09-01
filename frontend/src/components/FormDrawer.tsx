@@ -25,6 +25,11 @@ function SmallItemGraphic({ color = "var(--accent)" }: { color?: string }) {
 const helperCardStyle = { display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px', borderRadius: 8, background: 'var(--accent-soft)', color: 'var(--text)', fontSize: 12, lineHeight: 1.5, border: '1px solid color-mix(in srgb, var(--accent) 32%, white)' } as const
 
 function optionLabel(value: string): string {
+  if (value === 'UGX') return 'UGX — USh (Ugandan shilling)'
+  if (value === 'KES') return 'KES — KSh (Kenyan shilling)'
+  if (value === 'USD') return 'USD — $ (US dollar)'
+  if (value === 'TZS') return 'TZS — TSh (Tanzanian shilling)'
+  if (value === 'RWF') return 'RWF — FRw (Rwandan franc)'
   if (value === 'hotel_purchase') return 'Hotel purchase'
   if (value === 'department') return 'Department'
   if (value === 'manual') return 'Other special purchase'
@@ -80,7 +85,7 @@ export default function FormDrawer() {
     const existing = f.id ? app.data[f.entity].find((x) => x.id === f.id) : null
     const seed: Row = {}
     conf.fields?.forEach((fd) => {
-      const fallback = f.entity === 'requisitions' && fd.key === 'currency'
+      const fallback = fd.key === 'currency'
         ? 'UGX'
         : f.entity === 'locations' && fd.key === 'status'
           ? 'Active'

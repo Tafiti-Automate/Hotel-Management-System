@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { Icon } from '../components/Icon'
-import { money } from '../lib/theme'
+import { currencyMoney } from '../lib/theme'
 import type { Row } from '../lib/data'
 import { useApp } from '../state/AppContext'
 
@@ -128,8 +128,10 @@ export default function SupplierQuotationManagement() {
   const articleQuotes = selectedItem ? (quotesByArticle.get(text(selectedItem.id)) || []) : []
   const filteredQuotes = articleQuotes.filter((row) => !status || text(row.status).toLowerCase() === status)
   const activeQuotes = articleQuotes.filter((row) => text(row.status).toLowerCase() === 'active')
-  const lowestPrice = activeQuotes.length ? Math.min(...activeQuotes.map((row) => number(row.price))) : 0
-  const highestPrice = activeQuotes.length ? Math.max(...activeQuotes.map((row) => number(row.price))) : 0
+  const quoteCurrencies = new Set(activeQuotes.map((row) => text(row.currency).toUpperCase() || 'UGX'))
+  const comparisonCurrency = quoteCurrencies.size === 1 ? Array.from(quoteCurrencies)[0] : ''
+  const lowestPrice = comparisonCurrency ? Math.min(...activeQuotes.map((row) => number(row.price))) : 0
+  const highestPrice = comparisonCurrency ? Math.max(...activeQuotes.map((row) => number(row.price))) : 0
   const supplierCount = new Set(activeQuotes.map((row) => text(row.supplierId) || text(row.supplier))).size
   const units = new Set(activeQuotes.map((row) => text(row.unit)).filter(Boolean))
 
@@ -224,7 +226,7 @@ export default function SupplierQuotationManagement() {
             </div>
             <div className="supplier-summary-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 8, marginTop: 12 }}>
               <Summary label="Supplier options" value={String(supplierCount)} sub={`${activeQuotes.length} active quotation${activeQuotes.length === 1 ? '' : 's'}`} />
-              <Summary label="Lowest active price" value={activeQuotes.length ? money(lowestPrice) : '—'} sub={activeQuotes.length > 1 && highestPrice !== lowestPrice ? `Range to ${money(highestPrice)}` : 'Current quotation catalogue'} />
+              <Summary label="Lowest active price" value={comparisonCurrency ? currencyMoney(lowestPrice, comparisonCurrency) : quoteCurrencies.size > 1 ? 'Multiple currencies' : '—'} sub={comparisonCurrency && activeQuotes.length > 1 && highestPrice !== lowestPrice ? `Range to ${currencyMoney(highestPrice, comparisonCurrency)}` : quoteCurrencies.size > 1 ? 'Compare quotations in the same currency' : 'Current quotation catalogue'} />
               <Summary label="Purchase UOMs" value={String(units.size || 0)} sub={Array.from(units).slice(0, 2).join(', ') || 'No active UOM'} />
               <Summary label="Base unit" value={text(selectedItem.uom) || '—'} sub={`SKU ${text(selectedItem.sku) || 'not recorded'}`} />
             </div>
@@ -242,12 +244,13 @@ export default function SupplierQuotationManagement() {
               </div>
               {filteredQuotes.map((row) => {
                 const active = text(row.status).toLowerCase() === 'active'
-                const lowest = active && activeQuotes.length > 1 && number(row.price) === lowestPrice
+                const rowCurrency = text(row.currency).toUpperCase() || 'UGX'
+                const lowest = Boolean(comparisonCurrency) && active && activeQuotes.length > 1 && rowCurrency === comparisonCurrency && number(row.price) === lowestPrice
                 const validity = quoteValidity(row.quotationValidUntil)
                 return <div key={text(row.id)} style={{ display: 'grid', gridTemplateColumns: 'minmax(190px,1.4fr) 100px 125px minmax(145px,1fr) 145px 90px 90px 42px', gap: 8, alignItems: 'center', minHeight: 62, padding: '0 10px', borderBottom: '1px solid var(--border)', background: lowest ? 'var(--good-soft)' : 'transparent' }}>
                   <span style={{ ...bodyCell, display: 'block' }}><strong style={{ display: 'block', color: 'var(--text)' }}>{text(row.supplier) || '—'}</strong><small style={{ display: 'block', marginTop: 2, color: 'var(--text-faint)' }}>{text(row.supplierSku) || 'No supplier reference'}</small></span>
                   <span style={bodyCell}>{text(row.unit) || '—'}</span>
-                  <span style={{ ...bodyCell, justifyContent: 'flex-end', color: 'var(--text)', fontWeight: 760 }}><span>{money(row.price || 0)}</span>{lowest && <span style={bestBadge}>Lowest</span>}</span>
+                  <span style={{ ...bodyCell, justifyContent: 'flex-end', color: 'var(--text)', fontWeight: 760 }}><span>{currencyMoney(row.price || 0, rowCurrency)}</span>{lowest && <span style={bestBadge}>Lowest</span>}</span>
                   <span style={{ ...bodyCell, display: 'block' }}><strong style={{ display: 'block', color: 'var(--text)' }}>{text(row.quotationReference) || 'Not recorded'}</strong><small style={{ display: 'block', marginTop: 2, color: 'var(--text-faint)' }}>{row.effectiveFrom ? `From ${text(row.effectiveFrom).slice(0, 10)}` : 'Effective date not recorded'}</small></span>
                   <span style={bodyCell}><Validity value={validity} /></span>
                   <span style={bodyCell}>{number(row.leadTime)} day{number(row.leadTime) === 1 ? '' : 's'}</span>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { Icon } from '../components/Icon'
 import type { Row } from '../lib/data'
-import { money } from '../lib/theme'
+import { currencyMoney, money } from '../lib/theme'
 import { useApp } from '../state/AppContext'
 
 const text = (value: unknown) => String(value ?? '')
@@ -253,7 +253,7 @@ export default function ArticleManagement() {
                 icon="request_quote"
                 title="Supplier quotations"
                 value={`${activeQuotes.length} active · ${supplierCount} supplier option${supplierCount === 1 ? '' : 's'}`}
-                note={lowestQuote ? `Lowest active price ${money(lowestQuote.price || 0)}` : 'No active price recorded'}
+                note={lowestQuote ? `Lowest active price ${currencyMoney(lowestQuote.price || 0, text(lowestQuote.currency) || 'UGX')}` : 'No active price recorded'}
                 action="Open price comparison"
                 onClick={() => app.navTo('supplierItems', 'Supplier quotations')}
               />
@@ -276,7 +276,7 @@ export default function ArticleManagement() {
             </div></div> : selectedItem.store ? <div style={{ padding: '12px 14px' }}><Info label="Current store" value={`${text(selectedItem.store)} · ${number(selectedItem.onHand).toLocaleString()} on hand`} /></div> : <Empty icon="warehouse" title="No store balance recorded" note="Stock will appear here after the article has a balance in a store." compact />}
           </section>
 
-          <footer style={{ minHeight: 48, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderTop: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-muted)', fontSize: 11.5 }}><span>{text(selectedMajor?.name)} › {text(selectedGroup?.name)}</span><span>·</span><span>{supplierCount} supplier option{supplierCount === 1 ? '' : 's'}</span><span style={{ flex: 1 }} />{lowestQuote && <span>Lowest active quote: <strong style={{ color: 'var(--text)' }}>{money(lowestQuote.price || 0)}</strong></span>}</footer>
+          <footer style={{ minHeight: 48, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderTop: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-muted)', fontSize: 11.5 }}><span>{text(selectedMajor?.name)} › {text(selectedGroup?.name)}</span><span>·</span><span>{supplierCount} supplier option{supplierCount === 1 ? '' : 's'}</span><span style={{ flex: 1 }} />{lowestQuote && <span>Lowest active quote: <strong style={{ color: 'var(--text)' }}>{currencyMoney(lowestQuote.price || 0, text(lowestQuote.currency) || 'UGX')}</strong></span>}</footer>
         </> : <div style={{ flex: 1, display: 'grid', placeItems: 'center', padding: 48, textAlign: 'center', color: 'var(--text-muted)' }}><div><ArticleIcon size={28} /><div style={{ marginTop: 10, color: 'var(--text)', fontWeight: 750 }}>Select an article</div><div style={{ marginTop: 4, fontSize: 12 }}>Choose an article from the explorer to view its master record.</div></div></div>}
       </section>
     </div>

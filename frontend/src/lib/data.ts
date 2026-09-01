@@ -190,7 +190,7 @@ export const cfg: Record<string, EntityConfig> = {
       { key: 'quotationReference', label: 'Supplier quotation number', type: 'text' },
       { key: 'quotationValidUntil', label: 'Quotation valid until', type: 'date' },
       { key: 'price', label: 'Quoted unit price', type: 'number' },
-      { key: 'currency', label: 'Currency', type: 'text' },
+      { key: 'currency', label: 'Currency', type: 'select', opts: 'currencies', hint: 'UGX is selected by default. Choose the currency stated on the supplier quotation.' },
       { key: 'effectiveFrom', label: 'Effective from', type: 'date' },
       { key: 'minimumOrder', label: 'Minimum order quantity', type: 'number' },
       { key: 'leadTime', label: 'Lead time in days', type: 'number' },
@@ -372,8 +372,8 @@ export const cfg: Record<string, EntityConfig> = {
       {
         key: 'currency',
         label: 'Payment currency',
-        type: 'text',
-        placeholder: 'UGX',
+        type: 'select',
+        opts: 'currencies',
         hint: 'UGX is filled in automatically. Change it only if payment will use another currency.',
       },
     ],
@@ -475,6 +475,7 @@ export function getOptions(key: string, data: Record<EntityKey, Row[]>): string[
   if (key === 'unitRoles') return ['Purchase unit', 'Issue unit', 'Alternate unit', 'Base unit']
   if (key === 'reqTypes') return ['department', 'hotel_purchase']
   if (key === 'procurementSources') return ['manual', 'capital_asset', 'emergency', 'project', 'service']
+  if (key === 'currencies') return ['UGX', 'KES', 'USD', 'TZS', 'RWF']
   if (key === 'supStatus') return ['Active', 'On hold', 'Inactive']
   if (key === 'genStatus') return ['Active', 'Inactive']
   if (key === 'gender') return ['Female', 'Male']

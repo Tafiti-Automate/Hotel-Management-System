@@ -109,6 +109,25 @@ export function money(v: number | string | null | undefined): string {
   return 'UGX ' + Math.round(Number.isFinite(n) ? n : 0).toLocaleString('en-UG')
 }
 
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  UGX: 'USh',
+  KES: 'KSh',
+  USD: '$',
+  TZS: 'TSh',
+  RWF: 'FRw',
+}
+
+/** Format a supplier quotation in the currency recorded on that quotation. */
+export function currencyMoney(v: number | string | null | undefined, currency = 'UGX'): string {
+  const n = Number(v || 0)
+  const code = currency.trim().toUpperCase() || 'UGX'
+  const amount = (Number.isFinite(n) ? n : 0).toLocaleString('en', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: code === 'USD' ? 2 : 0,
+  })
+  return `${CURRENCY_SYMBOLS[code] || code} ${amount}`
+}
+
 export interface StatusPresentation {
   label: string
   tone: 'good' | 'warn' | 'bad' | 'info' | 'neutral'
