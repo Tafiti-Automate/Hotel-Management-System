@@ -68,7 +68,7 @@ export const cfg: Record<string, EntityConfig> = {
     ],
     fields: [
       { key: 'name', label: 'Item name', type: 'text' },
-      { key: 'sku', label: 'SKU', type: 'text' },
+      { key: 'sku', label: 'SKU', type: 'text', placeholder: 'Generated after saving', hint: 'Generated automatically' },
       { key: 'majorGroup', label: 'Major group', type: 'select', opts: 'majorGroups', hint: 'Select the top-level inventory family first.' },
       { key: 'category', label: 'Item group', type: 'select', opts: 'itemGroups', hint: 'Only groups inside the selected Major Group are shown.' },
       { key: 'businessType', label: 'Business classification', type: 'select', opts: 'businessTypes' },

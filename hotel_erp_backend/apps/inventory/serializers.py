@@ -216,6 +216,12 @@ class ItemSerializer(serializers.ModelSerializer):
             "created_by",
         )
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.context.get("allow_sku_input", False):
+            self.fields["sku"].read_only = True
+            self.fields["sku"].required = False
+
     def get_base_unit_locked(self, instance):
         return instance.has_base_unit_usage()
 

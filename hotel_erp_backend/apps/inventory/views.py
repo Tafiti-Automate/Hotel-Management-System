@@ -360,8 +360,11 @@ class ItemViewSet(CostControllerAuthorityMixin, CreatedByModelMixin, ModelViewSe
         serializer = ItemSerializer(
             existing,
             data=payload,
-            context={"request": request},
-        ) if existing else ItemSerializer(data=payload, context={"request": request})
+            context={"request": request, "allow_sku_input": True},
+        ) if existing else ItemSerializer(
+            data=payload,
+            context={"request": request, "allow_sku_input": True},
+        )
         serializer.is_valid(raise_exception=True)
         serializer.save(
             created_by=existing.created_by if existing else request.user,

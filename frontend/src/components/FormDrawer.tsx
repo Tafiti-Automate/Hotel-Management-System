@@ -282,6 +282,7 @@ export default function FormDrawer() {
             const identityLocked = false
             const fieldLocked = baseUnitLocked && fd.key === 'uom'
             const dependencyLocked = f.entity === 'items' && fd.opts === 'itemGroups' && !values.majorGroup
+            const systemGenerated = f.entity === 'items' && fd.key === 'sku'
             const selectLocked = fieldLocked || dependencyLocked
             return (
               <div key={fd.key}>
@@ -310,10 +311,12 @@ export default function FormDrawer() {
                 ) : (
                   <input
                     value={values[fd.key] ?? ''}
-                    onChange={(e) => setVal(fd.key, e.target.value, numeric)}
+                    readOnly={systemGenerated}
+                    aria-readonly={systemGenerated}
+                    onChange={systemGenerated ? undefined : (e) => setVal(fd.key, e.target.value, numeric)}
                     type={fd.type === 'number' ? 'number' : fd.type === 'date' ? 'date' : fd.type === 'password' ? 'password' : 'text'}
                     placeholder={fd.placeholder || fd.label}
-                    style={{ width: '100%', height: 42, border: '1px solid var(--border)', background: 'var(--surface-2)', borderRadius: 10, padding: '0 12px', fontSize: 13.5, color: 'var(--text)', outline: 'none' }}
+                    style={{ width: '100%', height: 42, border: '1px solid var(--border)', background: systemGenerated ? 'var(--surface-3)' : 'var(--surface-2)', borderRadius: 10, padding: '0 12px', fontSize: 13.5, color: systemGenerated ? 'var(--text-muted)' : 'var(--text)', outline: 'none', cursor: systemGenerated ? 'not-allowed' : 'text' }}
                   />
                 )}
                 {fieldLocked && (

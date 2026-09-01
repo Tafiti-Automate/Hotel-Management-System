@@ -815,7 +815,6 @@ function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey
     return {
       category: categoryId,
       name: text(values.name),
-      sku: text(values.sku),
       unit: text(values.uom),
       base_unit: unitId || null,
       reorder_level: num(values.reorder),
