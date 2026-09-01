@@ -85,7 +85,7 @@ export default function SupplierManagement() {
   })
   const addQuoteFor = (supplierName: string) => app.openCreate('supplierItems', 'Add supplier quotation', undefined, { supplier: supplierName })
 
-  return <div style={{ maxWidth: 1500, margin: '0 auto' }}>
+  return <div className="explorer-workspace-screen supplier-explorer-screen" style={{ width: '100%', maxWidth: 1500, height: '100%', minHeight: 0, margin: '0 auto', display: 'flex', flexDirection: 'column' }}>
     <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 14 }}>
       <div>
         <h1 style={{ margin: '0 0 5px', color: 'var(--text)', fontSize: 29, fontWeight: 750 }}>Suppliers</h1>
@@ -103,10 +103,10 @@ export default function SupplierManagement() {
       <select value={status} onChange={(event) => setStatus(event.target.value)} style={{ ...control, height: 42, width: 165 }}><option value="">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select>
     </div>
 
-    <div className="catalogue-layout supplier-explorer-layout" style={{ display: 'grid', gridTemplateColumns: '360px minmax(0,1fr)', minHeight: 600, border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', background: 'var(--surface)' }}>
-      <aside style={{ minWidth: 0, borderRight: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+    <div className="catalogue-layout explorer-workspace-layout supplier-explorer-layout" style={{ display: 'grid', gridTemplateColumns: '360px minmax(0,1fr)', flex: '1 1 auto', minHeight: 0, border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', background: 'var(--surface)' }}>
+      <aside className="explorer-workspace-pane" style={{ minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRight: '1px solid var(--border)', background: 'var(--surface-2)' }}>
         <div style={panelHeader}><span>Supplier explorer</span><small>{activeSuppliers} active · {suppliers.length} total</small></div>
-        <div style={{ padding: '8px 7px' }}>
+        <div className="explorer-workspace-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '8px 7px' }}>
           {filtered.map((supplier) => {
             const supplierId = text(supplier.id)
             const quotes = quotesBySupplier.get(supplierId) || []
@@ -142,7 +142,7 @@ export default function SupplierManagement() {
         </div>
       </aside>
 
-      <section style={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+      <section className="explorer-workspace-detail" style={{ minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
         {selected ? <>
           <div style={{ ...panelHeader, minHeight: 62, alignItems: 'center' }}>
             <div style={{ minWidth: 0 }}><small style={{ display: 'block', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '.05em' }}>Viewing supplier</small><strong style={{ display: 'block', color: 'var(--text)', fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{text(selected.name)}</strong></div>

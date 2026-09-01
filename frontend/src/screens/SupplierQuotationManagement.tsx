@@ -150,7 +150,7 @@ export default function SupplierQuotationManagement() {
   })
   const addQuotationForItem = (item: Row) => app.openCreate('supplierItems', 'Add supplier quotation', undefined, { article: text(item.name) })
 
-  return <div style={{ maxWidth: 1500, margin: '0 auto' }}>
+  return <div className="explorer-workspace-screen quotation-explorer-screen" style={{ width: '100%', maxWidth: 1500, height: '100%', minHeight: 0, margin: '0 auto', display: 'flex', flexDirection: 'column' }}>
     <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 14 }}>
       <div>
         <h1 style={{ margin: '0 0 5px', color: 'var(--text)', fontSize: 29, fontWeight: 750 }}>Supplier Quotations</h1>
@@ -168,10 +168,10 @@ export default function SupplierQuotationManagement() {
       <select value={status} onChange={(event) => setStatus(event.target.value)} style={{ ...control, height: 42, width: 165 }}><option value="">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select>
     </div>
 
-    <div className="catalogue-layout quotation-explorer-layout" style={{ display: 'grid', gridTemplateColumns: '365px minmax(0,1fr)', minHeight: 620, border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', background: 'var(--surface)' }}>
-      <aside style={{ minWidth: 0, borderRight: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+    <div className="catalogue-layout explorer-workspace-layout quotation-explorer-layout" style={{ display: 'grid', gridTemplateColumns: '365px minmax(0,1fr)', flex: '1 1 auto', minHeight: 0, border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', background: 'var(--surface)' }}>
+      <aside className="explorer-workspace-pane" style={{ minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRight: '1px solid var(--border)', background: 'var(--surface-2)' }}>
         <div style={panelHeader}><span>Article explorer</span><small>{items.length} article{items.length === 1 ? '' : 's'} · {rows.length} quote{rows.length === 1 ? '' : 's'}</small></div>
-        <div style={{ padding: '8px 7px' }}>
+        <div className="explorer-workspace-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '8px 7px' }}>
           {roots.map((root) => {
             const rootId = text(root.id)
             const groups = normalizedQuery ? visibleChildren(rootId) : (childrenByParent.get(rootId) || [])
@@ -215,7 +215,7 @@ export default function SupplierQuotationManagement() {
         </div>
       </aside>
 
-      <section style={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+      <section className="explorer-workspace-detail" style={{ minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
         {selectedItem ? <>
           <div style={{ padding: 14, borderBottom: '1px solid var(--border)' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>

@@ -238,7 +238,7 @@ export default function InventoryCatalogue() {
     })
   }
 
-  return <div style={{ maxWidth: 1500, margin: '0 auto' }}>
+  return <div className="explorer-workspace-screen catalogue-explorer-screen" style={{ width: '100%', maxWidth: 1500, height: '100%', minHeight: 0, margin: '0 auto', display: 'flex', flexDirection: 'column' }}>
     <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, marginBottom: 14, flexWrap: 'wrap' }}>
       <div><h1 style={{ margin: 0, color: 'var(--text)', fontSize: 24 }}>Item Grouping</h1><p style={{ margin: '5px 0 0', color: 'var(--text-muted)', fontSize: 12.5 }}>Maintain the catalogue in the order Major Group → Item Group → Item.</p></div>
       {canMaintainItems && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><input ref={importInput} type="file" accept=".csv,.xlsx" hidden onChange={(event) => void importFile(event.target.files?.[0])} /><button type="button" disabled={importing} onClick={() => importInput.current?.click()} style={secondary}><Icon name="upload_file" size={17} />{importing ? 'Importing…' : 'Import Items'}</button><button type="button" onClick={downloadTemplate} title="Download item import template" style={iconButton}><Icon name="download" size={17} /></button></div>}
@@ -265,10 +265,10 @@ export default function InventoryCatalogue() {
       {query && <button type="button" onClick={() => setQuery('')} aria-label="Clear inventory search" style={{ ...iconButton, position: 'absolute', right: 5, top: 5, border: 0 }}><Icon name="close" size={17} /></button>}
     </div>
 
-    <div className="catalogue-layout" style={{ display: 'grid', gridTemplateColumns: '320px minmax(0,1fr)', minHeight: 560, border: '1px solid var(--border)', borderRadius: 9, overflow: 'hidden', background: 'var(--surface)' }}>
-      <aside style={{ borderRight: '1px solid var(--border)', background: 'var(--surface-2)', minWidth: 0 }}>
+    <div className="catalogue-layout explorer-workspace-layout catalogue-explorer-layout" style={{ display: 'grid', gridTemplateColumns: '320px minmax(0,1fr)', flex: '1 1 auto', minHeight: 0, border: '1px solid var(--border)', borderRadius: 9, overflow: 'hidden', background: 'var(--surface)' }}>
+      <aside className="explorer-workspace-pane" style={{ borderRight: '1px solid var(--border)', background: 'var(--surface-2)', minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={panelHeader}><span>Catalogue explorer</span><small>{roots.length} major · {categories.length - roots.length} item groups</small></div>
-        <div style={{ padding: '8px 7px' }}>
+        <div className="explorer-workspace-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '8px 7px' }}>
           {roots.map((root) => {
             const rootId = id(root.id)
             const children = childrenByParent.get(rootId) || []
@@ -321,7 +321,7 @@ export default function InventoryCatalogue() {
         </div>
       </aside>
 
-      <section style={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+      <section className="explorer-workspace-detail" style={{ minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
         <div style={{ ...panelHeader, minHeight: 54 }}>
           <div>
             <small style={{ display: 'block', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '.05em' }}>{normalizedQuery ? 'Inventory search' : selected.type === 'item' ? 'Selected item' : 'Viewing'}</small>
