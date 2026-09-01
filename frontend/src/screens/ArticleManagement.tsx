@@ -157,7 +157,7 @@ export default function ArticleManagement() {
       <div>
         <div style={{ color: 'var(--accent)', fontSize: 12, fontWeight: 750 }}>Cost Controller · Article master</div>
         <h1 style={{ margin: '3px 0 5px', color: 'var(--text)', fontSize: 29, fontWeight: 750 }}>Articles / Items</h1>
-        <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 13 }}>Maintain article controls and review stock, units and supplier coverage from one workspace.</p>
+        <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 13 }}>Maintain stock and article controls here; open the dedicated workspaces for prices and unit rules.</p>
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <button type="button" onClick={exportCsv} style={secondary}><Icon name="download" size={17} />Export CSV</button>
@@ -247,27 +247,26 @@ export default function ArticleManagement() {
             </div>
           </div>
 
-          <section style={{ borderBottom: '1px solid var(--border)' }}>
-            <SectionHeader title="Supplier coverage" subtitle="Current active supplier quotations. Prices can only be changed in Supplier Quotations." action={canAddQuote ? <button type="button" onClick={addQuote} style={smallAction}><Icon name="add" size={15} />Add quotation</button> : undefined} count={`${activeQuotes.length} active`} />
-            <div style={{ overflowX: 'auto' }}>
-              <div style={{ minWidth: 760 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(190px,1.5fr) 110px 125px 150px 90px 90px', padding: '0 10px', background: 'var(--surface-2)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}><span style={headCell}>Supplier</span><span style={headCell}>Purchase UOM</span><span style={{ ...headCell, justifyContent: 'flex-end' }}>Quoted price</span><span style={headCell}>Quotation</span><span style={headCell}>Lead</span><span style={headCell}>Status</span></div>
-                {activeQuotes.slice(0, 8).map((quote, index) => <div key={text(quote.id)} style={{ display: 'grid', gridTemplateColumns: 'minmax(190px,1.5fr) 110px 125px 150px 90px 90px', minHeight: 52, padding: '0 10px', alignItems: 'center', borderBottom: '1px solid var(--border)', background: index === 0 && activeQuotes.length > 1 ? 'var(--good-soft)' : 'transparent' }}>
-                  <span style={{ ...bodyCell, display: 'block' }}><strong style={{ display: 'block', color: 'var(--text)' }}>{text(quote.supplier)}</strong><small style={{ display: 'block', marginTop: 2, color: 'var(--text-faint)' }}>{text(quote.supplierSku) || 'No supplier reference'}</small></span>
-                  <span style={bodyCell}>{text(quote.unit) || '—'}</span>
-                  <span style={{ ...bodyCell, justifyContent: 'flex-end', color: 'var(--text)', fontWeight: 750 }}>{money(quote.price || 0)}{index === 0 && activeQuotes.length > 1 && <span style={bestBadge}>Lowest</span>}</span>
-                  <span style={{ ...bodyCell, display: 'block' }}><strong style={{ display: 'block', color: 'var(--text)' }}>{text(quote.quotationReference) || '—'}</strong><small style={{ display: 'block', marginTop: 2, color: 'var(--text-faint)' }}>{quote.quotationValidUntil ? `Valid to ${text(quote.quotationValidUntil).slice(0, 10)}` : 'No expiry'}</small></span>
-                  <span style={bodyCell}>{number(quote.leadTime)} day{number(quote.leadTime) === 1 ? '' : 's'}</span>
-                  <span style={bodyCell}><Status value={text(quote.status)} /></span>
-                </div>)}
-                {!activeQuotes.length && <Empty icon="request_quote" title="No active supplier quotations" note="Add a supplier quotation to establish the current purchase price and purchase unit." />}
-              </div>
+          <section style={{ padding: '13px 14px 14px', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ marginBottom: 9 }}><div style={{ color: 'var(--text)', fontSize: 13.5, fontWeight: 750 }}>Related setup</div><div style={{ marginTop: 2, color: 'var(--text-faint)', fontSize: 11.5 }}>A concise status is shown here; maintenance stays in its authoritative workspace.</div></div>
+            <div className="article-related-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 9 }}>
+              <RelatedWorkspace
+                icon="request_quote"
+                title="Supplier quotations"
+                value={`${activeQuotes.length} active · ${supplierCount} supplier option${supplierCount === 1 ? '' : 's'}`}
+                note={lowestQuote ? `Lowest active price ${money(lowestQuote.price || 0)}` : 'No active price recorded'}
+                action="Open price comparison"
+                onClick={() => app.navTo('supplierItems', 'Supplier quotations')}
+              />
+              <RelatedWorkspace
+                icon="straighten"
+                title="Units & conversions"
+                value={`Base unit: ${text(selectedItem.uom) || 'not recorded'}`}
+                note={`${itemConversions.length} article conversion${itemConversions.length === 1 ? '' : 's'} configured`}
+                action="Open unit setup"
+                onClick={() => app.navTo('uoms', 'Units & conversions')}
+              />
             </div>
-          </section>
-
-          <section style={{ borderBottom: '1px solid var(--border)' }}>
-            <SectionHeader title="Units & conversions" subtitle={`Base stock unit: ${text(selectedItem.uom) || 'not recorded'}`} count={`${itemConversions.length} configured`} />
-            {itemConversions.length ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 8, padding: '12px 14px' }}>{itemConversions.map((entry) => <div key={text(entry.id)} style={summaryCard}><div style={summaryLabel}>{text(entry.role)}</div><div style={{ marginTop: 5, color: 'var(--text)', fontSize: 13, fontWeight: 750 }}>{text(entry.unit)}</div><div style={{ marginTop: 3, color: 'var(--text-muted)', fontSize: 11.5 }}>{text(entry.baseEquivalent) || `1 ${text(entry.unit)} = ${number(entry.conversionFactor)} ${text(entry.baseUnit) || text(selectedItem.uom)}`}</div></div>)}</div> : <Empty icon="straighten" title="No alternate units configured" note="The article currently uses only its base stock unit." compact />}
           </section>
 
           <section style={{ flex: 1 }}>
@@ -289,6 +288,7 @@ function Summary({ label, value, sub }: { label: string; value: string; sub?: st
   return <div style={summaryCard}><div style={summaryLabel}>{label}</div><div style={{ marginTop: 4, color: 'var(--text)', fontSize: 13, fontWeight: 750, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</div>{sub && <div style={{ marginTop: 2, color: 'var(--text-faint)', fontSize: 11.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</div>}</div>
 }
 function Info({ label, value }: { label: string; value: string }) { return <div style={summaryCard}><div style={summaryLabel}>{label}</div><div style={{ marginTop: 5, color: 'var(--text)', fontSize: 12.5, fontWeight: 650 }}>{value}</div></div> }
+function RelatedWorkspace({ icon, title, value, note, action, onClick }: { icon: string; title: string; value: string; note: string; action: string; onClick: () => void }) { return <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0, padding: '12px 13px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface-2)' }}><span style={{ width: 36, height: 36, display: 'grid', placeItems: 'center', flex: 'none', borderRadius: 8, color: 'var(--accent)', background: 'var(--accent-soft)' }}><Icon name={icon} size={19} color="var(--accent)" /></span><span style={{ minWidth: 0, flex: 1 }}><strong style={{ display: 'block', color: 'var(--text)', fontSize: 12.5 }}>{title}</strong><span style={{ display: 'block', marginTop: 3, color: 'var(--text-muted)', fontSize: 11.5 }}>{value}</span><small style={{ display: 'block', marginTop: 2, color: 'var(--text-faint)' }}>{note}</small></span><button type="button" onClick={onClick} style={{ ...smallAction, flex: 'none' }}>{action}<Icon name="arrow_forward" size={15} /></button></div> }
 function SectionHeader({ title, subtitle, count, action }: { title: string; subtitle: string; count: string; action?: React.ReactNode }) { return <div style={{ minHeight: 54, display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', justifyContent: 'space-between', flexWrap: 'wrap' }}><div><div style={{ color: 'var(--text)', fontSize: 13, fontWeight: 750 }}>{title}</div><div style={{ marginTop: 2, color: 'var(--text-faint)', fontSize: 11.5 }}>{subtitle}</div></div><div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>{action}<span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{count}</span></div></div> }
 function Status({ value }: { value: string }) { const active = value.toLowerCase() === 'active' || value.toLowerCase() === 'ok'; return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 8px', borderRadius: 999, color: active ? 'var(--good)' : 'var(--text-muted)', background: active ? 'var(--good-soft)' : 'var(--surface-3)', fontSize: 11.5, fontWeight: 750 }}><span style={{ width: 6, height: 6, borderRadius: 999, background: active ? 'var(--good)' : 'var(--text-faint)' }} />{value || 'Inactive'}</span> }
 function Empty({ icon, title, note, compact = false }: { icon: string; title: string; note: string; compact?: boolean }) { return <div style={{ padding: compact ? '18px 14px' : '38px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}><Icon name={icon} size={compact ? 21 : 26} color="var(--text-faint)" /><div style={{ marginTop: 6, color: 'var(--text)', fontWeight: 750 }}>{title}</div><div style={{ marginTop: 3 }}>{note}</div></div> }
@@ -306,4 +306,3 @@ const summaryCard: CSSProperties = { minWidth: 0, padding: '10px 11px', border: 
 const summaryLabel: CSSProperties = { color: 'var(--text-faint)', fontSize: 10.5, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '.035em' }
 const headCell: CSSProperties = { minWidth: 0, minHeight: 40, display: 'flex', alignItems: 'center', padding: '0 8px', color: 'var(--text-faint)', fontSize: 10.5, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase' }
 const bodyCell: CSSProperties = { minWidth: 0, display: 'flex', alignItems: 'center', padding: '8px', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-muted)', fontSize: 12 }
-const bestBadge: CSSProperties = { marginLeft: 6, display: 'inline-flex', padding: '2px 6px', borderRadius: 999, background: 'var(--good)', color: '#fff', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.025em' }

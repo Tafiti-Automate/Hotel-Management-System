@@ -5946,3 +5946,18 @@ html[data-theme="dark"] .screen-app .app-content {
 @media (max-width: 430px) {
   .article-summary-grid, .article-control-grid { grid-template-columns: 1fr !important; }
 }
+
+/* Units and conversions share one master-detail workspace. */
+@media (max-width: 1120px) {
+  .unit-overview-grid { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
+  .article-related-grid { grid-template-columns: 1fr !important; }
+}
+@media (max-width: 860px) {
+  .unit-master-layout { grid-template-columns: 285px minmax(0,1fr) !important; }
+  .unit-summary-grid { grid-template-columns: 1fr !important; }
+}
+@media (max-width: 680px) {
+  .unit-master-layout { display: block !important; }
+  .unit-master-layout > aside { max-height: 340px; overflow-y: auto; border-right: 0 !important; border-bottom: 1px solid var(--border); }
+  .unit-overview-grid { grid-template-columns: 1fr !important; }
+}

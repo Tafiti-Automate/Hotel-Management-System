@@ -7,7 +7,7 @@ export interface AccessUser {
 const routePermissions: Record<string, string[]> = {
   items: ['inventory.view_item'],
   categories: ['inventory.view_category'],
-  uoms: ['inventory.view_unitofmeasure'],
+  uoms: ['inventory.view_unitofmeasure', 'inventory.view_itemunitprice'],
   itemUnits: ['inventory.view_itemunitprice'],
   locations: ['inventory.view_storelocation'],
   balances: ['inventory.view_inventorybalance'],

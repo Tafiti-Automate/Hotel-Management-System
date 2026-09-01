@@ -1100,6 +1100,7 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
       name: text(row.name),
       abbr: text(row.abbreviation),
       itemsCount: itemsByUnit.get(idOf(row)) || 0,
+      status: activeStatus(row.is_active),
     })),
     itemUnits: raw.unitPrices.map((row) => ({
       id: idOf(row),

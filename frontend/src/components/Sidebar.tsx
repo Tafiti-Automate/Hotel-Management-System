@@ -35,8 +35,7 @@ const workflowNav: Record<string, NavGroup[]> = {
       { route: 'supplierItems', label: 'Supplier quotations' },
       { route: 'categories', label: 'Inventory Catalogue Setup' },
       { route: 'items', label: 'Articles / items' },
-      { route: 'uoms', label: 'Units of measure' },
-      { route: 'itemUnits', label: 'UOM conversions' },
+      { route: 'uoms', label: 'Units & conversions' },
     ] },
     { heading: 'Control', items: [{ route: 'reports', label: 'Reports' }] },
   ],
@@ -82,8 +81,7 @@ const adminOperations: NavGroup[] = [
     { route: 'supplierItems', label: 'Supplier quotations' },
     { route: 'categories', label: 'Inventory Catalogue Setup' },
     { route: 'items', label: 'Articles / items' },
-    { route: 'uoms', label: 'Units of measure' },
-    { route: 'itemUnits', label: 'UOM conversions' },
+    { route: 'uoms', label: 'Units & conversions' },
     { route: 'locations', label: 'Stores' },
   ] },
   { heading: 'Control', items: [
@@ -174,7 +172,7 @@ export default function Sidebar() {
       <nav className="sidebar-nav" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: collapsed ? '6px 10px 12px' : '6px 10px 16px' }}>
         {groups.map((group, groupIndex) => <div key={group.heading} className="sidebar-nav-group" style={{ paddingTop: groupIndex ? 14 : 4 }}>
           {!collapsed && <div className="sidebar-nav-heading" style={{ minHeight: 30, display: 'flex', alignItems: 'center', padding: '0 10px', color: 'var(--text-faint)', fontSize: 12, fontWeight: 750, letterSpacing: '.04em', textTransform: 'uppercase' }}>{group.heading}</div>}
-          {group.items.map((item) => { const active = app.navActive === item.route; return <button key={item.route} title={collapsed ? item.label : undefined} aria-label={collapsed ? item.label : undefined} aria-current={active ? 'page' : undefined} onClick={() => { app.navTo(item.route, item.label); setMobileOpen(false) }} className={`sidebar-nav-item ${active ? 'active' : 'hover-surface2'}`} style={navStyle(active)}><Icon name={navIcons[item.route] || 'chevron_right'} size={17} weight={300} />{!collapsed && <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.label}</span>}</button> })}
+          {group.items.map((item) => { const active = app.navActive === item.route || (item.route === 'uoms' && app.navActive === 'itemUnits'); return <button key={item.route} title={collapsed ? item.label : undefined} aria-label={collapsed ? item.label : undefined} aria-current={active ? 'page' : undefined} onClick={() => { app.navTo(item.route, item.label); setMobileOpen(false) }} className={`sidebar-nav-item ${active ? 'active' : 'hover-surface2'}`} style={navStyle(active)}><Icon name={navIcons[item.route] || 'chevron_right'} size={17} weight={300} />{!collapsed && <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.label}</span>}</button> })}
         </div>)}
       </nav>
 

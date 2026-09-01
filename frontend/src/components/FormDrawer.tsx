@@ -327,11 +327,11 @@ export default function FormDrawer() {
                         type="button"
                         onClick={() => {
                           app.closeForm()
-                          app.navTo('itemUnits', 'UOM conversions')
+                          app.navTo('uoms', 'Units & conversions')
                         }}
                         style={{ display: 'block', marginTop: 5, padding: 0, border: 0, background: 'transparent', color: 'var(--accent)', font: 'inherit', fontSize: 12, fontWeight: 650, cursor: 'pointer' }}
                       >
-                        Open unit conversions
+                        Open units & conversions
                       </button>
                     </div>
                   </div>

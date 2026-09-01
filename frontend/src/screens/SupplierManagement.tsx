@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { Icon } from '../components/Icon'
-import { money } from '../lib/theme'
 import { useApp } from '../state/AppContext'
 
 const text = (value: unknown) => String(value ?? '')
-const number = (value: unknown) => Number(value || 0)
 
 function SupplierTreeIcon({ active = false }: { active?: boolean }) {
   const color = active ? 'var(--accent)' : 'var(--text-muted)'
@@ -92,7 +90,7 @@ export default function SupplierManagement() {
       <div>
         <div style={{ color: 'var(--accent)', fontSize: 12, fontWeight: 750 }}>Cost Controller · Supplier master</div>
         <h1 style={{ margin: '3px 0 5px', color: 'var(--text)', fontSize: 29, fontWeight: 750 }}>Suppliers</h1>
-        <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 13 }}>Browse suppliers, their approved articles and current quotation-backed prices.</p>
+        <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 13 }}>Maintain supplier profiles and review article coverage; compare commercial terms in Supplier Quotations.</p>
       </div>
       {canAddSupplier && <button type="button" onClick={() => app.openCreate('suppliers', 'Register supplier')} style={primary}><Icon name="add" size={17} />Register supplier</button>}
     </header>
@@ -100,7 +98,7 @@ export default function SupplierManagement() {
     <div style={{ display: 'flex', gap: 9, marginBottom: 12, flexWrap: 'wrap' }}>
       <label style={{ flex: '1 1 420px', minWidth: 240, position: 'relative' }}>
         <Icon name="search" size={18} color="var(--text-faint)" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search supplier, TIN, contact, article or quotation…" style={{ ...control, width: '100%', height: 42, paddingLeft: 38 }} />
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search supplier, TIN, contact or supplied article…" style={{ ...control, width: '100%', height: 42, paddingLeft: 38 }} />
         {query && <button type="button" onClick={() => setQuery('')} aria-label="Clear supplier search" style={{ ...iconButton, position: 'absolute', right: 5, top: 4, border: 0 }}><Icon name="close" size={17} /></button>}
       </label>
       <select value={status} onChange={(event) => setStatus(event.target.value)} style={{ ...control, height: 42, width: 165 }}><option value="">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select>
@@ -134,7 +132,7 @@ export default function SupplierManagement() {
                   const quoteActive = selectedQuoteId === quoteId
                   return <button type="button" key={quoteId} onClick={() => { chooseSupplier(supplierId); setSelectedQuoteId(quoteId) }} style={{ ...treeLeaf, color: quoteActive ? 'var(--accent)' : 'var(--text-muted)', background: quoteActive ? 'var(--accent-soft)' : 'transparent', fontWeight: quoteActive ? 700 : 560 }}>
                     <ArticleTreeIcon active={quoteActive} />
-                    <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{text(row.article)}</span><small style={{ display: 'block', marginTop: 1, color: 'var(--text-faint)' }}>{text(row.unit) || 'Unit'} · {money(row.price || 0)}</small></span>
+                    <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{text(row.article)}</span><small style={{ display: 'block', marginTop: 1, color: 'var(--text-faint)' }}>{text(row.category) || 'Item group'} · {text(row.unit) || 'Unit'}</small></span>
                   </button>
                 })}
                 {!quotes.length && <div style={{ padding: '6px 8px 10px', color: 'var(--text-faint)', fontSize: 11.5 }}>No approved article quotations yet.</div>}
@@ -163,24 +161,22 @@ export default function SupplierManagement() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '12px 14px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
-            <div><div style={{ color: 'var(--text)', fontSize: 13.5, fontWeight: 750 }}>Items & quotations</div><div style={{ marginTop: 2, color: 'var(--text-faint)', fontSize: 11.5 }}>Current Cost Controller-maintained supplier prices.</div></div>
+            <div><div style={{ color: 'var(--text)', fontSize: 13.5, fontWeight: 750 }}>Items supplied</div><div style={{ marginTop: 2, color: 'var(--text-faint)', fontSize: 11.5 }}>Supplier coverage only. Pricing, validity and lead-time comparison stays in Supplier Quotations.</div></div>
             <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>{canAddQuote && <button type="button" onClick={() => addQuoteFor(text(selected.name))} style={primaryCompact}><Icon name="add" size={16} />Add quotation</button>}<button type="button" onClick={() => app.navTo('supplierItems', 'Supplier quotations')} style={secondary}><Icon name="request_quote" size={16} />All quotations</button></div>
           </div>
 
           <div style={{ overflowX: 'auto', flex: 1 }}>
-            <div style={{ minWidth: 850 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px,1.35fr) 1fr 90px 120px 1fr 95px 90px 42px', gap: 8, padding: '0 10px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
-                <span style={headCell}>Article</span><span style={headCell}>Item group</span><span style={headCell}>UOM</span><span style={{ ...headCell, justifyContent: 'flex-end' }}>Price</span><span style={headCell}>Quotation</span><span style={headCell}>Lead</span><span style={headCell}>Status</span><span />
+            <div style={{ minWidth: 680 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(190px,1.45fr) 1fr 110px minmax(130px,1fr) 90px 42px', gap: 8, padding: '0 10px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
+                <span style={headCell}>Article</span><span style={headCell}>Item group</span><span style={headCell}>Purchase UOM</span><span style={headCell}>Supplier reference</span><span style={headCell}>Status</span><span />
               </div>
               {prices.map((row) => {
                 const highlighted = selectedQuoteId === text(row.id)
-                return <div key={text(row.id)} style={{ display: 'grid', gridTemplateColumns: 'minmax(180px,1.35fr) 1fr 90px 120px 1fr 95px 90px 42px', gap: 8, alignItems: 'center', minHeight: 58, padding: '0 10px', borderBottom: '1px solid var(--border)', background: highlighted ? 'var(--accent-soft)' : 'transparent' }}>
+                return <div key={text(row.id)} style={{ display: 'grid', gridTemplateColumns: 'minmax(190px,1.45fr) 1fr 110px minmax(130px,1fr) 90px 42px', gap: 8, alignItems: 'center', minHeight: 58, padding: '0 10px', borderBottom: '1px solid var(--border)', background: highlighted ? 'var(--accent-soft)' : 'transparent' }}>
                   <span style={{ ...bodyCell, display: 'block' }}><strong style={{ display: 'block', color: 'var(--text)' }}>{text(row.article)}</strong><small style={{ display: 'block', marginTop: 2, color: 'var(--text-faint)' }}>{text(row.articleSku) || text(row.supplierSku) || 'No reference'}</small></span>
                   <span style={bodyCell}>{text(row.category) || '—'}</span>
                   <span style={bodyCell}>{text(row.unit) || '—'}</span>
-                  <span style={{ ...bodyCell, justifyContent: 'flex-end', color: 'var(--text)', fontWeight: 750 }}>{money(row.price || 0)}</span>
-                  <span style={{ ...bodyCell, display: 'block' }}><strong style={{ display: 'block', color: 'var(--text)' }}>{text(row.quotationReference) || 'Not recorded'}</strong>{row.quotationValidUntil && <small style={{ display: 'block', marginTop: 2, color: 'var(--text-faint)' }}>Valid to {text(row.quotationValidUntil)}</small>}</span>
-                  <span style={bodyCell}>{number(row.leadTime)} day{number(row.leadTime) === 1 ? '' : 's'}</span>
+                  <span style={{ ...bodyCell, color: 'var(--text)' }}>{text(row.supplierSku) || 'Not recorded'}</span>
                   <span style={bodyCell}><Status value={text(row.status)} /></span>
                   <span style={bodyCell}>{canEditQuote && <button type="button" onClick={() => app.openEdit(text(row.id), 'supplierItems')} title="Edit supplier quotation" style={iconButton}><Icon name="edit" size={16} /></button>}</span>
                 </div>
