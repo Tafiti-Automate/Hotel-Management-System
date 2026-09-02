@@ -622,8 +622,14 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
   }, [])
 
   const readyOrders = useMemo(
-    () => data.orders.filter((row) => ['issued', 'partially_received'].includes(id(row.status))),
-    [data.orders],
+    () => data.orders.filter((row) => {
+      if (!['issued', 'partially_received'].includes(id(row.status))) return false
+      const lines = data.orderItems.filter((line) => id(line.purchase_order) === id(row.id))
+      // Defensive UI check for older/stale LPO statuses: an LPO is ready for
+      // Receiving only while at least one approved line still has a balance.
+      return lines.some((line) => num(line.outstanding_quantity ?? line.approved_quantity ?? line.quantity) > 0)
+    }),
+    [data.orderItems, data.orders],
   )
   const supplierRows = useMemo(() => {
     const ids = Array.from(new Set(readyOrders.map((row) => id(row.supplier)).filter(Boolean)))

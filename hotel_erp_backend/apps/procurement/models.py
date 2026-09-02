@@ -1237,29 +1237,56 @@ class PurchaseOrder(BaseModel):
         self.save(update_fields=["total_amount", "updated_at"])
 
     def update_receipt_status(self):
-        ordered_total = sum(
-            (item.approved_base_quantity for item in self.items.all()),
-            Decimal("0.00"),
-        )
-        if ordered_total <= Decimal("0.00"):
+        """Synchronize the LPO's physical-delivery status from recorded GRNs.
+
+        LPO receipt status is intentionally independent from inventory posting.
+        Once the supplier has physically delivered the full approved quantity and
+        the Receiving Clerk records the GRN, the LPO is no longer a ready delivery.
+        The GRN may still remain in RECEIVED state until it is posted to inventory.
+        """
+        if self.status not in (
+            POStatus.ISSUED,
+            POStatus.PARTIALLY_RECEIVED,
+            POStatus.RECEIVED,
+        ):
             return
 
-        received_total = sum(
-            (
-                item.inventory_post_quantity()
-                for item in GoodsReceiptItem.objects.filter(
-                    goods_receipt__purchase_order=self,
-                    inventory_changes_applied=True,
-                ).select_related("goods_receipt")
-            ),
-            Decimal("0.00"),
+        lines = list(self.items.all())
+        if not lines:
+            return
+
+        has_received_quantity = False
+        fully_received = True
+        receipt_statuses = (
+            GoodsReceiptStatus.RECEIVED,
+            GoodsReceiptStatus.INSPECTED,
+            GoodsReceiptStatus.POSTED,
         )
-        if received_total >= ordered_total:
+
+        for order_line in lines:
+            approved = order_line.approved_quantity or Decimal("0.00")
+            if approved <= Decimal("0.00"):
+                continue
+            received = sum(
+                (
+                    receipt_item.committed_purchase_quantity
+                    for receipt_item in order_line.receipt_items.filter(
+                        goods_receipt__status__in=receipt_statuses,
+                    ).select_related("goods_receipt")
+                ),
+                Decimal("0.00"),
+            )
+            if received > Decimal("0.00"):
+                has_received_quantity = True
+            if received < approved:
+                fully_received = False
+
+        if fully_received and has_received_quantity:
             status = POStatus.RECEIVED
-        elif received_total > Decimal("0.00"):
+        elif has_received_quantity:
             status = POStatus.PARTIALLY_RECEIVED
         else:
-            return
+            status = POStatus.ISSUED
 
         if self.status != status:
             self.status = status
@@ -2107,6 +2134,9 @@ class GoodsReceiptNote(BaseModel):
             raise ValidationError("This GRN is already cancelled.")
         self.status = GoodsReceiptStatus.CANCELLED
         self.save(update_fields=("status", "updated_at"))
+        # Cancelling an unposted GRN releases its supplier-delivery commitment
+        # and may reopen the LPO for Receiving.
+        self.purchase_order.update_receipt_status()
 
     def posting_readiness(self):
         blockers = []
@@ -2115,8 +2145,12 @@ class GoodsReceiptNote(BaseModel):
             blockers.append("This GRN has already been posted.")
         if self.status == GoodsReceiptStatus.CANCELLED:
             blockers.append("A cancelled GRN cannot be posted.")
-        if self.purchase_order.status not in (POStatus.ISSUED, POStatus.PARTIALLY_RECEIVED):
-            blockers.append("The LPO must be issued before goods can be posted.")
+        if self.purchase_order.status not in (
+            POStatus.ISSUED,
+            POStatus.PARTIALLY_RECEIVED,
+            POStatus.RECEIVED,
+        ):
+            blockers.append("The LPO must be issued or received before goods can be posted.")
         lines = list(self.items.all())
         if not lines:
             blockers.append("Add at least one delivered Article.")
@@ -2313,8 +2347,9 @@ class GoodsReceiptItem(BaseModel):
             if receipt_item.goods_receipt.purchase_order.status not in (
                 POStatus.ISSUED,
                 POStatus.PARTIALLY_RECEIVED,
+                POStatus.RECEIVED,
             ):
-                raise ValidationError("Goods can only be posted against a sent purchase order.")
+                raise ValidationError("Goods can only be posted against a sent or received purchase order.")
 
             post_quantity = receipt_item.inventory_post_quantity(require_accepted=True)
 

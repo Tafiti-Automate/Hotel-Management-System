@@ -536,6 +536,26 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
                 ).prefetch_related("approval_workflow__approver__user", "approval_workflow__approver_role", "approval_workflow__decided_by"),
                 request.user,
             )
+            if stage == "receipt":
+                # Self-heal delivery status from the physical GRNs.  Older LPOs
+                # may have remained partially_received because receipt status was
+                # historically tied to inventory posting.  Receiving must only
+                # keep an LPO open while a physical delivery balance remains.
+                candidate_ids = list(
+                    orders.filter(
+                        status__in=(POStatus.ISSUED, POStatus.PARTIALLY_RECEIVED),
+                    ).values_list("id", flat=True)
+                )
+                for candidate in PurchaseOrder.objects.filter(id__in=candidate_ids).prefetch_related(
+                    "items__receipt_items__goods_receipt__inspection__items"
+                ):
+                    candidate.update_receipt_status()
+                orders = scope_purchase_orders_for_user(
+                    PurchaseOrder.objects.select_related(
+                        "requisition", "supplier", "ordered_by", "store", "sent_by", "approved_by"
+                    ).prefetch_related("approval_workflow__approver__user", "approval_workflow__approver_role", "approval_workflow__decided_by"),
+                    request.user,
+                )
             order_ids = orders.values_list("id", flat=True)
             if stage == "lpo" and user_has_role(
                 request.user, "System Administrator", "Procurement Manager", "Procurement Officer"
@@ -1329,6 +1349,12 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
 
                 receipt.status = GoodsReceiptStatus.RECEIVED
                 receipt.save(update_fields=["status", "updated_at"])
+
+                # A supplier delivery is complete when the recorded GRNs cover
+                # the full approved LPO quantities.  Do not wait for inventory
+                # posting to remove a fully delivered LPO from Receiving's queue.
+                order.update_receipt_status()
+
                 if short_lines:
                     order.record_activity(
                         action="PARTIAL_DELIVERY_RECORDED",

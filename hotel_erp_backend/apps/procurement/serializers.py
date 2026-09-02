@@ -672,7 +672,13 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
         received = sum(
             (
                 receipt_item.committed_purchase_quantity
-                for receipt_item in instance.receipt_items.exclude(goods_receipt__status="cancelled")
+                for receipt_item in instance.receipt_items.filter(
+                    goods_receipt__status__in=(
+                        GoodsReceiptStatus.RECEIVED,
+                        GoodsReceiptStatus.INSPECTED,
+                        GoodsReceiptStatus.POSTED,
+                    )
+                )
             ),
             Decimal("0.00"),
         )
