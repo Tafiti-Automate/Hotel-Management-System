@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework import serializers
 
-from core.constants.choices import POStatus, PRStatus
+from core.constants.choices import GoodsReceiptStatus, POStatus, PRStatus
 from apps.procurement.models import (
     GoodsInspection,
     GoodsInspectionItem,
