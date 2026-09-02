@@ -504,7 +504,7 @@ export default function ProcurementWorkbench() {
 
 
   return (
-    <div style={{ maxWidth: 1480, margin: '0 auto' }}>
+    <div className="enterprise-workspace procurement-workbench" style={{ maxWidth: 1480, margin: '0 auto' }}>
       <div style={{ ...card, padding: 20, marginBottom: 16 }}>
         <div className="workbench-hero" style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
           <span style={heroIcon}><Icon name="shopping_cart_checkout" size={24} color="#fff" /></span>
@@ -709,7 +709,7 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
 
   if (selectedOrder) {
     const supplier = names.suppliers.get(id(selectedOrder.supplier)) || 'Supplier'
-    return <div style={{ maxWidth: 1280, margin: '0 auto' }}>
+    return <div className="enterprise-workspace receiving-detail-screen" style={{ maxWidth: 1280, margin: '0 auto' }}>
       <button type="button" onClick={() => setSelectedOrderId('')} style={{ ...secondary, marginBottom: 14 }}><Icon name="arrow_back" size={16} />Back to Ready LPOs</button>
       <section style={{ ...card, overflow: 'hidden' }}>
         <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'flex-start', gap: 14, justifyContent: 'space-between' }}>
@@ -835,7 +835,7 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
 
   if (selectedReceipt) {
     const receiptPosted = id(selectedReceipt.status) === 'posted' || (receiptLines.length > 0 && receiptLines.every((line) => Boolean(line.inventory_changes_applied)))
-    return <div className="grn-document-screen" style={{ maxWidth: 1380, margin: '0 auto' }}>
+    return <div className="enterprise-workspace grn-document-screen" style={{ maxWidth: 1380, margin: '0 auto' }}>
       <div className="screen-document-view" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
         <button type="button" onClick={() => setSelectedReceiptId('')} style={secondary}><Icon name="arrow_back" size={16} />Back to GRN History</button>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -858,7 +858,7 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
     </div>
   }
 
-  return <div style={{ maxWidth: 1320, margin: '0 auto' }}>
+  return <div className="enterprise-workspace receiving-workspace" style={{ maxWidth: 1320, margin: '0 auto' }}>
     <div style={{ ...card, padding: 20, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 13 }}>
       <span style={heroIcon}><Icon name="move_to_inbox" size={24} color="#fff" /></span>
       <div>

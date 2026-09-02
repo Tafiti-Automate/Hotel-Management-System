@@ -219,7 +219,7 @@ export default function ReportView() {
 
   if (!authorized) {
     return (
-      <div>
+      <div className="enterprise-workspace report-view-screen">
         <button onClick={app.backFromReport} className="hover-text" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, border: 'none', background: 'transparent', cursor: 'pointer', font: 'inherit', fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', padding: '4px 0', marginBottom: 14 }}>
           <Icon name="arrow_back" size={19} />All reports
         </button>
@@ -235,7 +235,7 @@ export default function ReportView() {
   const canOpenSource = Boolean(selectedReportRow?.drilldown_id && selectedReportRow?.drilldown_type && ['requisitions', 'orders', 'grns', 'inspections', 'supplierItems', 'store-requisitions', 'stock_issue', 'store_return', 'supplier_return', 'goods_receipt'].includes(String(selectedReportRow.drilldown_type)))
 
   return (
-    <div>
+    <div className="enterprise-workspace report-view-screen">
       <button onClick={app.backFromReport} className="hover-text" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, border: 'none', background: 'transparent', cursor: 'pointer', font: 'inherit', fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', padding: '4px 0', marginBottom: 14 }}>
         <Icon name="arrow_back" size={19} />All reports
       </button>

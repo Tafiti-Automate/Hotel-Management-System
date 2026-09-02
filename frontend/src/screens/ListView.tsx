@@ -183,7 +183,7 @@ export default function ListView() {
   }
 
   return (
-    <div className="list-view">
+    <div className="enterprise-workspace list-view">
       <div className="list-toolbar" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
         <div>
           <h1 style={{ margin: 0, color: 'var(--text)', fontSize: 24, fontWeight: 650, letterSpacing: '-.025em' }}>{config.title}</h1>

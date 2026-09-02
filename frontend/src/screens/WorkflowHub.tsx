@@ -142,7 +142,7 @@ export default function WorkflowHub({ kind }: { kind: WorkflowKind }) {
   }
 
   return (
-    <div className="workflow-hub">
+    <div className="enterprise-workspace workflow-hub">
       <section className="workflow-hub-header" style={{ ...card }}>
         <div className="workflow-hub-header-inner">
           <div className="workflow-hub-icon">

@@ -19,12 +19,12 @@ export default function StoresDashboard() {
   )
   const syncTone = app.apiStatus === 'live' ? 'var(--good)' : app.apiStatus === 'loading' ? 'var(--warn)' : 'var(--bad)'
   return (
-    <div className="dashboard-screen">
+    <div className="enterprise-workspace dashboard-screen">
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 18 }}>
         <div>
           <div style={{ color: 'var(--accent)', fontSize: 11.5, fontWeight: 750, letterSpacing: '.1em', textTransform: 'uppercase' }}>Store Keeper</div>
           <h1 style={{ margin: '3px 0 0', color: 'var(--text)', fontSize: 25, fontWeight: 650, letterSpacing: '-.03em' }}>Stores workspace</h1>
-          <p style={{ margin: '5px 0 0', color: 'var(--text-muted)', fontSize: 13.5 }}>Process HOD-approved Department requests and raise direct purchase requests when your assigned store needs replenishment.</p>
+          <p style={{ margin: '5px 0 0', color: 'var(--text-muted)', fontSize: 13.5 }}>Process approved department requests and manage store replenishment.</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <button onClick={() => app.navTo('store-purchase-requests', 'Purchase requests')} style={primaryButton}><Icon name="add_shopping_cart" size={17} />Create purchase request</button>
@@ -36,7 +36,7 @@ export default function StoresDashboard() {
         <div style={{ ...panel, padding: 16 }}><div style={{ color: 'var(--text-muted)', fontSize: 12 }}>Forwarded to Procurement</div><div style={{ marginTop: 10, color: 'var(--text)', fontSize: 26, fontWeight: 700 }}>{forwarded.length}</div></div>
       </div>
       <section style={panel}>
-        <PanelHeader title="Department requests" subtitle="No supplier, quotation or price data is shown in this queue" action="Open work queue" onAction={() => app.navTo('workflow-stores', 'Store requests')} />
+        <PanelHeader title="Department requests" subtitle="Approved department requests awaiting store action" action="Open work queue" onAction={() => app.navTo('workflow-stores', 'Store requests')} />
         {submittedRequests.slice(0, 10).map((row) => <button key={row.id} onClick={() => app.navTo('workflow-stores', 'Store requests')} className="hover-surface2" style={queueRow}><span><span style={primaryText}>{row.id}</span><span style={secondaryText}>{row.department || 'Department'} · {row.itemSummary || 'Requested items'}</span></span><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{row.store || 'Assigned store'}</span><span style={pendingChip}>Needs Store Keeper</span><Icon name="chevron_right" size={18} color="var(--text-faint)" /></button>)}
         {!submittedRequests.length && <Empty text="No department requests are waiting for Store Keeper action." />}
       </section>

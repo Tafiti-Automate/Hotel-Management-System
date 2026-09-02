@@ -40,7 +40,7 @@ export default function LpoPreviewModal({ orderId, reference, onClose }: LpoPrev
           <span style={iconBox}><Icon name="description" size={21} color="var(--accent)" /></span>
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ color: 'var(--text)', fontSize: 15, fontWeight: 800 }}>LPO {reference}</div>
-            <div style={{ marginTop: 3, color: 'var(--text-muted)', fontSize: 11.5 }}>On-screen preview · does not use the ORIGINAL/COPY print number</div>
+            <div style={{ marginTop: 3, color: 'var(--text-muted)', fontSize: 11.5 }}>Preview only · controlled copy numbering applies to printed or downloaded output</div>
           </div>
           <button type="button" onClick={onClose} aria-label="Close LPO preview" style={closeButton}><Icon name="close" size={19} /></button>
         </header>

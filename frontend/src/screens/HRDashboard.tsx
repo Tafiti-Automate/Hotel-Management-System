@@ -20,7 +20,7 @@ export default function HRDashboard() {
   ]
 
   return (
-    <div className="hr-dashboard" style={{ maxWidth: 1380, margin: '0 auto' }}>
+    <div className="enterprise-workspace hr-dashboard" style={{ maxWidth: 1380, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
         <div>
           <div style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600, letterSpacing: '.02em' }}>Human resources</div>

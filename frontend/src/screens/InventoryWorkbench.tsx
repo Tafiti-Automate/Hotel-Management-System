@@ -220,7 +220,7 @@ export default function InventoryWorkbench() {
     }
   }
   const departmentPendingCount = scopedData.requests.filter((row: Row) => id(row.status) === 'pending_department_approval').length
-  return <div className="inventory-workbench" style={{ maxWidth: 1460, margin: '0 auto' }} aria-busy={loading}>
+  return <div className="enterprise-workspace inventory-workbench" style={{ maxWidth: 1460, margin: '0 auto' }} aria-busy={loading}>
     {isDepartmentHead ? <header className="department-approval-page-header" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 14 }}>
       <div>
         <h1 style={{ margin: '0 0 5px', color: 'var(--text)', fontSize: 29, fontWeight: 750 }}>Department Approvals</h1>
@@ -816,7 +816,7 @@ function RequesterDraftEditor({ app, data, form, setForm, busy, execute, draftRe
           <div>{draftLine ? 'Edit item' : 'Add item'}</div>
           {draftLine && <button type="button" onClick={clearItemForm} style={{ ...secondary, marginLeft: 'auto', height: 32 }}>Cancel edit</button>}
         </div>
-        {!majorGroups.length && <div role="alert" style={{ margin: '0 0 12px', padding: '10px 12px', border: '1px solid var(--warn)', borderRadius: 8, background: 'var(--warn-soft)', color: 'var(--text)', fontSize: 12, lineHeight: 1.45 }}><strong>Catalogue groups are not available.</strong> Refresh the page after the Requester catalogue permissions have been synchronized.</div>}
+        {!majorGroups.length && <div role="alert" style={{ margin: '0 0 12px', padding: '10px 12px', border: '1px solid var(--warn)', borderRadius: 8, background: 'var(--warn-soft)', color: 'var(--text)', fontSize: 12, lineHeight: 1.45 }}><strong>Catalogue unavailable.</strong> Refresh the page and try again.</div>}
         <div className="requester-item-entry cascade" style={{ display: 'grid', gridTemplateColumns: 'minmax(145px,.85fr) minmax(150px,.9fr) minmax(190px,1.2fr) 90px 90px minmax(150px,.9fr) auto', gap: 10, alignItems: 'end' }}>
           <Field label="1. Major Group"><StablePicker value={form.majorGroup} change={(value) => setForm({ ...form, majorGroup: value, itemGroup: '', item: '', unit: '' })} rows={majorGroups} emptyLabel="Choose Major Group" searchPlaceholder="Search Major Groups…" /></Field>
           <Field label="2. Item Group"><StablePicker disabled={!form.majorGroup} value={form.itemGroup} change={(value) => setForm({ ...form, itemGroup: value, item: '', unit: '' })} rows={itemGroups} emptyLabel={form.majorGroup ? 'Choose Item Group' : 'Select Major Group first'} searchPlaceholder="Search Item Groups…" /></Field>

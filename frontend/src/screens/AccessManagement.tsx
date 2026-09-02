@@ -69,7 +69,7 @@ export default function AccessManagement() {
 
 
 
-  return <div className="access-page">
+  return <div className="enterprise-workspace access-page">
     <div className="access-heading">
       <div>
         <h1>Roles & system access</h1>

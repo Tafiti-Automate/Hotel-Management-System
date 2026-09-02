@@ -131,12 +131,12 @@ export default function StorePurchaseRequests() {
     }
   }
 
-  return <div className="store-purchase-screen" style={{ maxWidth: 1460, margin: '0 auto' }}>
+  return <div className="enterprise-workspace store-purchase-screen" style={{ maxWidth: 1460, margin: '0 auto' }}>
     <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
       <div>
         <div style={eyebrow}>Store Keeper · Replenishment</div>
         <h1 style={{ margin: '3px 0 0', color: 'var(--text)', fontSize: 27, fontWeight: 700, letterSpacing: '-.03em' }}>Store Purchase Requests</h1>
-        <p style={{ margin: '5px 0 0', color: 'var(--text-muted)', fontSize: 13.5 }}>Request stock directly for an assigned store. Procurement selects the supplier; prices remain controlled by the Cost Controller.</p>
+        <p style={{ margin: '5px 0 0', color: 'var(--text-muted)', fontSize: 13.5 }}>Raise replenishment requests for your assigned store.</p>
       </div>
       <button type="button" onClick={() => void load()} disabled={loading} style={secondary}><Icon name="refresh" size={17} />{loading ? 'Refreshing…' : 'Refresh'}</button>
     </header>
@@ -201,7 +201,7 @@ export default function StorePurchaseRequests() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
-            <div style={{ flex: 1, minWidth: 220, color: 'var(--text-faint)', fontSize: 12, lineHeight: 1.5 }}><Icon name="lock" size={15} color="var(--text-faint)" style={{ verticalAlign: 'text-bottom', marginRight: 5 }} />No supplier or price can be entered from this screen.</div>
+            <div style={{ flex: 1 }} />
             <button type="button" onClick={() => void submit()} disabled={busy || loading} style={{ ...primary, opacity: busy ? .65 : 1 }}><Icon name="send" size={17} />{busy ? 'Sending…' : 'Send to Procurement'}</button>
           </div>
         </div>

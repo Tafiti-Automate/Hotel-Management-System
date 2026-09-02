@@ -68,7 +68,7 @@ export default function DetailView() {
   const f2 = isReq ? r.requester : 'Procurement'
 
   return (
-    <div>
+    <div className="enterprise-workspace detail-view-screen">
       <button onClick={app.backFromDetail} className="hover-text" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, border: 'none', background: 'transparent', cursor: 'pointer', font: 'inherit', fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', padding: '4px 0', marginBottom: 14 }}>
         <Icon name="arrow_back" size={19} />Back
       </button>

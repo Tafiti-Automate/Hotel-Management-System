@@ -78,7 +78,7 @@ export default function FinanceWorkbench() {
     setForm({})
   }
 
-  return <div style={{ maxWidth: 1440, margin: '0 auto' }}>
+  return <div className="enterprise-workspace finance-workbench" style={{ maxWidth: 1440, margin: '0 auto' }}>
     <section className="workbench-hero" style={{ ...card, padding: 20, marginBottom: 15, display: 'flex', alignItems: 'center', gap: 13 }}>
       <span style={hero}><Icon name="account_balance" size={24} color="#fff" /></span>
       <div><div style={eyebrow}>Procure to pay</div><h1 style={{ margin: '3px 0', fontSize: 23 }}>Finance control centre</h1><div style={subtle}>Supplier invoices, matching, payment approval and settlement.</div></div>

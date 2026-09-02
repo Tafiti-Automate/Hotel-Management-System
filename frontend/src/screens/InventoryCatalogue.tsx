@@ -238,7 +238,7 @@ export default function InventoryCatalogue() {
     })
   }
 
-  return <div className="explorer-workspace-screen catalogue-explorer-screen" style={{ width: '100%', maxWidth: 1500, height: '100%', minHeight: 0, margin: '0 auto', display: 'flex', flexDirection: 'column' }}>
+  return <div className="enterprise-workspace explorer-workspace-screen catalogue-explorer-screen" style={{ width: '100%', maxWidth: 1500, height: '100%', minHeight: 0, margin: '0 auto', display: 'flex', flexDirection: 'column' }}>
     <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, marginBottom: 14, flexWrap: 'wrap' }}>
       <div><h1 style={{ margin: 0, color: 'var(--text)', fontSize: 24 }}>Item Grouping</h1><p style={{ margin: '5px 0 0', color: 'var(--text-muted)', fontSize: 12.5 }}>Maintain the catalogue in the order Major Group → Item Group → Item.</p></div>
       {canMaintainItems && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><input ref={importInput} type="file" accept=".csv,.xlsx" hidden onChange={(event) => void importFile(event.target.files?.[0])} /><button type="button" disabled={importing} onClick={() => importInput.current?.click()} style={secondary}><Icon name="upload_file" size={17} />{importing ? 'Importing…' : 'Import Items'}</button><button type="button" onClick={downloadTemplate} title="Download item import template" style={iconButton}><Icon name="download" size={17} /></button></div>}

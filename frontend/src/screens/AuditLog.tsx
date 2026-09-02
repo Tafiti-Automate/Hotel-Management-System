@@ -20,7 +20,7 @@ export default function AuditLog() {
   useEffect(() => { void load() }, [])
   if (!app.user.isStaff && !app.user.isSuperuser) return <div style={notice}>You do not have authority to view the audit log.</div>
   const visible = rows.filter((row) => `${row.action} ${row.entity_type} ${row.entity_id}`.toLowerCase().includes(search.toLowerCase()))
-  return <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+  return <div className="enterprise-workspace audit-log-screen" style={{ maxWidth: 1400, margin: '0 auto' }}>
     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, marginBottom: 15 }}><div><h1 style={{ margin: 0, fontSize: 23 }}>Audit log</h1><p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: 12.5 }}>Recorded approvals, stock movements and controlled document deletions.</p></div><button onClick={() => void load()} style={{ ...button, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button></div>
     <div style={{ ...panel, padding: 10, marginBottom: 0 }}><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search actions, documents or IDs" style={input} /></div>
     <div style={{ ...panel, overflow: 'hidden', borderRadius: '0 0 8px 8px' }}>

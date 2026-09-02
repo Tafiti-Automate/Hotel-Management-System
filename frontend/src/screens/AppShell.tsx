@@ -65,7 +65,7 @@ export default function AppShell() {
       <Sidebar />
       <div className="app-main" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
         <Header />
-        <main className="app-content" style={{ flex: 1, overflowY: 'auto', padding: 'var(--pad)' }}><Suspense fallback={<RouteLoading />}>{content}</Suspense></main>
+        <main className={`app-content route-${route}`} data-route={route} style={{ flex: 1, overflowY: 'auto', padding: 'var(--pad)' }}><Suspense fallback={<RouteLoading />}>{content}</Suspense></main>
       </div>
     </div>
   )

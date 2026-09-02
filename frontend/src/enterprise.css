@@ -1,0 +1,665 @@
+/* ========================================================================== 
+   Unified Enterprise UI — authenticated ERP only
+   Visual system derived from the Supplier and Supplier Quotation explorers.
+   Business logic, permissions and workflow state remain outside this layer.
+   ========================================================================== */
+
+.screen-app .app-content {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg) 92%, var(--surface)) 0%, var(--bg) 180px);
+  padding: 22px 24px !important;
+}
+
+.screen-app .app-content > * {
+  animation: enterprise-page-enter .16s ease-out both;
+}
+
+@keyframes enterprise-page-enter {
+  from { opacity: .94; transform: translateY(2px); }
+  to { opacity: 1; transform: none; }
+}
+
+.screen-app .enterprise-workspace,
+.screen-app .role-dashboard,
+.screen-app .dashboard-screen,
+.screen-app .access-page,
+.screen-app .workflow-hub,
+.screen-app .list-view {
+  width: 100%;
+  max-width: 1500px;
+  margin-inline: auto;
+}
+
+/* ---------- typography & page introductions ---------- */
+.screen-app .enterprise-workspace > header h1,
+.screen-app .role-dashboard-header h1,
+.screen-app .dashboard-screen > div:first-child h1,
+.screen-app .list-toolbar h1,
+.screen-app .access-header h1,
+.screen-app .workflow-hub-header h1 {
+  font-size: 28px !important;
+  line-height: 1.18 !important;
+  letter-spacing: -.028em !important;
+  font-weight: 720 !important;
+}
+
+.screen-app .enterprise-workspace > header p,
+.screen-app .role-dashboard-header p,
+.screen-app .dashboard-screen > div:first-child p,
+.screen-app .list-toolbar p,
+.screen-app .access-header p,
+.screen-app .workflow-hub-header p {
+  max-width: 780px;
+  color: var(--text-muted) !important;
+  font-size: 13px !important;
+  line-height: 1.55 !important;
+}
+
+.screen-app .enterprise-workspace [style*="text-transform: uppercase"],
+.screen-app .role-dashboard [style*="text-transform: uppercase"] {
+  letter-spacing: .045em !important;
+}
+
+/* ---------- shared controls ---------- */
+.screen-app .erp-primary,
+.screen-app .erp-secondary,
+.screen-app .enterprise-workspace button,
+.screen-app .list-view button,
+.screen-app .access-page button,
+.screen-app .workflow-hub button {
+  border-radius: 7px !important;
+}
+
+.screen-app .erp-primary,
+.screen-app .enterprise-workspace button[style*="background: var(--accent)"],
+.screen-app .enterprise-workspace button[style*="background:'var(--accent)'"],
+.screen-app .enterprise-workspace button[style*="background: 'var(--accent)'"],
+.screen-app .list-view button[style*="background: var(--accent)"],
+.screen-app .access-primary {
+  box-shadow: none !important;
+}
+
+.screen-app .enterprise-workspace :where(input, select, textarea),
+.screen-app .list-view :where(input, select, textarea),
+.screen-app .access-page :where(input, select, textarea),
+.screen-app .report-view-screen :where(input, select, textarea) {
+  border-radius: 7px !important;
+  border-color: var(--border) !important;
+  box-shadow: none !important;
+}
+
+.screen-app .enterprise-workspace :where(input, select, textarea):hover,
+.screen-app .list-view :where(input, select, textarea):hover,
+.screen-app .access-page :where(input, select, textarea):hover {
+  border-color: var(--border-2) !important;
+}
+
+.screen-app .enterprise-workspace :where(input, select, textarea):focus,
+.screen-app .list-view :where(input, select, textarea):focus,
+.screen-app .access-page :where(input, select, textarea):focus,
+.screen-app .report-view-screen :where(input, select, textarea):focus {
+  outline: 0 !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent) !important;
+}
+
+/* ---------- card language: quiet borders, not decorative floating cards ---------- */
+.screen-app .enterprise-workspace [style*="box-shadow: var(--shadow-sm)"],
+.screen-app .role-dashboard [style*="box-shadow: var(--shadow-sm)"],
+.screen-app .dashboard-screen [style*="box-shadow: var(--shadow-sm)"],
+.screen-app .list-view [style*="box-shadow: var(--shadow-sm)"] {
+  box-shadow: none !important;
+}
+
+.screen-app .enterprise-workspace [style*="border-radius: 15"],
+.screen-app .enterprise-workspace [style*="border-radius: 14"],
+.screen-app .enterprise-workspace [style*="border-radius: 12"],
+.screen-app .role-dashboard [style*="border-radius: 15"],
+.screen-app .dashboard-screen [style*="border-radius: 15"] {
+  border-radius: 10px !important;
+}
+
+/* ---------- Supplier-style explorer workspaces ---------- */
+.screen-app .explorer-workspace-screen > header {
+  margin-bottom: 13px !important;
+}
+
+.screen-app .explorer-workspace-layout,
+.screen-app .article-master-layout,
+.screen-app .unit-master-layout {
+  border-radius: 10px !important;
+  border-color: var(--border) !important;
+  box-shadow: none !important;
+}
+
+.screen-app .explorer-workspace-pane,
+.screen-app .article-master-layout > aside,
+.screen-app .unit-master-layout > aside {
+  background: color-mix(in srgb, var(--surface-2) 86%, var(--surface)) !important;
+}
+
+.screen-app .explorer-workspace-pane button:hover,
+.screen-app .article-master-layout > aside button:hover,
+.screen-app .unit-master-layout > aside button:hover {
+  background: color-mix(in srgb, var(--accent-soft) 42%, transparent) !important;
+}
+
+.screen-app .explorer-workspace-pane button:focus-visible,
+.screen-app .article-master-layout > aside button:focus-visible,
+.screen-app .unit-master-layout > aside button:focus-visible {
+  outline-offset: -1px;
+}
+
+/* ---------- replace oversized workbench hero cards with supplier-style page headers ---------- */
+.screen-app .finance-workbench > .workbench-hero,
+.screen-app .inventory-workbench > .workbench-hero {
+  padding: 0 0 15px !important;
+  margin-bottom: 14px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.screen-app .finance-workbench > .workbench-hero > span,
+.screen-app .inventory-workbench > .workbench-hero > span {
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 9px !important;
+}
+
+.screen-app .finance-workbench > .workbench-hero h1,
+.screen-app .inventory-workbench > .workbench-hero h1 {
+  font-size: 28px !important;
+  font-weight: 720 !important;
+  letter-spacing: -.028em !important;
+}
+
+.screen-app .procurement-workbench > div:first-child {
+  padding: 0 0 15px !important;
+  margin-bottom: 14px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.screen-app .procurement-workbench > div:first-child .workbench-hero > span {
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 9px !important;
+}
+
+.screen-app .procurement-workbench > div:first-child h1 {
+  font-size: 28px !important;
+  font-weight: 720 !important;
+  letter-spacing: -.028em !important;
+}
+
+/* ---------- workflow navigation ---------- */
+.screen-app .workflow-path {
+  margin-bottom: 14px !important;
+  border-radius: 10px !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: none !important;
+  background: var(--surface) !important;
+  overflow: hidden;
+}
+
+.screen-app .workflow-path-header {
+  padding: 11px 14px !important;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.screen-app .workflow-path-steps {
+  gap: 0 !important;
+  padding: 0 !important;
+}
+
+.screen-app .workflow-path-step {
+  min-height: 74px !important;
+  border: 0 !important;
+  border-right: 1px solid var(--border) !important;
+  border-radius: 0 !important;
+  background: var(--surface) !important;
+}
+
+.screen-app .workflow-path-step:last-child { border-right: 0 !important; }
+.screen-app .workflow-path-step:hover { background: var(--surface-2) !important; }
+.screen-app .workflow-path-step.is-active {
+  background: var(--accent-soft) !important;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+/* ---------- procurement: queue + selected record mirrors supplier explorer ---------- */
+.screen-app .procurement-workbench > div:nth-child(2),
+.screen-app .procurement-workbench > div:nth-child(3) {
+  box-shadow: none !important;
+}
+
+.screen-app .procurement-workbench .workbench-grid,
+.screen-app .finance-workbench .workbench-grid,
+.screen-app .inventory-workbench .workbench-grid {
+  gap: 0 !important;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.screen-app .procurement-workbench .workbench-grid > section,
+.screen-app .finance-workbench .workbench-grid > section,
+.screen-app .inventory-workbench .workbench-grid > section {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: var(--surface) !important;
+}
+
+.screen-app .procurement-workbench .workbench-grid > aside,
+.screen-app .finance-workbench .workbench-grid > aside,
+.screen-app .inventory-workbench .workbench-grid > aside {
+  border: 0 !important;
+  border-left: 1px solid var(--border) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: var(--surface) !important;
+}
+
+.screen-app .procurement-workbench .procurement-record-row,
+.screen-app .inventory-workbench .procurement-record-row,
+.screen-app .finance-workbench .procurement-record-row {
+  min-height: 58px !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+.screen-app .procurement-workbench .procurement-record-row:hover,
+.screen-app .inventory-workbench .procurement-record-row:hover,
+.screen-app .finance-workbench .procurement-record-row:hover {
+  background: var(--surface-2) !important;
+}
+
+.screen-app .procurement-workbench .procurement-record-row[aria-current="true"],
+.screen-app .inventory-workbench .procurement-record-row[aria-current="true"] {
+  background: var(--accent-soft) !important;
+  box-shadow: inset 3px 0 0 var(--accent) !important;
+}
+
+/* procurement stage counters: flatter tab strip */
+.screen-app .procurement-workbench > div[style*="repeat(auto-fit"] {
+  padding: 5px !important;
+  gap: 3px !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+
+.screen-app .procurement-workbench > div[style*="repeat(auto-fit"] > button {
+  min-height: 58px;
+  padding: 8px 10px !important;
+  border-radius: 7px !important;
+}
+
+/* ---------- finance tabs ---------- */
+.screen-app .finance-workbench > div[style*="display: flex"][style*="flex-wrap: wrap"] {
+  gap: 4px !important;
+  padding: 5px;
+  margin-bottom: 14px !important;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.screen-app .finance-workbench > div[style*="display: flex"][style*="flex-wrap: wrap"] > button {
+  min-height: 36px !important;
+  border-color: transparent !important;
+  background: transparent !important;
+}
+
+/* ---------- inventory navigation ---------- */
+.screen-app .inventory-workbench-navigation {
+  border: 1px solid var(--border) !important;
+  border-radius: 10px !important;
+  background: var(--surface) !important;
+  box-shadow: none !important;
+  overflow: hidden;
+}
+
+.screen-app .inventory-nav-group {
+  border-bottom: 1px solid var(--border);
+}
+.screen-app .inventory-nav-group:last-child { border-bottom: 0; }
+.screen-app .inventory-nav-button { border-radius: 7px !important; }
+
+/* ---------- Store purchase requests ---------- */
+.screen-app .store-purchase-screen > header {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.screen-app .store-purchase-screen > header [style*="text-transform: uppercase"] {
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  color: var(--text-muted) !important;
+  font-size: 12px !important;
+  font-weight: 650 !important;
+}
+
+.screen-app .store-purchase-screen .store-purchase-metrics > div {
+  border-radius: 9px !important;
+  box-shadow: none !important;
+}
+
+.screen-app .store-purchase-screen .store-purchase-grid {
+  gap: 12px !important;
+}
+
+.screen-app .store-purchase-screen .store-purchase-grid > section {
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+
+.screen-app .store-purchase-line:hover {
+  border-color: var(--border-2) !important;
+}
+
+/* ---------- receiving ---------- */
+.screen-app .receiving-workspace,
+.screen-app .receiving-detail-screen {
+  width: 100%;
+  max-width: 1380px;
+  margin-inline: auto;
+}
+
+.screen-app .route-workflow-procure .receiving-line-grid {
+  transition: background .12s ease;
+}
+
+.screen-app .route-workflow-procure .receiving-line-grid:not(:first-child):hover {
+  background: var(--surface-2);
+}
+
+/* ---------- dashboards ---------- */
+.screen-app .role-dashboard-header,
+.screen-app .dashboard-screen > div:first-child {
+  padding-bottom: 15px;
+  margin-bottom: 14px !important;
+  border-bottom: 1px solid var(--border);
+}
+
+.screen-app .dashboard-primary-action {
+  min-height: 64px;
+  padding: 11px 13px !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 10px !important;
+  background: var(--surface) !important;
+  box-shadow: none !important;
+}
+
+.screen-app .task-card-grid {
+  gap: 9px !important;
+}
+
+.screen-app .dashboard-task-card {
+  min-height: 118px !important;
+  padding: 13px !important;
+  border-radius: 9px !important;
+  box-shadow: none !important;
+}
+
+.screen-app .dashboard-task-card:hover {
+  transform: none !important;
+  background: color-mix(in srgb, var(--accent-soft) 28%, var(--surface)) !important;
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border)) !important;
+  box-shadow: none !important;
+}
+
+.screen-app .dashboard-panel {
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+
+.screen-app .dashboard-panel-header {
+  min-height: 56px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.screen-app .dashboard-activity-row:hover { box-shadow: inset 3px 0 0 var(--accent); }
+
+/* store keeper legacy dashboard follows same hierarchy */
+.screen-app .dashboard-screen > div[style*="grid-template-columns: repeat(2"] > div,
+.screen-app .dashboard-screen > section {
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+
+/* ---------- HR ---------- */
+.screen-app .hr-dashboard > div:first-child {
+  padding-bottom: 15px;
+  margin-bottom: 14px !important;
+  border-bottom: 1px solid var(--border);
+}
+
+.screen-app .hr-kpi-grid { gap: 9px !important; }
+.screen-app .hr-kpi-grid > div {
+  padding: 13px !important;
+  border-radius: 9px !important;
+  box-shadow: none !important;
+}
+.screen-app .hr-kpi-grid > div > div:nth-child(2) { font-size: 22px !important; }
+.screen-app .hr-main-grid { gap: 12px !important; margin-top: 12px !important; }
+.screen-app .hr-main-grid > section,
+.screen-app .hr-main-grid > aside { border-radius: 10px !important; box-shadow: none !important; }
+
+/* ---------- generic list/data pages ---------- */
+.screen-app .list-toolbar {
+  padding-bottom: 14px;
+  margin-bottom: 13px !important;
+  border-bottom: 1px solid var(--border);
+}
+
+.screen-app .list-view .data-table,
+.screen-app .list-view [class*="data-table"],
+.screen-app .list-view > div[style*="border: 1px solid"] {
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+
+.screen-app .data-head {
+  background: var(--surface-2) !important;
+}
+
+.screen-app .data-row {
+  min-height: 56px !important;
+  transition: background .12s ease, box-shadow .12s ease;
+}
+.screen-app .data-row:hover {
+  background: color-mix(in srgb, var(--accent-soft) 24%, var(--surface)) !important;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* ---------- Reports ---------- */
+.screen-app .reports-screen > div:first-child {
+  padding-bottom: 14px;
+  margin-bottom: 14px !important;
+  border-bottom: 1px solid var(--border);
+}
+
+.screen-app .reports-screen article,
+.screen-app .reports-screen [style*="box-shadow: var(--shadow-sm)"] {
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+
+.screen-app .report-view-screen,
+.screen-app .route-reportview > div {
+  width: 100%;
+  max-width: 1500px;
+  margin-inline: auto;
+}
+
+.screen-app .route-reportview [style*="box-shadow: var(--shadow-sm)"] {
+  box-shadow: none !important;
+}
+
+.screen-app .route-reportview [style*="border-radius: 14"],
+.screen-app .route-reportview [style*="border-radius: 12"] {
+  border-radius: 10px !important;
+}
+
+/* ---------- Access management ---------- */
+.screen-app .access-header {
+  padding-bottom: 14px !important;
+  margin-bottom: 14px !important;
+  border-bottom: 1px solid var(--border);
+}
+
+.screen-app .access-stat,
+.screen-app .access-card {
+  border-radius: 9px !important;
+  box-shadow: none !important;
+}
+
+.screen-app .access-table-row:hover { box-shadow: inset 3px 0 0 var(--accent); }
+
+.screen-app .access-modal {
+  border-radius: 10px !important;
+  box-shadow: 0 18px 48px rgba(15,23,42,.20) !important;
+}
+
+/* ---------- Hotel profile ---------- */
+.screen-app .route-hotel-profile article {
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+
+.screen-app .route-hotel-profile article > div:first-child {
+  background: var(--surface-2) !important;
+}
+
+/* ---------- Audit ---------- */
+.screen-app .audit-log-screen > div:first-child {
+  padding-bottom: 14px;
+  margin-bottom: 13px !important;
+  border-bottom: 1px solid var(--border);
+}
+
+.screen-app .audit-log-screen [style*="box-shadow"] { box-shadow: none !important; }
+
+/* ---------- Workflow hub ---------- */
+.screen-app .workflow-hub-header {
+  padding: 0 0 15px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.screen-app .workflow-step,
+.screen-app .workflow-queue-panel {
+  border-radius: 9px !important;
+  box-shadow: none !important;
+}
+
+.screen-app .workflow-step:hover {
+  transform: none !important;
+  background: var(--surface-2) !important;
+}
+
+/* ---------- drawers/dialogs ---------- */
+.screen-app .form-drawer,
+.screen-app .record-detail-drawer {
+  box-shadow: -14px 0 36px rgba(15,23,42,.14) !important;
+}
+
+.screen-app .form-drawer > div:first-child,
+.screen-app .record-detail-drawer > div:first-child {
+  background: var(--surface);
+}
+
+.screen-app .form-body {
+  background: color-mix(in srgb, var(--surface-2) 34%, var(--surface));
+}
+
+.screen-app .form-body > div,
+.screen-app .form-body > label {
+  min-width: 0;
+}
+
+.screen-app .workflow-alert,
+.screen-app .feedback-dialog,
+.screen-app .confirm-dialog {
+  border-radius: 10px !important;
+}
+
+/* ---------- tables everywhere ---------- */
+.screen-app :where(.enterprise-workspace, .list-view, .access-page) [style*="text-transform: uppercase"][style*="font-weight: 800"] {
+  color: var(--text-faint) !important;
+  font-size: 10.5px !important;
+  font-weight: 750 !important;
+  letter-spacing: .04em !important;
+}
+
+.screen-app :where(.enterprise-workspace, .list-view, .access-page) [style*="border-bottom: 1px solid var(--border)"] {
+  border-bottom-color: var(--border) !important;
+}
+
+/* ---------- responsive ---------- */
+@media (max-width: 1180px) {
+  .screen-app .app-content { padding: 20px !important; }
+  .screen-app .procurement-workbench .workbench-grid,
+  .screen-app .finance-workbench .workbench-grid,
+  .screen-app .inventory-workbench .workbench-grid {
+    grid-template-columns: minmax(0, 1.15fr) minmax(340px,.75fr) !important;
+  }
+}
+
+@media (max-width: 960px) {
+  .screen-app .procurement-workbench .workbench-grid,
+  .screen-app .finance-workbench .workbench-grid,
+  .screen-app .inventory-workbench .workbench-grid {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+  }
+  .screen-app .procurement-workbench .workbench-grid > aside,
+  .screen-app .finance-workbench .workbench-grid > aside,
+  .screen-app .inventory-workbench .workbench-grid > aside {
+    border-left: 0 !important;
+    border-top: 1px solid var(--border) !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .screen-app .app-content { padding: 14px !important; }
+  .screen-app .enterprise-workspace > header h1,
+  .screen-app .role-dashboard-header h1,
+  .screen-app .dashboard-screen > div:first-child h1,
+  .screen-app .list-toolbar h1,
+  .screen-app .access-header h1 { font-size: 24px !important; }
+  .screen-app .enterprise-workspace > header,
+  .screen-app .role-dashboard-header,
+  .screen-app .dashboard-screen > div:first-child,
+  .screen-app .list-toolbar { align-items: flex-start !important; }
+  .screen-app .workflow-path-steps {
+    display: flex !important;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .screen-app .workflow-path-step { flex: 0 0 180px; }
+  .screen-app .workflow-path-step:last-child { border-right: 1px solid var(--border) !important; }
+  .screen-app .store-purchase-screen > header > button { width: 100%; justify-content: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen-app .app-content > * { animation: none !important; }
+}
+
+/* Preserve controlled documents when printing. */
+@media print {
+  .screen-app .app-content { padding: 0 !important; background: #fff !important; }
+  .screen-app .app-content > * { animation: none !important; transform: none !important; }
+}

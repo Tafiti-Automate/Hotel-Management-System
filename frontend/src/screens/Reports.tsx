@@ -33,7 +33,7 @@ export default function Reports() {
   const scope = scopeForRole(app.user.role)
 
   return (
-    <div>
+    <div className="enterprise-workspace reports-screen">
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 18 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 23, fontWeight: 800, letterSpacing: '-.02em', color: 'var(--text)' }}>Reports</h1>

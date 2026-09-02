@@ -358,7 +358,7 @@ export default function HotelProfile() {
   }
 
   return (
-    <div>
+    <div className="enterprise-workspace hotel-profile-screen">
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 18 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
           <div style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

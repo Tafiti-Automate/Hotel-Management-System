@@ -152,7 +152,7 @@ export default function SupplierQuotationManagement() {
   })
   const addQuotationForItem = (item: Row) => app.openCreate('supplierItems', 'Add supplier quotation', undefined, { article: text(item.name) })
 
-  return <div className="explorer-workspace-screen quotation-explorer-screen" style={{ width: '100%', maxWidth: 1500, height: '100%', minHeight: 0, margin: '0 auto', display: 'flex', flexDirection: 'column' }}>
+  return <div className="enterprise-workspace explorer-workspace-screen quotation-explorer-screen" style={{ width: '100%', maxWidth: 1500, height: '100%', minHeight: 0, margin: '0 auto', display: 'flex', flexDirection: 'column' }}>
     <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 14 }}>
       <div>
         <h1 style={{ margin: '0 0 5px', color: 'var(--text)', fontSize: 29, fontWeight: 750 }}>Supplier Quotations</h1>

@@ -120,7 +120,7 @@ export default function UnitManagement() {
     item: articleFilter ? text(items.find((item) => text(item.id) === articleFilter)?.name) : '',
   })
 
-  return <div style={{ maxWidth: 1500, margin: '0 auto' }}>
+  return <div className="enterprise-workspace unit-management-screen" style={{ maxWidth: 1500, margin: '0 auto' }}>
     <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 14 }}>
       <div>
         <h1 style={{ margin: '0 0 5px', color: 'var(--text)', fontSize: 29, fontWeight: 750 }}>Units &amp; Conversions</h1>
