@@ -20,6 +20,67 @@ function SupplierIcon({ active = false }: { active?: boolean }) {
   </svg>
 }
 
+
+function DashboardGlyph({ kind, tone = 'neutral', size = 18 }: { kind: 'suppliers' | 'quotations' | 'flag'; tone?: 'neutral' | 'good' | 'warning'; size?: number }) {
+  const palette = tone === 'warning'
+    ? { stroke: '#c7791a', fill: 'rgba(199, 121, 26, .14)' }
+    : tone === 'good'
+      ? { stroke: '#1f8f54', fill: 'rgba(31, 143, 84, .14)' }
+      : { stroke: 'var(--accent)', fill: 'rgba(37, 99, 235, .12)' }
+
+  if (kind === 'suppliers') {
+    return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" style={{ display: 'block' }}>
+      <circle cx="9" cy="9" r="3" fill={palette.fill} stroke={palette.stroke} strokeWidth="1.6" />
+      <path d="M4.8 18c.7-2.4 2.5-3.7 4.2-3.7s3.5 1.3 4.2 3.7" stroke={palette.stroke} strokeWidth="1.6" strokeLinecap="round" />
+      <circle cx="17.2" cy="10.2" r="2.3" fill={palette.fill} stroke={palette.stroke} strokeWidth="1.5" />
+      <path d="M14.8 17.3c.5-1.7 1.8-2.7 3.2-2.7 1.2 0 2.4.8 3 2.2" stroke={palette.stroke} strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  }
+
+  if (kind === 'quotations') {
+    return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" style={{ display: 'block' }}>
+      <path d="M7 3.8h6l4 4v10.4c0 1-.8 1.8-1.8 1.8H7c-1 0-1.8-.8-1.8-1.8V5.6C5.2 4.6 6 3.8 7 3.8Z" fill={palette.fill} stroke={palette.stroke} strokeWidth="1.6" strokeLinejoin="round" />
+      <path d="M13 3.8v4h4" stroke={palette.stroke} strokeWidth="1.6" strokeLinejoin="round" />
+      <path d="M8.5 11.2h5.5M8.5 14.5h7" stroke={palette.stroke} strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  }
+
+  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" style={{ display: 'block' }}>
+    <path d="M12 3.8 20 6.6v5.1c0 4.1-2.4 7.8-8 8.9-5.6-1.1-8-4.8-8-8.9V6.6l8-2.8Z" fill={palette.fill} stroke={palette.stroke} strokeWidth="1.6" strokeLinejoin="round" />
+    <path d="M12 8.1v4.2M12 15.8h.01" stroke={palette.stroke} strokeWidth="1.8" strokeLinecap="round" />
+  </svg>
+}
+
+function ContactGlyph({ kind, size = 18 }: { kind: 'person' | 'phone' | 'mail' | 'location'; size?: number }) {
+  const stroke = 'var(--text-muted)'
+  const fill = 'rgba(100, 116, 139, .10)'
+
+  if (kind === 'person') {
+    return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" style={{ display: 'block' }}>
+      <circle cx="12" cy="8.2" r="3.1" fill={fill} stroke={stroke} strokeWidth="1.5" />
+      <path d="M6.8 18.5c.7-2.7 2.8-4.2 5.2-4.2s4.5 1.5 5.2 4.2" stroke={stroke} strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  }
+
+  if (kind === 'phone') {
+    return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" style={{ display: 'block' }}>
+      <path d="M8.2 4.9h2.7l1.1 3.2-1.6 1.6c.9 1.8 2.2 3.1 4 4l1.6-1.6 3.2 1.1V16c0 .7-.6 1.3-1.3 1.3A12 12 0 0 1 6.9 6.2c0-.7.6-1.3 1.3-1.3Z" fill={fill} stroke={stroke} strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  }
+
+  if (kind === 'mail') {
+    return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" style={{ display: 'block' }}>
+      <rect x="4" y="6.2" width="16" height="11.6" rx="2" fill={fill} stroke={stroke} strokeWidth="1.5" />
+      <path d="M5.5 8l6.5 5.2L18.5 8" stroke={stroke} strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  }
+
+  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" style={{ display: 'block' }}>
+    <path d="M12 20c3.7-3.8 5.5-6.7 5.5-9.2A5.5 5.5 0 1 0 6.5 10.8C6.5 13.3 8.3 16.2 12 20Z" fill={fill} stroke={stroke} strokeWidth="1.5" strokeLinejoin="round" />
+    <circle cx="12" cy="10.6" r="1.9" stroke={stroke} strokeWidth="1.5" />
+  </svg>
+}
+
 type DrawerTab = 'overview' | 'items' | 'contact'
 
 function paymentTermsInfo(value: unknown) {
@@ -143,9 +204,9 @@ export default function SupplierManagement() {
     </header>
 
     <section className="supplier-kpi-grid" aria-label="Supplier operational metrics">
-      <MetricCard icon="local_shipping" label="Total Active Suppliers" value={activeSuppliers} hint={`${suppliers.length} supplier${suppliers.length === 1 ? '' : 's'} registered`} tone="good" />
-      <MetricCard icon="request_quote" label="Pending Quotations" value={pendingQuotations} hint="Inactive quotations requiring review" />
-      <MetricCard icon="flag" label="Flagged Action Items" value={flaggedActions} hint="Missing data or expired quotations" tone={flaggedActions ? 'warning' : 'good'} />
+      <MetricCard kind="suppliers" label="Total Active Suppliers" value={activeSuppliers} hint={`${suppliers.length} supplier${suppliers.length === 1 ? '' : 's'} registered`} tone="good" />
+      <MetricCard kind="quotations" label="Pending Quotations" value={pendingQuotations} hint="Inactive quotations requiring review" />
+      <MetricCard kind="flag" label="Flagged Action Items" value={flaggedActions} hint="Missing data or expired quotations" tone={flaggedActions ? 'warning' : 'good'} />
     </section>
 
     <div className="supplier-filter-toolbar">
@@ -254,9 +315,9 @@ export default function SupplierManagement() {
   </div>
 }
 
-function MetricCard({ icon, label, value, hint, tone = 'neutral' }: { icon: string; label: string; value: number; hint: string; tone?: 'neutral' | 'good' | 'warning' }) {
+function MetricCard({ kind, label, value, hint, tone = 'neutral' }: { kind: 'suppliers' | 'quotations' | 'flag'; label: string; value: number; hint: string; tone?: 'neutral' | 'good' | 'warning' }) {
   return <article className={`supplier-kpi-card supplier-kpi-${tone}`}>
-    <span className="supplier-kpi-icon"><Icon name={icon} size={19} /></span>
+    <span className="supplier-kpi-icon"><DashboardGlyph kind={kind} tone={tone} size={19} /></span>
     <div className="supplier-kpi-copy"><span>{label}</span><strong>{value.toLocaleString()}</strong><small>{hint}</small></div>
   </article>
 }
@@ -291,10 +352,10 @@ function SupplierContact({ supplier }: { supplier: Record<string, any> }) {
   return <div className="supplier-tab-section">
     <div className="supplier-section-heading"><div><h3>Contact details</h3><p>Primary contact information for supplier communication.</p></div></div>
     <div className="supplier-contact-list">
-      <ContactRow icon="person" label="Primary contact person" value={text(supplier.contact) || 'Not recorded'} />
-      <ContactRow icon="call" label="Phone" value={text(supplier.phone) || 'Not recorded'} />
-      <ContactRow icon="mail" label="Email" value={text(supplier.email) || 'Not recorded'} />
-      <ContactRow icon="location_on" label="Address" value={text(supplier.address) || 'Not recorded'} />
+      <ContactRow kind="person" label="Primary contact person" value={text(supplier.contact) || 'Not recorded'} />
+      <ContactRow kind="phone" label="Phone" value={text(supplier.phone) || 'Not recorded'} />
+      <ContactRow kind="mail" label="Email" value={text(supplier.email) || 'Not recorded'} />
+      <ContactRow kind="location" label="Address" value={text(supplier.address) || 'Not recorded'} />
     </div>
   </div>
 }
@@ -347,8 +408,8 @@ function MiniStat({ label, value }: { label: string; value: number }) {
   return <div className="supplier-mini-stat"><strong>{value.toLocaleString()}</strong><span>{label}</span></div>
 }
 
-function ContactRow({ icon, label, value }: { icon: string; label: string; value: string }) {
-  return <div className="supplier-contact-row"><span className="supplier-contact-icon"><Icon name={icon} size={19} /></span><div><span>{label}</span><strong>{value}</strong></div></div>
+function ContactRow({ kind, label, value }: { kind: 'person' | 'phone' | 'mail' | 'location'; label: string; value: string }) {
+  return <div className="supplier-contact-row"><span className="supplier-contact-icon"><ContactGlyph kind={kind} size={19} /></span><div><span>{label}</span><strong>{value}</strong></div></div>
 }
 
 function Status({ value }: { value: string }) {
