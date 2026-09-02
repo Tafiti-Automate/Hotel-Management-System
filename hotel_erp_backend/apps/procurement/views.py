@@ -337,6 +337,7 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
         reason = str(request.data.get("reason") or "").strip()
         expected_date_raw = str(request.data.get("expected_date") or "").strip()
         payload_lines = request.data.get("lines") or []
+        short_delivery_reason = str(request.data.get("short_delivery_reason") or "").strip()
 
         if not reason:
             raise ValidationError({"reason": "Enter the reason for this store purchase request."})
@@ -1209,6 +1210,7 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
         delivery_note_no = str(request.data.get("delivery_note_no") or "").strip()
         received_date = request.data.get("received_date") or timezone.localdate()
         payload_lines = request.data.get("lines") or []
+        short_delivery_reason = str(request.data.get("short_delivery_reason") or "").strip()
 
         if not supplier_invoice_no:
             raise ValidationError({"supplier_invoice_no": "Enter the supplier invoice number."})
@@ -1252,13 +1254,38 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                 if not normalized:
                     raise ValidationError({"lines": "Enter a received quantity greater than zero."})
 
+                incoming_by_line = {str(line.pk): quantity for line, quantity, _ in normalized}
+                short_lines = []
+                for line in order_lines.values():
+                    already_received = sum(
+                        (
+                            receipt_item.committed_purchase_quantity
+                            for receipt_item in line.receipt_items.exclude(goods_receipt__status=GoodsReceiptStatus.CANCELLED)
+                        ),
+                        Decimal("0.00"),
+                    )
+                    due = max((line.approved_quantity or Decimal("0.00")) - already_received, Decimal("0.00"))
+                    incoming = incoming_by_line.get(str(line.pk), Decimal("0.00"))
+                    if incoming < due:
+                        short_lines.append({
+                            "item": str(line.item),
+                            "due": str(due),
+                            "received": str(incoming),
+                            "balance": str(due - incoming),
+                        })
+
+                if short_lines and not short_delivery_reason:
+                    raise ValidationError({
+                        "short_delivery_reason": "Enter the reason for the partial delivery."
+                    })
+
                 receipt = GoodsReceiptNote(
                     purchase_order=order,
                     received_by=employee,
                     received_date=received_date,
                     delivery_note_no=delivery_note_no,
                     supplier_invoice_no=supplier_invoice_no,
-                    note="",
+                    note=short_delivery_reason if short_lines else "",
                     created_by=request.user if request.user.is_authenticated else None,
                 )
                 receipt.full_clean()
@@ -1282,7 +1309,11 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                     inspection_date=received_date,
                     status=GoodsInspectionStatus.ACCEPTED,
                     delivery_note_no=delivery_note_no,
-                    remarks="Receiving Clerk confirmed delivered quantities against the issued LPO.",
+                    remarks=(
+                        f"Partial delivery: {short_delivery_reason}"
+                        if short_lines
+                        else "Receiving Clerk confirmed delivered quantities against the issued LPO."
+                    ),
                     created_by=request.user if request.user.is_authenticated else None,
                 )
                 for receipt_item in receipt_items:
@@ -1298,6 +1329,15 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
 
                 receipt.status = GoodsReceiptStatus.RECEIVED
                 receipt.save(update_fields=["status", "updated_at"])
+                if short_lines:
+                    order.record_activity(
+                        action="PARTIAL_DELIVERY_RECORDED",
+                        actor=request.user if request.user.is_authenticated else None,
+                        comments=short_delivery_reason,
+                        metadata={"short_lines": short_lines, "grn_id": str(receipt.pk)},
+                        previous_status=order.status,
+                        new_status=order.status,
+                    )
                 receipt.refresh_from_db()
         except DjangoValidationError as error:
             raise_drf_validation_error(error)

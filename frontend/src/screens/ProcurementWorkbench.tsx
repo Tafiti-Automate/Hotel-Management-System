@@ -608,6 +608,8 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
   const [receivedDate, setReceivedDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [quantities, setQuantities] = useState<Record<string, string>>({})
   const [expiryDates, setExpiryDates] = useState<Record<string, string>>({})
+  const [shortDeliveryOpen, setShortDeliveryOpen] = useState(false)
+  const [shortDeliveryReason, setShortDeliveryReason] = useState('')
 
   useEffect(() => {
     let active = true
@@ -659,6 +661,22 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
     const expiry = expiryDates[lineId] || ''
     return (Boolean(article?.expiryTracking) && !expiry) || Boolean(expiry && expiry < receivedDate)
   })
+  const shortDeliveryLines = orderLines
+    .map((line) => {
+      const lineId = id(line.id)
+      const due = num(line.outstanding_quantity ?? line.approved_quantity ?? line.quantity)
+      const received = num(quantities[lineId])
+      return {
+        id: lineId,
+        article: names.items.get(id(line.item)) || id(line.item),
+        due,
+        received,
+        balance: Math.max(0, due - received),
+        uom: names.units.get(id(line.unit)) || 'Unit',
+      }
+    })
+    .filter((line) => line.received >= 0 && line.received < line.due)
+  const hasShortDelivery = shortDeliveryLines.length > 0
 
   const selectedReceipt = data.receipts.find((row) => id(row.id) === selectedReceiptId)
   const receiptLines = selectedReceipt
@@ -679,6 +697,8 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
     setReceivedDate(new Date().toISOString().slice(0, 10))
     setQuantities({})
     setExpiryDates({})
+    setShortDeliveryOpen(false)
+    setShortDeliveryReason('')
   }
 
   if (selectedOrder) {
@@ -712,26 +732,24 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
             <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>{orderLines.length} item{orderLines.length === 1 ? '' : 's'} on LPO</span>
           </div>
           <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-            <div className="receiving-line-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(240px,1.6fr) .6fr .8fr 1fr .55fr', gap: 10, padding: '10px 12px', background: 'var(--surface-2)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}>
-              <span>Article</span><span>LPO Qty</span><span>Receive now</span><span>Expiry date</span><span>UOM</span>
+            <div className="receiving-line-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(240px,1.55fr) .7fr .9fr 1fr .55fr', gap: 12, padding: '10px 12px', background: 'var(--surface-2)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}>
+              <span>Article</span><span>LPO Qty Due</span><span>Receive Now</span><span>Expiry Date</span><span>UOM</span>
             </div>
             {orderLines.map((line) => {
               const lineId = id(line.id)
-              const ordered = num(line.approved_quantity ?? line.quantity)
-              const previous = num(line.previously_received_quantity)
-              const outstanding = num(line.outstanding_quantity ?? Math.max(0, ordered - previous))
+              const due = num(line.outstanding_quantity ?? line.approved_quantity ?? line.quantity)
               const entered = num(quantities[lineId])
-              const invalid = entered > outstanding
+              const invalid = entered > due
               const article = app.data.items.find((item) => id(item.id) === id(line.item))
               const expiryRequired = Boolean(article?.expiryTracking)
               const expiry = expiryDates[lineId] || ''
               const invalidExpiry = Boolean(entered > 0 && ((expiryRequired && !expiry) || (expiry && expiry < receivedDate)))
-              return <div key={lineId} className="receiving-line-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(240px,1.6fr) .6fr .8fr 1fr .55fr', gap: 10, alignItems: 'center', padding: '12px', borderTop: '1px solid var(--border)', fontSize: 11.5 }}>
+              return <div key={lineId} className="receiving-line-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(240px,1.55fr) .7fr .9fr 1fr .55fr', gap: 12, alignItems: 'center', padding: '12px', borderTop: '1px solid var(--border)', fontSize: 11.5 }}>
                 <strong style={{ color: 'var(--text)' }}>{names.items.get(id(line.item)) || id(line.item)}</strong>
-                <span style={{ color: 'var(--text-muted)' }}>{ordered}</span>
+                <span style={{ color: 'var(--text)', fontWeight: 800 }}>{due}</span>
                 <div>
                   <Input type="number" value={quantities[lineId] || ''} onChange={(value) => setQuantities((current) => ({ ...current, [lineId]: value }))} placeholder="0" />
-                  {invalid && <div style={{ marginTop: 4, color: 'var(--bad)', fontSize: 9.5 }}>Above the remaining LPO balance</div>}
+                  {invalid && <div style={{ marginTop: 4, color: 'var(--bad)', fontSize: 9.5 }}>Cannot exceed the LPO balance of {due}</div>}
                 </div>
                 <div>
                   <Input type="date" value={expiry} onChange={(value) => setExpiryDates((current) => ({ ...current, [lineId]: value }))} />
@@ -747,25 +765,65 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
             <button
               type="button"
               disabled={busy || !invoiceNumber.trim() || !positiveLines.length || lineInvalid || expiryInvalid}
-              onClick={() => void run(
-                () => runBackendAction('purchase-orders', id(selectedOrder.id), 'receive-delivery', {
-                  supplier_invoice_no: invoiceNumber.trim(),
-                  delivery_note_no: deliveryNoteNumber.trim(),
-                  received_date: receivedDate,
-                  lines: positiveLines,
-                }).then((result) => {
-                  clearSelection()
-                  setView('history')
-                  setSelectedReceiptId(id(result.id))
-                  return result
-                }),
-                'GRN generated successfully',
-              )}
+              onClick={() => {
+                if (hasShortDelivery) {
+                  setShortDeliveryReason('')
+                  setShortDeliveryOpen(true)
+                  return
+                }
+                void run(
+                  () => runBackendAction('purchase-orders', id(selectedOrder.id), 'receive-delivery', {
+                    supplier_invoice_no: invoiceNumber.trim(),
+                    delivery_note_no: deliveryNoteNumber.trim(),
+                    received_date: receivedDate,
+                    lines: positiveLines,
+                  }).then((result) => {
+                    clearSelection()
+                    setView('history')
+                    setSelectedReceiptId(id(result.id))
+                    return result
+                  }),
+                  'GRN generated successfully',
+                )
+              }}
               style={{ ...action, width: 'auto', minWidth: 150, marginTop: 0, padding: '0 18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, background: 'var(--good)', opacity: busy || !invoiceNumber.trim() || !positiveLines.length || lineInvalid || expiryInvalid ? .5 : 1 }}
             ><Icon name="receipt_long" size={17} color="#fff" />Generate GRN</button>
           </div>
         </div>
       </section>
+      {shortDeliveryOpen && <><div onClick={() => !busy && setShortDeliveryOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(15,23,42,.45)' }} /><section role="dialog" aria-modal="true" aria-labelledby="partial-delivery-title" style={{ position: 'fixed', zIndex: 91, left: '50%', top: '50%', transform: 'translate(-50%,-50%)', width: 520, maxWidth: 'calc(100vw - 32px)', maxHeight: 'calc(100vh - 48px)', overflowY: 'auto', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface)', boxShadow: '0 24px 70px rgba(15,23,42,.24)' }}>
+        <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <span style={{ width: 36, height: 36, display: 'grid', placeItems: 'center', borderRadius: 9, background: 'var(--warn-soft)' }}><Icon name="inventory" size={20} color="var(--warn)" /></span>
+            <div style={{ flex: 1 }}><h2 id="partial-delivery-title" style={{ margin: 0, fontSize: 17, color: 'var(--text)' }}>Partial delivery</h2><p style={{ margin: '5px 0 0', color: 'var(--text-muted)', fontSize: 12.5, lineHeight: 1.5 }}>The supplier delivered less than the quantity due on the LPO. The outstanding balance will remain open for a later delivery.</p></div>
+          </div>
+        </div>
+        <div style={{ padding: 20 }}>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', marginBottom: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr .55fr .55fr .55fr', gap: 8, padding: '9px 11px', background: 'var(--surface-2)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}><span>Article</span><span>Due</span><span>Received</span><span>Balance</span></div>
+            {shortDeliveryLines.map((line) => <div key={line.id} style={{ display: 'grid', gridTemplateColumns: '1.4fr .55fr .55fr .55fr', gap: 8, padding: '10px 11px', borderTop: '1px solid var(--border)', alignItems: 'center', fontSize: 11.5 }}><strong style={{ color: 'var(--text)' }}>{line.article}</strong><span>{line.due}</span><span>{line.received}</span><span style={{ color: 'var(--warn)', fontWeight: 800 }}>{line.balance}</span></div>)}
+          </div>
+          <Field label="Reason for short delivery *"><textarea value={shortDeliveryReason} onChange={(event) => setShortDeliveryReason(event.target.value)} placeholder="e.g. Supplier delivered available stock; balance to follow" style={{ width: '100%', minHeight: 86, padding: '10px 11px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface-2)', color: 'var(--text)', font: 'inherit', fontSize: 12.5, resize: 'vertical', outline: 'none' }} /></Field>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 9, padding: '13px 20px', borderTop: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+          <button type="button" disabled={busy} onClick={() => setShortDeliveryOpen(false)} style={secondary}>Go back</button>
+          <button type="button" disabled={busy || !shortDeliveryReason.trim()} onClick={() => void run(
+            () => runBackendAction('purchase-orders', id(selectedOrder.id), 'receive-delivery', {
+              supplier_invoice_no: invoiceNumber.trim(),
+              delivery_note_no: deliveryNoteNumber.trim(),
+              received_date: receivedDate,
+              lines: positiveLines,
+              short_delivery_reason: shortDeliveryReason.trim(),
+            }).then((result) => {
+              clearSelection()
+              setView('history')
+              setSelectedReceiptId(id(result.id))
+              return result
+            }),
+            'Partial delivery recorded and GRN generated',
+          )} style={{ ...action, width: 'auto', minWidth: 180, marginTop: 0, padding: '0 16px', background: 'var(--warn)', opacity: busy || !shortDeliveryReason.trim() ? .5 : 1 }}>Record partial delivery</button>
+        </div>
+      </section></>}
     </div>
   }
 
@@ -818,7 +876,23 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
 
       {view === 'ready' ? <>
         <div className="receiving-ready-header" style={{ display: 'grid', gridTemplateColumns: '.7fr 1.5fr .8fr .8fr auto', gap: 12, padding: '10px 16px', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}><span>LPO</span><span>Supplier</span><span>Expected</span><span>Status</span><span></span></div>
-        {filteredOrders.map((order) => <button key={id(order.id)} type="button" onClick={() => { setSelectedOrderId(id(order.id)); setQuantities({}); setExpiryDates({}); setInvoiceNumber(''); setDeliveryNoteNumber('') }} style={{ width: '100%', display: 'grid', gridTemplateColumns: '.7fr 1.5fr .8fr .8fr auto', gap: 12, alignItems: 'center', padding: '13px 16px', border: 0, borderTop: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}><strong style={{ color: 'var(--text)', fontSize: 12 }}>LPO {id(order.lpo_number || order.po_number)}</strong><span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{names.suppliers.get(id(order.supplier)) || 'Supplier'}</span><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{formatDateOnly(order.expected_date)}</span><span style={{ color: id(order.status) === 'partially_received' ? 'var(--warn)' : 'var(--good)', fontSize: 10.8, fontWeight: 750 }}>{id(order.status) === 'partially_received' ? 'Partial' : 'Ready'}</span><span style={{ color: 'var(--accent)', fontSize: 10.8, fontWeight: 800 }}>Receive</span></button>)}
+        {filteredOrders.map((order) => <button key={id(order.id)} type="button" onClick={() => {
+          const orderId = id(order.id)
+          const remaining: Record<string, string> = {}
+          data.orderItems
+            .filter((line) => id(line.purchase_order) === orderId)
+            .forEach((line) => {
+              const ordered = num(line.approved_quantity ?? line.quantity)
+              const previous = num(line.previously_received_quantity)
+              const outstanding = num(line.outstanding_quantity ?? Math.max(0, ordered - previous))
+              if (outstanding > 0) remaining[id(line.id)] = String(outstanding)
+            })
+          setSelectedOrderId(orderId)
+          setQuantities(remaining)
+          setExpiryDates({})
+          setInvoiceNumber('')
+          setDeliveryNoteNumber('')
+        }} style={{ width: '100%', display: 'grid', gridTemplateColumns: '.7fr 1.5fr .8fr .8fr auto', gap: 12, alignItems: 'center', padding: '13px 16px', border: 0, borderTop: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}><strong style={{ color: 'var(--text)', fontSize: 12 }}>LPO {id(order.lpo_number || order.po_number)}</strong><span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{names.suppliers.get(id(order.supplier)) || 'Supplier'}</span><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{formatDateOnly(order.expected_date)}</span><span style={{ color: id(order.status) === 'partially_received' ? 'var(--warn)' : 'var(--good)', fontSize: 10.8, fontWeight: 750 }}>{id(order.status) === 'partially_received' ? 'Partial' : 'Ready'}</span><span style={{ color: 'var(--accent)', fontSize: 10.8, fontWeight: 800 }}>Receive</span></button>)}
         {!filteredOrders.length && <div style={{ padding: 48, textAlign: 'center' }}><Icon name="inventory_2" size={25} color="var(--text-faint)" /><div style={{ marginTop: 8, color: 'var(--text)', fontWeight: 750 }}>No matching LPOs</div><div style={{ marginTop: 4, color: 'var(--text-muted)', fontSize: 11.5 }}>{readyOrders.length ? 'Try another LPO number or supplier.' : 'No supplier deliveries are currently ready for receiving.'}</div></div>}
       </> : <>
         <div style={{ display: 'grid', gridTemplateColumns: '.7fr .7fr 1.35fr .8fr .7fr .65fr auto', gap: 12, padding: '10px 16px', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}><span>GRN</span><span>LPO</span><span>Supplier</span><span>Invoice</span><span>Date</span><span>Status</span><span></span></div>
