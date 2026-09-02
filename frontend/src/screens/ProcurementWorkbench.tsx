@@ -286,7 +286,12 @@ export default function ProcurementWorkbench() {
     } catch (error) {
       const detail = errorMessage(error)
       setMessage(detail)
-      app.showWorkflowAlert('Workflow requirement not completed', detail)
+      const alertTitle = /\(500\)|\b500\b/.test(detail)
+        ? 'Server error'
+        : /\b403\b|permission|not allowed|only .* can/i.test(detail)
+          ? 'Permission required'
+          : 'Action could not be completed'
+      app.showWorkflowAlert(alertTitle, detail)
     } finally {
       setBusy(false)
     }
@@ -1159,19 +1164,19 @@ function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplier
     </div>
 
     {selectedReqLine && <>
-      <SectionLabel>Procurement quantity review</SectionLabel>
+      <SectionLabel>1. Procurement quantity review</SectionLabel>
       <Two><ReadOnlyValue label="Store Keeper quantity" value={`${id(selectedReqLine.quantity)} ${id(selectedItem?.uom) || ''}`} /><Field label="Procurement approved quantity"><Input type="number" value={form.sourceQuantity ?? selectedReqLine.approved_quantity ?? selectedReqLine.quantity} onChange={(v) => setForm({ ...form, sourceQuantity: v })} /></Field></Two>
       <Field label="Reason if reduced or rejected"><Input value={form.sourceReason || ''} onChange={(v) => setForm({ ...form, sourceReason: v })} placeholder="Required when quantity is below the Store Keeper quantity" /></Field>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-        <Action disabled={busy || num(form.sourceQuantity ?? selectedReqLine.approved_quantity ?? selectedReqLine.quantity) < 0 || num(form.sourceQuantity ?? selectedReqLine.approved_quantity ?? selectedReqLine.quantity) > num(selectedReqLine.quantity) || (num(form.sourceQuantity ?? selectedReqLine.approved_quantity ?? selectedReqLine.quantity) < num(selectedReqLine.quantity) && !id(form.sourceReason).trim())} onClick={() => run(
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+        <CompactAction disabled={busy || num(form.sourceQuantity ?? selectedReqLine.approved_quantity ?? selectedReqLine.quantity) < 0 || num(form.sourceQuantity ?? selectedReqLine.approved_quantity ?? selectedReqLine.quantity) > num(selectedReqLine.quantity) || (num(form.sourceQuantity ?? selectedReqLine.approved_quantity ?? selectedReqLine.quantity) < num(selectedReqLine.quantity) && !id(form.sourceReason).trim())} onClick={() => run(
           () => runBackendAction('requisition-items', id(selectedReqLine.id), 'review-quantity', { approved_quantity: num(form.sourceQuantity ?? selectedReqLine.approved_quantity ?? selectedReqLine.quantity), reason: form.sourceReason || '' }),
           num(form.sourceQuantity ?? selectedReqLine.approved_quantity ?? selectedReqLine.quantity) === 0 ? 'Item rejected from the requisition' : 'Procurement quantity saved',
           { requisition: form.requisition, reqLine: id(selectedReqLine.id) },
-        )}>Save quantity decision</Action>
-        {num(form.sourceQuantity ?? selectedReqLine.approved_quantity ?? selectedReqLine.quantity) > 0 && <Action tone="danger" disabled={busy} onClick={() => setForm({ ...form, sourceQuantity: 0, sourceReason: '' })}>Reject item</Action>}
+        )}>Save quantity decision</CompactAction>
+        {num(form.sourceQuantity ?? selectedReqLine.approved_quantity ?? selectedReqLine.quantity) > 0 && <CompactAction tone="danger" disabled={busy} onClick={() => setForm({ ...form, sourceQuantity: 0, sourceReason: '' })}>Reject item</CompactAction>}
       </div>
       {num(selectedReqLine.approved_quantity ?? selectedReqLine.quantity) > 0 && !id(selectedReqLine.rejection_stage) && <>
-      <SectionLabel>Supplier quotations</SectionLabel>
+      <SectionLabel>2. Supplier quotations</SectionLabel>
       {catalogue.length ? <div style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
         {catalogue.map((entry: Row) => {
           const selected = id(entry.id) === id(selectedCatalogue?.id)
@@ -1189,7 +1194,8 @@ function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplier
 
     {selectedCatalogue && <>
       <ReadOnlyValue label="Supplier" value={selectedSupplier?.name || names.suppliers.get(id(selectedCatalogue.supplierId)) || id(selectedCatalogue.supplier)} />
-      <Two><Field label={`Quantity to order (${id(selectedItem?.uom) || 'item unit'})`}><Input type="number" value={form.quantity || maxOrderQuantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><ReadOnlyValue label={`Supplier price per ${id(selectedCatalogue.unit) || 'quoted unit'}`} value={money(selectedCatalogue.price)} /></Two>
+      <Two><Field label={`Order quantity (${id(selectedItem?.uom) || 'item unit'})`}><Input type="number" value={form.quantity || maxOrderQuantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field><ReadOnlyValue label={`Supplier price per ${id(selectedCatalogue.unit) || 'quoted unit'}`} value={money(selectedCatalogue.price)} /></Two>
+      <div style={{ margin: '-5px 0 10px', color: 'var(--text-faint)', fontSize: 10.5 }}>Prefilled from the Procurement quantity decision above. Change it only when the quantity to place with this supplier must be lower.</div>
       <Field label="Note"><Input value={form.procurementNote || ''} onChange={(v) => setForm({ ...form, procurementNote: v })} placeholder="Optional" /></Field>
       {selectedCatalogue && <QuoteConversionNote orderQuantity={enteredOrderQuantity} factor={selectedFactor} quotedUnit={id(selectedCatalogue.unit) || 'quoted unit'} baseUnit={id(selectedItem?.uom) || 'item unit'} quotedPrice={confirmedPrice} basePrice={confirmedBasePrice} />}
       {allocationExceedsRequest && <Hint>Quantity exceeds the Store Keeper quantity. Maximum is {maxOrderQuantity} {id(selectedItem?.uom) || 'units'}.</Hint>}
@@ -1197,16 +1203,21 @@ function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplier
         () => runBackendAction('requisitions', id(form.requisition), 'allocate-line', { line_id: form.reqLine, supplier_price: form.cataloguePrice, quantity: enteredOrderQuantity, note: form.procurementNote || '' }),
         'Supplier allocation saved',
         { requisition: form.requisition },
-      )}>Save item</Action>
+      )}>Save supplier allocation</Action>
     </>}
       </>}
     </>}
 
     <Divider />
-    {!form.showRejectRequisition ? <Action tone="danger" disabled={busy} onClick={() => setForm({ ...form, showRejectRequisition: true })}>Reject entire requisition</Action> : <div style={{ display: 'grid', gap: 8 }}><Field label="Reason for rejecting all items *"><Input value={form.rejectRequisitionReason || ''} onChange={(v) => setForm({ ...form, rejectRequisitionReason: v })} /></Field><div style={{ display: 'flex', gap: 8 }}><Action disabled={busy} onClick={() => setForm({ ...form, showRejectRequisition: false, rejectRequisitionReason: '' })}>Cancel</Action><Action tone="danger" disabled={busy || !id(form.rejectRequisitionReason).trim()} onClick={() => run(() => runBackendAction('requisitions', id(selectedRequisition.id), 'reject-all-items', { reason: form.rejectRequisitionReason }), 'Procurement requisition rejected', {})}>Confirm rejection</Action></div></div>}
+    <details style={{ marginBottom: allAllocated ? 12 : 0 }}>
+      <summary style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: 11.5, fontWeight: 700 }}>Other actions</summary>
+      <div style={{ marginTop: 10 }}>
+        {!form.showRejectRequisition ? <CompactAction tone="danger" disabled={busy} onClick={() => setForm({ ...form, showRejectRequisition: true })}>Reject entire requisition</CompactAction> : <div style={{ display: 'grid', gap: 8 }}><Field label="Reason for rejecting all items *"><Input value={form.rejectRequisitionReason || ''} onChange={(v) => setForm({ ...form, rejectRequisitionReason: v })} /></Field><div style={{ display: 'flex', gap: 8 }}><CompactAction disabled={busy} onClick={() => setForm({ ...form, showRejectRequisition: false, rejectRequisitionReason: '' })}>Cancel</CompactAction><CompactAction tone="danger" disabled={busy || !id(form.rejectRequisitionReason).trim()} onClick={() => run(() => runBackendAction('requisitions', id(selectedRequisition.id), 'reject-all-items', { reason: form.rejectRequisitionReason }), 'Procurement requisition rejected', {})}>Confirm rejection</CompactAction></div></div>}
+      </div>
+    </details>
 
     {allAllocated && <>
-      <Divider />
+      <SectionLabel>3. LPO preparation</SectionLabel>
       <Action tone="good" disabled={busy} onClick={() => onContinueToLpo(id(selectedRequisition.id))}>Continue to LPO preparation</Action>
     </>}
   </Panel>
@@ -2049,6 +2060,7 @@ function Select({ value, onChange, rows, label = (row: Row) => id(row.name), opt
   return <select value={String(value ?? '')} onChange={(e) => onChange(e.target.value)} style={control}><option value="">{optional ? 'None' : 'Select…'}</option>{rows.map((row: Row) => <option key={id(row.id)} value={id(row.id)}>{label(row)}</option>)}</select>
 }
 function Action({ children, onClick, disabled, tone = 'accent' }: any) { return <button disabled={disabled} onClick={onClick} style={{ ...action, background: tone === 'good' ? 'var(--good)' : tone === 'danger' ? 'var(--bad)' : 'var(--accent)', opacity: disabled ? .45 : 1 }}>{children}</button> }
+function CompactAction({ children, onClick, disabled, tone = 'neutral' }: any) { return <button type="button" disabled={disabled} onClick={onClick} style={{ ...secondary, minWidth: 0, color: tone === 'danger' ? 'var(--bad)' : 'var(--text-muted)', borderColor: tone === 'danger' ? 'rgba(220,38,38,.35)' : 'var(--border)', opacity: disabled ? .45 : 1 }}>{children}</button> }
 function Divider() { return <div style={{ borderTop: '1px solid var(--border)', margin: '17px 0' }} /> }
 function Hint({ children }: { children: ReactNode }) { return <div style={{ padding: 9, background: 'var(--warn-soft)', color: 'var(--warn)', fontSize: 11.5, borderRadius: 6, marginBottom: 10 }}>{children}</div> }
 function appRows(map: Map<string, string>) { return Array.from(map, ([id, name]) => ({ id, name })) }

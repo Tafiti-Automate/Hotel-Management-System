@@ -805,7 +805,12 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
         # 1 ream into an LPO quantity of 0.20 carton.  Keep the requested
         # quantity intact and convert only the supplier's quoted price to the
         # base UOM used on the LPO.
-        quantity = Decimal(str(payload.get("quantity") or "0"))
+        try:
+            quantity = Decimal(str(payload.get("quantity") or "0"))
+        except (InvalidOperation, TypeError, ValueError) as error:
+            raise ValidationError({"quantity": "Enter a valid procurement quantity."}) from error
+        if not quantity.is_finite():
+            raise ValidationError({"quantity": "Enter a valid finite procurement quantity."})
         if quantity <= 0 or quantity > line.remaining_order_quantity:
             raise ValidationError({
                 "quantity": f"Procurement quantity for {line.item} must be positive and cannot exceed {line.remaining_order_quantity}."
@@ -827,9 +832,14 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
                     "Supplier prices are set by the Cost Controller and are read-only in Procurement."
                 )
         confirmed_price = price.unit_price
-        if confirmed_price <= 0:
+        if confirmed_price is None or not confirmed_price.is_finite() or confirmed_price <= 0:
             raise ValidationError({"supplier_price": f"The approved supplier price for {line.item} is invalid."})
-        base_unit_price = (confirmed_price / conversion_factor).quantize(Decimal("0.01"))
+        try:
+            base_unit_price = (confirmed_price / conversion_factor).quantize(Decimal("0.01"))
+        except (InvalidOperation, ZeroDivisionError) as error:
+            raise ValidationError({
+                "supplier_price": f"The approved supplier quotation for {line.item} cannot be converted to the Article unit."
+            }) from error
         line.procurement_supplier = price.supplier
         line.procurement_supplier_price = price
         line.procurement_unit = line.item.base_unit

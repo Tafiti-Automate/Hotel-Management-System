@@ -1985,6 +1985,15 @@ def test_supplier_pack_quote_keeps_lpo_quantity_in_article_base_uom():
 
     client = APIClient()
     client.force_authenticate(employee.user)
+    invalid_quantity = client.post(
+        f"/api/v1/requisitions/{requisition.pk}/allocate-line/",
+        {
+            "line_id": str(requisition.items.get().pk),
+            "supplier_price": str(quote.pk),
+            "quantity": "not-a-number",
+        },
+        format="json",
+    )
     rejected_price_change = client.post(
         f"/api/v1/requisitions/{requisition.pk}/allocate-line/",
         {
@@ -2004,6 +2013,8 @@ def test_supplier_pack_quote_keeps_lpo_quantity_in_article_base_uom():
         },
         format="json",
     )
+    assert invalid_quantity.status_code == 400, invalid_quantity.data
+    assert "quantity" in invalid_quantity.data
     assert rejected_price_change.status_code == 403
     assert allocation.status_code == 200, allocation.data
     quote.refresh_from_db()
