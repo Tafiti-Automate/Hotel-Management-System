@@ -2436,6 +2436,40 @@ html:not([data-theme="dark"]) .form-drawer {
 }
 
 /* Department Head approval workspace */
+.screen-app .department-approval-layout {
+  height: clamp(650px, calc(100dvh - 285px), 780px);
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.screen-app .department-approval-queue-scroll,
+.screen-app .department-approval-detail-scroll {
+  scrollbar-gutter: stable;
+}
+
+.screen-app .department-approval-queue-row {
+  transition: background .14s ease, border-color .14s ease, box-shadow .14s ease;
+}
+
+.screen-app .department-approval-queue-row:hover,
+.screen-app .department-approval-queue-row:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--border)) !important;
+  background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface)) !important;
+  outline: 0;
+}
+
+.screen-app .department-approval-queue-row[aria-current='true'] {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+@media (max-width: 1120px) {
+  .screen-app .department-approval-layout {
+    grid-template-columns: 330px minmax(0, 1fr) !important;
+  }
+  .screen-app .approval-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
 @media (max-width: 900px) {
   .hod-approval-filters {
     grid-template-columns: 1fr !important;
@@ -2463,6 +2497,64 @@ html:not([data-theme="dark"]) .form-drawer {
   .hod-items-row > :first-child,
   .hod-items-row > :last-child {
     grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 760px) {
+  .screen-app .department-approval-page-header {
+    align-items: flex-start !important;
+  }
+  .screen-app .department-approval-page-header > button {
+    width: 100%;
+    justify-content: center;
+  }
+  .screen-app .department-approval-layout {
+    display: block !important;
+    height: auto;
+    min-height: 0 !important;
+  }
+  .screen-app .department-approval-queue {
+    max-height: min(470px, 60dvh);
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--border);
+  }
+  .screen-app .department-approval-detail {
+    min-height: 520px !important;
+  }
+  .screen-app .department-approval-detail-scroll {
+    overflow-y: visible !important;
+  }
+  .screen-app .department-approval-detail-header {
+    align-items: flex-start !important;
+    flex-wrap: wrap;
+  }
+  .screen-app .department-approval-actions {
+    align-items: stretch !important;
+    flex-direction: column;
+  }
+  .screen-app .department-approval-actions > span {
+    width: 100%;
+    margin: 0 0 3px !important;
+  }
+  .screen-app .department-approval-actions > button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 520px) {
+  .screen-app .approval-overview-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .screen-app .approval-section-tabs {
+    width: 100%;
+  }
+  .screen-app .approval-section-tabs > button {
+    flex: 1;
+  }
+  .screen-app .department-approval-queue > div:first-child {
+    align-items: stretch !important;
+    flex-direction: column;
   }
 }
 
