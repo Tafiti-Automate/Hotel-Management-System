@@ -161,7 +161,7 @@ export const cfg: Record<string, EntityConfig> = {
       { key: 'address', label: 'Address', type: 'textarea' },
       { key: 'tinNumber', label: 'Tax identification number', type: 'text' },
       { key: 'registrationNumber', label: 'Registration number', type: 'text' },
-      { key: 'paymentTerms', label: 'Payment terms', type: 'text' },
+      { key: 'paymentTerms', label: 'Payment terms', type: 'text', placeholder: 'Net 30', hint: 'Examples: Net 30, Net 15, Cash on Delivery.' },
       { key: 'status', label: 'Status', type: 'select', opts: 'supStatus' },
     ],
   },
