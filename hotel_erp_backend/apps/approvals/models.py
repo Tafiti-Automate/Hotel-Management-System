@@ -526,10 +526,20 @@ class PurchaseOrderApprovalWorkflow(BaseModel):
             if next_step and next_step.approver_role_id:
                 try:
                     from apps.notifications.services import notify_roles
+                    next_role_name = next_step.approver_role.name
                     notify_roles(
-                        [next_step.approver_role.name],
-                        branch=self.purchase_order.requisition.branch,
-                        title=f"LPO {self.purchase_order.lpo_number} requires {next_step.approver_role.name} approval",
+                        [next_role_name],
+                        branch=(
+                            self.purchase_order.requisition.branch
+                            if next_role_name == "Procurement Manager"
+                            else None
+                        ),
+                        hotel=(
+                            self.purchase_order.requisition.hotel
+                            if next_role_name in {"Financial Manager", "General Manager"}
+                            else None
+                        ),
+                        title=f"LPO {self.purchase_order.lpo_number} requires {next_role_name} approval",
                         message=f"{next_step.stage_name} is ready for your decision.",
                         created_by=self.decided_by,
                     )

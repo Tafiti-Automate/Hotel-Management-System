@@ -135,12 +135,54 @@ COMMERCIAL_CONTROL_ROLES = (
 RECEIVING_ROLES = ("Receiving Clerk",)
 
 
+LPO_APPROVAL_ROLES = ("Procurement Manager", "Financial Manager", "General Manager")
+
+
+def requested_lpo_approval_role(request):
+    """Resolve the role queue explicitly when an account carries multiple groups.
+
+    The UI sends the role it is currently rendering. Without this, a user who
+    retained more than one management group could be routed to the first group
+    checked and receive the wrong approval inbox.
+    """
+    requested = str(
+        request.query_params.get("approval_role")
+        or request.query_params.get("role")
+        or ""
+    ).strip()
+    canonical = {name.lower(): name for name in LPO_APPROVAL_ROLES}
+    if requested:
+        role_name = canonical.get(requested.lower())
+        if not role_name:
+            raise ValidationError({"approval_role": "Choose Purchasing Manager, Financial Manager or General Manager."})
+        if not (request.user.is_superuser or user_has_role(request.user, role_name)):
+            raise PermissionDenied("You cannot open another role's LPO approval queue.")
+        return role_name
+
+    # Backward compatibility for callers that do not send an explicit role.
+    for role_name in ("Financial Manager", "General Manager", "Procurement Manager"):
+        if user_has_role(request.user, role_name):
+            return role_name
+    if request.user.is_superuser:
+        return "General Manager"
+    return None
+
+
 def scope_purchase_orders_for_user(queryset, user):
-    """Apply the same LPO visibility rules to lists and the combined workspace."""
+    """Apply LPO visibility consistently with the approval responsibilities.
+
+    Procurement remains operationally branch-scoped. Finance and General
+    Management are hotel-wide control roles so an LPO must not disappear merely
+    because the originating store is in another branch of the same hotel.
+    """
     employee = getattr(user, "employee_profile", None)
     if user.is_superuser or user_has_role(user, "System Administrator"):
         return queryset
-    if user_has_role(user, "Procurement Manager", "Procurement Officer", "Financial Manager", "General Manager"):
+    if user_has_role(user, "Financial Manager", "General Manager"):
+        if employee and employee.branch_id and employee.branch.hotel_id:
+            return queryset.filter(requisition__hotel_id=employee.branch.hotel_id)
+        return queryset
+    if user_has_role(user, "Procurement Manager", "Procurement Officer"):
         if employee and employee.branch_id:
             return queryset.filter(requisition__branch=employee.branch)
         return queryset
@@ -613,13 +655,7 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             ).data
             # Approval queues are authoritative server-side role queues.  Do not
             # make Finance/GM reconstruct their inbox from serialized status text.
-            approval_role = None
-            if user_has_role(request.user, "Procurement Manager"):
-                approval_role = "Procurement Manager"
-            elif user_has_role(request.user, "Financial Manager"):
-                approval_role = "Financial Manager"
-            elif user_has_role(request.user, "General Manager"):
-                approval_role = "General Manager"
+            approval_role = requested_lpo_approval_role(request) if stage == "lpo" else None
             if stage == "lpo" and approval_role:
                 approval_queue_orders = current_lpo_approval_queue(
                     orders, request.user, approval_role
@@ -679,17 +715,24 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         user = self.request.user
-        if user.is_superuser or user.groups.filter(
-            name__in=(
-                "System Administrator",
-                "General Manager",
-                "Procurement Manager",
-                "Procurement Officer",
-                "Financial Manager",
-            )
-        ).exists():
-            return queryset
         employee = getattr(user, "employee_profile", None)
+
+        if user.is_superuser or user_has_role(user, "System Administrator"):
+            return queryset
+
+        # Keep requisition visibility aligned with the LPO that will be created
+        # from it. A request must not be visible to Procurement at sourcing and
+        # then disappear from the same user's LPO queue after handoff.
+        if user_has_role(user, "Financial Manager", "General Manager"):
+            if employee and employee.branch_id and employee.branch.hotel_id:
+                return queryset.filter(hotel_id=employee.branch.hotel_id)
+            return queryset
+
+        if user_has_role(user, "Procurement Manager", "Procurement Officer"):
+            if employee and employee.branch_id:
+                return queryset.filter(branch=employee.branch)
+            return queryset
+
         if not employee:
             return queryset.none()
         if user.groups.filter(name="Store Keeper").exists():
@@ -1163,17 +1206,8 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=False, methods=["get"], url_path="approval-inbox")
     def approval_inbox(self, request):
         """Return the authenticated manager's current LPO approval inbox."""
-        if user_has_role(request.user, "Procurement Manager"):
-            role_name = "Procurement Manager"
-        elif user_has_role(request.user, "Financial Manager"):
-            role_name = "Financial Manager"
-        elif user_has_role(request.user, "General Manager"):
-            role_name = "General Manager"
-        elif request.user.is_superuser:
-            role_name = str(request.query_params.get("role", "General Manager")).strip()
-            if role_name not in {"Procurement Manager", "Financial Manager", "General Manager"}:
-                raise ValidationError({"role": "Choose Procurement Manager, Financial Manager or General Manager."})
-        else:
+        role_name = requested_lpo_approval_role(request)
+        if not role_name:
             raise PermissionDenied("Only Purchasing, Finance or General Management can view this approval inbox.")
 
         queue = current_lpo_approval_queue(self.get_queryset(), request.user, role_name)

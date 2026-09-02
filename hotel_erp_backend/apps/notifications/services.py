@@ -2,6 +2,7 @@ from collections.abc import Iterable
 from datetime import timedelta
 
 from django.conf import settings
+from django.db import models
 from django.utils import timezone
 
 from apps.employees.models import Employee
@@ -170,6 +171,7 @@ def notify_roles(
     title,
     message,
     branch=None,
+    hotel=None,
     department=None,
     created_by=None,
     exclude_employee=None,
@@ -182,6 +184,10 @@ def notify_roles(
     )
     if branch is not None:
         employees = employees.filter(branch=branch)
+    elif hotel is not None:
+        # Finance and General Management are hotel-wide control roles. They may
+        # sit in a different branch from the store that originated the purchase.
+        employees = employees.filter(models.Q(branch__hotel=hotel) | models.Q(branch__isnull=True))
     if department is not None:
         employees = employees.filter(department=department)
     if exclude_employee is not None:

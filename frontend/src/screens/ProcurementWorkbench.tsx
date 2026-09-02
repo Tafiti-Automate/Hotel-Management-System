@@ -162,14 +162,39 @@ export default function ProcurementWorkbench() {
     setLoading(true)
     setMessage('')
     try {
-      const payload = await readBackendPayload(`requisitions/workspace?stage=${stage}`)
+      const approvalRole = role === 'procurement manager'
+        ? 'Procurement Manager'
+        : role === 'financial manager'
+          ? 'Financial Manager'
+          : role === 'general manager'
+            ? 'General Manager'
+            : ''
+      const query = stage === 'lpo' && approvalRole
+        ? `requisitions/workspace?stage=${stage}&approval_role=${encodeURIComponent(approvalRole)}`
+        : `requisitions/workspace?stage=${stage}`
+      const payload = await readBackendPayload(query)
       if (stage === 'quote' && Array.isArray(payload.supplierItems)) {
         payload.supplierItems = payload.supplierItems.map(normalizeSupplierPrice)
       }
       if (stage === 'lpo' && ['procurement manager', 'financial manager', 'general manager'].includes(role)) {
-        payload.approvalQueueOrders = await readBackendRecords('purchase-orders/approval-inbox')
+        // The combined workspace already returns the authoritative approval queue.
+        // Keep the old inbox endpoint only as a fallback so an auxiliary request
+        // can never blank the whole role workspace.
+        if (!Array.isArray(payload.approvalQueueOrders)) {
+          try {
+            payload.approvalQueueOrders = await readBackendRecords(
+              `purchase-orders/approval-inbox?approval_role=${encodeURIComponent(approvalRole)}`,
+            )
+          } catch {
+            payload.approvalQueueOrders = []
+          }
+        }
         if (role === 'general manager') {
-          payload.decisionHistoryOrders = await readBackendRecords('purchase-orders/decision-history')
+          try {
+            payload.decisionHistoryOrders = await readBackendRecords('purchase-orders/decision-history')
+          } catch {
+            payload.decisionHistoryOrders = []
+          }
         }
       }
       setData((current) => ({ ...current, ...payload }))

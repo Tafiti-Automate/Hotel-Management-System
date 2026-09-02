@@ -1513,10 +1513,18 @@ class PurchaseOrder(BaseModel):
             user__groups=group,
         )
         branch_id = getattr(self.requisition, "branch_id", None)
-        if branch_id:
+        hotel_id = getattr(self.requisition, "hotel_id", None)
+        if role_name == "Procurement Manager" and branch_id:
             candidates = candidates.filter(branch_id=branch_id)
+            location = " for this branch"
+        elif role_name in {"Financial Manager", "General Manager"} and hotel_id:
+            candidates = candidates.filter(
+                models.Q(branch__hotel_id=hotel_id) | models.Q(branch__isnull=True)
+            )
+            location = " for this hotel"
+        else:
+            location = ""
         if not candidates.exists():
-            location = " for this branch" if branch_id else ""
             raise ValidationError(f"Assign at least one active {role_name}{location} before submitting an LPO.")
         return group
 
