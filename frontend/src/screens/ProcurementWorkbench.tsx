@@ -59,6 +59,31 @@ const empty: Datasets = Object.fromEntries(Object.keys(paths).map((key) => [key,
 
 function id(value: unknown) { return String(value || '') }
 function num(value: unknown) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0 }
+function activeLabel(value: unknown) { return value === true || id(value).toLowerCase() === 'true' || id(value).toLowerCase() === 'active' ? 'Active' : 'Inactive' }
+function normalizeSupplierPrice(entry: Row): Row {
+  // The procurement workspace returns DRF supplier-price rows in snake_case,
+  // while the application-wide catalogue uses camelCase. Normalize both forms
+  // here so sourcing always compares the same Article and quotation IDs.
+  return {
+    ...entry,
+    id: id(entry.id),
+    supplierId: id(entry.supplierId || entry.supplier),
+    supplier: id(entry.supplier_name || entry.supplierName || entry.supplier),
+    articleId: id(entry.articleId || entry.item),
+    article: id(entry.item_name || entry.article),
+    articleSku: id(entry.item_sku || entry.articleSku),
+    unitId: id(entry.unitId || entry.unit),
+    unit: id(entry.unit_name || entry.unitName || entry.unit),
+    price: num(entry.price ?? entry.unit_price),
+    basePrice: num(entry.basePrice ?? entry.base_unit_price ?? entry.unit_price),
+    currency: id(entry.currency || 'UGX'),
+    minimumOrder: num(entry.minimumOrder ?? entry.minimum_order_quantity),
+    leadTime: num(entry.leadTime ?? entry.lead_time_days),
+    quotationReference: id(entry.quotationReference || entry.quotation_reference),
+    quotationValidUntil: id(entry.quotationValidUntil || entry.quotation_valid_until),
+    status: activeLabel(entry.status ?? entry.is_active),
+  }
+}
 function isProcurementHandoffSource(value: unknown) { return ['store_purchase', 'store_requisition', 'store_shortage'].includes(id(value)) }
 function currentApprovalStep(order: Row): Row | undefined {
   const steps = Array.isArray(order.approval_steps) ? order.approval_steps as Row[] : []
@@ -138,6 +163,9 @@ export default function ProcurementWorkbench() {
     setMessage('')
     try {
       const payload = await readBackendPayload(`requisitions/workspace?stage=${stage}`)
+      if (stage === 'quote' && Array.isArray(payload.supplierItems)) {
+        payload.supplierItems = payload.supplierItems.map(normalizeSupplierPrice)
+      }
       if (stage === 'lpo' && ['procurement manager', 'financial manager', 'general manager'].includes(role)) {
         payload.approvalQueueOrders = await readBackendRecords('purchase-orders/approval-inbox')
         if (role === 'general manager') {
@@ -543,7 +571,7 @@ export default function ProcurementWorkbench() {
           {!(role === 'general manager' && !form.order) && <aside style={{ ...card, padding: 18 }}>
             {!canChangeStage && stage !== 'lpo' && <ReadOnlyStage />}
             {canChangeStage && stage === 'request' && <RequestPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel }} items={app.data.items} stores={app.data.locations} departments={app.data.departments} />}
-            {canChangeStage && stage === 'quote' && <QuotePanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, names }} suppliers={app.data.suppliers} supplierItems={app.data.supplierItems} items={app.data.items} itemUnits={app.data.itemUnits} onContinueToLpo={(requisitionId: string) => { setStage('lpo'); setLpoQueue('prepare'); setForm({ requisition: requisitionId }) }} />}
+            {canChangeStage && stage === 'quote' && <QuotePanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, names }} suppliers={app.data.suppliers} supplierItems={(scopedData.supplierItems || app.data.supplierItems || []).map(normalizeSupplierPrice)} items={app.data.items} itemUnits={app.data.itemUnits} onContinueToLpo={(requisitionId: string) => { setStage('lpo'); setLpoQueue('prepare'); setForm({ requisition: requisitionId }) }} />}
             {stage === 'lpo' && <LpoPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, orderLabel, names, lpoQueue, setLpoQueue }} role={role} canManage={canManageLpo} userName={app.user.name} suppliers={app.data.suppliers} items={app.data.items} itemUnits={app.data.itemUnits} />}
             {canChangeStage && stage === 'receipt' && <ReceiptPanel {...{ data: scopedData, form, setForm, busy, run, orderLabel, receiptLabel, names }} employees={app.data.employees} stores={app.data.locations} items={app.data.items} />}
             {canChangeStage && stage === 'inspect' && <InspectionPanel {...{ data: scopedData, form, setForm, busy, run, receiptLabel, names }} employees={app.data.employees} />}

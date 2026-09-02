@@ -557,6 +557,28 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
         if stage in {"request", "quote"}:
             lines = RequisitionItem.objects.filter(requisition_id__in=requisition_ids)
             payload["requisitionItems"] = RequisitionItemSerializer(lines, many=True, context={"request": request}).data
+            if stage == "quote":
+                # Supplier quotations are part of the Procurement sourcing workspace.
+                # Return the active catalogue rows for the exact requisition Articles
+                # instead of relying on the application's unrelated global data load.
+                # This prevents a valid Cost Controller quotation from appearing as
+                # "not attached" in Procurement when another reference-data request
+                # was delayed, permission-scoped, or stale in the browser.
+                from apps.inventory.models import SupplierItemPrice
+                from apps.inventory.serializers import SupplierItemPriceSerializer
+
+                item_ids = lines.values_list("item_id", flat=True).distinct()
+                supplier_prices = SupplierItemPrice.objects.filter(
+                    item_id__in=item_ids,
+                    is_active=True,
+                    supplier__is_active=True,
+                    item__is_active=True,
+                ).select_related("supplier", "item", "item__category", "unit")
+                payload["supplierItems"] = SupplierItemPriceSerializer(
+                    supplier_prices,
+                    many=True,
+                    context={"request": request},
+                ).data
         if stage == "request" and (
             request.user.is_superuser or request.user.has_perm("approvals.view_approvalworkflow")
         ):
