@@ -5,10 +5,11 @@ import { useApp } from '../state/AppContext'
 
 const roleKey = (role: string) => role.trim().toLowerCase()
 const statusKey = (value: unknown) => String(value || '').trim().toLowerCase().replace(/\s+/g, '_')
+const rowStatus = (row: any) => statusKey(row?.statusCode || row?.status)
 const pendingApprovalStage = (row: any) => {
-  const steps = Array.isArray(row?.approval_steps) ? row.approval_steps : []
+  const steps = Array.isArray(row?.approvalSteps) ? row.approvalSteps : Array.isArray(row?.approval_steps) ? row.approval_steps : []
   const pending = steps.find((step: any) => statusKey(step?.status) === 'pending')
-  return String(pending?.stage_name || '').toLowerCase()
+  return String(pending?.stageName || pending?.stage_name || '').toLowerCase()
 }
 const ref = (row: any) => String(row?.lpo_number || row?.grn_number || row?.requisition_no || row?.requisition_number || row?.po_number || row?.number || row?.id || 'Record')
 
@@ -201,29 +202,34 @@ function dashboardFor(role: string, data: any): DashboardView {
     const missingConversions = items.filter((item:any)=>!itemUnits.some((unit:any)=>String(unit.itemId || unit.item)===String(item.id)))
     return base({ subtitle: 'Suppliers, catalogue, units and quotation data.', tasks: [task('Suppliers', activeSuppliers, 'Approved supplier records', 'local_shipping', 'suppliers', 'Suppliers'), task('Supplier quotations', activePrices, 'Current item prices', 'request_quote', 'supplierItems', 'Supplier quotations'), task('Item grouping', items, 'Major Groups → Item Groups → Items', 'account_tree', 'categories', 'Item Category'), task('Units & conversions', itemUnits, `${missingConversions.length} article(s) without conversion`, 'calculate', 'uoms', 'Units & conversions', missingConversions.length ? 'warning' : 'good')], activities: activity(supplierItems, r=>`${r.article || 'Article'} · ${r.supplier || 'Supplier'}`, r=>`${money(r.price || 0)} per ${r.unit || 'unit'} · Quote ${r.quotationReference || 'not recorded'}`, 'supplierItems', 'Supplier quotations'), queueTitle: 'Supplier quotation catalogue', queueHint: 'Supplier + article + quotation + price', queueRoute: 'supplierItems', queueRouteLabel: 'Supplier quotations', context: [{label:'Units configured',value:String(uoms.length)},{label:'Active suppliers',value:String(activeSuppliers.length)}], primaryAction: { title: 'Item grouping', hint: 'Create Major Groups, Item Groups and Items in sequence.', label: 'Open item categories', route: 'categories', icon: 'account_tree' } }) }
 
-  if (role === 'procurement manager') {
-    const supplierSelection = procurement.filter((r:any)=>{ const state=statusKey(r.statusCode || r.status); if(!['approved','partially_ordered'].includes(state)) return false; const lines=(data.requisitionItems||[]).filter((line:any)=>String(line.requisition)===String(r.id)); return !lines.length || lines.some((line:any)=>!line.procurement_supplier_price || Number(line.procurement_quantity||0)<=0 || Number(line.procurement_unit_cost||0)<=0) })
-    const drafts = orders.filter((r:any)=>statusKey(r.status)==='draft')
-    const approved = orders.filter((r:any)=>statusKey(r.status)==='approved')
-    const deliveries = orders.filter((r:any)=>['issued','partially_received'].includes(statusKey(r.status)))
-    return base({ subtitle: 'Supplier allocation, LPO preparation and supplier issue.', tasks: [task('Supplier allocation', supplierSelection, 'Choose supplier per item', 'compare_arrows', 'workflow-procure', 'Procurement queue', supplierSelection.length ? 'warning' : 'good'), task('LPO preparation', drafts, 'Complete and send to Finance', 'description', 'workflow-procure', 'Procurement queue'), task('Approved · Print & Send', approved, 'Original print and supplier email', 'print', 'workflow-procure', 'Procurement queue', approved.length ? 'warning' : 'good'), task('Supplier delivery pending', deliveries, 'Issued or partially received', 'local_shipping', 'workflow-procure', 'Procurement queue')], activities: activity([...approved,...drafts,...supplierSelection], r=>statusKey(r.status)==='approved'?`LPO ${ref(r)}`:`${ref(r)}`, r=>r.supplier ? `${r.supplier} · ${money(r.total || 0)}` : `${r.dept || r.department || 'Store Requisition'} · ${r.reason || ''}`, 'workflow-procure', 'Procurement queue'), queueTitle: 'Procurement action queue', queueHint: 'Supplier decisions and LPO actions that need Procurement', queueRoute: 'workflow-procure', queueRouteLabel: 'Procurement queue', context: [{label:'Registered suppliers',value:String(suppliers.length)},{label:'Open supplier deliveries',value:String(deliveries.length)}] }) }
+  if (role === 'procurement manager' || role === 'procurement officer') {
+    const supplierSelection = procurement.filter((r:any) => ['approved','partially_ordered'].includes(rowStatus(r)) && Boolean(r.allocationPending))
+    const activeOrderRequisitions = new Set(orders.filter((r:any) => rowStatus(r) !== 'cancelled').map((r:any) => String(r.requisitionId || '')))
+    const readyForLpo = procurement.filter((r:any) => ['approved','partially_ordered'].includes(rowStatus(r)) && Boolean(r.allocationComplete) && !activeOrderRequisitions.has(String(r.apiId || '')))
+    const drafts = orders.filter((r:any)=>rowStatus(r)==='draft')
+    const lpoPreparation = [...readyForLpo, ...drafts]
+    const approved = orders.filter((r:any)=>rowStatus(r)==='approved')
+    const deliveries = orders.filter((r:any)=>['issued','partially_received'].includes(rowStatus(r)))
+    return base({ subtitle: 'Supplier allocation, LPO preparation and supplier issue.', tasks: [task('Supplier allocation', supplierSelection, 'Choose supplier per item', 'compare_arrows', 'workflow-procure', 'Procurement queue', supplierSelection.length ? 'warning' : 'good'), task('LPO preparation', lpoPreparation, 'Allocated requests and draft LPOs', 'description', 'workflow-procure', 'Procurement queue', lpoPreparation.length ? 'warning' : 'good'), task('Approved · Print & Send', approved, 'Original print and supplier email', 'print', 'workflow-procure', 'Procurement queue', approved.length ? 'warning' : 'good'), task('Supplier delivery pending', deliveries, 'Issued or partially received', 'local_shipping', 'workflow-procure', 'Procurement queue')], activities: activity([...approved,...drafts,...supplierSelection], r=>rowStatus(r)==='approved'?`LPO ${ref(r)}`:`${ref(r)}`, r=>r.supplier ? `${r.supplier} · ${money(r.total || 0)}` : `${r.dept || r.department || 'Store Requisition'} · ${r.reason || ''}`, 'workflow-procure', 'Procurement queue'), queueTitle: 'Procurement action queue', queueHint: 'Supplier decisions and LPO actions that need Procurement', queueRoute: 'workflow-procure', queueRouteLabel: 'Procurement queue', context: [{label:'Registered suppliers',value:String(suppliers.length)},{label:'Open supplier deliveries',value:String(deliveries.length)}] }) }
 
   if (role === 'financial manager') {
-    const pending = orders.filter((r:any)=>statusKey(r.status)==='pending_approval' && /finance/.test(pendingApprovalStage(r)))
-    const approved = orders.filter((r:any)=>['approved','issued','partially_received','received'].includes(statusKey(r.status)))
-    const rejected = orders.filter((r:any)=>statusKey(r.status)==='rejected')
+    const pending = orders.filter((r:any)=>rowStatus(r)==='pending_approval' && /finance/.test(pendingApprovalStage(r)))
+    const approved = orders.filter((r:any)=>['approved','issued','partially_received','received'].includes(rowStatus(r)))
+    const rejected = orders.filter((r:any)=>rowStatus(r)==='rejected')
     return base({ subtitle: 'LPOs awaiting financial review.', tasks: [task('Awaiting review', pending, 'Requires Finance decision', 'account_balance_wallet', 'workflow-procure', 'LPO approvals', pending.length ? 'warning' : 'good'), task('Approved / progressed', approved, 'Finance-approved LPOs', 'check_circle', 'workflow-procure', 'LPO approvals', 'good'), task('Rejected', rejected, 'Stopped LPOs', 'cancel', 'workflow-procure', 'LPO approvals', rejected.length ? 'danger' : 'accent')], activities: activity(pending, r=>`LPO ${ref(r)}`, r=>`${r.supplier || 'Supplier'} · ${money(r.total || 0)}`, 'workflow-procure', 'LPO approvals'), queueTitle: 'Financial approval queue', queueHint: 'LPOs requiring financial decision', queueRoute: 'workflow-procure', queueRouteLabel: 'LPO approvals', context: [] }) }
 
   if (role === 'general manager') {
-    const pending = orders.filter((r:any)=>statusKey(r.status)==='pending_approval' && /(general manager|management)/.test(pendingApprovalStage(r)))
-    const approved = orders.filter((r:any)=>['approved','issued','partially_received','received'].includes(statusKey(r.status)))
-    const rejected = orders.filter((r:any)=>statusKey(r.status)==='rejected')
+    const pending = orders.filter((r:any)=>rowStatus(r)==='pending_approval' && /(general manager|management)/.test(pendingApprovalStage(r)))
+    const approved = orders.filter((r:any)=>['approved','issued','partially_received','received'].includes(rowStatus(r)))
+    const rejected = orders.filter((r:any)=>rowStatus(r)==='rejected')
     return base({ subtitle: 'Finance-reviewed LPOs awaiting final approval.', tasks: [task('Final approval', pending, 'Requires your decision', 'verified_user', 'workflow-procure', 'Final LPO approvals', pending.length ? 'warning' : 'good'), task('Approved', approved, 'Authorized LPOs', 'check_circle', 'workflow-procure', 'Final LPO approvals', 'good'), task('Rejected', rejected, 'Workflow stopped', 'cancel', 'workflow-procure', 'Final LPO approvals', rejected.length ? 'danger' : 'accent')], activities: activity(pending, r=>`LPO ${ref(r)}`, r=>`${r.supplier || 'Supplier'} · ${money(r.total || 0)}`, 'workflow-procure', 'Final LPO approvals'), queueTitle: 'Final LPO approvals', queueHint: 'Finance-reviewed LPOs awaiting executive authorization', queueRoute: 'workflow-procure', queueRouteLabel: 'Final LPO approvals', context: [] }) }
 
   if (role === 'receiving clerk') {
-    const ready = orders.filter((r:any)=>statusKey(r.status)==='issued')
-    const partial = orders.filter((r:any)=>statusKey(r.status)==='partially_received')
-    const completed = orders.filter((r:any)=>statusKey(r.status)==='received')
+    const ready = orders.filter((r:any)=>rowStatus(r)==='issued')
+    const partial = orders.filter((r:any)=>rowStatus(r)==='partially_received')
+    const openOrderIds = new Set([...ready, ...partial].map((r:any) => String(r.apiId || '')))
+    const completedOrderIds = new Set(grns.map((r:any) => String(r.purchaseOrderId || '')).filter((id:string) => id && !openOrderIds.has(id)))
+    const completed = Array.from(completedOrderIds).map((id) => ({ id, status: 'received' }))
     return base({ subtitle: 'Issued LPOs and goods receipts.', tasks: [task('Ready for receiving', ready, 'Issued LPOs', 'move_to_inbox', 'workflow-procure', 'Receiving & GRN', ready.length ? 'warning' : 'good'), task('Partial deliveries', partial, 'Outstanding quantities remain', 'pending_actions', 'workflow-procure', 'Receiving & GRN', partial.length ? 'warning' : 'accent'), task('GRNs recorded', grns, 'Receipt documents', 'receipt_long', 'workflow-procure', 'Receiving & GRN'), task('Fully received', completed, 'Completed supplier deliveries', 'task_alt', 'workflow-procure', 'Receiving & GRN', 'good')], activities: activity([...ready,...partial], r=>`LPO ${ref(r)}`, r=>`${r.supplier || 'Supplier'} · ${r.count || 0} item(s)`, 'workflow-procure', 'Receiving & GRN'), queueTitle: 'Ready for receiving', queueHint: 'Issued and partially received LPOs', queueRoute: 'workflow-procure', queueRouteLabel: 'Receiving & GRN', context: [] }) }
 
   return base({ subtitle: 'Operational records and workflow status.', tasks: [task('Department requests', requests, 'Visible requisitions', 'assignment', 'workflow-stores', 'Department workflow'), task('Procurement requests', procurement, 'Visible procurement records', 'shopping_cart_checkout', 'workflow-procure', 'Procurement workflow'), task('LPOs', orders, 'Visible purchase orders', 'description', 'workflow-procure', 'Procurement workflow'), task('GRNs', grns, 'Visible goods receipts', 'receipt_long', 'workflow-procure', 'Procurement workflow')], activities: [], queueTitle: 'Operations', queueHint: 'Use the workflow queues to continue work', queueRoute: 'workflow-procure', queueRouteLabel: 'Procurement workflow', context: [] })

@@ -1328,8 +1328,20 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
 
   const reqItemsByRequisition = groupBy(raw.reqItems, 'requisition')
   data.requisitions = raw.requisitions.map((row) => {
-    const lines = itemLines(reqItemsByRequisition.get(idOf(row)) || [], itemNames, itemUnits, itemPrice)
+    const rawLines = reqItemsByRequisition.get(idOf(row)) || []
+    const lines = itemLines(rawLines, itemNames, itemUnits, itemPrice)
     const total = lines.reduce((sum, line) => sum + line.qty * line.unitCost, 0)
+    const allocationLines = rawLines.filter((line) => num(line.approved_quantity ?? line.quantity) > 0)
+    const allocationComplete = Boolean(allocationLines.length) && allocationLines.every(
+      (line) => Boolean(text(line.procurement_supplier_price))
+        && num(line.procurement_quantity) > 0
+        && num(line.procurement_unit_cost) > 0,
+    )
+    const allocationPending = Boolean(allocationLines.length) && allocationLines.some(
+      (line) => !text(line.procurement_supplier_price)
+        || num(line.procurement_quantity) <= 0
+        || num(line.procurement_unit_cost) <= 0,
+    )
     const approvalSteps = Array.isArray(row.approval_steps)
       ? row.approval_steps.map((step) => {
           const record = step as ApiRecord
@@ -1372,6 +1384,9 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
           && text(approval.status) === 'pending'
           && bool(approval.is_actionable),
       ),
+      allocationPending,
+      allocationComplete,
+      allocationLineCount: allocationLines.length,
       lines,
       count: lines.length,
       total,
@@ -1383,12 +1398,37 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
   data.orders = raw.orders.map((row) => {
     const lines = itemLines(orderItemsByOrder.get(idOf(row)) || [], itemNames, itemUnits, itemPrice)
     const total = num(row.total_amount, lines.reduce((sum, line) => sum + line.qty * line.unitCost, 0))
+    const approvalSteps = Array.isArray(row.approval_steps)
+      ? row.approval_steps.map((step) => {
+          const record = step as ApiRecord
+          return {
+            id: text(record.id),
+            stage: num(record.stage),
+            stageName: text(record.stage_name, `Stage ${text(record.stage)}`),
+            stage_name: text(record.stage_name, `Stage ${text(record.stage)}`),
+            approverName: text(record.approver_name, 'Unassigned approver'),
+            approver_name: text(record.approver_name, 'Unassigned approver'),
+            status: text(record.status, 'pending'),
+            comments: text(record.comments),
+            decidedAt: text(record.decided_at),
+            decided_at: text(record.decided_at),
+          }
+        })
+      : []
     return {
       id: text(row.po_number, idOf(row)),
       apiId: idOf(row),
+      requisitionId: text(row.requisition),
+      supplierId: text(row.supplier),
       supplier: supplierNames.get(text(row.supplier)) || shortId(row.supplier),
       date: dateOnly(row.created_at || row.expected_date),
+      expectedDate: dateOnly(row.expected_date),
       status: purchaseOrderStatus(row.status),
+      statusCode: text(row.status),
+      approvalSteps,
+      approval_steps: approvalSteps,
+      sentAt: text(row.sent_at),
+      supplierEmail: text(row.supplier_email),
       lines,
       count: lines.length,
       total,
@@ -1402,11 +1442,14 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
     return {
       id: text(row.grn_number, idOf(row)),
       apiId: idOf(row),
-      po: order ? text(order.po_number, idOf(order)) : shortId(row.purchase_order),
-      supplier: order ? supplierNames.get(text(order.supplier)) || shortId(order.supplier) : '',
+      purchaseOrderId: text(row.purchase_order),
+      po: text(row.lpo_number) || (order ? text(order.lpo_number || order.po_number, idOf(order)) : shortId(row.purchase_order)),
+      supplier: text(row.supplier_name) || (order ? supplierNames.get(text(order.supplier)) || shortId(order.supplier) : ''),
+      receivedBy: text(row.received_by_name),
       date: dateOnly(row.received_date || row.created_at),
-      status: 'Received',
-      branchId: order ? storeBranches.get(text(order.store)) || '' : '',
+      status: titleCaseStatus(row.status || 'received'),
+      statusCode: text(row.status || 'received'),
+      branchId: text(row.branch_id) || (order ? storeBranches.get(text(order.store)) || '' : ''),
     }
   })
 
