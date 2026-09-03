@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import { useApp } from '../state/AppContext'
 import { Icon } from './Icon'
+import { Avatar } from './Avatar'
 import CommandPalette from './CommandPalette'
 import { canAccessRoute, canSwitchModules, isStoresManager } from '../lib/access'
 import {
@@ -23,7 +24,6 @@ export default function Header() {
   const role = String(app.user.role || '').trim().toLowerCase()
   const departmentLabel = app.user.departmentName || app.user.role
   const moduleName = storesManager ? 'Stores & Inventory' : app.activeModule === 'hr' ? 'Human Resources' : departmentLabel
-  const initials = app.user.name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()
   const notificationCount = notifications.filter((notification) => !notification.is_read).length
   const hasPermission = (permission: string) => app.user.isSuperuser || app.user.permissions.includes(permission)
 
@@ -201,7 +201,7 @@ export default function Header() {
           <div style={{ width: 1, height: 28, background: 'var(--border)', margin: '0 8px' }} />
           <div style={{ position: 'relative' }}>
             <button onClick={() => setProfileOpen((open) => !open)} style={{ height: 40, display: 'flex', alignItems: 'center', gap: 9, border: 0, background: 'transparent', borderRadius: 7, padding: '0 4px 0 7px', cursor: 'pointer', font: 'inherit' }} className="header-profile-trigger hover-surface2">
-              <span className="header-avatar" style={{ width: 31, height: 31, borderRadius: 7, display: 'grid', placeItems: 'center', background: '#E8EEF9', color: '#1D4ED8', fontSize: 12, fontWeight: 700 }}>{initials}</span>
+              <Avatar className="header-avatar" src={app.user.photoUrl} name={app.user.name} size={31} radius={7} />
               <span className="header-user-copy" style={{ textAlign: 'left' }}><span style={{ display: 'block', color: 'var(--text)', fontSize: 12.5, fontWeight: 600 }}>{app.user.name}</span><span style={{ display: 'block', color: 'var(--text-faint)', fontSize: 12, marginTop: 1 }}>{departmentLabel}</span></span>
               <Icon name="expand_more" size={17} color="var(--text-faint)" />
             </button>

@@ -25,7 +25,19 @@ def _user_role(user) -> str:
     return group.name if group else "Staff"
 
 
-def _user_payload(user) -> dict:
+def _employee_photo_url(employee, request=None) -> str:
+    if not employee or not employee.photo:
+        return ""
+    try:
+        url = employee.photo.url
+    except (ValueError, AttributeError):
+        return ""
+    if request is not None and url and not str(url).startswith(("http://", "https://")):
+        return request.build_absolute_uri(url)
+    return str(url or "")
+
+
+def _user_payload(user, request=None) -> dict:
     employee = getattr(user, "employee_profile", None)
     return {
         "id": str(user.pk),
@@ -40,6 +52,7 @@ def _user_payload(user) -> dict:
         "department_id": str(employee.department_id) if employee and employee.department_id else "",
         "department_name": employee.department.name if employee and employee.department_id else "",
         "designation": employee.designation if employee else "",
+        "photo_url": _employee_photo_url(employee, request),
         "is_staff": user.is_staff,
         "is_superuser": user.is_superuser,
         "permissions": sorted(user.get_all_permissions()),
@@ -107,7 +120,7 @@ class LoginView(APIView):
             metadata={"role": _user_role(user)},
             created_by=user,
         )
-        return Response({"token": token.key, "user": _user_payload(user)})
+        return Response({"token": token.key, "user": _user_payload(user, request)})
 
 
 class CurrentUserView(APIView):
@@ -116,7 +129,7 @@ class CurrentUserView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response(_user_payload(request.user))
+        return Response(_user_payload(request.user, request))
 
 
 class LogoutView(APIView):

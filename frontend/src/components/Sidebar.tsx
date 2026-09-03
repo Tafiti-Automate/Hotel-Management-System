@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from 'react'
 import { useApp } from '../state/AppContext'
 import { Icon } from './Icon'
+import { Avatar } from './Avatar'
 import { canAccessRoute, canSwitchBranches, canSwitchModules } from '../lib/access'
 
 interface NavItem { route: string; label: string }
@@ -137,7 +138,6 @@ export default function Sidebar() {
   const contextLabel = role === 'store keeper'
     ? (app.data.locations.length === 1 ? String(app.data.locations[0].name) : app.currentBranch || app.user.branchName)
     : app.user.departmentName || app.currentBranch || app.user.branchName
-  const initials = app.user.name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()
   const branchLocked = !canSwitchBranches(app.user) && Boolean(app.user.branchId)
   const branches = branchLocked ? app.data.branches.filter((branch) => String(branch.id) === app.user.branchId) : app.data.branches
   const width = collapsed ? 60 : 220
@@ -180,7 +180,7 @@ export default function Sidebar() {
 
       <div className="sidebar-footer" style={{ borderTop: '1px solid var(--border)', padding: collapsed ? 10 : '10px 12px' }}>
         {canSwitchModules(app.user) && <button onClick={app.gotoModules} title="Switch module" className="hover-surface2" style={{ ...navStyle(false), justifyContent: collapsed ? 'center' : undefined }}><Icon name="apps" size={19} />{!collapsed && <span>Switch module</span>}</button>}
-        {!collapsed && <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 8px 2px' }}><div className="sidebar-user-avatar" style={{ width: 34, height: 34, borderRadius: 8, display: 'grid', placeItems: 'center', background: 'var(--accent-soft)', color: 'var(--accent)', fontSize: 12, fontWeight: 750 }}>{initials}</div><div style={{ flex: 1, minWidth: 0 }}><div style={{ color: 'var(--text)', fontSize: 12.5, fontWeight: 650, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{app.user.name}</div><div style={{ color: 'var(--text-faint)', fontSize: 12, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{app.user.role}</div></div><button onClick={app.logout} title="Sign out" style={plainIcon}><Icon name="logout" size={18} /></button></div>}
+        {!collapsed && <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 8px 2px' }}><Avatar className="sidebar-user-avatar" src={app.user.photoUrl} name={app.user.name} size={34} radius={8} /><div style={{ flex: 1, minWidth: 0 }}><div style={{ color: 'var(--text)', fontSize: 12.5, fontWeight: 650, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{app.user.name}</div><div style={{ color: 'var(--text-faint)', fontSize: 12, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{app.user.role}</div></div><button onClick={app.logout} title="Sign out" style={plainIcon}><Icon name="logout" size={18} /></button></div>}
       </div>
     </aside>
   </>

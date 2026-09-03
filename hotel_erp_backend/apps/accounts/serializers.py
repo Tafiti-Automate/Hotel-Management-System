@@ -115,10 +115,20 @@ class UserSerializer(serializers.ModelSerializer):
         employee = getattr(obj, "employee_profile", None)
         if not employee:
             return None
+        photo_url = ""
+        if employee.photo:
+            try:
+                photo_url = employee.photo.url
+                request = self.context.get("request")
+                if request is not None and photo_url and not str(photo_url).startswith(("http://", "https://")):
+                    photo_url = request.build_absolute_uri(photo_url)
+            except (ValueError, AttributeError):
+                photo_url = ""
         return {
             "id": str(employee.id),
             "name": employee.user.get_full_name() or employee.user.username,
             "department": employee.department.name,
+            "photo_url": str(photo_url or ""),
         }
 
     def get_role_name(self, obj):

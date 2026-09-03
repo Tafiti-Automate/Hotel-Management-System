@@ -1,6 +1,7 @@
 import { useEffect, type CSSProperties, type ReactNode } from 'react'
 import { chipStyleFor, statusPresentation } from '../lib/theme'
 import { Icon } from './Icon'
+import { Avatar } from './Avatar'
 
 type DetailRecord = Record<string, unknown>
 
@@ -14,7 +15,7 @@ interface RecordDetailDrawerProps {
   actions?: ReactNode
 }
 
-const hiddenKeys = new Set(['apiId'])
+const hiddenKeys = new Set(['apiId', 'photo', 'photoUrl', 'photo_url'])
 
 export default function RecordDetailDrawer({
   title,
@@ -47,9 +48,9 @@ export default function RecordDetailDrawer({
       <div className="record-detail-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }} />
       <aside className="record-detail-drawer" role="dialog" aria-modal="true" aria-label={`${title} details`}>
         <header style={headerStyle}>
-          <span style={{ width: 42, height: 42, flex: 'none', display: 'grid', placeItems: 'center', borderRadius: 9, color: 'var(--accent)', background: 'var(--accent-soft)' }}>
-            <Icon name="description" size={22} />
-          </span>
+          {record.photo || record.photoUrl || record.photo_url
+            ? <Avatar src={String(record.photo || record.photoUrl || record.photo_url)} name={String(subtitle || record.name || title)} size={46} radius={10} />
+            : <span style={{ width: 42, height: 42, flex: 'none', display: 'grid', placeItems: 'center', borderRadius: 9, color: 'var(--accent)', background: 'var(--accent-soft)' }}><Icon name="description" size={22} /></span>}
           <span style={{ minWidth: 0, flex: 1 }}>
             <span style={{ display: 'block', color: 'var(--text-faint)', fontSize: 11.5, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>{title}</span>
             <span style={{ display: 'block', marginTop: 3, overflow: 'hidden', color: 'var(--text)', fontSize: 18, fontWeight: 800, textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{subtitle || reference || 'Record details'}</span>

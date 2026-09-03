@@ -74,6 +74,7 @@ export interface AuthUser {
   department_id?: string
   department_name?: string
   designation?: string
+  photo_url?: string
   is_staff?: boolean
   is_superuser?: boolean
   permissions?: string[]
@@ -126,7 +127,7 @@ export interface AccountRecord {
   employee_code: string
   phone: string
   account_type: 'employee' | 'system'
-  linked_employee: { id: string; name: string; department: string } | null
+  linked_employee: { id: string; name: string; department: string; photo_url?: string } | null
   is_active: boolean
   is_staff: boolean
   date_joined: string
@@ -340,7 +341,11 @@ export async function fetchCurrentUser(): Promise<AuthUser> {
     headers: { Accept: 'application/json', ...authHeaders() },
   })
   if (!response.ok) throw new Error(`Current session could not be verified (${response.status}).`)
-  return response.json() as Promise<AuthUser>
+  const user = await response.json() as AuthUser
+  let remember = true
+  try { remember = Boolean(localStorage.getItem(TOKEN_KEY)) } catch { /* storage unavailable */ }
+  setStoredUser(user, remember)
+  return user
 }
 
 export async function logout(): Promise<void> {
@@ -1077,6 +1082,7 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
       contact: text(row.contact) || text(row.user_phone),
       address: text(row.address),
       dateJoined: text(row.date_joined),
+      photo: text(row.photo),
       status: activeStatus(row.is_active),
     })),
     categories: raw.categories.map((row) => ({
@@ -1489,6 +1495,30 @@ export async function saveBackendRecord(entity: EntityKey, id: string | null, va
   if (!endpoint) throw new Error(`Backend saving is not configured for ${entity}.`)
 
   const payload = toBackendPayload(entity, values, data)
+  if (entity === 'employees' && values.photoFile instanceof File) {
+    const form = new FormData()
+    Object.entries(payload).forEach(([key, value]) => {
+      if (value === null || value === undefined) return
+      form.append(key, typeof value === 'boolean' ? String(value) : String(value))
+    })
+    form.append('photo', values.photoFile)
+    const method = id ? 'PATCH' : 'POST'
+    const target = id ? `${endpoint}/${id}` : endpoint
+    const photoKey = `${values.photoFile.name}:${values.photoFile.size}:${values.photoFile.lastModified}`
+    return singleFlightMutation(`${method}:${endpointUrl(target)}:${photoKey}`, async () => {
+      const response = await fetchWithTimeout(endpointUrl(target), {
+        method,
+        headers: { Accept: 'application/json', ...authHeaders() },
+        body: form,
+      })
+      if (!response.ok) {
+        let body: unknown = null
+        try { body = await response.json() } catch { /* non-JSON response */ }
+        throw new Error(apiErrorDetail(body, `${method} employees failed with ${response.status}`))
+      }
+      return await response.json() as Row
+    })
+  }
   return (await sendJson(id ? `${endpoint}/${id}` : endpoint, id ? 'PATCH' : 'POST', payload)) as Row
 }
 

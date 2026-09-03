@@ -1,5 +1,6 @@
 import { useApp } from '../state/AppContext'
 import { Icon } from '../components/Icon'
+import { Avatar } from '../components/Avatar'
 import { canAccessModule } from '../lib/access'
 
 export default function Launchpad() {
@@ -8,7 +9,6 @@ export default function Launchpad() {
     { module: 'operations' as const, eyebrow: 'Operations', title: 'Hotel Operations', desc: 'Procurement, stores, inventory, suppliers and operational reporting.', meta: 'Inventory · Procurement · Finance', icon: 'inventory_2', action: app.enterApp },
     { module: 'hr' as const, eyebrow: 'People', title: 'Human Resources', desc: 'Employee records, departments and workforce administration.', meta: 'Employees · Departments · Access', icon: 'groups', action: app.enterHR },
   ].filter((module) => canAccessModule(app.user, module.module))
-  const initials = app.user.name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()
 
   return (
     <div className="launchpad">
@@ -18,7 +18,7 @@ export default function Launchpad() {
           <span><strong>Hotel ERP</strong><small>Operations & administration</small></span>
         </div>
         <div className="launchpad-account">
-          <span className="launchpad-avatar">{initials}</span>
+          <Avatar className="launchpad-avatar" src={app.user.photoUrl} name={app.user.name} size={38} radius="50%" />
           <span className="launchpad-user"><strong>{app.user.name}</strong><small>{app.user.role}</small></span>
           <button onClick={app.logout} title="Sign out" aria-label="Sign out" className="launchpad-signout"><Icon name="logout" size={18} /></button>
         </div>

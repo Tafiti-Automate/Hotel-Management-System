@@ -67,6 +67,8 @@ export default function FormDrawer() {
   const f = app.form
   const [values, setValues] = useState<Row>({})
   const [step, setStep] = useState(0)
+  const [employeePhoto, setEmployeePhoto] = useState<File | null>(null)
+  const [employeePhotoPreview, setEmployeePhotoPreview] = useState('')
   const roleKey = app.user.role.trim().toLowerCase()
   const canRequestOnBehalf = app.user.isSuperuser || roleKey === 'system administrator'
   const canPurchaseOnBehalf = app.user.isSuperuser || ['system administrator', 'general manager'].includes(roleKey)
@@ -115,9 +117,17 @@ export default function FormDrawer() {
       seed.majorGroup = majorGroup?.name || ''
     }
     setValues(seed)
+    setEmployeePhoto(null)
+    setEmployeePhotoPreview(f.entity === 'employees' ? String(existing?.photo || '') : '')
     setStep(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [f?.entity, f?.id, f?.preset, f?.initialValues, canPurchaseOnBehalf, canRequestOnBehalf, signedInEmployee?.id])
+
+  useEffect(() => {
+    return () => {
+      if (employeePhotoPreview.startsWith('blob:')) URL.revokeObjectURL(employeePhotoPreview)
+    }
+  }, [employeePhotoPreview])
 
   if (!f) return null
   const conf = cfg[f.entity]
@@ -194,7 +204,10 @@ export default function FormDrawer() {
       app.showWorkflowAlert('Invalid Uganda phone number', UGANDA_PHONE_HINT, 'warning')
       return
     }
-    if (f.entity === 'employees' && !f.id) out.status = 'Active'
+    if (f.entity === 'employees') {
+      if (employeePhoto) out.photoFile = employeePhoto
+      if (!f.id) out.status = 'Active'
+    }
     if (f.entity === 'requisitions') {
       out.request_type = 'department'
       out.procurement_source = values.procurement_source || 'manual'
@@ -251,6 +264,27 @@ export default function FormDrawer() {
         {wizard && <div style={{ display: 'grid', gridTemplateColumns: `repeat(${pageCount},1fr)`, gap: 5, padding: '12px 22px', borderBottom: '1px solid var(--border)' }}>{Array.from({ length: pageCount }).map((_, index) => <span key={index} style={{ height: 3, borderRadius: 2, background: index <= step ? 'var(--accent)' : 'var(--border)' }} />)}</div>}
 
         <div className="form-body" style={{ flex: 1, overflowY: 'auto', padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {f.entity === 'employees' && <section style={{ display: 'flex', alignItems: 'center', gap: 14, padding: 14, border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface-2)' }}>
+            <span style={{ width: 72, height: 72, flex: 'none', borderRadius: '50%', overflow: 'hidden', display: 'grid', placeItems: 'center', background: 'var(--accent-soft)', color: 'var(--accent)', fontSize: 20, fontWeight: 850 }}>
+              {employeePhotoPreview ? <img src={employeePhotoPreview} alt="Employee preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : String(`${values.firstName || ''} ${values.lastName || ''}`.trim() || 'EP').split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()}
+            </span>
+            <span style={{ minWidth: 0, flex: 1 }}>
+              <span style={{ display: 'block', color: 'var(--text)', fontSize: 12.5, fontWeight: 800 }}>Employee photo</span>
+              <span style={{ display: 'block', marginTop: 3, color: 'var(--text-faint)', fontSize: 12, lineHeight: 1.45 }}>PNG, JPG/JPEG or WEBP · maximum 5 MB. This photo is also used for the linked user account avatar.</span>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 34, marginTop: 9, padding: '0 11px', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface)', color: 'var(--text)', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
+                <Icon name="photo_camera" size={16} />{employeePhotoPreview ? 'Change photo' : 'Choose photo'}
+                <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(event) => {
+                  const file = event.target.files?.[0] || null
+                  if (!file) return
+                  if (file.size > 5 * 1024 * 1024) { app.showWorkflowAlert('Photo too large', 'Employee photos must be 5 MB or smaller.', 'warning'); event.currentTarget.value = ''; return }
+                  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) { app.showWorkflowAlert('Unsupported photo', 'Upload a PNG, JPG/JPEG, or WEBP image.', 'warning'); event.currentTarget.value = ''; return }
+                  if (employeePhotoPreview.startsWith('blob:')) URL.revokeObjectURL(employeePhotoPreview)
+                  setEmployeePhoto(file)
+                  setEmployeePhotoPreview(URL.createObjectURL(file))
+                }} />
+              </label>
+            </span>
+          </section>}
           {f.entity === 'categories' && !f.id && f.preset === 'majorGroup' && <div style={helperCardStyle}><span style={{ display: 'grid', placeItems: 'center', width: 24, height: 24, borderRadius: 6, background: 'rgba(37,99,235,.10)' }}><SmallFolderGraphic color="var(--accent)" /></span><div><strong>Major Group:</strong> the top level of the catalogue, such as Beverages, Food Supplies or Stationery.</div></div>}
           {f.entity === 'categories' && !f.id && f.preset === 'itemGroup' && <div style={helperCardStyle}><span style={{ display: 'grid', placeItems: 'center', width: 24, height: 24, borderRadius: 6, background: 'rgba(37,99,235,.10)' }}><SmallFolderGraphic open color="var(--accent)" /></span><div><strong>Item Group:</strong> select the Major Group first, then name the group beneath it. Example: Beverages → Soft Drinks.</div></div>}
           {f.entity === 'categories' && (f.id || !f.preset) && <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: 12, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface-2)', color: 'var(--text-muted)', fontSize: 12, lineHeight: 1.5 }}><Icon name="account_tree" size={18} color="var(--accent)" style={{ marginTop: 1 }} /><div>Catalogue hierarchy: <strong>Major Group → Item Group → Item</strong>.</div></div>}

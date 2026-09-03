@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '../components/Icon'
+import { Avatar } from '../components/Avatar'
 import RecordDetailDrawer from '../components/RecordDetailDrawer'
 import { useApp } from '../state/AppContext'
 import {
@@ -101,7 +102,7 @@ export default function AccessManagement() {
       {loading ? <div className="access-empty">Loading access controls…</div> : tab === 'accounts' ? <>
         <div className="access-table-head account-grid"><span>User</span><span>Account</span><span>Role</span><span>Last sign-in</span><span>Status</span><span /></div>
         {visibleAccounts.map((account) => <div className="access-table-row account-grid" key={account.id} role="button" tabIndex={0} onClick={() => setSelectedAccessRecord({ title: 'User account', subtitle: fullName(account), record: { ...account } })} onKeyDown={(event) => { if (event.key === 'Enter') setSelectedAccessRecord({ title: 'User account', subtitle: fullName(account), record: { ...account } }) }} style={{ cursor: 'pointer' }}>
-          <div className="access-person"><span className="access-avatar">{initials(account)}</span><span><b>{fullName(account)}</b><small>{account.email || `@${account.username}`}</small></span></div>
+          <div className="access-person"><Avatar className="access-avatar" src={account.linked_employee?.photo_url || ''} name={fullName(account)} size={35} radius={8} /><span><b>{fullName(account)}</b><small>{account.email || `@${account.username}`}</small></span></div>
           <span><code>{account.employee_code || '—'}</code><small style={{ display: 'block', marginTop: 3, color: 'var(--text-faint)' }}>{account.linked_employee ? account.linked_employee.department : 'System account'}</small></span>
           <span className="access-role"><Icon name="shield" size={15} />{account.role_name}</span>
           <span className="muted">{account.last_login ? new Date(account.last_login).toLocaleDateString() : 'Never'}</span>
@@ -145,7 +146,6 @@ export default function AccessManagement() {
 function Stat({ icon, label, value, note }: { icon: string; label: string; value: number; note: string }) {
   return <div className="access-stat"><span><Icon name={icon} size={21} /></span><div><small>{label}</small><b>{value}</b><em>{note}</em></div></div>
 }
-function initials(account: AccountRecord) { return `${account.first_name?.[0] || account.username[0] || ''}${account.last_name?.[0] || ''}`.toUpperCase() }
 function fullName(account: AccountRecord) { return `${account.first_name} ${account.last_name}`.trim() || account.username }
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) { return <label className="access-field"><span>{label}{required && <i>*</i>}</span>{children}</label> }
 function Modal({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: React.ReactNode }) { return <div className="access-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}><section className="access-modal"><header><span><h2>{title}</h2><p>{subtitle}</p></span><button onClick={onClose}><Icon name="close" size={20} /></button></header><div className="access-modal-body">{children}</div></section></div> }

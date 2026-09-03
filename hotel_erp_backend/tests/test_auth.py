@@ -1,6 +1,7 @@
 import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
+from django.core.files.base import ContentFile as SimpleContentFile
 from django.core.management import call_command
 from django.test import override_settings
 from apps.departments.models import Branch, Department
@@ -235,3 +236,20 @@ def test_current_user_payload_has_stable_user_and_employee_identifiers(client):
     assert response.data["employee_code"] == "EMP-PAYLOAD"
     assert response.data["branch_id"] == str(branch.pk)
     assert response.data["department_id"] == str(department.pk)
+
+
+@pytest.mark.django_db
+def test_current_user_payload_contains_employee_photo_url(client, settings, tmp_path):
+    settings.MEDIA_ROOT = tmp_path
+    settings.MEDIA_URL = "/media/"
+    user = get_user_model().objects.create_user(
+        username="photo-user", employee_code="EMP-PHOTO", password="test-pass-123"
+    )
+    employee = link_employee(user, "PHOTO")
+    employee.photo.save("profile.jpg", SimpleContentFile(b"profile"), save=True)
+    client.force_login(user)
+
+    response = client.get("/api/v1/auth/me/")
+
+    assert response.status_code == 200
+    assert response.json()["photo_url"].endswith("/media/employee_photos/profile.jpg")

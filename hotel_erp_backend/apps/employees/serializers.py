@@ -1,3 +1,6 @@
+import os
+
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.contrib.auth.models import Group
@@ -38,6 +41,27 @@ class EmployeeSerializer(serializers.ModelSerializer):
         value = str(value or "").strip().title()
         if value and value not in {"Male", "Female"}:
             raise serializers.ValidationError("Gender must be Male or Female.")
+        return value
+
+    def validate_photo(self, value):
+        if value is None:
+            return value
+
+        max_size = 5 * 1024 * 1024
+        if value.size > max_size:
+            raise serializers.ValidationError("The employee photo must be 5 MB or smaller.")
+
+        allowed_types = {"image/png", "image/jpeg", "image/webp"}
+        content_type = getattr(value, "content_type", "")
+        if content_type and content_type not in allowed_types:
+            raise serializers.ValidationError("Upload a PNG, JPG/JPEG, or WEBP image.")
+
+        running_on_vercel = bool(os.environ.get("VERCEL") or os.environ.get("VERCEL_URL"))
+        blob_ready = bool(getattr(settings, "VERCEL_BLOB_CONFIGURED", False))
+        if running_on_vercel and not blob_ready:
+            raise serializers.ValidationError(
+                "Media storage is not configured. Connect a Vercel Blob store to the backend project or add BLOB_READ_WRITE_TOKEN, redeploy, and try again."
+            )
         return value
 
     class Meta:

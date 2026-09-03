@@ -1,4 +1,8 @@
+import base64
+
 import pytest
+from django.core.files.uploadedfile import SimpleUploadedFile
+from rest_framework import serializers
 from rest_framework.test import APIRequestFactory
 
 from apps.departments.models import Department
@@ -89,3 +93,27 @@ def test_employee_removal_is_a_soft_deactivation():
 
     assert employee.is_active is False
     assert employee.user.is_active is False
+
+
+@pytest.mark.django_db
+def test_employee_photo_accepts_supported_small_image():
+    department = Department.objects.create(name="People Operations")
+    photo = SimpleUploadedFile("employee.png", base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="), content_type="image/png")
+    serializer = EmployeeSerializer(
+        data={
+            "first_name": "Mercy",
+            "last_name": "Akello",
+            "password": "Temporary-pass-123",
+            "department": str(department.id),
+            "designation": "Receiving Clerk",
+            "photo": photo,
+        }
+    )
+    assert serializer.is_valid(), serializer.errors
+
+
+def test_employee_photo_rejects_unsupported_content_type():
+    photo = SimpleUploadedFile("employee.svg", b"<svg></svg>", content_type="image/svg+xml")
+    serializer = EmployeeSerializer()
+    with pytest.raises(serializers.ValidationError):
+        serializer.validate_photo(photo)

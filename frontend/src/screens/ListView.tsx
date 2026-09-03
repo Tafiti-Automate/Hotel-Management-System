@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useApp } from '../state/AppContext'
 import { Icon } from '../components/Icon'
+import { Avatar } from '../components/Avatar'
 import RecordDetailDrawer from '../components/RecordDetailDrawer'
 import { cfg, type ColumnDef, type EntityKey, type Row } from '../lib/data'
 import { chipStyleFor, money } from '../lib/theme'
@@ -231,6 +232,12 @@ export default function ListView() {
             <div style={{ display: 'grid', placeItems: 'center' }}><input type="checkbox" checked={selected.has(row.id)} onClick={(event) => event.stopPropagation()} onChange={(event) => setSelected((current) => { const next = new Set(current); event.target.checked ? next.add(row.id) : next.delete(row.id); return next })} /></div>
             {visibleColumns.map((column, index) => {
               const value = valueFor(column, row)
+              if (route === 'employees' && column.key === 'name') {
+                return <div key={column.key} className="data-cell" data-label={column.label} data-primary={index === 0 ? 'true' : undefined} style={{ ...cellStyle(column), gap: 10 }}>
+                  <Avatar src={String(row.photo || '')} name={String(row.name || 'Employee')} size={34} />
+                  <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</span>
+                </div>
+              }
               if (route === 'categories' && column.key === 'name') {
                 const child = Number(row.level || 0) > 0
                 return <div key={column.key} className="data-cell" data-label={column.label} data-primary={index === 0 ? 'true' : undefined} style={{ ...cellStyle(column), paddingLeft: child ? 32 : 12, gap: 8 }}><Icon name={child ? 'subdirectory_arrow_right' : 'folder'} size={17} color={child ? 'var(--text-faint)' : 'var(--accent)'} /><span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</span></div>

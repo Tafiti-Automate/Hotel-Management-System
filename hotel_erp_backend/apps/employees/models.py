@@ -59,7 +59,7 @@ class Employee(BaseModel):
     address = models.TextField(blank=True)
     date_joined = models.DateField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
-    photo = models.ImageField(upload_to="employee_photos/", blank=True, null=True)
+    photo = models.ImageField(upload_to="employee_photos/", blank=True, null=True, max_length=500)
 
     class Meta(BaseModel.Meta):
         ordering = ("user__first_name", "user__last_name", "user__username")

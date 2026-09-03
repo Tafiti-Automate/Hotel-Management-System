@@ -1,3 +1,4 @@
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.viewsets import ModelViewSet
 
 from apps.employees.models import Designation, Employee
@@ -6,6 +7,7 @@ from core.mixins.viewsets import CreatedByModelMixin
 
 
 class EmployeeViewSet(CreatedByModelMixin, ModelViewSet):
+    parser_classes = (JSONParser, FormParser, MultiPartParser)
     queryset = Employee.objects.select_related("user", "department", "branch", "designation_record")
     serializer_class = EmployeeSerializer
     filterset_fields = ("department", "branch", "designation_record", "is_active")

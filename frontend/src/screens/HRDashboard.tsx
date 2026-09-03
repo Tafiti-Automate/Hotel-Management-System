@@ -1,4 +1,5 @@
 import { Icon } from '../components/Icon'
+import { Avatar } from '../components/Avatar'
 import { useApp } from '../state/AppContext'
 
 export default function HRDashboard() {
@@ -50,7 +51,7 @@ export default function HRDashboard() {
           </div>
           {(datedEmployees.length ? datedEmployees : employees.slice(0, 6)).map((employee) => (
             <button key={employee.id} onClick={() => { app.navTo('employees', 'Employees'); app.openEdit(employee.id) }} className="hover-surface2" style={{ width: '100%', border: 0, borderTop: '1px solid var(--border)', background: 'transparent', padding: '11px 17px', display: 'grid', gridTemplateColumns: '38px minmax(130px,1.5fr) minmax(110px,1fr) auto', alignItems: 'center', gap: 11, textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
-              <span style={{ width: 36, height: 36, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'var(--accent-soft)', color: 'var(--accent)', fontSize: 12, fontWeight: 850 }}>{String(employee.name).split(' ').map((part: string) => part[0]).join('').slice(0, 2)}</span>
+              <Avatar src={String(employee.photo || '')} name={String(employee.name || 'Employee')} size={36} />
               <span><span style={{ display: 'block', color: 'var(--text)', fontSize: 12.5, fontWeight: 800 }}>{employee.name}</span><span style={{ display: 'block', color: 'var(--text-faint)', fontSize: 12, marginTop: 2 }}>{employee.employeeCode || 'Employee profile'}</span></span>
               <span><span style={{ display: 'block', color: 'var(--text-muted)', fontSize: 12 }}>{employee.department || 'Unassigned'}</span><span style={{ display: 'block', color: 'var(--text-faint)', fontSize: 11.5, marginTop: 2 }}>{employee.designation || 'No job title'}</span></span>
               <span style={{ color: employee.status === 'Active' ? 'var(--good)' : 'var(--text-faint)', background: employee.status === 'Active' ? 'var(--good-soft)' : 'var(--surface-2)', borderRadius: 20, padding: '4px 8px', fontSize: 11.5, fontWeight: 800 }}>{employee.status}</span>
