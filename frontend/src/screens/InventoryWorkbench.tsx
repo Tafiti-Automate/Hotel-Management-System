@@ -772,6 +772,12 @@ function RequesterDraftEditor({ app, data, form, setForm, busy, execute, draftRe
         </div>
       </header>
 
+      <div className="requester-progress" aria-label="Requisition preparation progress">
+        <span className={selectedStoreId ? 'is-complete' : 'is-active'}><i>1</i><b>Requisition details</b></span>
+        <span className={draftLines.length ? 'is-complete' : selectedStoreId ? 'is-active' : ''}><i>2</i><b>Add items</b></span>
+        <span className={canSubmit ? 'is-active' : ''}><i>3</i><b>Review &amp; submit</b></span>
+      </div>
+
       <div className="requester-document-section requester-document-details-section">
         <div className="requester-section-heading"><h3>Request details</h3></div>
         <div className="requester-document-details">

@@ -52,6 +52,9 @@ export default function Dashboard() {
   const statusLabel = app.apiStatus === 'loading' ? 'Syncing' : synced ? 'Live' : app.apiStatus === 'offline' ? 'Offline' : 'Connecting'
   const department = app.user.departmentName || '—'
   const branch = app.currentBranch || app.user.branchName || '—'
+  const firstName = String(app.user.name || 'there').trim().split(/\s+/)[0] || 'there'
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
 
   return <div className="role-dashboard">
     <header className="role-dashboard-header">
@@ -60,8 +63,8 @@ export default function Dashboard() {
           <span>{app.user.role}</span>
           <span className={`live-state ${synced ? 'is-live' : app.apiStatus === 'offline' ? 'is-offline' : ''}`}><i />{statusLabel}</span>
         </div>
-        <h1>{dashboardTitleFor(role)}</h1>
-        <p>{view.subtitle}</p>
+        <h1>{greeting}, {firstName} <span className="dashboard-wave" aria-hidden="true">👋</span></h1>
+        <p>{view.subtitle} <span className="dashboard-view-label">{dashboardTitleFor(role)}</span></p>
       </div>
       <div className="role-dashboard-tools">
         <span className="dashboard-date">{formatDashboardDate()}</span>
@@ -76,7 +79,7 @@ export default function Dashboard() {
     </section>}
 
     <section className="dashboard-section">
-      <div className="dashboard-section-heading"><div><h2>Overview</h2><span>Current workload</span></div></div>
+      <div className="dashboard-section-heading"><div><h2>Workload</h2><span>What needs attention in your current role</span></div></div>
       <div className="task-card-grid">
         {view.tasks.map((task) => <Task key={task.label} task={task} onClick={() => app.navTo(task.route, task.routeLabel)} />)}
       </div>

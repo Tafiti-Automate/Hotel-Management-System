@@ -6089,3 +6089,732 @@ html[data-theme="dark"] .screen-app .app-content {
   .store-purchase-line { grid-template-columns: 1fr !important; align-items: stretch !important; }
   .store-purchase-line > button { width: 100% !important; }
 }
+
+/* ========================================================================== */
+/* ERP WORKSPACE VISUAL REFINEMENT V29 — presentation only, workflow neutral. */
+/* ========================================================================== */
+
+.screen-app .dashboard-wave {
+  display: inline-block;
+  margin-left: 3px;
+  font-size: .82em;
+  transform: translateY(-1px);
+}
+
+.screen-app .dashboard-view-label {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.screen-app .role-dashboard-header {
+  padding-bottom: 18px;
+}
+
+.screen-app .dashboard-section {
+  margin-top: 20px;
+}
+
+.screen-app .task-card-grid {
+  gap: 12px;
+}
+
+/* Compact operational KPI cards like the approved concept screens. */
+.screen-app .dashboard-task-card {
+  min-height: 104px !important;
+  grid-template-columns: 38px minmax(0,1fr) 18px;
+  grid-template-rows: auto auto auto;
+  padding: 14px 15px !important;
+  gap: 2px 10px;
+}
+
+.screen-app .dashboard-task-icon {
+  grid-row: 1 / span 2;
+  width: 36px;
+  height: 36px;
+  align-self: center;
+}
+
+.screen-app .dashboard-task-count {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: 25px;
+}
+
+.screen-app .dashboard-task-label {
+  grid-column: 2;
+  grid-row: 2;
+  font-size: 12.5px;
+}
+
+.screen-app .dashboard-task-hint {
+  grid-column: 1 / span 2;
+  grid-row: 3;
+  margin-top: 6px;
+  font-size: 11px;
+}
+
+.screen-app .dashboard-task-card > .ic:last-child {
+  grid-column: 3;
+  grid-row: 1 / span 3;
+}
+
+.screen-app .dashboard-work-grid {
+  grid-template-columns: minmax(0,1.7fr) minmax(280px,.6fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+
+/* Procurement: clear queue -> selected record -> action panel hierarchy. */
+.screen-app .procurement-workbench,
+.screen-app .receiving-workspace,
+.screen-app .finance-workbench {
+  width: 100%;
+}
+
+.screen-app .procurement-hero-card,
+.screen-app .receiving-hero-card,
+.screen-app .finance-workbench > .workbench-hero {
+  border-left: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  border-color: transparent !important;
+  padding: 4px 0 13px !important;
+  min-height: 82px !important;
+}
+
+.screen-app .procurement-hero-card .workbench-hero,
+.screen-app .receiving-hero-card {
+  min-height: 72px;
+}
+
+.screen-app .procurement-queue-tabs,
+.screen-app .receiving-view-tabs {
+  position: relative;
+  padding: 5px !important;
+  border-radius: 10px !important;
+  background: var(--surface) !important;
+  box-shadow: var(--ui-shadow-xs) !important;
+}
+
+.screen-app .procurement-queue-tab {
+  position: relative;
+  min-height: 58px;
+  padding: 8px 11px !important;
+  border: 1px solid transparent !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+}
+
+.screen-app .procurement-queue-tab:hover {
+  background: var(--surface-2) !important;
+}
+
+.screen-app .procurement-queue-tab.is-active {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border)) !important;
+  background: color-mix(in srgb, var(--accent-soft) 72%, var(--surface)) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.screen-app .procurement-queue-tab.is-active::after {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: -6px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--accent);
+  content: "";
+}
+
+.screen-app .procurement-workbench-grid,
+.screen-app .finance-workbench-grid {
+  align-items: stretch !important;
+}
+
+.screen-app .procurement-queue-card,
+.screen-app .procurement-detail-panel,
+.screen-app .finance-table-card,
+.screen-app .finance-action-panel,
+.screen-app .receiving-table-card {
+  border-radius: 10px !important;
+  border-color: var(--border) !important;
+  box-shadow: var(--ui-shadow-xs) !important;
+}
+
+.screen-app .procurement-detail-panel,
+.screen-app .finance-action-panel {
+  position: sticky;
+  top: 0;
+  max-height: calc(100dvh - 128px);
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.screen-app .procurement-table-title,
+.screen-app .finance-table-title {
+  min-height: 58px;
+  align-items: center;
+  background: var(--surface);
+}
+
+.screen-app .finance-table-title {
+  display: flex;
+  justify-content: space-between;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.screen-app .finance-table-title > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.screen-app .finance-table-title strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.screen-app .finance-table-title span {
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+
+.screen-app .procurement-table-head,
+.screen-app .finance-table-head {
+  display: grid;
+  grid-template-columns: 1.2fr 1.5fr 1fr .9fr 24px;
+  align-items: center;
+  gap: 12px;
+  min-height: 36px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-faint);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+}
+
+.screen-app .finance-table-head {
+  grid-template-columns: 1.2fr 1.4fr 1fr 1fr 20px;
+  padding: 0 17px;
+}
+
+.screen-app .procurement-record-row,
+.screen-app .finance-table-row {
+  min-height: 58px;
+  transition: background-color .12s ease, box-shadow .12s ease, transform .12s ease;
+}
+
+.screen-app .procurement-record-row:hover,
+.screen-app .finance-table-row:hover {
+  background: color-mix(in srgb, var(--accent-soft) 28%, var(--surface)) !important;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.screen-app .procurement-allocation-row,
+.screen-app .lpo-prep-row {
+  min-height: 62px;
+}
+
+.screen-app .supplier-allocation-line,
+.screen-app .supplier-quote-choice {
+  transition: border-color .12s ease, background-color .12s ease, box-shadow .12s ease, transform .12s ease;
+}
+
+.screen-app .supplier-allocation-line:hover,
+.screen-app .supplier-quote-choice:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border)) !important;
+  background: color-mix(in srgb, var(--accent-soft) 20%, var(--surface)) !important;
+}
+
+.screen-app .supplier-allocation-line.is-active,
+.screen-app .supplier-quote-choice.is-selected {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* LPO approval stages: make current and completed roles understandable at a glance. */
+.screen-app .lpo-summary-card {
+  border-radius: 9px !important;
+  box-shadow: none;
+}
+
+.screen-app .lpo-approval-track-wrap {
+  padding: 12px 12px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  overflow-x: auto;
+}
+
+.screen-app .lpo-approval-track-label {
+  margin-bottom: 10px;
+  color: var(--text-faint);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.screen-app .lpo-approval-track {
+  display: flex;
+  align-items: flex-start;
+  min-width: max-content;
+}
+
+.screen-app .lpo-approval-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 26px auto;
+  align-items: center;
+  gap: 7px;
+  min-width: 150px;
+  padding-right: 26px;
+}
+
+.screen-app .lpo-approval-node {
+  position: relative;
+  z-index: 2;
+  width: 25px;
+  height: 25px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-2);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text-faint);
+}
+
+.screen-app .lpo-approval-copy {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.screen-app .lpo-approval-copy strong {
+  color: var(--text);
+  font-size: 10.5px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.screen-app .lpo-approval-copy small {
+  color: var(--text-faint);
+  font-size: 9.5px;
+  text-transform: capitalize;
+}
+
+.screen-app .lpo-approval-connector {
+  position: absolute;
+  z-index: 1;
+  top: 12px;
+  left: 24px;
+  width: calc(100% - 2px);
+  height: 1px;
+  background: var(--border-2);
+}
+
+.screen-app .lpo-approval-step.tone-good .lpo-approval-node {
+  border-color: color-mix(in srgb, var(--good) 45%, var(--border));
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.screen-app .lpo-approval-step.tone-good .lpo-approval-connector {
+  background: color-mix(in srgb, var(--good) 45%, var(--border));
+}
+
+.screen-app .lpo-approval-step.tone-warn .lpo-approval-node {
+  border-color: color-mix(in srgb, var(--warn) 45%, var(--border));
+  background: var(--warn-soft);
+  color: var(--warn);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn-soft) 70%, transparent);
+}
+
+.screen-app .lpo-approval-step.tone-bad .lpo-approval-node {
+  border-color: color-mix(in srgb, var(--bad) 45%, var(--border));
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+
+/* Finance: queue-oriented overview without touching finance actions. */
+.screen-app .finance-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4,minmax(0,1fr));
+  gap: 12px;
+  margin: 0 0 16px;
+}
+
+.screen-app .finance-kpi-card {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 38px minmax(0,1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 94px;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--ui-shadow-xs);
+}
+
+.screen-app .finance-kpi-icon {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.screen-app .finance-kpi-card.tone-warning .finance-kpi-icon {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.screen-app .finance-kpi-card.tone-good .finance-kpi-icon {
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.screen-app .finance-kpi-card > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.screen-app .finance-kpi-card > div > span {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.screen-app .finance-kpi-card strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 20px;
+  line-height: 1.15;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.screen-app .finance-kpi-card small {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.screen-app .finance-workarea-label {
+  margin: 5px 0 9px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: .015em;
+}
+
+.screen-app .finance-empty-state {
+  min-height: 210px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--text-faint);
+  text-align: center;
+}
+
+.screen-app .finance-empty-state strong {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+.screen-app .finance-empty-state span {
+  font-size: 11px;
+}
+
+/* Department and Stores queues follow the same list-detail language. */
+.screen-app .department-approval-layout {
+  border-radius: 10px !important;
+  box-shadow: var(--ui-shadow-xs);
+}
+
+.screen-app .department-approval-queue {
+  background: color-mix(in srgb, var(--surface-2) 68%, var(--surface)) !important;
+}
+
+.screen-app .department-approval-queue-row {
+  min-height: 78px !important;
+  padding: 10px 12px !important;
+  border-radius: 8px !important;
+}
+
+.screen-app .department-approval-queue-row:hover {
+  background: var(--surface) !important;
+  border-color: var(--border) !important;
+}
+
+.screen-app .department-approval-queue-row[aria-current='true'] {
+  background: color-mix(in srgb, var(--accent-soft) 72%, var(--surface)) !important;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.screen-app .department-approval-detail-header {
+  min-height: 82px !important;
+  padding: 14px 18px !important;
+}
+
+.screen-app .department-approval-detail-scroll {
+  padding: 18px !important;
+}
+
+.screen-app .department-approval-actions {
+  min-height: 64px;
+  padding: 11px 18px !important;
+}
+
+.screen-app .storekeeper-queue-head,
+.screen-app .requester-list-head,
+.screen-app .requester-items-head {
+  background: var(--surface-2) !important;
+}
+
+.screen-app .storekeeper-queue-row,
+.screen-app .requester-items-table:not(.requester-items-head) {
+  transition: background-color .12s ease;
+}
+
+.screen-app .storekeeper-queue-row:hover,
+.screen-app .requester-items-table:not(.requester-items-head):hover {
+  background: color-mix(in srgb, var(--accent-soft) 18%, var(--surface));
+}
+
+.screen-app .requester-requisition-document {
+  border-radius: 10px !important;
+  box-shadow: var(--ui-shadow-sm) !important;
+}
+
+/* Direct store replenishment matches the same operational card rhythm. */
+.screen-app .store-purchase-grid > section,
+.screen-app .store-purchase-grid > aside,
+.screen-app .store-purchase-metrics > div {
+  border-radius: 10px !important;
+  box-shadow: var(--ui-shadow-xs) !important;
+}
+
+.screen-app .store-purchase-line {
+  border-radius: 8px !important;
+  background: var(--surface) !important;
+}
+
+/* Receiving: compact queue, readable selected-document work area. */
+.screen-app .receiving-search-grid {
+  padding: 12px 14px !important;
+  background: var(--surface) !important;
+}
+
+.screen-app .receiving-ready-header {
+  min-height: 36px;
+  align-items: center;
+  background: var(--surface-2);
+}
+
+.screen-app .receiving-table-card > button {
+  min-height: 58px;
+  transition: background-color .12s ease, box-shadow .12s ease;
+}
+
+.screen-app .receiving-table-card > button:hover {
+  background: color-mix(in srgb, var(--accent-soft) 24%, var(--surface)) !important;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* Keep Supplier Management as the visual reference implementation. */
+.screen-app .supplier-management-screen {
+  max-width: 1480px !important;
+}
+
+.screen-app .supplier-table-shell,
+.screen-app .supplier-kpi-card {
+  box-shadow: var(--ui-shadow-xs);
+}
+
+.screen-app .supplier-table-row:hover {
+  background: color-mix(in srgb, var(--accent-soft) 24%, var(--surface));
+}
+
+@media (max-width: 1180px) {
+  .screen-app .finance-kpi-grid {
+    grid-template-columns: repeat(2,minmax(0,1fr));
+  }
+
+  .screen-app .procurement-detail-panel,
+  .screen-app .finance-action-panel {
+    position: static;
+    max-height: none;
+  }
+}
+
+@media (max-width: 980px) {
+  .screen-app .procurement-workbench-grid,
+  .screen-app .finance-workbench-grid {
+    grid-template-columns: minmax(0,1fr) !important;
+  }
+
+  .screen-app .procurement-table-head,
+  .screen-app .finance-table-head {
+    display: none;
+  }
+
+  .screen-app .procurement-record-row,
+  .screen-app .finance-table-row {
+    grid-template-columns: minmax(0,1.3fr) minmax(0,1fr) auto !important;
+  }
+
+  .screen-app .procurement-record-row > span:nth-child(3),
+  .screen-app .finance-table-row > span:nth-child(3) {
+    display: none;
+  }
+
+  .screen-app .procurement-record-row > span:nth-child(4),
+  .screen-app .finance-table-row > span:nth-child(4) {
+    justify-self: end;
+  }
+}
+
+@media (max-width: 760px) {
+  .screen-app .dashboard-view-label {
+    display: none;
+  }
+
+  .screen-app .task-card-grid,
+  .screen-app .finance-kpi-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .screen-app .procurement-queue-tabs {
+    grid-template-columns: repeat(2,minmax(0,1fr)) !important;
+  }
+
+  .screen-app .lpo-approval-step {
+    min-width: 136px;
+  }
+
+  .screen-app .procurement-record-row,
+  .screen-app .finance-table-row {
+    grid-template-columns: minmax(0,1fr) auto !important;
+    gap: 6px 10px !important;
+  }
+
+  .screen-app .procurement-record-row > span:nth-child(2),
+  .screen-app .procurement-record-row > span:nth-child(3),
+  .screen-app .finance-table-row > span:nth-child(2),
+  .screen-app .finance-table-row > span:nth-child(3) {
+    display: none;
+  }
+
+  .screen-app .procurement-record-row > span:nth-child(4),
+  .screen-app .finance-table-row > span:nth-child(4) {
+    justify-self: start;
+  }
+}
+
+/* Department requisition progress cue — visual only. */
+.screen-app .requester-progress {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: 0;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.screen-app .requester-progress > span {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.screen-app .requester-progress > span:not(:last-child)::after {
+  position: absolute;
+  left: calc(50% + 54px);
+  right: calc(-50% + 54px);
+  top: 16px;
+  height: 1px;
+  background: var(--border-2);
+  content: "";
+}
+
+.screen-app .requester-progress i {
+  position: relative;
+  z-index: 1;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-2);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text-faint);
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.screen-app .requester-progress .is-active,
+.screen-app .requester-progress .is-complete {
+  color: var(--text);
+}
+
+.screen-app .requester-progress .is-active i {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.screen-app .requester-progress .is-complete i {
+  border-color: var(--good);
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.screen-app .requester-progress .is-complete:not(:last-child)::after {
+  background: color-mix(in srgb, var(--good) 55%, var(--border-2));
+}
+
+@media (max-width: 640px) {
+  .screen-app .requester-progress {
+    padding-inline: 12px;
+  }
+  .screen-app .requester-progress b {
+    display: none;
+  }
+  .screen-app .requester-progress > span:not(:last-child)::after {
+    left: calc(50% + 14px);
+    right: calc(-50% + 14px);
+  }
+}

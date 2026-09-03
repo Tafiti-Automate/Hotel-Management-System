@@ -535,7 +535,7 @@ export default function ProcurementWorkbench() {
 
   return (
     <div className="enterprise-workspace procurement-workbench" style={{ maxWidth: 1480, margin: '0 auto' }}>
-      <div style={{ ...card, padding: 20, marginBottom: 16 }}>
+      <div className="procurement-hero-card" style={{ ...card, padding: 20, marginBottom: 16 }}>
         <div className="workbench-hero" style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
           <span style={heroIcon}><Icon name="shopping_cart_checkout" size={24} color="#fff" /></span>
           <div>
@@ -546,7 +546,7 @@ export default function ProcurementWorkbench() {
           <button onClick={() => void load()} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button>
         </div>
       </div>
-      {isProcurementRole ? <div style={{ ...card, padding: 8, marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 6 }}>
+      {isProcurementRole ? <div className="procurement-queue-tabs" style={{ ...card, padding: 8, marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 6 }}>
         {([
           ['allocation', 'New Purchase Requests', procurementQueues.allocation],
           ['prepare', 'Prepare LPO', procurementQueues.prepare],
@@ -557,12 +557,12 @@ export default function ProcurementWorkbench() {
           ['history', 'History', procurementQueues.history],
         ] as Array<['allocation' | LpoQueue, string, number]>).map(([key, label, count]) => {
           const active = key === 'allocation' ? stage === 'quote' : stage === 'lpo' && lpoQueue === key
-          return <button key={key} type="button" onClick={() => openProcurementQueue(key)} style={{ minWidth: 0, padding: '10px 9px', border: `1px solid ${active ? 'var(--accent)' : 'transparent'}`, borderRadius: 8, background: active ? 'var(--accent-soft)' : 'transparent', color: active ? 'var(--accent)' : 'var(--text-muted)', font: 'inherit', cursor: 'pointer', textAlign: 'left' }}>
+          return <button key={key} type="button" className={`procurement-queue-tab${active ? ' is-active' : ''}`} onClick={() => openProcurementQueue(key)} style={{ minWidth: 0, padding: '10px 9px', border: `1px solid ${active ? 'var(--accent)' : 'transparent'}`, borderRadius: 8, background: active ? 'var(--accent-soft)' : 'transparent', color: active ? 'var(--accent)' : 'var(--text-muted)', font: 'inherit', cursor: 'pointer', textAlign: 'left' }}>
             <div style={{ fontSize: 10.5, fontWeight: 750, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</div>
             <div style={{ marginTop: 3, fontSize: 17, fontWeight: 850, color: active ? 'var(--accent)' : 'var(--text)' }}>{count}</div>
           </button>
         })}
-      </div> : role === 'general manager' ? <div style={{ ...card, padding: 8, marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(2,minmax(150px,220px))', gap: 7 }}>
+      </div> : role === 'general manager' ? <div className="receiving-view-tabs" style={{ ...card, padding: 8, marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(2,minmax(150px,220px))', gap: 7 }}>
         <button type="button" onClick={() => { setLpoQueue('management'); setForm({}); setSelectedRecord(null) }} style={{ padding: '11px 13px', border: `1px solid ${lpoQueue === 'management' ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 8, background: lpoQueue === 'management' ? 'var(--accent-soft)' : 'var(--surface)', color: lpoQueue === 'management' ? 'var(--accent)' : 'var(--text)', font: 'inherit', cursor: 'pointer', textAlign: 'left' }}>
           <strong style={{ display: 'block', fontSize: 11.5 }}>Pending</strong><span style={{ display: 'block', marginTop: 3, fontSize: 17, fontWeight: 850 }}>{roleApprovalQueueOrders.length}</span>
         </button>
@@ -594,11 +594,11 @@ export default function ProcurementWorkbench() {
 
       {message && <div style={{ ...card, padding: 13, marginBottom: 14, borderColor: 'rgba(220,38,38,.3)', color: 'var(--bad)', fontSize: 12.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}><span>{message}</span><button type="button" onClick={() => void load()} style={secondary}>Retry</button></div>}
       {loading ? <div style={{ ...card, padding: 50, textAlign: 'center', color: 'var(--text-faint)' }}>Loading procurement records…</div> : (
-        <div className="workbench-grid" style={{ display: 'grid', gridTemplateColumns: role === 'general manager' && !form.order ? '1fr' : stage === 'lpo' && form.order ? 'minmax(0,.9fr) minmax(460px,1.1fr)' : 'minmax(0,1.45fr) minmax(340px,.75fr)', gap: 16, alignItems: 'start' }}>
-          <section style={{ ...card, overflow: 'hidden' }}>
+        <div className="workbench-grid procurement-workbench-grid" style={{ display: 'grid', gridTemplateColumns: role === 'general manager' && !form.order ? '1fr' : stage === 'lpo' && form.order ? 'minmax(0,.9fr) minmax(460px,1.1fr)' : 'minmax(0,1.45fr) minmax(340px,.75fr)', gap: 16, alignItems: 'start' }}>
+          <section className="procurement-queue-card" style={{ ...card, overflow: 'hidden' }}>
             <StageTable stage={stage} lpoQueue={lpoQueue} data={scopedData} names={names} role={role} onSelect={selectWorkspaceRecord} />
           </section>
-          {!(role === 'general manager' && !form.order) && <aside style={{ ...card, padding: 18 }}>
+          {!(role === 'general manager' && !form.order) && <aside className="procurement-detail-panel" style={{ ...card, padding: 18 }}>
             {!canChangeStage && stage !== 'lpo' && <ReadOnlyStage />}
             {canChangeStage && stage === 'request' && <RequestPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel }} items={app.data.items} stores={app.data.locations} departments={app.data.departments} />}
             {canChangeStage && stage === 'quote' && <QuotePanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, names }} suppliers={app.data.suppliers} supplierItems={(scopedData.supplierItems || app.data.supplierItems || []).map(normalizeSupplierPrice)} items={app.data.items} itemUnits={app.data.itemUnits} onContinueToLpo={(requisitionId: string) => { setStage('lpo'); setLpoQueue('prepare'); setForm({ requisition: requisitionId }) }} />}
@@ -889,7 +889,7 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
   }
 
   return <div className="enterprise-workspace receiving-workspace" style={{ maxWidth: 1320, margin: '0 auto' }}>
-    <div style={{ ...card, padding: 20, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 13 }}>
+    <div className="receiving-hero-card" style={{ ...card, padding: 20, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 13 }}>
       <span style={heroIcon}><Icon name="move_to_inbox" size={24} color="#fff" /></span>
       <div>
         <div style={eyebrow}>Receiving Clerk</div>
@@ -904,7 +904,7 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
       <button type="button" onClick={() => { setView('history'); setSelectedOrderId('') }} style={{ padding: '11px 13px', border: `1px solid ${view === 'history' ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 8, background: view === 'history' ? 'var(--accent-soft)' : 'var(--surface)', color: view === 'history' ? 'var(--accent)' : 'var(--text)', font: 'inherit', cursor: 'pointer', textAlign: 'left' }}><strong style={{ display: 'block', fontSize: 11.5 }}>GRN History</strong><span style={{ display: 'block', marginTop: 3, fontSize: 17, fontWeight: 850 }}>{data.receipts.length}</span></button>
     </div>
 
-    <section style={{ ...card, overflow: 'hidden' }}>
+    <section className="receiving-table-card" style={{ ...card, overflow: 'hidden' }}>
       <div className="receiving-search-grid" style={{ padding: 14, display: 'grid', gridTemplateColumns: view === 'ready' ? 'minmax(260px,1fr) minmax(210px,.45fr)' : '1fr', gap: 10, borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
         <Field label={view === 'ready' ? '1. Find the LPO' : 'Search saved GRNs'}><Input value={query} onChange={setQuery} placeholder={view === 'ready' ? 'Type the LPO number (not the invoice number)' : 'GRN, LPO, supplier or invoice number'} /></Field>
         {view === 'ready' && <Field label="Optional: filter by supplier"><select value={supplierFilter} onChange={(event) => setSupplierFilter(event.target.value)} style={control}><option value="">All suppliers</option>{supplierRows.map((row) => <option key={id(row.id)} value={id(row.id)}>{id(row.name)}</option>)}</select></Field>}
@@ -1155,7 +1155,7 @@ function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplier
         const article = items.find((item: Row) => id(item.id) === id(line.item))
         const rejected = num(line.approved_quantity ?? line.quantity) === 0 || Boolean(id(line.rejection_stage))
         const allocated = !rejected && Boolean(line.procurement_supplier_price && num(line.procurement_quantity) > 0 && num(line.procurement_unit_cost) > 0)
-        return <button key={id(line.id)} type="button" onClick={() => selectArticle(id(line.id))} style={{ width: '100%', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto', alignItems: 'center', gap: 9, padding: '9px 10px', border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 7, background: active ? 'var(--accent-soft)' : 'var(--surface)', color: 'var(--text)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
+        return <button key={id(line.id)} type="button" className={`supplier-allocation-line${active ? ' is-active' : ''}`} onClick={() => selectArticle(id(line.id))} style={{ width: '100%', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto', alignItems: 'center', gap: 9, padding: '9px 10px', border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 7, background: active ? 'var(--accent-soft)' : 'var(--surface)', color: 'var(--text)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
           <span style={{ minWidth: 0 }}><strong style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5 }}>{names.items.get(id(line.item)) || id(line.item)}</strong><small style={{ color: 'var(--text-muted)' }}>Store Keeper: {id(line.quantity)} {id(article?.uom)} · Procurement: {id(line.approved_quantity ?? line.quantity)}</small></span>
           <span style={{ color: rejected ? 'var(--bad)' : allocated ? 'var(--good)' : 'var(--warn)', fontSize: 10.5, fontWeight: 750 }}>{rejected ? 'Rejected item' : allocated ? 'Allocated' : 'Needs supplier'}</span>
           <Icon name="chevron_right" size={16} color="var(--text-faint)" />
@@ -1181,7 +1181,7 @@ function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplier
         {catalogue.map((entry: Row) => {
           const selected = id(entry.id) === id(selectedCatalogue?.id)
           const supplierName = names.suppliers.get(id(entry.supplierId)) || id(entry.supplier) || 'Supplier'
-          return <button key={id(entry.id)} type="button" onClick={() => {
+          return <button key={id(entry.id)} type="button" className={`supplier-quote-choice${selected ? ' is-selected' : ''}`} onClick={() => {
             setForm({ ...form, cataloguePrice: id(entry.id), quantity: requestedBase })
           }} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.3fr) .75fr .65fr auto', alignItems: 'center', gap: 8, padding: '9px 10px', border: `1px solid ${selected ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 7, background: selected ? 'var(--accent-soft)' : 'var(--surface)', color: 'var(--text)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
             <span style={{ minWidth: 0 }}><strong style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.3 }}>{supplierName}</strong><small style={{ color: 'var(--text-muted)' }}>{id(entry.quotationReference) || 'Quotation'} · {id(entry.unit) || id(selectedItem?.uom) || 'unit'}</small></span>
@@ -1461,7 +1461,7 @@ function friendlyLpoStatus(status: string, steps: Row[]) { if (status === 'pendi
 
 function LpoSummary({ order, lines, names, quantityValue, quantityMax, onQuantityChange, totalOverride }: { order: Row; lines: Row[]; names: Record<string, Map<string, string>>; quantityValue?: (row: Row) => number; quantityMax?: (row: Row) => number; onQuantityChange?: (row: Row, value: unknown) => void; totalOverride?: number }) {
   const approvalSteps = Array.isArray(order.approval_steps) ? order.approval_steps as Row[] : []
-  return <section style={{ margin: '10px 0 14px', overflow: 'hidden', border: '1px solid var(--border)', borderRadius: 8 }}>
+  return <section className="lpo-summary-card" style={{ margin: '10px 0 14px', overflow: 'hidden', border: '1px solid var(--border)', borderRadius: 8 }}>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8, padding: 11, background: 'var(--surface-2)' }}>
       <ReadOnlyValue label="LPO number" value={id(order.lpo_number) || id(order.po_number)} />
       <ReadOnlyValue label="Supplier" value={names.suppliers.get(id(order.supplier)) || 'Inherited supplier'} />
@@ -1470,12 +1470,16 @@ function LpoSummary({ order, lines, names, quantityValue, quantityMax, onQuantit
     </div>
     {approvalSteps.length > 0 && (() => {
       const firstPending = approvalSteps.findIndex((step) => id(step.status) === 'pending')
-      return <div style={{ padding: '10px 11px', borderTop: '1px solid var(--border)' }}><div style={{ marginBottom: 7, color:'var(--text-faint)', fontSize:9.5, fontWeight:750, textTransform:'uppercase' }}>Approval timeline</div><div style={{ display:'flex', gap:7, flexWrap:'wrap' }}>{approvalSteps.map((step, index) => {
+      return <div className="lpo-approval-track-wrap"><div className="lpo-approval-track-label">Approval workflow</div><div className="lpo-approval-track">{approvalSteps.map((step, index) => {
         const rawStatus = id(step.status)
         const waiting = rawStatus === 'pending' && firstPending >= 0 && index > firstPending
         const displayStatus = waiting ? 'waiting' : rawStatus
         const tone = rawStatus === 'approved' ? 'good' : rawStatus === 'rejected' ? 'bad' : waiting ? 'muted' : 'warn'
-        return <span key={`${id(step.stage_name)}-${id(step.stage)}`} style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'5px 8px', borderRadius:999, background:tone==='good'?'var(--good-soft)':tone==='bad'?'var(--bad-soft)':tone==='warn'?'var(--warn-soft)':'var(--surface-2)', color:tone==='good'?'var(--good)':tone==='bad'?'var(--bad)':tone==='warn'?'var(--warn)':'var(--text-muted)', fontSize:10, fontWeight:700 }}><Icon name={rawStatus==='approved'?'check_circle':rawStatus==='rejected'?'cancel':waiting?'hourglass_empty':'schedule'} size={13} />{id(step.stage_name)} · {displayStatus.replace(/_/g,' ')}</span>
+        return <div key={`${id(step.stage_name)}-${id(step.stage)}`} className={`lpo-approval-step tone-${tone}`}>
+          <span className="lpo-approval-node"><Icon name={rawStatus==='approved'?'check':rawStatus==='rejected'?'close':waiting?'schedule':'hourglass_top'} size={13} /></span>
+          <span className="lpo-approval-copy"><strong>{id(step.stage_name)}</strong><small>{displayStatus.replace(/_/g,' ')}</small></span>
+          {index < approvalSteps.length - 1 && <span className="lpo-approval-connector" aria-hidden="true" />}
+        </div>
       })}</div></div>
     })()}
     <div style={{ padding: '8px 11px', display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) .6fr .7fr .8fr', gap: 8, borderTop: '1px solid var(--border)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}><span>Article</span><span>Quantity</span><span>Unit price</span><span>Total</span></div>
@@ -1604,7 +1608,7 @@ function StageTable({ stage, lpoQueue, data, names, role, onSelect }: { stage: S
         const lines = data.requisitionItems.filter((line) => id(line.requisition) === id(requisition.id))
         const allocated = lines.filter((line) => line.procurement_supplier_price && num(line.procurement_quantity) > 0 && num(line.procurement_unit_cost) > 0).length
         const preview = lines.slice(0, 2).map((line) => names.items.get(id(line.item)) || id(line.item)).join(', ')
-        return <button key={id(requisition.id)} type="button" onClick={() => onSelect(requisition)} style={{ width: '100%', display: 'grid', gridTemplateColumns: '1fr .65fr 1.2fr auto', alignItems: 'center', gap: 12, padding: '13px 16px', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
+        return <button key={id(requisition.id)} type="button" className="procurement-record-row procurement-allocation-row" onClick={() => onSelect(requisition)} style={{ width: '100%', display: 'grid', gridTemplateColumns: '1fr .65fr 1.2fr auto', alignItems: 'center', gap: 12, padding: '13px 16px', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
           <span><strong style={{ display: 'block', color: 'var(--text)', fontSize: 12.2 }}>{id(requisition.source_store_requisition_no) || id(requisition.requisition_number)}</strong><small style={{ color: 'var(--text-muted)' }}>{names.departments.get(id(requisition.department)) || 'Department'} · {lines.length} item{lines.length === 1 ? '' : 's'}</small></span>
           <span style={{ color: allocated === lines.length ? 'var(--good)' : 'var(--warn)', fontSize: 10.8, fontWeight: 750 }}>{allocated}/{lines.length} allocated</span>
           <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: 11.2 }}>{preview}{lines.length > 2 ? ` +${lines.length - 2}` : ''}</span>
@@ -1629,10 +1633,10 @@ function StageTable({ stage, lpoQueue, data, names, role, onSelect }: { stage: S
       {readyRequisitions.map((requisition) => {
         const lines = data.requisitionItems.filter((line) => id(line.requisition) === id(requisition.id))
         const suppliers = new Set(lines.map((line) => id(line.procurement_supplier)).filter(Boolean)).size
-        return <button key={id(requisition.id)} type="button" onClick={() => onSelect({ ...requisition, __workspace_kind: 'ready_requisition' })} style={{ width: '100%', display: 'grid', gridTemplateColumns: '1fr .7fr .7fr auto', gap: 12, alignItems: 'center', padding: '12px 16px', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}><strong style={{ color: 'var(--text)', fontSize: 12 }}>{id(requisition.source_store_requisition_no) || id(requisition.requisition_number)}</strong><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{lines.length} items</span><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{suppliers || 1} supplier{suppliers === 1 ? '' : 's'}</span><span style={{ color: 'var(--accent)', fontSize: 10.8, fontWeight: 800 }}>Prepare</span></button>
+        return <button key={id(requisition.id)} type="button" className="procurement-record-row lpo-prep-row" onClick={() => onSelect({ ...requisition, __workspace_kind: 'ready_requisition' })} style={{ width: '100%', display: 'grid', gridTemplateColumns: '1fr .7fr .7fr auto', gap: 12, alignItems: 'center', padding: '12px 16px', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}><strong style={{ color: 'var(--text)', fontSize: 12 }}>{id(requisition.source_store_requisition_no) || id(requisition.requisition_number)}</strong><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{lines.length} items</span><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{suppliers || 1} supplier{suppliers === 1 ? '' : 's'}</span><span style={{ color: 'var(--accent)', fontSize: 10.8, fontWeight: 800 }}>Prepare</span></button>
       })}
       {drafts.length > 0 && <div style={{ padding: '11px 16px 6px', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}>Draft LPOs</div>}
-      {drafts.map((row) => <button type="button" key={id(row.id)} onClick={() => onSelect(row)} style={{ width: '100%', display: 'grid', gridTemplateColumns: '1fr 1.3fr .8fr auto', gap: 12, alignItems: 'center', padding: '12px 16px', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}><strong style={{ color: 'var(--text)', fontSize: 12 }}>LPO {id(row.lpo_number) || id(row.po_number)}</strong><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{names.suppliers.get(id(row.supplier)) || id(row.supplier)}</span><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{money(row.total_amount)}</span><span style={{ color: 'var(--accent)', fontSize: 10.8, fontWeight: 800 }}>Review</span></button>)}
+      {drafts.map((row) => <button type="button" className="procurement-record-row lpo-prep-row" key={id(row.id)} onClick={() => onSelect(row)} style={{ width: '100%', display: 'grid', gridTemplateColumns: '1fr 1.3fr .8fr auto', gap: 12, alignItems: 'center', padding: '12px 16px', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}><strong style={{ color: 'var(--text)', fontSize: 12 }}>LPO {id(row.lpo_number) || id(row.po_number)}</strong><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{names.suppliers.get(id(row.supplier)) || id(row.supplier)}</span><span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{money(row.total_amount)}</span><span style={{ color: 'var(--accent)', fontSize: 10.8, fontWeight: 800 }}>Review</span></button>)}
       {!readyRequisitions.length && !drafts.length && <div style={{ padding: 42, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>No requisition is ready for LPO preparation. Complete supplier allocation under New Purchase Requests first.</div>}
     </div>
   }
@@ -1662,7 +1666,9 @@ function StageTable({ stage, lpoQueue, data, names, role, onSelect }: { stage: S
     if (stage === 'inspect') return [`INS-${id(row.id).slice(0, 8)}`, `GRN-${id(row.goods_receipt).slice(0, 8)}`, names.employees.get(id(row.inspected_by)) || id(row.inspected_by), id(row.status)]
     return [id(row.return_no), names.suppliers.get(id(row.supplier)) || id(row.supplier), id(row.return_date), id(row.status)]
   }
-  return <><div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', gap: 10 }}><strong style={{ fontSize: 12.8 }}>{title}</strong><span style={{ color: 'var(--text-faint)', fontSize: 10.5 }}>{rows.length} record{rows.length === 1 ? '' : 's'}</span></div>
+  const headers = stage === 'lpo' ? ['LPO', 'Supplier', 'Amount', 'Status'] : stage === 'request' ? ['Requisition', 'Article', 'Quantity', 'Estimate'] : stage === 'receipt' ? ['GRN', 'Date', 'Received by', 'Lines'] : stage === 'inspect' ? ['Inspection', 'GRN', 'Inspected by', 'Status'] : ['Return', 'Supplier', 'Date', 'Status']
+  return <><div className="procurement-table-title" style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', gap: 10 }}><strong style={{ fontSize: 12.8 }}>{title}</strong><span style={{ color: 'var(--text-faint)', fontSize: 10.5 }}>{rows.length} record{rows.length === 1 ? '' : 's'}</span></div>
+    <div className="procurement-table-head">{headers.map((header) => <span key={header}>{header}</span>)}<span aria-hidden="true" /></div>
     {rows.map((row) => <button type="button" key={id(row.id)} onClick={() => onSelect(row)} className="procurement-record-row" style={{ width: '100%', display: 'grid', gridTemplateColumns: '1.2fr 1.5fr 1fr .9fr 24px', alignItems: 'center', gap: 12, padding: '12px 16px', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit', fontSize: 12 }}>{cells(row).map((cell, i) => <span key={i} style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: i === 0 ? 'var(--text)' : 'var(--text-muted)', fontWeight: i === 0 ? 750 : 500 }}>{cell || '—'}</span>)}<Icon name="chevron_right" size={17} color="var(--text-faint)" /></button>)}
     {!rows.length && <div style={{ padding: 42, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}><div style={{ color: 'var(--text)', fontWeight: 750 }}>{role === 'general manager' && lpoQueue === 'management' ? 'No LPOs need your decision' : 'No records in this queue.'}</div>{role === 'general manager' && lpoQueue === 'management' && <div style={{ marginTop: 5 }}>Level 2-approved LPOs will appear here automatically.</div>}</div>}
   </>

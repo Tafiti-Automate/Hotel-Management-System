@@ -77,6 +77,11 @@ export default function FinanceWorkbench() {
     setTab(['payment', 'post'].includes(key) ? 'payments' : 'invoices')
     setForm({})
   }
+  const invoiceStatus = (row: Row) => sid(row.status).trim().toLowerCase()
+  const matchingQueue = scopedData.invoices.filter((row) => ['draft', 'unmatched', 'pending_match', 'matching'].includes(invoiceStatus(row)))
+  const approvalQueue = scopedData.invoices.filter((row) => ['matched', 'pending_approval', 'awaiting_approval'].includes(invoiceStatus(row)))
+  const outstandingPayable = scopedData.invoices.reduce((total, row) => total + number(row.balance_due), 0)
+  const paymentQueue = scopedData.payments.filter((row) => !['posted', 'paid', 'completed'].includes(invoiceStatus(row)))
 
   return <div className="enterprise-workspace finance-workbench" style={{ maxWidth: 1440, margin: '0 auto' }}>
     <section className="workbench-hero" style={{ ...card, padding: 20, marginBottom: 15, display: 'flex', alignItems: 'center', gap: 13 }}>
@@ -97,13 +102,19 @@ export default function FinanceWorkbench() {
         { key: 'post', label: 'Post settlement', actor: 'Finance', description: 'Post the payment and reduce the invoice balance.', icon: 'task_alt' },
       ]}
     />
-    <div style={{ marginBottom: 10, color: 'var(--text-muted)', fontSize: 14, fontWeight: 600 }}>Finance work areas</div>
+    <section className="finance-kpi-grid" aria-label="Finance operational metrics">
+      <FinanceMetric icon="difference" label="Awaiting Matching" value={String(matchingQueue.length)} hint="Invoices requiring three-way match" tone={matchingQueue.length ? 'warning' : 'good'} />
+      <FinanceMetric icon="approval" label="Ready for Approval" value={String(approvalQueue.length)} hint="Matched invoices awaiting decision" tone={approvalQueue.length ? 'warning' : 'good'} />
+      <FinanceMetric icon="payments" label="Outstanding Payable" value={money(outstandingPayable)} hint="Current supplier invoice balance" />
+      <FinanceMetric icon="schedule" label="Payments to Post" value={String(paymentQueue.length)} hint="Prepared settlements not yet posted" tone={paymentQueue.length ? 'warning' : 'good'} />
+    </section>
+    <div className="finance-workarea-label">Finance work areas</div>
     <div style={{ display: 'flex', gap: 5, marginBottom: 15, flexWrap: 'wrap' }}>{tabs.map(([key, icon, label]) => <button key={key} onClick={() => { setPaymentPathHint(''); setTab(key) }} style={{ ...tabButton, background: tab === key ? 'var(--accent-soft)' : 'var(--surface)', color: tab === key ? 'var(--accent)' : 'var(--text-muted)', borderColor: tab === key ? 'var(--accent)' : 'var(--border)' }}><Icon name={icon} size={17} />{label}</button>)}</div>
     {error && <div style={{ ...card, padding: 12, color: 'var(--bad)', marginBottom: 14, fontSize: 12 }}>{error}</div>}
     {loading ? <div style={{ ...card, padding: 50, textAlign: 'center', color: 'var(--text-faint)' }}>Loading finance records…</div> :
-      <div className="workbench-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.45fr) minmax(340px,.7fr)', gap: 16, alignItems: 'start' }}>
+      <div className="workbench-grid finance-workbench-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.45fr) minmax(340px,.7fr)', gap: 16, alignItems: 'start' }}>
         <FinanceTable tab={tab} data={scopedData} suppliers={suppliers} />
-        <aside style={{ ...card, padding: 18 }}>
+        <aside className="finance-action-panel" style={{ ...card, padding: 18 }}>
           {tab === 'invoices' && <InvoicePanel {...{ data: scopedData, form, setForm, busy, execute, orderLabel, invoiceLabel }} />}
           {tab === 'payments' && <PaymentPanel {...{ data: scopedData, form, setForm, busy, execute, invoiceLabel }} />}
           {tab === 'expenses' && <ExpensePanel {...{ data: scopedData, form, setForm, busy, execute, stores }} />}
@@ -204,8 +215,20 @@ function FinanceTable({ tab, data, suppliers }: { tab: FinanceTab; data: Record<
     : tab === 'banking' ? [sid(row.reference), money(row.amount), sid(row.transaction_type), sid(row.date)]
     : [sid(row.name), sid(row.description), row.is_default ? 'Default' : 'Available', row.is_active ? 'Active' : 'Inactive']
   const titles: Record<FinanceTab, string> = { invoices: 'Supplier invoices', payments: 'Supplier payments', expenses: 'Operating expenses', banking: 'Bank transactions', methods: 'Payment methods' }
+  const headers: Record<FinanceTab, string[]> = {
+    invoices: ['Invoice', 'Supplier', 'Amount', 'Status'],
+    payments: ['Reference', 'Amount', 'Payment date', 'Status'],
+    expenses: ['Reference', 'Amount', 'Date', 'Description'],
+    banking: ['Reference', 'Amount', 'Type', 'Date'],
+    methods: ['Method', 'Description', 'Default', 'Status'],
+  }
   return <>
-    <section style={{ ...card, overflow: 'hidden' }}><div style={{ padding: '15px 17px', borderBottom: '1px solid var(--border)', fontWeight: 800, fontSize: 13 }}>{titles[tab]}</div>{rows.map((row) => <button type="button" onClick={() => setSelectedRow(row)} className="procurement-record-row" key={sid(row.id)} style={{ ...tableRow, width: '100%', alignItems: 'center', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>{cells(row).map((cell, index) => <span key={index} style={{ color: index ? 'var(--text-muted)' : 'var(--text)', fontWeight: index ? 500 : 700 }}>{cell || '—'}</span>)}<Icon name="chevron_right" size={18} color="var(--text-faint)" /></button>)}{!rows.length && <div style={{ padding: 45, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>No {titles[tab].toLowerCase()} have been recorded yet.</div>}</section>
+    <section className="finance-table-card" style={{ ...card, overflow: 'hidden' }}>
+      <div className="finance-table-title"><div><strong>{titles[tab]}</strong><span>{rows.length} record{rows.length === 1 ? '' : 's'}</span></div></div>
+      <div className="finance-table-head">{headers[tab].map((header) => <span key={header}>{header}</span>)}<span aria-hidden="true" /></div>
+      {rows.map((row) => <button type="button" onClick={() => setSelectedRow(row)} className="procurement-record-row finance-table-row" key={sid(row.id)} style={{ ...tableRow, width: '100%', alignItems: 'center', border: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>{cells(row).map((cell, index) => <span key={index} style={{ color: index ? 'var(--text-muted)' : 'var(--text)', fontWeight: index ? 500 : 700 }}>{cell || '—'}</span>)}<Icon name="chevron_right" size={18} color="var(--text-faint)" /></button>)}
+      {!rows.length && <div className="finance-empty-state"><Icon name="inbox" size={25} color="var(--text-faint)" /><strong>No {titles[tab].toLowerCase()}</strong><span>Records will appear here when they are created.</span></div>}
+    </section>
     {selectedRow && <RecordDetailDrawer title={titles[tab]} subtitle={financeRecordTitle(tab, selectedRow)} record={selectedRow} onClose={() => setSelectedRow(null)} />}
   </>
 }
@@ -214,6 +237,10 @@ function financeRecordTitle(tab: FinanceTab, row: Row): string {
   if (tab === 'invoices') return sid(row.invoice_number) || sid(row.id)
   if (tab === 'payments' || tab === 'expenses' || tab === 'banking') return sid(row.reference) || sid(row.id)
   return sid(row.name) || sid(row.id)
+}
+
+function FinanceMetric({ icon, label, value, hint, tone = 'neutral' }: { icon: string; label: string; value: string; hint: string; tone?: 'neutral' | 'good' | 'warning' }) {
+  return <article className={`finance-kpi-card tone-${tone}`}><span className="finance-kpi-icon"><Icon name={icon} size={18} /></span><div><span>{label}</span><strong>{value}</strong><small>{hint}</small></div></article>
 }
 
 function Panel({ title, note, children }: { title: string; note: string; children: ReactNode }) { return <><div style={{ fontSize: 14, fontWeight: 800 }}>{title}</div><div style={{ ...subtle, margin: '4px 0 15px', lineHeight: 1.5 }}>{note}</div>{children}</> }
