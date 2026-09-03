@@ -1419,7 +1419,20 @@ class PurchaseOrder(BaseModel):
 
         with transaction.atomic():
             order = PurchaseOrder.objects.select_for_update().get(pk=self.pk)
-            lines = {str(line.pk): line for line in order.items.select_for_update().select_related("item", "unit", "requisition_item").order_by("pk")}
+            # PostgreSQL cannot apply FOR UPDATE to the nullable side of an
+            # OUTER JOIN. Lock only the PurchaseOrderItem rows first, then load
+            # nullable related records (unit/requisition_item) in a separate query.
+            locked_line_ids = list(
+                order.items.select_for_update()
+                .order_by("pk")
+                .values_list("pk", flat=True)
+            )
+            lines = {
+                str(line.pk): line
+                for line in PurchaseOrderItem.objects.filter(pk__in=locked_line_ids)
+                .select_related("item", "unit", "requisition_item")
+                .order_by("pk")
+            }
             activity_lines = []
             positive = False
             for decision in decisions:

@@ -1439,11 +1439,20 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                 if not order.editable:
                     raise ValidationError("LPO quantities can only be changed while the LPO is draft.")
 
+                # Lock the LPO rows without joining nullable relationships.
+                # PostgreSQL rejects FOR UPDATE when it is applied to the nullable
+                # side of the OUTER JOIN created for unit/requisition_item.
+                locked_line_ids = list(
+                    PurchaseOrderItem.objects.select_for_update()
+                    .filter(purchase_order=order)
+                    .order_by("pk")
+                    .values_list("pk", flat=True)
+                )
                 locked_lines = {
                     str(line.pk): line
-                    for line in PurchaseOrderItem.objects.select_for_update().select_related(
-                        "item", "unit", "requisition_item"
-                    ).filter(purchase_order=order)
+                    for line in PurchaseOrderItem.objects.filter(pk__in=locked_line_ids)
+                    .select_related("item", "unit", "requisition_item")
+                    .order_by("pk")
                 }
                 seen = set()
                 for decision in decisions:
