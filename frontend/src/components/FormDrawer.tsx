@@ -264,26 +264,34 @@ export default function FormDrawer() {
         {wizard && <div style={{ display: 'grid', gridTemplateColumns: `repeat(${pageCount},1fr)`, gap: 5, padding: '12px 22px', borderBottom: '1px solid var(--border)' }}>{Array.from({ length: pageCount }).map((_, index) => <span key={index} style={{ height: 3, borderRadius: 2, background: index <= step ? 'var(--accent)' : 'var(--border)' }} />)}</div>}
 
         <div className="form-body" style={{ flex: 1, overflowY: 'auto', padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {f.entity === 'employees' && <section style={{ display: 'flex', alignItems: 'center', gap: 14, padding: 14, border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface-2)' }}>
-            <span style={{ width: 72, height: 72, flex: 'none', borderRadius: '50%', overflow: 'hidden', display: 'grid', placeItems: 'center', background: 'var(--accent-soft)', color: 'var(--accent)', fontSize: 20, fontWeight: 850 }}>
+          {f.entity === 'employees' && <section style={{ display: 'grid', gridTemplateColumns: '88px minmax(0,1fr)', gap: 18, padding: 18, border: '1px solid color-mix(in srgb, var(--accent) 16%, var(--border))', borderRadius: 14, background: 'linear-gradient(180deg, color-mix(in srgb, var(--accent) 4%, white), var(--surface))', boxShadow: '0 1px 2px rgba(15,23,42,.04)' }}>
+            <span style={{ width: 88, height: 88, flex: 'none', borderRadius: '50%', overflow: 'hidden', display: 'grid', placeItems: 'center', background: employeePhotoPreview ? 'var(--surface)' : 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, white), color-mix(in srgb, var(--accent) 8%, white))', border: '1px solid color-mix(in srgb, var(--accent) 16%, var(--border))', color: 'var(--accent)', fontSize: 24, fontWeight: 850, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.55)' }}>
               {employeePhotoPreview ? <img src={employeePhotoPreview} alt="Employee preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : String(`${values.firstName || ''} ${values.lastName || ''}`.trim() || 'EP').split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()}
             </span>
-            <span style={{ minWidth: 0, flex: 1 }}>
-              <span style={{ display: 'block', color: 'var(--text)', fontSize: 12.5, fontWeight: 800 }}>Employee photo</span>
-              <span style={{ display: 'block', marginTop: 3, color: 'var(--text-faint)', fontSize: 12, lineHeight: 1.45 }}>PNG, JPG/JPEG or WEBP · maximum 5 MB. This photo is also used for the linked user account avatar.</span>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 34, marginTop: 9, padding: '0 11px', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface)', color: 'var(--text)', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
-                <Icon name="photo_camera" size={16} />{employeePhotoPreview ? 'Change photo' : 'Choose photo'}
-                <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(event) => {
-                  const file = event.target.files?.[0] || null
-                  if (!file) return
-                  if (file.size > 5 * 1024 * 1024) { app.showWorkflowAlert('Photo too large', 'Employee photos must be 5 MB or smaller.', 'warning'); event.currentTarget.value = ''; return }
-                  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) { app.showWorkflowAlert('Unsupported photo', 'Upload a PNG, JPG/JPEG, or WEBP image.', 'warning'); event.currentTarget.value = ''; return }
-                  if (employeePhotoPreview.startsWith('blob:')) URL.revokeObjectURL(employeePhotoPreview)
-                  setEmployeePhoto(file)
-                  setEmployeePhotoPreview(URL.createObjectURL(file))
-                }} />
-              </label>
-            </span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
+                <div>
+                  <div style={{ color: 'var(--text)', fontSize: 14.5, fontWeight: 800, letterSpacing: '-0.01em' }}>Employee photo</div>
+                  <div style={{ marginTop: 4, color: 'var(--text-faint)', fontSize: 12.5, lineHeight: 1.55, maxWidth: 460 }}>Upload a clear profile photo for the employee record. The same image is used automatically for the linked user account avatar.</div>
+                </div>
+                <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', height: 26, padding: '0 10px', borderRadius: 999, background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 11.5, fontWeight: 700 }}>PNG, JPG/JPEG or WEBP · up to 5 MB</span>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginTop: 14 }}>
+                <label style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: 38, padding: '0 14px', border: '1px solid color-mix(in srgb, var(--accent) 25%, var(--border))', borderRadius: 10, background: 'var(--surface)', color: 'var(--text)', cursor: 'pointer', fontSize: 13, fontWeight: 800, boxShadow: '0 1px 2px rgba(15,23,42,.05)' }}>
+                  {employeePhotoPreview ? 'Replace photo' : 'Upload photo'}
+                  <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(event) => {
+                    const file = event.target.files?.[0] || null
+                    if (!file) return
+                    if (file.size > 5 * 1024 * 1024) { app.showWorkflowAlert('Photo too large', 'Employee photos must be 5 MB or smaller.', 'warning'); event.currentTarget.value = ''; return }
+                    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) { app.showWorkflowAlert('Unsupported photo', 'Upload a PNG, JPG/JPEG, or WEBP image.', 'warning'); event.currentTarget.value = ''; return }
+                    if (employeePhotoPreview.startsWith('blob:')) URL.revokeObjectURL(employeePhotoPreview)
+                    setEmployeePhoto(file)
+                    setEmployeePhotoPreview(URL.createObjectURL(file))
+                  }} />
+                </label>
+                {employeePhoto && <span style={{ minWidth: 0, color: 'var(--text-muted)', fontSize: 12.5 }}>Selected file: <strong style={{ color: 'var(--text)' }}>{employeePhoto.name}</strong></span>}
+              </div>
+            </div>
           </section>}
           {f.entity === 'categories' && !f.id && f.preset === 'majorGroup' && <div style={helperCardStyle}><span style={{ display: 'grid', placeItems: 'center', width: 24, height: 24, borderRadius: 6, background: 'rgba(37,99,235,.10)' }}><SmallFolderGraphic color="var(--accent)" /></span><div><strong>Major Group:</strong> the top level of the catalogue, such as Beverages, Food Supplies or Stationery.</div></div>}
           {f.entity === 'categories' && !f.id && f.preset === 'itemGroup' && <div style={helperCardStyle}><span style={{ display: 'grid', placeItems: 'center', width: 24, height: 24, borderRadius: 6, background: 'rgba(37,99,235,.10)' }}><SmallFolderGraphic open color="var(--accent)" /></span><div><strong>Item Group:</strong> select the Major Group first, then name the group beneath it. Example: Beverages → Soft Drinks.</div></div>}
