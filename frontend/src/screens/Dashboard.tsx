@@ -56,6 +56,7 @@ export default function Dashboard() {
   const firstName = String(app.user.name || 'there').trim().split(/\s+/)[0] || 'there'
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+  const visibleRecords = view.tasks.reduce((total, task) => total + task.count, 0)
 
   return <div className="role-dashboard">
     <header className="role-dashboard-header">
@@ -72,6 +73,21 @@ export default function Dashboard() {
         <button type="button" onClick={app.refreshData} className="erp-secondary"><Icon name="refresh" size={17} />Refresh</button>
       </div>
     </header>
+
+    <section className="dashboard-week-summary">
+      <span className="dashboard-week-icon"><Icon name="add" size={18} /></span>
+      <div className="dashboard-week-copy">
+        <strong>This shift</strong>
+        <small>Updated from live hotel operations</small>
+      </div>
+      <button type="button" onClick={app.refreshData} className="dashboard-week-refresh" aria-label="Refresh dashboard"><Icon name="refresh" size={17} /></button>
+      <p>{visibleRecords
+        ? `${visibleRecords} record${visibleRecords === 1 ? ' is' : 's are'} visible across your current responsibilities. Open a workspace below to continue work.`
+        : 'There is no outstanding activity in your current view. Your operational queues are clear and ready for the next request.'}</p>
+      <div className="dashboard-week-tags">
+        {view.tasks.slice(0, 3).map((task) => <span key={task.label}>{task.count} {task.label.toLowerCase()}</span>)}
+      </div>
+    </section>
 
     {view.primaryAction && <section className="dashboard-primary-action">
       <span className="dashboard-primary-icon"><Icon name={view.primaryAction.icon} size={20} color="#fff" /></span>

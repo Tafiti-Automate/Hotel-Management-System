@@ -3,7 +3,7 @@ import { useApp } from '../state/AppContext'
 import { Icon } from './Icon'
 import { Avatar } from './Avatar'
 import CommandPalette from './CommandPalette'
-import { canAccessRoute, canSwitchModules, isStoresManager } from '../lib/access'
+import { canSwitchModules, isStoresManager } from '../lib/access'
 import {
   errorMessage,
   fetchNotifications,
@@ -20,12 +20,12 @@ export default function Header() {
   const [notifications, setNotifications] = useState<NotificationRecord[]>([])
   const [notificationsLoading, setNotificationsLoading] = useState(true)
   const [notificationsError, setNotificationsError] = useState('')
+  const [now, setNow] = useState(() => new Date())
   const storesManager = isStoresManager(app.user)
-  const role = String(app.user.role || '').trim().toLowerCase()
   const departmentLabel = app.user.departmentName || app.user.role
   const moduleName = storesManager ? 'Stores & Inventory' : app.activeModule === 'hr' ? 'Human Resources' : departmentLabel
+  const pageDescription = routeDescription(app.route, moduleName)
   const notificationCount = notifications.filter((notification) => !notification.is_read).length
-  const hasPermission = (permission: string) => app.user.isSuperuser || app.user.permissions.includes(permission)
 
   const loadNotifications = useCallback(async (showLoading = true) => {
     if (showLoading) setNotificationsLoading(true)
@@ -39,51 +39,16 @@ export default function Header() {
     }
   }, [app.user.id])
 
-  const primary = (() => {
-    if (app.activeModule === 'hr' && canAccessRoute(app.user, 'employees')) {
-      return { label: 'Employee directory', icon: 'groups', action: () => app.navTo('employees', 'Employees') }
-    }
-    if (role === 'requester' && canAccessRoute(app.user, 'workflow-stores')) {
-      return { label: 'My requisitions', icon: 'assignment', action: () => app.navTo('workflow-stores', 'My requisitions') }
-    }
-    if (role === 'department head' && canAccessRoute(app.user, 'workflow-stores')) {
-      return { label: 'Review approvals', icon: 'approval', action: () => app.navTo('workflow-stores', 'Department approvals') }
-    }
-    if (role === 'store keeper' && canAccessRoute(app.user, 'workflow-stores')) {
-      return { label: 'Store queue', icon: 'warehouse', action: () => app.navTo('workflow-stores', 'Store Keeper queue') }
-    }
-    if (role === 'cost controller' && canAccessRoute(app.user, 'suppliers')) {
-      return { label: 'Supplier master', icon: 'local_shipping', action: () => app.navTo('suppliers', 'Suppliers') }
-    }
-    if (role === 'financial manager' && canAccessRoute(app.user, 'workflow-procure')) {
-      return { label: 'LPO approvals', icon: 'account_balance_wallet', action: () => app.navTo('workflow-procure', 'LPO approvals') }
-    }
-    if (role === 'general manager' && canAccessRoute(app.user, 'workflow-procure')) {
-      return { label: 'Final approvals', icon: 'verified_user', action: () => app.navTo('workflow-procure', 'Final LPO approvals') }
-    }
-    if (role === 'receiving clerk' && canAccessRoute(app.user, 'workflow-procure')) {
-      return { label: 'Receiving', icon: 'move_to_inbox', action: () => app.navTo('workflow-procure', 'Receiving & GRN') }
-    }
-    if (canAccessRoute(app.user, 'workflow-procure')) {
-      return { label: 'Procurement', icon: 'shopping_cart_checkout', action: () => app.navTo('workflow-procure', 'Procurement workflow') }
-    }
-    if (canAccessRoute(app.user, 'workflow-pay')) {
-      return { label: 'Finance', icon: 'account_balance', action: () => app.navTo('workflow-pay', 'Supplier invoices & payment') }
-    }
-    if (canAccessRoute(app.user, 'workflow-stores')) {
-      return { label: 'Stores', icon: 'warehouse', action: () => app.navTo('workflow-stores', 'Store requests') }
-    }
-    if (hasPermission('approvals.change_approvalworkflow')) {
-      return { label: 'Approvals', icon: 'approval', action: () => app.navTo('approvals', 'Approvals') }
-    }
-    return null
-  })()
-
   useEffect(() => {
     void loadNotifications()
     const timer = window.setInterval(() => void loadNotifications(false), 60_000)
     return () => window.clearInterval(timer)
   }, [loadNotifications])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   useEffect(() => {
     if (!notificationsOpen) return
@@ -137,12 +102,25 @@ export default function Header() {
       <div className="app-header-top" style={{ height: 58, display: 'flex', alignItems: 'center', gap: 18, padding: '0 24px' }}>
         <button className="global-search-trigger" onClick={() => setSearchOpen(true)} aria-label="Open global search">
           <Icon name="search" size={19} />
-          <span>{storesManager ? 'Search stock, requests and receipts' : 'Search the ERP'}</span>
+          <span className="header-search-label">Search</span>
           <kbd>Ctrl K</kbd>
         </button>
 
+        <div className="header-page-context">
+          <strong>{app.crumb || 'Dashboard'}</strong>
+          <span>{pageDescription}</span>
+        </div>
+
+        <div className="header-clock" aria-label={`Local time ${formatClock(now)}`}>
+          <i aria-hidden="true" />
+          <span><small>{formatClockDate(now)}</small><strong>{formatClock(now)}</strong></span>
+          <Icon name="schedule" size={17} color="var(--accent)" />
+        </div>
+
         <div className="header-actions" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5 }}>
           <span className={`header-live-state ${app.apiStatus === 'live' ? 'is-live' : app.apiStatus === 'offline' ? 'is-offline' : ''}`}><i />{app.apiStatus === 'live' ? 'Live' : app.apiStatus === 'loading' ? 'Syncing' : app.apiStatus === 'offline' ? 'Offline' : 'Connecting'}</span>
+          <span className="header-role-chip">{app.user.isSuperuser ? 'Admin' : app.user.role}</span>
+          <button onClick={app.toggleMode} title={app.mode === 'dark' ? 'Use light appearance' : 'Use dark appearance'} aria-label={app.mode === 'dark' ? 'Use light appearance' : 'Use dark appearance'} className="header-theme-trigger hover-surface2" style={iconAction}><Icon name={app.mode === 'dark' ? 'light_mode' : 'dark_mode'} size={19} /></button>
           <div style={{ position: 'relative' }}>
             <button
               onClick={openNotifications}
@@ -216,16 +194,46 @@ export default function Header() {
           </div>
         </div>
       </div>
-
-      <div className="app-header-breadcrumbs" style={{ height: 38, display: 'flex', alignItems: 'center', gap: 8, padding: '0 24px', borderTop: '1px solid var(--border)', background: 'var(--surface-2)' }}>
-        <span style={{ color: 'var(--text-faint)', fontSize: 12 }}>{moduleName}</span>
-        <Icon name="chevron_right" size={15} color="var(--text-faint)" />
-        <span style={{ color: 'var(--text)', fontSize: 12, fontWeight: 600 }}>{app.crumb}</span>
-        {primary && app.route === 'dashboard' && <button onClick={primary.action} className="header-primary-action hover-accent" style={{ marginLeft: 'auto', height: 29, display: 'flex', alignItems: 'center', gap: 6, border: 0, borderRadius: 5, background: 'var(--accent)', color: '#fff', padding: '0 11px', cursor: 'pointer', font: 'inherit', fontSize: 12, fontWeight: 600 }}><Icon name={primary.icon} size={16} color="#fff" />{primary.label}</button>}
-      </div>
       <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
     </header>
   )
+}
+
+function routeDescription(route: string, moduleName: string) {
+  const descriptions: Record<string, string> = {
+    dashboard: 'System at a glance',
+    'hr-dashboard': 'People and workforce overview',
+    'workflow-stores': 'Requests, stock and store handoffs',
+    'store-purchase-requests': 'Purchase requests from Stores',
+    'workflow-procure': 'Purchasing and supplier workflow',
+    'workflow-pay': 'Supplier invoices and payments',
+    suppliers: 'Manage supplier accounts',
+    supplierItems: 'Prices, quotations and supplied articles',
+    categories: 'Catalogue groups and item structure',
+    items: 'Goods, services and stock articles',
+    uoms: 'Units and article conversions',
+    itemUnits: 'Units and article conversions',
+    locations: 'Stores and stock locations',
+    employees: 'Employee records and assignments',
+    departments: 'Teams and operational departments',
+    reports: 'Analytics and operational insights',
+    'audit-log': 'System activity and accountability',
+    'access-management': 'Roles, permissions and user access',
+    'hotel-profile': 'Property identity and configuration',
+  }
+  return descriptions[route] || moduleName
+}
+
+function formatClockDate(date: Date) {
+  return new Intl.DateTimeFormat('en-UG', {
+    weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Africa/Kampala',
+  }).format(date).toUpperCase()
+}
+
+function formatClock(date: Date) {
+  return new Intl.DateTimeFormat('en-UG', {
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'Africa/Kampala',
+  }).format(date)
 }
 
 function NotificationState({ icon, text, detail, action }: { icon: string; text: string; detail?: string; action?: () => void }) {

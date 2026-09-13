@@ -31,6 +31,8 @@ export default function Reports() {
     return permitted.filter((report) => [report.title, report.desc, report.grp].some((value) => value.toLowerCase().includes(query)))
   }, [allowedIds, app.user, search])
   const scope = scopeForRole(app.user.role)
+  const recordCount = Object.values(app.data).reduce((total, rows) => total + rows.length, 0)
+  const reportAreas = new Set(visibleReports.map((report) => report.grp)).size
 
   return (
     <div className="enterprise-workspace reports-screen">
@@ -57,6 +59,13 @@ export default function Reports() {
           <span style={{ position: 'absolute', left: 12, top: 11, pointerEvents: 'none' }}><Icon name="search" size={18} color="var(--text-faint)" /></span>
         </div>
       </div>
+
+      <section className="reports-overview-grid" aria-label="Report overview">
+        <ReportMetric label="Available reports" value={String(visibleReports.length)} icon="analytics" />
+        <ReportMetric label="Report areas" value={String(reportAreas)} icon="category" />
+        <ReportMetric label="Visible records" value={recordCount.toLocaleString('en-UG')} icon="dataset" />
+        <ReportMetric label="Current scope" value={scope} icon="visibility" compact />
+      </section>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, color: 'var(--text-muted)', fontSize: 12.5 }}>
         <span style={{ padding: '4px 9px', border: '1px solid var(--border)', background: 'var(--surface-2)', borderRadius: 20, fontWeight: 700, color: 'var(--text)' }}>{visibleReports.length} report{visibleReports.length === 1 ? '' : 's'}</span>
@@ -123,4 +132,12 @@ export default function Reports() {
       `}</style>
     </div>
   )
+}
+
+function ReportMetric({ label, value, icon, compact = false }: { label: string; value: string; icon: string; compact?: boolean }) {
+  return <div className="reports-overview-card">
+    <span><Icon name={icon} size={17} /></span>
+    <small>{label}</small>
+    <strong className={compact ? 'is-compact' : ''}>{value}</strong>
+  </div>
 }
