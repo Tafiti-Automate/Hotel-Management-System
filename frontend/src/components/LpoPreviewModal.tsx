@@ -34,17 +34,17 @@ export default function LpoPreviewModal({ orderId, reference, onClose }: LpoPrev
 
   return (
     <>
-      <div onClick={onClose} style={backdrop} />
-      <section role="dialog" aria-modal="true" aria-label={`Preview LPO ${reference}`} style={modal}>
-        <header style={header}>
-          <span style={iconBox}><Icon name="description" size={21} color="var(--accent)" /></span>
+      <div className="lpo-preview-backdrop" onClick={onClose} style={backdrop} />
+      <section className="lpo-preview-modal" role="dialog" aria-modal="true" aria-label={`Preview LPO ${reference}`} style={modal}>
+        <header className="lpo-preview-header" style={header}>
+          <span className="lpo-preview-icon" style={iconBox}><Icon name="description" size={21} color="var(--accent)" /></span>
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ color: 'var(--text)', fontSize: 15, fontWeight: 800 }}>LPO {reference}</div>
             <div style={{ marginTop: 3, color: 'var(--text-muted)', fontSize: 11.5 }}>Preview only · controlled copy numbering applies to printed or downloaded output</div>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close LPO preview" style={closeButton}><Icon name="close" size={19} /></button>
+          <button className="lpo-preview-close" type="button" onClick={onClose} aria-label="Close LPO preview" style={closeButton}><Icon name="close" size={19} /></button>
         </header>
-        <div style={viewer}>
+        <div className="lpo-preview-viewer" style={viewer}>
           {!previewUrl && !error && <div style={message}><Icon name="progress_activity" size={24} color="var(--accent)" /><span>Preparing the LPO preview…</span></div>}
           {error && <div role="alert" style={{ ...message, color: 'var(--bad)' }}><Icon name="error" size={24} color="var(--bad)" /><strong>Preview unavailable</strong><span style={{ maxWidth: 520, textAlign: 'center', fontWeight: 500 }}>{error}</span></div>}
           {previewUrl && <iframe title={`LPO ${reference} preview`} src={`${previewUrl}#toolbar=1&navpanes=0`} style={{ width: '100%', height: '100%', border: 0, background: '#eef1f5' }} />}

@@ -61,20 +61,31 @@ export default function AppShell() {
   else if (route === 'access-management') content = <AccessManagement />
 
   return (
-    <div className="app-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+    <div className="app-shell tafiti-app-shell">
+      <span className="tafiti-shell-topline" aria-hidden="true" />
       <Sidebar />
-      <div className="app-main" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
+
+      <div className="app-main tafiti-app-main">
         <Header />
-        <main className={`app-content route-${route}`} data-route={route} style={{ flex: 1, overflowY: 'auto', padding: 'var(--pad)' }}><Suspense fallback={<RouteLoading />}>{content}</Suspense></main>
+        <main
+          className={`app-content tafiti-app-content route-${route}`}
+          data-route={route}
+        >
+          <Suspense fallback={<RouteLoading />}>{content}</Suspense>
+        </main>
       </div>
     </div>
   )
 }
 
-
 function RouteLoading() {
-  return <div className="route-loading" role="status" aria-live="polite">
-    <span className="route-loading-spinner" aria-hidden="true" />
-    <div><strong>Loading</strong><span>Preparing your workspace…</span></div>
-  </div>
+  return (
+    <div className="route-loading" role="status" aria-live="polite">
+      <span className="route-loading-spinner" aria-hidden="true" />
+      <div>
+        <strong>Loading</strong>
+        <span>Preparing your workspace…</span>
+      </div>
+    </div>
+  )
 }

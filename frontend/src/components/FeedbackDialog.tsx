@@ -72,8 +72,9 @@ export default function FeedbackDialog({ tone, title, message, details = [], onC
   }
 
   return <>
-    <div aria-hidden="true" style={{ position: 'fixed', inset: 0, zIndex: 109, background: 'rgba(8,18,32,.58)', backdropFilter: 'blur(3px)' }} />
+    <div className="feedback-backdrop" aria-hidden="true" style={{ position: 'fixed', inset: 0, zIndex: 109, background: 'rgba(8,18,32,.58)', backdropFilter: 'blur(3px)' }} />
     <section
+      className={`feedback-dialog feedback-${tone}`}
       role="alertdialog"
       aria-modal="true"
       aria-labelledby={`feedback-${tone}-heading`}
@@ -94,12 +95,12 @@ export default function FeedbackDialog({ tone, title, message, details = [], onC
         animation: 'pop .2s ease',
       }}
     >
-      <span style={iconStyle}><Icon name={view.icon} size={38} color="#fff" weight={750} /></span>
-      <h2 id={`feedback-${tone}-heading`} style={{ margin: 0, color: 'var(--text)', fontSize: 26, lineHeight: 1.15, fontWeight: 750 }}>{view.heading}</h2>
-      {title && <div style={{ marginTop: 12, color: 'var(--text)', fontSize: 15, lineHeight: 1.4, fontWeight: 750 }}>{title}</div>}
-      <p id={`feedback-${tone}-message`} style={{ margin: title ? '6px auto 0' : '10px auto 0', maxWidth: 330, color: 'var(--text-muted)', fontSize: 13.5, lineHeight: 1.55 }}>{message}</p>
+      <span className="feedback-icon" style={iconStyle}><Icon name={view.icon} size={38} color="#fff" weight={750} /></span>
+      <h2 className="feedback-heading" id={`feedback-${tone}-heading`} style={{ margin: 0, color: 'var(--text)', fontSize: 26, lineHeight: 1.15, fontWeight: 750 }}>{view.heading}</h2>
+      {title && <div className="feedback-title" style={{ marginTop: 12, color: 'var(--text)', fontSize: 15, lineHeight: 1.4, fontWeight: 750 }}>{title}</div>}
+      <p className="feedback-message" id={`feedback-${tone}-message`} style={{ margin: title ? '6px auto 0' : '10px auto 0', maxWidth: 330, color: 'var(--text-muted)', fontSize: 13.5, lineHeight: 1.55 }}>{message}</p>
 
-      {details.length > 0 && <div style={{ marginTop: 14, padding: '9px 12px', borderRadius: 10, background: view.soft, textAlign: 'left' }}>
+      {details.length > 0 && <div className="feedback-details" style={{ marginTop: 14, padding: '9px 12px', borderRadius: 10, background: view.soft, textAlign: 'left' }}>
         {details.map((detail, index) => <div key={`${detail}-${index}`} style={{ display: 'flex', gap: 8, padding: '5px 0', color: 'var(--text)', fontSize: 12.5, lineHeight: 1.45 }}>
           <Icon name="error" size={16} color={view.color} style={{ flex: 'none', marginTop: 1 }} />
           <span>{detail}</span>
@@ -107,6 +108,7 @@ export default function FeedbackDialog({ tone, title, message, details = [], onC
       </div>}
 
       <button
+        className="feedback-action"
         ref={buttonRef}
         type="button"
         onClick={onClose}

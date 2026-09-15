@@ -53,93 +53,169 @@ export default function Dashboard() {
   const statusLabel = app.apiStatus === 'loading' ? 'Syncing' : synced ? 'Live' : app.apiStatus === 'offline' ? 'Offline' : 'Connecting'
   const department = app.user.departmentName || '—'
   const branch = app.currentBranch || app.user.branchName || '—'
-  const firstName = String(app.user.name || 'there').trim().split(/\s+/)[0] || 'there'
-  const hour = new Date().getHours()
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
   const visibleRecords = view.tasks.reduce((total, task) => total + task.count, 0)
 
-  return <div className="role-dashboard">
-    <header className="role-dashboard-header">
-      <div className="role-dashboard-heading">
-        <div className="role-dashboard-kicker">
-          <span>{app.user.role}</span>
-          <span className={`live-state ${synced ? 'is-live' : app.apiStatus === 'offline' ? 'is-offline' : ''}`}><i />{statusLabel}</span>
+  return (
+    <div className="role-dashboard tafiti-dashboard">
+      <div className="tafiti-dashboard-grid">
+        <div className="tafiti-dashboard-main">
+          <section className="dashboard-week-summary">
+            <div className="dashboard-week-title-row">
+              <span className="dashboard-week-icon"><Icon name="add" size={15} /></span>
+              <div className="dashboard-week-copy">
+                <strong>This Week</strong>
+                <small>{formatDashboardDate()} · {statusLabel}</small>
+              </div>
+              <button type="button" onClick={app.refreshData} className="dashboard-week-refresh" aria-label="Refresh dashboard" title="Refresh dashboard">
+                <Icon name="refresh" size={15} />
+              </button>
+            </div>
+            <p>
+              {visibleRecords
+                ? `${visibleRecords} record${visibleRecords === 1 ? ' is' : 's are'} visible across your current responsibilities. Open a workspace below to continue work.`
+                : 'There is no outstanding activity in your current view. Your operational queues are clear and ready for the next request.'}
+            </p>
+            <div className="dashboard-week-tags">
+              {view.tasks.slice(0, 3).map((task) => <span key={task.label}>{task.count} {task.label.toLowerCase()}</span>)}
+            </div>
+          </section>
+
+          <section className="dashboard-kpi-section" aria-label="Current workload">
+            <div className="task-card-grid">
+              {view.tasks.map((task) => (
+                <Task key={task.label} task={task} onClick={() => app.navTo(task.route, task.routeLabel)} />
+              ))}
+            </div>
+          </section>
+
+          <section className="dashboard-summary-strip" aria-label="Current working scope">
+            <SummaryItem label="Visible" value={String(visibleRecords)} />
+            <SummaryItem label="Role" value={app.user.role || '—'} />
+            <SummaryItem label="Department" value={department} />
+            <SummaryItem label="Property" value={branch} />
+            <SummaryItem label="Data" value={statusLabel} tone={synced ? 'good' : app.apiStatus === 'offline' ? 'bad' : undefined} />
+          </section>
+
+          <section className="dashboard-panel dashboard-queue-panel">
+            <div className="dashboard-panel-header">
+              <div>
+                <h3>{view.queueTitle}</h3>
+                <span>{view.queueHint}</span>
+              </div>
+              <button type="button" onClick={() => app.navTo(view.queueRoute, view.queueRouteLabel)} className="dashboard-link-button">
+                Open workspace <Icon name="arrow_forward" size={14} />
+              </button>
+            </div>
+            <div className="dashboard-activity-list">
+              {view.activities.slice(0, 8).map((row) => (
+                <button
+                  key={`${row.id}-${row.title}`}
+                  type="button"
+                  onClick={() => app.navTo(row.route, row.routeLabel)}
+                  className="dashboard-activity-row"
+                >
+                  <div className="dashboard-activity-copy">
+                    <strong>{row.title}</strong>
+                    <span>{row.detail}</span>
+                  </div>
+                  <span style={statusBadge(row.status)}>{friendlyStatus(row.status)}</span>
+                  <span className="dashboard-activity-date">{row.date || ''}</span>
+                  <Icon name="chevron_right" size={16} color="var(--text-faint)" />
+                </button>
+              ))}
+              {!view.activities.length && <EmptyState />}
+            </div>
+          </section>
         </div>
-        <h1>{greeting}, {firstName} <span className="dashboard-wave" aria-hidden="true">👋</span></h1>
-        <p>{view.subtitle} <span className="dashboard-view-label">{dashboardTitleFor(role)}</span></p>
-      </div>
-      <div className="role-dashboard-tools">
-        <span className="dashboard-date">{formatDashboardDate()}</span>
-        <button type="button" onClick={app.refreshData} className="erp-secondary"><Icon name="refresh" size={17} />Refresh</button>
-      </div>
-    </header>
 
-    <section className="dashboard-week-summary">
-      <span className="dashboard-week-icon"><Icon name="add" size={18} /></span>
-      <div className="dashboard-week-copy">
-        <strong>This shift</strong>
-        <small>Updated from live hotel operations</small>
+        <aside className="tafiti-dashboard-rail" aria-label="Dashboard information">
+          <section className="dashboard-rail-card dashboard-attention-card">
+            <div className="dashboard-rail-heading">
+              <h3>Needs Attention</h3>
+            </div>
+            <p>
+              {visibleRecords
+                ? `${visibleRecords} record${visibleRecords === 1 ? '' : 's'} currently visible in your role queues.`
+                : 'All caught up. Nothing needs attention.'}
+            </p>
+          </section>
+
+          <section className="dashboard-rail-card dashboard-performance-card">
+            <div className="dashboard-rail-heading">
+              <h3>Performance</h3>
+              <span>Where things stand right now</span>
+            </div>
+            <div className="dashboard-performance-grid">
+              {view.tasks.slice(0, 4).map((task) => (
+                <PerformanceMetric key={task.label} task={task} />
+              ))}
+            </div>
+          </section>
+
+          <section className="dashboard-rail-card dashboard-context-panel">
+            <div className="dashboard-rail-heading">
+              <h3>Work Context</h3>
+              <span>Current account scope</span>
+            </div>
+            <div className="dashboard-context-list">
+              <ContextRow label="Role" value={app.user.role || '—'} />
+              {app.user.departmentName && <ContextRow label="Department" value={department} />}
+              {(app.currentBranch || app.user.branchName) && <ContextRow label="Property" value={branch} />}
+              <ContextRow label="Data" value={statusLabel} tone={synced ? 'good' : app.apiStatus === 'offline' ? 'bad' : undefined} />
+              {view.context.map((item) => <ContextRow key={item.label} label={item.label} value={item.value} />)}
+            </div>
+          </section>
+
+          <section className="dashboard-rail-card dashboard-followup-card">
+            <div className="dashboard-rail-heading"><h3>{view.primaryAction ? view.primaryAction.title : 'Continue Work'}</h3></div>
+            <p>{view.primaryAction ? view.primaryAction.hint : view.queueHint}</p>
+            <button
+              type="button"
+              className="dashboard-rail-action"
+              onClick={() => view.primaryAction
+                ? app.navTo(view.primaryAction.route, view.primaryAction.label)
+                : app.navTo(view.queueRoute, view.queueRouteLabel)}
+            >
+              {view.primaryAction ? view.primaryAction.label : `Open ${view.queueRouteLabel}`}
+              <Icon name="arrow_forward" size={14} />
+            </button>
+          </section>
+        </aside>
       </div>
-      <button type="button" onClick={app.refreshData} className="dashboard-week-refresh" aria-label="Refresh dashboard"><Icon name="refresh" size={17} /></button>
-      <p>{visibleRecords
-        ? `${visibleRecords} record${visibleRecords === 1 ? ' is' : 's are'} visible across your current responsibilities. Open a workspace below to continue work.`
-        : 'There is no outstanding activity in your current view. Your operational queues are clear and ready for the next request.'}</p>
-      <div className="dashboard-week-tags">
-        {view.tasks.slice(0, 3).map((task) => <span key={task.label}>{task.count} {task.label.toLowerCase()}</span>)}
-      </div>
-    </section>
-
-    {view.primaryAction && <section className="dashboard-primary-action">
-      <span className="dashboard-primary-icon"><Icon name={view.primaryAction.icon} size={20} color="#fff" /></span>
-      <div className="dashboard-primary-copy"><strong>{view.primaryAction.title}</strong><span>{view.primaryAction.hint}</span></div>
-      <button type="button" onClick={() => app.navTo(view.primaryAction!.route, view.primaryAction!.label)} className="erp-primary">{view.primaryAction.label}<Icon name="arrow_forward" size={17} /></button>
-    </section>}
-
-    <section className="dashboard-section">
-      <div className="dashboard-section-heading"><div><h2>Workload</h2><span>What needs attention in your current role</span></div></div>
-      <div className="task-card-grid">
-        {view.tasks.map((task) => <Task key={task.label} task={task} onClick={() => app.navTo(task.route, task.routeLabel)} />)}
-      </div>
-    </section>
-
-    <div className="dashboard-work-grid">
-      <section className="dashboard-panel dashboard-queue-panel">
-        <div className="dashboard-panel-header"><div><h3>{view.queueTitle}</h3><span>{view.queueHint}</span></div><button type="button" onClick={() => app.navTo(view.queueRoute, view.queueRouteLabel)} className="dashboard-link-button">Open workspace <Icon name="arrow_forward" size={15} /></button></div>
-        <div className="dashboard-activity-list">
-          {view.activities.slice(0, 8).map((row) => <button key={`${row.id}-${row.title}`} type="button" onClick={() => app.navTo(row.route, row.routeLabel)} className="dashboard-activity-row">
-            <div className="dashboard-activity-copy"><strong>{row.title}</strong><span>{row.detail}</span></div>
-            <span style={statusBadge(row.status)}>{friendlyStatus(row.status)}</span>
-            <span className="dashboard-activity-date">{row.date || ''}</span>
-            <Icon name="chevron_right" size={17} color="var(--text-faint)" />
-          </button>)}
-          {!view.activities.length && <EmptyState />}
-        </div>
-      </section>
-
-      <aside className="dashboard-panel dashboard-context-panel">
-        <div className="dashboard-panel-header"><div><h3>Work context</h3><span>Current account scope</span></div></div>
-        <div className="dashboard-context-list">
-          <ContextRow label="Role" value={app.user.role || '—'} />
-          {app.user.departmentName && <ContextRow label="Department" value={department} />}
-          {(app.currentBranch || app.user.branchName) && <ContextRow label="Property" value={branch} />}
-          <ContextRow label="Data" value={statusLabel} tone={synced ? 'good' : app.apiStatus === 'offline' ? 'bad' : undefined} />
-          {view.context.map((item) => <ContextRow key={item.label} label={item.label} value={item.value} />)}
-        </div>
-        <button type="button" onClick={() => app.navTo(view.queueRoute, view.queueRouteLabel)} className="dashboard-context-action">Open {view.queueRouteLabel}<Icon name="arrow_forward" size={16} /></button>
-      </aside>
     </div>
-  </div>
+  )
 }
 
 function Task({ task, onClick }: { task: TaskCard; onClick: () => void }) {
   const tone = task.tone || 'accent'
-  return <button type="button" onClick={onClick} className={`dashboard-task-card tone-${tone}`}>
-    <span className="dashboard-task-icon"><Icon name={task.icon} size={18} /></span>
-    <strong className="dashboard-task-count">{task.count}</strong>
-    <span className="dashboard-task-label">{task.label}</span>
-    <span className="dashboard-task-hint">{task.hint}</span>
-    <Icon name="arrow_forward" size={15} color="var(--text-faint)" />
-  </button>
+  return (
+    <button type="button" onClick={onClick} className={`dashboard-task-card tone-${tone}`}>
+      <span className="dashboard-task-icon"><Icon name={task.icon} size={16} /></span>
+      <Icon name="chevron_right" size={14} color="var(--text-faint)" />
+      <span className="dashboard-task-label">{task.label}</span>
+      <strong className="dashboard-task-count">{task.count}</strong>
+      <span className="dashboard-task-hint">{task.hint}</span>
+    </button>
+  )
+}
+
+function PerformanceMetric({ task }: { task: TaskCard }) {
+  const tone = task.tone || 'accent'
+  return (
+    <div className={`dashboard-performance-item tone-${tone}`}>
+      <span className="dashboard-performance-ring"><strong>{task.count}</strong></span>
+      <small>{task.label}</small>
+    </div>
+  )
+}
+
+function SummaryItem({ label, value, tone }: { label: string; value: string; tone?: 'good' | 'bad' }) {
+  return (
+    <div className="dashboard-summary-item">
+      <span>{label}</span>
+      <strong className={tone ? `tone-${tone}` : ''}>{value}</strong>
+    </div>
+  )
 }
 
 function ContextRow({ label, value, tone }: { label: string; value: string; tone?: 'good' | 'bad' }) {
@@ -252,21 +328,6 @@ function dashboardFor(role: string, data: any): DashboardView {
 }
 
 function base(config: DashboardView): DashboardView { return config }
-function dashboardTitleFor(role: string) {
-  const titles: Record<string, string> = {
-    requester: 'My requisitions',
-    'department head': 'Department approvals',
-    'store keeper': 'Stores overview',
-    'cost controller': 'Commercial data',
-    'procurement manager': 'Procurement overview',
-    'procurement officer': 'Procurement overview',
-    'financial manager': 'Financial approvals',
-    'general manager': 'Executive approvals',
-    'receiving clerk': 'Receiving overview',
-    'system administrator': 'Operations overview',
-  }
-  return titles[role] || 'Operations overview'
-}
 function formatDashboardDate() {
   return new Intl.DateTimeFormat('en-UG', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).format(new Date())
 }

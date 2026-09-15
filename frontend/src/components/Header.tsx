@@ -91,58 +91,94 @@ export default function Header() {
 
   useEffect(() => {
     const openSearch = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); setSearchOpen(true) }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        setSearchOpen(true)
+      }
     }
     window.addEventListener('keydown', openSearch)
     return () => window.removeEventListener('keydown', openSearch)
   }, [])
 
   return (
-    <header className="app-header" style={{ height: 96, flex: 'none', background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
-      <div className="app-header-top" style={{ height: 58, display: 'flex', alignItems: 'center', gap: 18, padding: '0 24px' }}>
-        <button className="global-search-trigger" onClick={() => setSearchOpen(true)} aria-label="Open global search">
-          <Icon name="search" size={19} />
-          <span className="header-search-label">Search</span>
-          <kbd>Ctrl K</kbd>
-        </button>
+    <header className="app-header tafiti-app-header">
+      <div className="app-header-top tafiti-app-header-top">
+        <div className="tafiti-header-left">
+          <button
+            className="global-search-trigger tafiti-header-menu hover-surface2"
+            onClick={() => setSearchOpen(true)}
+            aria-label="Open navigation and global search"
+            title="Navigation and search (Ctrl K)"
+          >
+            <Icon name="menu" size={16} />
+            <span className="header-search-label">Search</span>
+            <kbd>Ctrl K</kbd>
+          </button>
 
-        <div className="header-page-context">
-          <strong>{app.crumb || 'Dashboard'}</strong>
-          <span>{pageDescription}</span>
+          <div className="header-page-context tafiti-header-page-context">
+            <strong>{app.crumb || 'Dashboard'}</strong>
+            <span>{pageDescription}</span>
+          </div>
         </div>
 
-        <div className="header-clock" aria-label={`Local time ${formatClock(now)}`}>
-          <i aria-hidden="true" />
-          <span><small>{formatClockDate(now)}</small><strong>{formatClock(now)}</strong></span>
-          <Icon name="schedule" size={17} color="var(--accent)" />
+        <div className="header-clock tafiti-header-clock" aria-label={`Local time ${formatClock(now)}`}>
+          <span className="tafiti-clock-copy">
+            <small>{formatClockDate(now)}</small>
+            <strong>{formatClock(now)}</strong>
+          </span>
+          <span className="tafiti-clock-icon" aria-hidden="true">
+            <Icon name="schedule" size={13} />
+          </span>
+          <Icon name="expand_more" size={11} />
         </div>
 
-        <div className="header-actions" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5 }}>
-          <span className={`header-live-state ${app.apiStatus === 'live' ? 'is-live' : app.apiStatus === 'offline' ? 'is-offline' : ''}`}><i />{app.apiStatus === 'live' ? 'Live' : app.apiStatus === 'loading' ? 'Syncing' : app.apiStatus === 'offline' ? 'Offline' : 'Connecting'}</span>
+        <div className="header-actions tafiti-header-actions">
+          <span className={`header-live-state ${app.apiStatus === 'live' ? 'is-live' : app.apiStatus === 'offline' ? 'is-offline' : ''}`}>
+            <i />
+            {app.apiStatus === 'live' ? 'Live' : app.apiStatus === 'loading' ? 'Syncing' : app.apiStatus === 'offline' ? 'Offline' : 'Connecting'}
+          </span>
+
           <span className="header-role-chip">{app.user.isSuperuser ? 'Admin' : app.user.role}</span>
-          <button onClick={app.toggleMode} title={app.mode === 'dark' ? 'Use light appearance' : 'Use dark appearance'} aria-label={app.mode === 'dark' ? 'Use light appearance' : 'Use dark appearance'} className="header-theme-trigger hover-surface2" style={iconAction}><Icon name={app.mode === 'dark' ? 'light_mode' : 'dark_mode'} size={19} /></button>
-          <div style={{ position: 'relative' }}>
+
+          <button
+            onClick={app.toggleMode}
+            title={app.mode === 'dark' ? 'Use light appearance' : 'Use dark appearance'}
+            aria-label={app.mode === 'dark' ? 'Use light appearance' : 'Use dark appearance'}
+            className="header-theme-trigger hover-surface2"
+            style={iconAction}
+          >
+            <Icon name={app.mode === 'dark' ? 'light_mode' : 'dark_mode'} size={16} />
+          </button>
+
+          <div className="tafiti-header-popover-anchor">
             <button
               onClick={openNotifications}
               title="Notifications"
               aria-label={`Notifications${notificationCount ? `, ${notificationCount} unread` : ''}`}
               aria-expanded={notificationsOpen}
               className="header-notification-trigger hover-surface2"
-              style={{ ...iconAction, position: 'relative' }}
+              style={iconAction}
             >
-              <Icon name={notificationCount ? 'notifications_active' : 'notifications'} size={20} />
-              {notificationCount > 0 && <span style={{ position: 'absolute', right: 5, top: 4, minWidth: 17, height: 17, padding: '0 3px', display: 'grid', placeItems: 'center', borderRadius: 9, background: 'var(--bad)', color: '#fff', fontSize: 11.5, fontWeight: 750, border: '2px solid var(--surface)' }}>{notificationCount > 99 ? '99+' : notificationCount}</span>}
+              <Icon name={notificationCount ? 'notifications_active' : 'notifications'} size={16} />
+              {notificationCount > 0 && (
+                <span className="tafiti-notification-badge">{notificationCount > 99 ? '99+' : notificationCount}</span>
+              )}
             </button>
+
             {notificationsOpen && <>
               <div className="notification-backdrop" onClick={() => setNotificationsOpen(false)} />
               <section className="notification-panel" aria-label="Notifications">
-                <header style={{ padding: '15px 16px 12px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid var(--border)' }}>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ color: 'var(--text)', fontSize: 14, fontWeight: 750 }}>Notifications</div>
-                    <div style={{ marginTop: 2, color: 'var(--text-faint)', fontSize: 12 }}>{notificationCount ? `${notificationCount} unread` : 'You are all caught up'}</div>
+                <header className="tafiti-notification-header">
+                  <div className="tafiti-notification-title">
+                    <div>Notifications</div>
+                    <span>{notificationCount ? `${notificationCount} unread` : 'You are all caught up'}</span>
                   </div>
-                  <button onClick={() => void loadNotifications()} title="Refresh notifications" aria-label="Refresh notifications" className="hover-surface2" style={smallIconAction}><Icon name="refresh" size={17} /></button>
-                  <button onClick={() => setNotificationsOpen(false)} title="Close notifications" aria-label="Close notifications" className="hover-surface2" style={smallIconAction}><Icon name="close" size={17} /></button>
+                  <button onClick={() => void loadNotifications()} title="Refresh notifications" aria-label="Refresh notifications" className="hover-surface2" style={smallIconAction}>
+                    <Icon name="refresh" size={17} />
+                  </button>
+                  <button onClick={() => setNotificationsOpen(false)} title="Close notifications" aria-label="Close notifications" className="hover-surface2" style={smallIconAction}>
+                    <Icon name="close" size={17} />
+                  </button>
                 </header>
 
                 <div className="notification-list">
@@ -156,44 +192,70 @@ export default function Header() {
                       className="notification-item hover-surface2"
                       aria-label={`${notification.title}${notification.is_read ? '' : ', unread'}`}
                     >
-                      <span style={{ width: 34, height: 34, flex: 'none', display: 'grid', placeItems: 'center', borderRadius: 8, color: notification.is_read ? 'var(--text-faint)' : 'var(--accent)', background: notification.is_read ? 'var(--surface-2)' : 'var(--accent-soft)' }}><Icon name={notification.is_read ? 'notifications' : 'notification_important'} size={18} /></span>
-                      <span style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
-                        <span style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                          <span style={{ flex: 1, color: 'var(--text)', fontSize: 12, lineHeight: 1.35, fontWeight: notification.is_read ? 600 : 750 }}>{notification.title}</span>
-                          {!notification.is_read && <span aria-hidden="true" style={{ width: 7, height: 7, flex: 'none', marginTop: 4, borderRadius: '50%', background: 'var(--accent)' }} />}
+                      <span className={`tafiti-notification-icon ${notification.is_read ? 'is-read' : ''}`}>
+                        <Icon name={notification.is_read ? 'notifications' : 'notification_important'} size={18} />
+                      </span>
+                      <span className="tafiti-notification-copy">
+                        <span className="tafiti-notification-row-title">
+                          <span className={notification.is_read ? 'is-read' : ''}>{notification.title}</span>
+                          {!notification.is_read && <i aria-hidden="true" />}
                         </span>
-                        <span style={{ display: 'block', marginTop: 4, color: 'var(--text-muted)', fontSize: 12, lineHeight: 1.45 }}>{notification.message}</span>
-                        <span style={{ display: 'block', marginTop: 6, color: 'var(--text-faint)', fontSize: 11.5 }}>{notificationTime(notification.created_at)}</span>
+                        <span className="tafiti-notification-message">{notification.message}</span>
+                        <span className="tafiti-notification-time">{notificationTime(notification.created_at)}</span>
                       </span>
                     </button>
                   ))}
                 </div>
 
-                {notifications.length > 0 && <footer style={{ padding: '10px 14px', display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--border)', background: 'var(--surface-2)' }}>
-                  <button onClick={() => void readAllNotifications()} disabled={!notificationCount} style={{ border: 0, background: 'transparent', color: notificationCount ? 'var(--accent)' : 'var(--text-faint)', cursor: notificationCount ? 'pointer' : 'default', fontSize: 12, fontWeight: 700 }}>Mark all as read</button>
-                </footer>}
+                {notifications.length > 0 && (
+                  <footer className="tafiti-notification-footer">
+                    <button onClick={() => void readAllNotifications()} disabled={!notificationCount}>
+                      Mark all as read
+                    </button>
+                  </footer>
+                )}
               </section>
             </>}
           </div>
 
-          <div style={{ width: 1, height: 28, background: 'var(--border)', margin: '0 8px' }} />
-          <div style={{ position: 'relative' }}>
-            <button onClick={() => setProfileOpen((open) => !open)} style={{ height: 40, display: 'flex', alignItems: 'center', gap: 9, border: 0, background: 'transparent', borderRadius: 7, padding: '0 4px 0 7px', cursor: 'pointer', font: 'inherit' }} className="header-profile-trigger hover-surface2">
-              <Avatar className="header-avatar" src={app.user.photoUrl} name={app.user.name} size={31} radius={7} />
-              <span className="header-user-copy" style={{ textAlign: 'left' }}><span style={{ display: 'block', color: 'var(--text)', fontSize: 12.5, fontWeight: 600 }}>{app.user.name}</span><span style={{ display: 'block', color: 'var(--text-faint)', fontSize: 12, marginTop: 1 }}>{departmentLabel}</span></span>
-              <Icon name="expand_more" size={17} color="var(--text-faint)" />
+          <div className="tafiti-header-divider" />
+
+          <div className="tafiti-header-popover-anchor">
+            <button
+              onClick={() => setProfileOpen((open) => !open)}
+              className="header-profile-trigger hover-surface2 tafiti-header-profile-trigger"
+            >
+              <Avatar className="header-avatar" src={app.user.photoUrl} name={app.user.name} size={26} radius={7} />
+              <span className="header-user-copy tafiti-header-user-copy">
+                <span>{app.user.name}</span>
+                <small>{departmentLabel}</small>
+              </span>
+              <Icon name="expand_more" size={14} />
             </button>
+
             {profileOpen && <>
-              <div onClick={() => setProfileOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
-              <div style={{ position: 'absolute', right: 0, top: '100%', width: 220, zIndex: 50, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: 'var(--shadow)', padding: 6 }}>
-                <button onClick={app.toggleMode} className="hover-surface2" style={menuAction}><Icon name={app.mode === 'dark' ? 'light_mode' : 'dark_mode'} size={18} />{app.mode === 'dark' ? 'Light appearance' : 'Dark appearance'}</button>
-                {canSwitchModules(app.user) && <button onClick={app.gotoModules} className="hover-surface2" style={menuAction}><Icon name="apps" size={18} />Switch module</button>}
-                <button onClick={app.logout} className="hover-surface2" style={{ ...menuAction, color: 'var(--bad)' }}><Icon name="logout" size={18} />Sign out</button>
+              <div onClick={() => setProfileOpen(false)} className="tafiti-popover-backdrop" />
+              <div className="tafiti-profile-menu">
+                <button onClick={app.toggleMode} className="hover-surface2" style={menuAction}>
+                  <Icon name={app.mode === 'dark' ? 'light_mode' : 'dark_mode'} size={18} />
+                  {app.mode === 'dark' ? 'Light appearance' : 'Dark appearance'}
+                </button>
+                {canSwitchModules(app.user) && (
+                  <button onClick={app.gotoModules} className="hover-surface2" style={menuAction}>
+                    <Icon name="apps" size={18} />
+                    Switch module
+                  </button>
+                )}
+                <button onClick={app.logout} className="hover-surface2" style={{ ...menuAction, color: 'var(--bad)' }}>
+                  <Icon name="logout" size={18} />
+                  Sign out
+                </button>
               </div>
             </>}
           </div>
         </div>
       </div>
+
       <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
     </header>
   )
@@ -237,14 +299,16 @@ function formatClock(date: Date) {
 }
 
 function NotificationState({ icon, text, detail, action }: { icon: string; text: string; detail?: string; action?: () => void }) {
-  return <div style={{ minHeight: 180, padding: 24, display: 'grid', placeItems: 'center', textAlign: 'center' }}>
-    <div>
-      <span style={{ width: 42, height: 42, margin: '0 auto 10px', display: 'grid', placeItems: 'center', borderRadius: 11, color: 'var(--text-faint)', background: 'var(--surface-2)' }}><Icon name={icon} size={21} /></span>
-      <div style={{ color: 'var(--text)', fontSize: 12, fontWeight: 700 }}>{text}</div>
-      {detail && <div style={{ maxWidth: 260, marginTop: 5, color: 'var(--text-faint)', fontSize: 12, lineHeight: 1.45 }}>{detail}</div>}
-      {action && <button onClick={action} style={{ marginTop: 12, height: 30, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text-muted)', padding: '0 11px', cursor: 'pointer', fontSize: 12, fontWeight: 650 }}>Try again</button>}
+  return (
+    <div className="tafiti-notification-state">
+      <div>
+        <span><Icon name={icon} size={21} /></span>
+        <strong>{text}</strong>
+        {detail && <p>{detail}</p>}
+        {action && <button onClick={action}>Try again</button>}
+      </div>
     </div>
-  </div>
+  )
 }
 
 function notificationTime(value: string): string {
@@ -258,18 +322,43 @@ function notificationTime(value: string): string {
 }
 
 const iconAction: CSSProperties = {
-  width: 38, height: 38, border: 0, borderRadius: 6, background: 'transparent',
-  display: 'grid', placeItems: 'center', color: 'var(--text-muted)', cursor: 'pointer',
+  width: 30,
+  height: 30,
+  border: 0,
+  borderRadius: 6,
+  background: 'transparent',
+  display: 'grid',
+  placeItems: 'center',
+  color: 'var(--text-muted)',
+  cursor: 'pointer',
+  position: 'relative',
 }
 
 const smallIconAction: CSSProperties = {
-  width: 30, height: 30, border: 0, borderRadius: 6, background: 'transparent',
-  display: 'grid', placeItems: 'center', color: 'var(--text-muted)', cursor: 'pointer',
+  width: 30,
+  height: 30,
+  border: 0,
+  borderRadius: 6,
+  background: 'transparent',
+  display: 'grid',
+  placeItems: 'center',
+  color: 'var(--text-muted)',
+  cursor: 'pointer',
 }
 
-
 const menuAction: CSSProperties = {
-  width: '100%', height: 36, border: 0, borderRadius: 5, background: 'transparent',
-  display: 'flex', alignItems: 'center', gap: 9, padding: '0 10px', color: 'var(--text-muted)',
-  font: 'inherit', fontSize: 12.5, cursor: 'pointer', textAlign: 'left',
+  width: '100%',
+  height: 36,
+  border: 0,
+  borderRadius: 5,
+  background: 'transparent',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 9,
+  padding: '0 10px',
+  color: 'var(--text-muted)',
+  font: 'inherit',
+  fontSize: 12.5,
+  cursor: 'pointer',
+  textAlign: 'left',
 }

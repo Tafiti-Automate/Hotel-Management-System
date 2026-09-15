@@ -140,50 +140,190 @@ export default function Sidebar() {
     : app.user.departmentName || app.currentBranch || app.user.branchName
   const branchLocked = !canSwitchBranches(app.user) && Boolean(app.user.branchId)
   const branches = branchLocked ? app.data.branches.filter((branch) => String(branch.id) === app.user.branchId) : app.data.branches
-  const width = collapsed ? 60 : 220
+  const width = collapsed ? 58 : 195
 
   const navStyle = (active: boolean): CSSProperties => ({
-    width: '100%', minHeight: 34, display: 'flex', alignItems: 'center', gap: 9,
-    padding: '0 9px', border: 0, borderRadius: 4,
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    border: 0,
     background: 'transparent',
-    color: active ? 'var(--text)' : 'var(--text-muted)', cursor: 'pointer',
-    font: 'inherit', fontSize: 13.5, fontWeight: active ? 650 : 550, textAlign: 'left',
+    cursor: 'pointer',
+    font: 'inherit',
+    textAlign: 'left',
+    color: active ? 'var(--accent)' : 'inherit',
   })
 
   return <>
-    {mobileOpen && <button className="sidebar-mobile-backdrop" aria-label="Close navigation" onClick={() => setMobileOpen(false)} />}
-    <aside className={`sidebar ${collapsed ? 'is-collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`} style={{ width, flex: 'none', height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--surface)', borderRight: '1px solid var(--border)', transition: 'width .18s ease' }}>
-      <div className="sidebar-brand" style={{ height: 66, padding: '0 16px', display: 'flex', alignItems: 'center', gap: 11, borderBottom: '1px solid var(--border)' }}>
-        <div className="sidebar-brand-mark" style={{ width: 36, height: 36, flex: 'none', borderRadius: 9, display: 'grid', placeItems: 'center', background: 'var(--accent)', color: '#fff' }}><Icon name="apartment" size={20} color="#fff" fill /></div>
-        {!collapsed && <div style={{ minWidth: 0, flex: 1 }}><div className="sidebar-brand-title" style={{ color: 'var(--text)', fontSize: 14, fontWeight: 750 }}>Hotel ERP</div><div className="sidebar-brand-subtitle" style={{ color: 'var(--text-faint)', fontSize: 12, marginTop: 1 }}>{roleTitle}</div></div>}
-        <button className="sidebar-mobile-toggle" onClick={() => setMobileOpen((open) => !open)} aria-label={mobileOpen ? 'Close navigation' : 'Open navigation'} style={plainIcon}><Icon name={mobileOpen ? 'close' : 'menu'} size={21} /></button>
-        {!collapsed && <button className="sidebar-desktop-collapse" onClick={() => setCollapsed(true)} title="Collapse sidebar" style={plainIcon}><Icon name="left_panel_close" size={18} /></button>}
+    {mobileOpen && (
+      <button
+        className="sidebar-mobile-backdrop"
+        aria-label="Close navigation"
+        onClick={() => setMobileOpen(false)}
+      />
+    )}
+
+    <aside
+      className={`sidebar tafiti-sidebar ${collapsed ? 'is-collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}
+      style={{ width }}
+    >
+      <div className="sidebar-brand tafiti-sidebar-brand">
+        <div className="sidebar-brand-mark tafiti-sidebar-brand-mark">
+          <Icon name="apartment" size={20} color="#fff" fill />
+        </div>
+
+        {!collapsed && (
+          <div className="tafiti-sidebar-brand-copy">
+            <div className="sidebar-brand-title">Hotel ERP</div>
+            <div className="sidebar-brand-subtitle">{roleTitle}</div>
+          </div>
+        )}
+
+        <button
+          className="sidebar-mobile-toggle tafiti-sidebar-mobile-toggle"
+          onClick={() => setMobileOpen((open) => !open)}
+          aria-label={mobileOpen ? 'Close navigation' : 'Open navigation'}
+          style={plainIcon}
+        >
+          <Icon name={mobileOpen ? 'close' : 'menu'} size={20} />
+        </button>
+
+        {!collapsed && (
+          <button
+            className="sidebar-desktop-collapse tafiti-sidebar-collapse"
+            onClick={() => setCollapsed(true)}
+            title="Collapse sidebar"
+            aria-label="Collapse sidebar"
+            style={plainIcon}
+          >
+            <Icon name="left_panel_close" size={16} />
+          </button>
+        )}
       </div>
 
-      {collapsed && <button className="sidebar-desktop-collapse" onClick={() => setCollapsed(false)} title="Expand sidebar" style={{ ...plainIcon, margin: '10px auto 2px' }}><Icon name="left_panel_open" size={19} /></button>}
-
-      {!collapsed && <div className="sidebar-property" style={{ padding: '12px 12px 6px', position: 'relative' }}>
-        <button onClick={branchLocked || !isAdministrator ? undefined : app.toggleBranch} style={{ width: '100%', minHeight: 50, display: 'flex', alignItems: 'center', gap: 10, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', cursor: branchLocked || !isAdministrator ? 'default' : 'pointer', font: 'inherit' }}>
-          <Icon name={role === 'store keeper' ? 'warehouse' : 'business'} size={18} color="var(--text-muted)" />
-          <span style={{ minWidth: 0, flex: 1, textAlign: 'left' }}><span style={{ display: 'block', fontSize: 12, color: 'var(--text-faint)', fontWeight: 650 }}>{role === 'store keeper' ? 'Store / property' : app.user.departmentName ? 'Department' : 'Property'}</span><span style={{ display: 'block', marginTop: 2, fontSize: 12.5, fontWeight: 650, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{contextLabel || 'Current property'}</span></span>
-          {isAdministrator && !branchLocked && <Icon name="unfold_more" size={17} color="var(--text-faint)" />}
+      {collapsed && (
+        <button
+          className="sidebar-desktop-collapse tafiti-sidebar-expand"
+          onClick={() => setCollapsed(false)}
+          title="Expand sidebar"
+          aria-label="Expand sidebar"
+          style={plainIcon}
+        >
+          <Icon name="left_panel_open" size={18} />
         </button>
-        {app.branchOpen && <><div onClick={app.closePop} style={{ position: 'fixed', inset: 0, zIndex: 40 }} /><div style={{ position: 'absolute', left: 12, right: 12, top: '100%', zIndex: 50, padding: 5, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: 'var(--shadow)' }}>{branches.map((branch) => <button key={branch.id} onClick={() => app.selectBranch(String(branch.name))} className="hover-surface2" style={{ width: '100%', minHeight: 36, border: 0, borderRadius: 5, background: 'transparent', padding: '0 9px', textAlign: 'left', color: 'var(--text)', font: 'inherit', fontSize: 12.5, cursor: 'pointer' }}>{branch.name}</button>)}</div></>}
-      </div>}
+      )}
 
-      <nav className="sidebar-nav" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: collapsed ? '6px 10px 12px' : '6px 10px 16px' }}>
-        {groups.map((group, groupIndex) => <div key={group.heading} className="sidebar-nav-group" style={{ paddingTop: groupIndex ? 14 : 4 }}>
-          {!collapsed && <div className="sidebar-nav-heading" style={{ minHeight: 30, display: 'flex', alignItems: 'center', padding: '0 10px', color: 'var(--text-faint)', fontSize: 12, fontWeight: 750, letterSpacing: '.04em', textTransform: 'uppercase' }}>{group.heading}</div>}
-          {group.items.map((item) => { const active = app.navActive === item.route || (item.route === 'uoms' && app.navActive === 'itemUnits'); return <button key={item.route} title={collapsed ? item.label : undefined} aria-label={collapsed ? item.label : undefined} aria-current={active ? 'page' : undefined} onClick={() => { app.navTo(item.route, item.label); setMobileOpen(false) }} className={`sidebar-nav-item ${active ? 'active' : 'hover-surface2'}`} style={navStyle(active)}><Icon name={navIcons[item.route] || 'chevron_right'} size={17} weight={300} />{!collapsed && <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.label}</span>}</button> })}
-        </div>)}
+      {!collapsed && (
+        <div className="sidebar-property tafiti-sidebar-property">
+          <button
+            onClick={branchLocked || !isAdministrator ? undefined : app.toggleBranch}
+            className="tafiti-property-trigger"
+            style={{ cursor: branchLocked || !isAdministrator ? 'default' : 'pointer' }}
+          >
+            <Icon name={role === 'store keeper' ? 'warehouse' : 'business'} size={16} />
+            <span className="tafiti-property-copy">
+              <span className="tafiti-property-label">
+                {role === 'store keeper' ? 'Store / property' : app.user.departmentName ? 'Department' : 'Property'}
+              </span>
+              <span className="tafiti-property-value">{contextLabel || 'Current property'}</span>
+            </span>
+            {isAdministrator && !branchLocked && <Icon name="unfold_more" size={15} />}
+          </button>
+
+          {app.branchOpen && <>
+            <div onClick={app.closePop} className="tafiti-popover-backdrop" />
+            <div className="tafiti-branch-menu">
+              {branches.map((branch) => (
+                <button
+                  key={branch.id}
+                  onClick={() => app.selectBranch(String(branch.name))}
+                  className="hover-surface2 tafiti-branch-option"
+                >
+                  {branch.name}
+                </button>
+              ))}
+            </div>
+          </>}
+        </div>
+      )}
+
+      <nav className="sidebar-nav tafiti-sidebar-nav">
+        {groups.map((group, groupIndex) => (
+          <div
+            key={group.heading}
+            className="sidebar-nav-group tafiti-sidebar-nav-group"
+            data-group-index={groupIndex}
+          >
+            {!collapsed && <div className="sidebar-nav-heading">{group.heading}</div>}
+
+            {group.items.map((item) => {
+              const active = app.navActive === item.route || (item.route === 'uoms' && app.navActive === 'itemUnits')
+              return (
+                <button
+                  key={item.route}
+                  title={collapsed ? item.label : undefined}
+                  aria-label={collapsed ? item.label : undefined}
+                  aria-current={active ? 'page' : undefined}
+                  onClick={() => {
+                    app.navTo(item.route, item.label)
+                    setMobileOpen(false)
+                  }}
+                  className={`sidebar-nav-item tafiti-sidebar-nav-item ${active ? 'active' : 'hover-surface2'}`}
+                  style={navStyle(active)}
+                >
+                  <Icon name={navIcons[item.route] || 'chevron_right'} size={15} weight={300} />
+                  {!collapsed && <span className="tafiti-sidebar-nav-label">{item.label}</span>}
+                </button>
+              )
+            })}
+          </div>
+        ))}
       </nav>
 
-      <div className="sidebar-footer" style={{ borderTop: '1px solid var(--border)', padding: collapsed ? 10 : '10px 12px' }}>
-        {canSwitchModules(app.user) && <button onClick={app.gotoModules} title="Switch module" className="hover-surface2" style={{ ...navStyle(false), justifyContent: collapsed ? 'center' : undefined }}><Icon name="apps" size={19} />{!collapsed && <span>Switch module</span>}</button>}
-        {!collapsed && <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 8px 2px' }}><Avatar className="sidebar-user-avatar" src={app.user.photoUrl} name={app.user.name} size={34} radius={8} /><div style={{ flex: 1, minWidth: 0 }}><div style={{ color: 'var(--text)', fontSize: 12.5, fontWeight: 650, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{app.user.name}</div><div style={{ color: 'var(--text-faint)', fontSize: 12, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{app.user.role}</div></div><button onClick={app.logout} title="Sign out" style={plainIcon}><Icon name="logout" size={18} /></button></div>}
+      <div className="sidebar-footer tafiti-sidebar-footer">
+        {canSwitchModules(app.user) && (
+          <button
+            onClick={app.gotoModules}
+            title="Switch module"
+            className="hover-surface2 tafiti-module-switch"
+            style={{ ...navStyle(false), justifyContent: collapsed ? 'center' : undefined }}
+          >
+            <Icon name="apps" size={17} />
+            {!collapsed && <span>Switch module</span>}
+          </button>
+        )}
+
+        {!collapsed && (
+          <div className="tafiti-sidebar-user">
+            <Avatar
+              className="sidebar-user-avatar"
+              src={app.user.photoUrl}
+              name={app.user.name}
+              size={30}
+              radius={7}
+            />
+            <div className="tafiti-sidebar-user-copy">
+              <div className="tafiti-sidebar-user-name">{app.user.name}</div>
+              <div className="tafiti-sidebar-user-role">{app.user.role}</div>
+            </div>
+            <button onClick={app.logout} title="Sign out" aria-label="Sign out" style={plainIcon}>
+              <Icon name="logout" size={15} />
+            </button>
+          </div>
+        )}
       </div>
     </aside>
   </>
 }
 
-const plainIcon: CSSProperties = { width: 30, height: 30, border: 0, borderRadius: 6, background: 'transparent', display: 'grid', placeItems: 'center', color: 'var(--text-faint)', cursor: 'pointer' }
+const plainIcon: CSSProperties = {
+  width: 26,
+  height: 26,
+  border: 0,
+  borderRadius: 6,
+  background: 'transparent',
+  display: 'grid',
+  placeItems: 'center',
+  color: 'var(--text-faint)',
+  cursor: 'pointer',
+}
