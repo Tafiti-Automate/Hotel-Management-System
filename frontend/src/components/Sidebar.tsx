@@ -90,6 +90,7 @@ const adminOperations: NavGroup[] = [
     { route: 'reports', label: 'Reports' },
     { route: 'audit-log', label: 'Audit trail' },
     { route: 'access-management', label: 'User access' },
+    { route: 'hotel-profile', label: 'Settings' },
   ] },
 ]
 
@@ -119,6 +120,7 @@ const navIcons: Record<string, string> = {
   reports: 'bar_chart',
   'audit-log': 'history',
   'access-management': 'manage_accounts',
+  'hotel-profile': 'settings',
   employees: 'badge',
   departments: 'account_tree',
 }

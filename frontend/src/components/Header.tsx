@@ -281,7 +281,7 @@ function routeDescription(route: string, moduleName: string) {
     reports: 'Analytics and operational insights',
     'audit-log': 'System activity and accountability',
     'access-management': 'Roles, permissions and user access',
-    'hotel-profile': 'Property identity and configuration',
+    'hotel-profile': 'System configuration',
   }
   return descriptions[route] || moduleName
 }

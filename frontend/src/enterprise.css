@@ -4762,267 +4762,505 @@ html[data-theme="light"] .screen-app .supplier-table-scroll::-webkit-scrollbar-t
 html[data-theme="light"] .screen-app .supplier-drawer-body::-webkit-scrollbar-thumb,
 html[data-theme="light"] .screen-app .form-body::-webkit-scrollbar-thumb { background: #aebdce !important; }
 
-/* ==========================================================================
-   Reference-layout stabilization
-   Resolves the remaining cascade conflicts between the legacy enterprise
-   layers and the compact TAFITI shell. This block is deliberately visual:
-   routes, handlers, permissions and API-backed workflows remain unchanged.
-   ========================================================================== */
-
-html[data-theme="dark"] .screen-app {
-  --tafiti-bg: #0d172b;
-  --tafiti-bg-deep: #0d172b;
-  --tafiti-sidebar: #0b172e;
-  --tafiti-header: #0e162a;
-  --tafiti-panel: #12223d;
-  --tafiti-panel-2: #192d49;
-  --tafiti-panel-3: #263b55;
-  --tafiti-field: #263b55;
-  --tafiti-field-hover: #2b425f;
-  --tafiti-border: #2a4665;
-  --tafiti-border-soft: #203753;
-  --tafiti-text: #e2e9f2;
-  --tafiti-text-2: #9bacbf;
-  --tafiti-text-3: #617792;
+/* ========================================================================
+   COMPANY SETTINGS — TAFITI reference screen
+   Presentation-only treatment for the existing hotel/company profile route.
+   ======================================================================== */
+.screen-app .company-settings-screen {
+  --settings-panel: color-mix(in srgb, var(--surface) 96%, var(--accent) 4%);
+  --settings-panel-2: color-mix(in srgb, var(--surface-2) 93%, var(--accent) 7%);
+  --settings-line: color-mix(in srgb, var(--border) 82%, transparent 18%);
+  min-height: 100%;
+  padding: 10px 12px 84px !important;
 }
 
-html[data-theme="dark"] .screen-app .tafiti-app-shell {
-  --bg: #0d172b;
-  --surface: #12223d;
-  --surface-2: #192d49;
-  --surface-3: #263b55;
-  --text: #e2e9f2;
-  --text-muted: #9bacbf;
-  --text-faint: #617792;
-  --border: #203753;
-  --border-2: #2a4665;
+.screen-app .company-settings-pagehead {
+  min-height: 43px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 3px 8px;
 }
 
-.screen-app .app-shell.tafiti-app-shell {
-  height: 100vh !important;
-  height: 100svh !important;
-  padding-top: 9px !important;
-  border-top: 0 !important;
-  background: var(--tafiti-bg-deep) !important;
+.screen-app .company-settings-pagehead h1 {
+  margin: 0;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.1;
+  font-weight: 790;
+  letter-spacing: -.02em;
 }
 
-.screen-app .tafiti-shell-topline {
-  height: 9px !important;
-  background: #303c4c !important;
+.screen-app .company-settings-pagehead p {
+  margin: 4px 0 0;
+  color: var(--text-faint);
+  font-size: 8px;
+  line-height: 1.25;
 }
 
-.screen-app .app-main.tafiti-app-main,
-.screen-app .app-content.tafiti-app-content {
-  background: var(--tafiti-bg) !important;
+.screen-app .company-settings-page-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
 }
 
-.screen-app .app-content.tafiti-app-content {
-  padding: 18px 30px 30px !important;
-}
-
-.screen-app .sidebar.tafiti-sidebar {
-  background: var(--tafiti-sidebar) !important;
-  border-right-color: var(--tafiti-border-soft) !important;
-}
-
-.screen-app .tafiti-sidebar .tafiti-sidebar-brand {
-  order: 1;
-  margin-top: 9px !important;
-}
-
-.screen-app .tafiti-sidebar-nav { order: 2; }
-
-.screen-app .tafiti-sidebar-property {
-  order: 3;
-  padding-block: 3px !important;
-}
-
-.screen-app .tafiti-sidebar .tafiti-property-trigger {
-  min-height: 36px !important;
-  padding-block: 4px !important;
-  background: transparent !important;
-}
-
-.screen-app .tafiti-sidebar .tafiti-branch-menu {
-  top: auto;
-  bottom: calc(100% + 3px);
-}
-
-.screen-app .tafiti-sidebar-footer { order: 4; }
-
-@media (min-width: 961px) {
-  .screen-app .sidebar-mobile-toggle { display: none !important; }
-}
-
-.screen-app .app-header.tafiti-app-header {
-  background: var(--tafiti-header) !important;
-  border-bottom-color: var(--tafiti-border-soft) !important;
-}
-
-.screen-app .tafiti-app-header-top {
-  padding-inline: 22px !important;
-}
-
-/* Full-canvas create/edit pages. The existing drawer close/save callbacks are
-   retained; only the desktop presentation changes to the reference layout. */
-.screen-app .form-overlay {
-  inset: 58px 0 0 195px !important;
-  background: var(--tafiti-bg) !important;
-  backdrop-filter: none !important;
-  animation: none !important;
-}
-
-.screen-app .form-drawer {
-  inset: 58px 0 0 195px !important;
-  width: auto !important;
-  max-width: none !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: var(--tafiti-bg) !important;
-  box-shadow: none !important;
-  animation: enterprise-page-enter .16s ease-out both !important;
-}
-
-.screen-app .form-drawer > .form-page-header {
-  min-height: 64px !important;
-  flex: 0 0 64px;
-  justify-content: flex-start !important;
-  gap: 10px;
-  padding: 12px 30px !important;
-  border-bottom: 0 !important;
-  background: var(--tafiti-bg) !important;
-}
-
-.screen-app .form-page-title {
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-}
-
-.screen-app .form-page-title > div:first-child {
-  color: var(--tafiti-text) !important;
-  font-size: 14px !important;
-  line-height: 1.2 !important;
-  font-weight: 690 !important;
-}
-
-.screen-app .form-page-subtitle {
-  margin: 0 !important;
-  color: var(--tafiti-text-3) !important;
-  font-size: 7.6px !important;
-  line-height: 1.35;
-}
-
-.screen-app .form-drawer .form-back-button {
-  order: -1;
-  width: 26px !important;
-  height: 26px !important;
-  min-height: 26px !important;
-  flex: 0 0 26px;
-  padding: 0 !important;
-  border: 0 !important;
-  border-radius: 6px !important;
-  background: var(--tafiti-panel-2) !important;
-  color: var(--tafiti-text-2) !important;
-}
-
-.screen-app .form-drawer .form-step-progress {
-  flex: 0 0 auto;
-  margin: 0 30px 12px;
-  padding: 5px !important;
-  border: 1px solid var(--tafiti-border-soft) !important;
+.screen-app .company-settings-page-actions select,
+.screen-app .company-settings-new {
+  height: 29px;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--tafiti-panel-2);
+  background: var(--surface);
+  color: var(--text-muted);
+  padding: 0 9px;
+  font: inherit;
+  font-size: 8px;
+  font-weight: 650;
 }
 
-.screen-app .form-drawer .form-step-progress > span {
-  height: 2px !important;
+.screen-app .company-settings-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
 }
 
-.screen-app .form-drawer .form-body {
-  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  align-content: start;
-  gap: 18px 12px !important;
-  margin: 0 30px 14px;
-  padding: 20px 22px 24px !important;
-  border: 1px solid var(--tafiti-border) !important;
-  border-radius: 15px !important;
-  background: var(--tafiti-panel) !important;
+.screen-app .company-settings-layout {
+  display: grid;
+  grid-template-columns: 148px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
 }
 
-.screen-app .form-drawer .form-body > section,
-.screen-app .form-drawer .form-body > .form-helper-card {
-  grid-column: 1 / -1;
+.screen-app .company-settings-nav {
+  position: sticky;
+  top: 62px;
+  min-height: 388px;
+  padding: 9px 7px;
+  border: 1px solid var(--settings-line);
+  border-radius: 10px;
+  background: var(--settings-panel);
+  display: flex;
+  flex-direction: column;
 }
 
-.screen-app .form-drawer .form-body :where(input:not([type="checkbox"]):not([type="radio"]), select) {
-  height: 29px !important;
-  min-height: 29px !important;
-  border-color: var(--tafiti-border) !important;
-  border-radius: 5px !important;
-  background: var(--tafiti-field) !important;
-  color: var(--tafiti-text) !important;
-  box-shadow: none !important;
-  font-size: 8.3px !important;
+.screen-app .company-settings-nav-title {
+  padding: 3px 8px 8px;
+  color: var(--text-faint);
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: .075em;
+  text-transform: uppercase;
 }
 
-.screen-app .form-drawer .form-body textarea {
-  min-height: 72px !important;
-  border-color: var(--tafiti-border) !important;
-  border-radius: 5px !important;
-  background: var(--tafiti-field) !important;
-  color: var(--tafiti-text) !important;
-  box-shadow: none !important;
-  font-size: 8.3px !important;
+.screen-app .company-settings-nav > button {
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: inherit;
+  font-size: 8px;
+  font-weight: 620;
+  cursor: pointer;
+  text-align: left;
 }
 
-.screen-app .form-drawer .form-body label,
-.screen-app .form-drawer .form-body label > span {
-  color: var(--tafiti-text-2) !important;
-  font-size: 7.4px !important;
+.screen-app .company-settings-nav > button:hover {
+  background: var(--surface-2);
+  color: var(--text);
 }
 
-.screen-app .form-drawer .form-footer {
-  min-height: 50px !important;
-  flex: 0 0 50px;
-  padding: 0 30px 18px !important;
-  border: 0 !important;
-  background: var(--tafiti-bg) !important;
+.screen-app .company-settings-nav > button.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 760;
 }
 
-.screen-app .form-drawer .form-footer button {
-  min-width: 0 !important;
-  min-height: 29px !important;
-  height: 29px !important;
-  padding: 0 11px !important;
-  border-radius: 5px !important;
-  font-size: 7.5px !important;
+.screen-app .company-settings-nav-spacer { flex: 1; }
+
+.screen-app .company-settings-nav-meta {
+  margin: 8px 3px 2px;
+  padding: 8px;
+  border-top: 1px solid var(--settings-line);
+  color: var(--text-faint);
+  display: flex;
+  gap: 7px;
+  font-size: 7px;
+  line-height: 1.45;
 }
 
-@media (max-width: 960px) {
-  .screen-app .app-shell.tafiti-app-shell {
-    height: auto !important;
-    min-height: 100svh !important;
-    padding-top: 7px !important;
+.screen-app .company-settings-nav-meta strong {
+  color: var(--text-muted);
+  font-weight: 760;
+}
+
+.screen-app .company-settings-content {
+  min-width: 0;
+}
+
+.screen-app .company-settings-form {
+  display: grid;
+  gap: 10px;
+}
+
+.screen-app .company-settings-section {
+  scroll-margin-top: 70px;
+  padding: 12px 13px 11px;
+  border: 1px solid var(--settings-line);
+  border-radius: 10px;
+  background: var(--settings-panel);
+  box-shadow: none;
+}
+
+.screen-app .company-settings-section-first {
+  padding-top: 9px;
+}
+
+.screen-app .company-settings-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 9px;
+  margin-bottom: 9px;
+  border-bottom: 1px solid var(--settings-line);
+}
+
+.screen-app .company-settings-section-heading strong {
+  display: block;
+  color: var(--text);
+  font-size: 8px;
+  font-weight: 770;
+}
+
+.screen-app .company-settings-section-heading span {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-faint);
+  font-size: 7px;
+}
+
+.screen-app .company-settings-field {
+  display: block;
+  margin: 0 0 10px;
+}
+
+.screen-app .company-settings-field:last-child { margin-bottom: 0; }
+
+.screen-app .company-settings-label {
+  display: block;
+  margin: 0 0 4px;
+  color: var(--text-muted);
+  font-size: 7.3px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.screen-app .company-settings-label b { color: var(--bad); }
+.screen-app .company-settings-label em { color: var(--text-faint); font-style: normal; font-weight: 500; }
+
+.screen-app .company-settings-hint {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-faint);
+  font-size: 6.5px;
+  line-height: 1.3;
+}
+
+.screen-app .company-settings-field input:not([type="checkbox"]):not([type="color"]),
+.screen-app .company-settings-field select,
+.screen-app .company-settings-page-actions select {
+  width: 100%;
+  height: 28px;
+  min-height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--settings-panel-2);
+  color: var(--text);
+  padding: 0 9px;
+  outline: none;
+  font: inherit;
+  font-size: 8px;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+
+.screen-app .company-settings-field input:focus,
+.screen-app .company-settings-field select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.screen-app .company-settings-field input:disabled,
+.screen-app .company-settings-field select:disabled {
+  opacity: .72;
+  cursor: default;
+}
+
+.screen-app .company-settings-grid {
+  display: grid;
+  gap: 0 10px;
+}
+
+.screen-app .company-settings-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.screen-app .company-logo-dropzone {
+  width: 100%;
+  min-height: 84px;
+  padding: 9px 12px;
+  border: 1px dashed color-mix(in srgb, var(--border) 88%, var(--accent) 12%);
+  border-radius: 8px;
+  background: var(--settings-panel-2);
+  color: var(--text-muted);
+  display: grid;
+  grid-template-columns: 58px 1fr 58px;
+  align-items: center;
+  cursor: pointer;
+  font: inherit;
+}
+
+.screen-app .company-logo-dropzone:disabled { cursor: default; }
+
+.screen-app .company-logo-preview {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.screen-app .company-logo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.screen-app .company-logo-drop-copy {
+  grid-column: 2;
+  justify-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.screen-app .company-logo-upload-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  background: var(--accent-soft);
+  color: var(--accent);
+  margin-bottom: 1px;
+}
+
+.screen-app .company-logo-drop-copy strong {
+  color: var(--text);
+  font-size: 7px;
+  font-weight: 650;
+}
+
+.screen-app .company-logo-drop-copy small {
+  color: var(--text-faint);
+  font-size: 6.5px;
+}
+
+.screen-app .company-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.screen-app .company-color-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.screen-app .company-color-control input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.screen-app .company-color-control > span {
+  width: 22px;
+  height: 22px;
+  border: 2px solid color-mix(in srgb, var(--surface) 60%, #fff 40%);
+  outline: 1px solid var(--border);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--border) 45%, transparent);
+}
+
+.screen-app .company-color-control small {
+  color: var(--text-faint);
+  font-size: 6.5px;
+}
+
+.screen-app .company-regenerate-button,
+.screen-app .company-settings-savebar button,
+.screen-app .company-settings-state button {
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 9px;
+  font: inherit;
+  font-size: 7px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.screen-app .company-regenerate-button { margin-left: 4px; }
+
+.screen-app .company-theme-toggle,
+.screen-app .company-active-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-muted);
+  font-size: 7px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.screen-app .company-theme-toggle input,
+.screen-app .company-active-toggle input {
+  accent-color: var(--accent);
+}
+
+.screen-app .company-active-toggle {
+  padding: 8px 9px;
+  border: 1px solid var(--settings-line);
+  border-radius: 7px;
+  background: var(--settings-panel-2);
+  align-items: flex-start;
+}
+
+.screen-app .company-active-toggle strong { display: block; color: var(--text); font-size: 7.3px; }
+.screen-app .company-active-toggle small { display: block; margin-top: 2px; color: var(--text-faint); font-size: 6.5px; font-weight: 500; }
+
+.screen-app .company-settings-savebar {
+  position: sticky;
+  bottom: 8px;
+  z-index: 4;
+  min-height: 42px;
+  padding: 6px 7px 6px 10px;
+  border: 1px solid var(--settings-line);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent 6%);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 10px 30px rgba(0,0,0,.12);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.screen-app .company-settings-savebar > div {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-faint);
+  font-size: 6.7px;
+}
+
+.screen-app .company-settings-savebar button {
+  min-width: 90px;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.screen-app .company-settings-savebar button:disabled { opacity: .65; cursor: wait; }
+
+.screen-app .company-settings-error {
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 1px solid color-mix(in srgb, var(--bad) 30%, var(--border));
+  border-radius: 7px;
+  background: var(--bad-soft);
+  color: var(--bad);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 7.3px;
+  font-weight: 650;
+}
+
+.screen-app .company-settings-state {
+  min-height: 220px;
+  padding: 28px;
+  border: 1px solid var(--settings-line);
+  border-radius: 10px;
+  background: var(--settings-panel);
+  color: var(--text-faint);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  text-align: center;
+}
+
+.screen-app .company-settings-state strong { color: var(--text); font-size: 9px; }
+.screen-app .company-settings-state span { max-width: 360px; font-size: 7px; }
+.screen-app .company-settings-state-error > .ic { color: var(--bad); }
+
+html[data-theme="light"] .screen-app .company-settings-screen {
+  --settings-panel: #ffffff;
+  --settings-panel-2: #f7f9fc;
+  --settings-line: #dce4ef;
+}
+
+html[data-theme="light"] .screen-app .company-settings-savebar {
+  background: rgba(255,255,255,.92);
+  box-shadow: 0 8px 24px rgba(15,23,42,.08);
+}
+
+@media (max-width: 920px) {
+  .screen-app .company-settings-layout { grid-template-columns: 1fr; }
+  .screen-app .company-settings-nav {
+    position: static;
+    min-height: 0;
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
   }
-
-  .screen-app .tafiti-sidebar-property { display: none; }
-
-  .screen-app .form-overlay,
-  .screen-app .form-drawer {
-    inset: 110px 0 0 !important;
-  }
+  .screen-app .company-settings-nav-title,
+  .screen-app .company-settings-nav-spacer,
+  .screen-app .company-settings-nav-meta { display: none; }
+  .screen-app .company-settings-nav > button { min-width: max-content; width: auto; }
 }
 
-@media (max-width: 760px) {
-  .screen-app .app-content.tafiti-app-content { padding: 14px 10px 24px !important; }
-  .screen-app .tafiti-app-header-top { padding-inline: 8px !important; }
-  .screen-app .form-drawer > .form-page-header { padding-inline: 14px !important; }
-  .screen-app .form-drawer .form-step-progress { margin-inline: 14px; }
-  .screen-app .form-drawer .form-body {
-    grid-template-columns: minmax(0, 1fr) !important;
-    margin-inline: 10px;
-    padding: 15px 14px 19px !important;
-  }
-  .screen-app .form-drawer .form-footer { padding-inline: 14px !important; }
+@media (max-width: 640px) {
+  .screen-app .company-settings-pagehead { align-items: flex-start; flex-direction: column; }
+  .screen-app .company-settings-grid-2 { grid-template-columns: 1fr; }
+  .screen-app .company-logo-dropzone { grid-template-columns: 46px 1fr; }
+  .screen-app .company-logo-drop-copy { grid-column: 2; justify-self: start; align-items: flex-start; }
+  .screen-app .company-settings-savebar > div { display: none; }
+  .screen-app .company-settings-savebar button { width: 100%; }
 }
