@@ -5264,3 +5264,267 @@ html[data-theme="light"] .screen-app .company-settings-savebar {
   .screen-app .company-settings-savebar > div { display: none; }
   .screen-app .company-settings-savebar button { width: 100%; }
 }
+
+/* ========================================================================
+   READABILITY REPAIR
+   Keep the compact ERP layout, but restore a practical type scale and enough
+   contrast for long sessions. This intentionally sits last in the cascade.
+   ======================================================================== */
+html[data-theme="light"] .screen-app {
+  --tafiti-text: #0f2138;
+  --tafiti-text-2: #3f536a;
+  --tafiti-text-3: #5d6f84;
+}
+
+html[data-theme="dark"] .screen-app {
+  --tafiti-text: #f2f6fb;
+  --tafiti-text-2: #bdcad9;
+  --tafiti-text-3: #98a9bc;
+}
+
+.screen-app .tafiti-app-content,
+.screen-app .app-content {
+  color: var(--tafiti-text) !important;
+  font-size: 12px !important;
+  line-height: 1.45 !important;
+}
+
+.screen-app .app-content h1,
+.screen-app .enterprise-workspace > header h1,
+.screen-app .role-dashboard-header h1,
+.screen-app .dashboard-screen > div:first-child h1,
+.screen-app .list-toolbar h1,
+.screen-app .access-header h1,
+.screen-app .workflow-hub-header h1,
+.screen-app .workbench-hero h1 {
+  font-size: 18px !important;
+  line-height: 1.25 !important;
+  font-weight: 720 !important;
+}
+
+.screen-app .app-content h2 { font-size: 15px !important; }
+.screen-app .app-content h3 { font-size: 13px !important; }
+
+.screen-app .app-content p,
+.screen-app .enterprise-workspace > header p,
+.screen-app .role-dashboard-header p,
+.screen-app .dashboard-screen > div:first-child p,
+.screen-app .list-toolbar p,
+.screen-app .access-header p,
+.screen-app .workflow-hub-header p {
+  color: var(--tafiti-text-2) !important;
+  font-size: 11.5px !important;
+  line-height: 1.5 !important;
+}
+
+.screen-app .app-content :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  color: var(--tafiti-text) !important;
+  font-size: 12px !important;
+}
+
+.screen-app .app-content :where(input:not([type="checkbox"]):not([type="radio"]), select) {
+  min-height: 34px !important;
+  height: 34px !important;
+}
+
+.screen-app .app-content :where(input, textarea)::placeholder {
+  color: var(--tafiti-text-3) !important;
+}
+
+/* Undo the earlier inline-size compression without returning to display-sized
+   headings. Inline values are common in the legacy screens, so this mapping
+   gives them one predictable, readable scale. */
+.screen-app .app-content :not(.ic)[style*="font-size: 17"],
+.screen-app .app-content :not(.ic)[style*="font-size: 18"],
+.screen-app .app-content :not(.ic)[style*="font-size: 19"],
+.screen-app .app-content :not(.ic)[style*="font-size: 20"],
+.screen-app .app-content :not(.ic)[style*="font-size: 21"],
+.screen-app .app-content :not(.ic)[style*="font-size: 22"],
+.screen-app .app-content :not(.ic)[style*="font-size: 23"] {
+  font-size: 16px !important;
+}
+.screen-app .app-content :not(.ic)[style*="font-size: 13"],
+.screen-app .app-content :not(.ic)[style*="font-size: 14"],
+.screen-app .app-content :not(.ic)[style*="font-size: 15"] {
+  font-size: 12.5px !important;
+}
+.screen-app .app-content :not(.ic)[style*="font-size: 11"],
+.screen-app .app-content :not(.ic)[style*="font-size: 12"] {
+  font-size: 11.5px !important;
+}
+
+.screen-app.screen-app .app-content .workbench-hero h1,
+.screen-app.screen-app .app-content .company-settings-pagehead h1 {
+  font-size: 18px !important;
+}
+
+/* Shell text remains compact without becoming faint or microscopic. */
+.screen-app .tafiti-sidebar .sidebar-nav-heading { font-size: 9px !important; }
+.screen-app .tafiti-sidebar .tafiti-sidebar-nav-item {
+  min-height: 31px !important;
+  color: var(--tafiti-text-2) !important;
+  font-size: 11px !important;
+}
+.screen-app .tafiti-sidebar .tafiti-sidebar-nav-item .ic { color: var(--tafiti-text-2) !important; }
+.screen-app .tafiti-property-label { font-size: 9px !important; }
+.screen-app .tafiti-property-value { color: var(--tafiti-text-2); font-size: 11px !important; }
+.screen-app .tafiti-module-switch { color: var(--tafiti-text-2) !important; font-size: 10.5px !important; }
+.screen-app .tafiti-sidebar-user-name { font-size: 11px !important; }
+.screen-app .tafiti-sidebar-user-role { font-size: 9.5px !important; }
+.screen-app .tafiti-header-page-context strong { font-size: 12px !important; }
+.screen-app .tafiti-header-page-context > span { color: var(--tafiti-text-2); font-size: 10px !important; }
+.screen-app .tafiti-header-clock small { font-size: 8px !important; }
+.screen-app .tafiti-header-clock strong { font-size: 11px !important; }
+.screen-app .tafiti-header-actions .header-role-chip,
+.screen-app .tafiti-header-actions .header-live-state { font-size: 9px !important; }
+.screen-app .tafiti-header-user-copy > span { font-size: 10.5px !important; }
+.screen-app .tafiti-header-user-copy > small { color: var(--tafiti-text-2); font-size: 9px !important; }
+
+/* Workflows, controls, tables, and dense operational views. */
+.screen-app .workflow-path-header strong { font-size: 12px !important; }
+.screen-app .workflow-path-header span { color: var(--tafiti-text-2) !important; font-size: 10.5px !important; }
+.screen-app .workflow-path-actor { color: var(--tafiti-text-2) !important; font-size: 9.5px !important; }
+.screen-app .workflow-path-label { font-size: 11px !important; }
+.screen-app .workflow-path-description { color: var(--tafiti-text-2) !important; font-size: 9.5px !important; }
+
+.screen-app .finance-table-head,
+.screen-app .procurement-table-head,
+.screen-app .storekeeper-queue-head,
+.screen-app .requester-list-head,
+.screen-app .requester-items-head,
+.screen-app .storekeeper-items-head,
+.screen-app .hod-items-head,
+.screen-app .receiving-ready-header,
+.screen-app .supplier-items-head,
+.screen-app .supplier-table-head > span,
+.screen-app .data-head button,
+.screen-app .access-table-head,
+.screen-app .reports-index-header > div {
+  color: var(--tafiti-text-2) !important;
+  font-size: 10px !important;
+}
+
+.screen-app .finance-table-row,
+.screen-app .procurement-record-row,
+.screen-app .storekeeper-queue-row,
+.screen-app .requester-list-row,
+.screen-app .receiving-line-grid,
+.screen-app .lpo-prep-row,
+.screen-app .supplier-items-row,
+.screen-app .data-cell,
+.screen-app .supplier-table-primary,
+.screen-app .supplier-mono-cell {
+  color: var(--tafiti-text-2) !important;
+  font-size: 11.5px !important;
+  line-height: 1.4 !important;
+}
+
+.screen-app .finance-workarea-label,
+.screen-app .inventory-form-field > span,
+.screen-app .inventory-filter-field > span,
+.screen-app .access-field span,
+.screen-app .supplier-field-slot > span {
+  color: var(--tafiti-text-2) !important;
+  font-size: 10.5px !important;
+}
+
+.screen-app .inventory-form-hint,
+.screen-app .inventory-form-rule,
+.screen-app .requester-section-heading p,
+.screen-app .requester-item-entry-heading p,
+.screen-app .workflow-step-description,
+.screen-app .supplier-kpi-copy > small,
+.screen-app .supplier-drawer-title-wrap small {
+  color: var(--tafiti-text-2) !important;
+  font-size: 10px !important;
+}
+
+.screen-app .finance-workbench > div[style*="flex-wrap: wrap"] > button,
+.screen-app .procurement-queue-tab,
+.screen-app .receiving-view-tabs button,
+.screen-app .approval-section-tabs button,
+.screen-app .inventory-nav-button,
+.screen-app .inventory-refresh-button,
+.screen-app .inventory-clear-filters,
+.screen-app .requester-editor-actions button,
+.screen-app .list-actions button,
+.screen-app .table-command-bar button,
+.screen-app .access-primary,
+.screen-app .access-tabs button,
+.screen-app .form-footer button {
+  font-size: 11px !important;
+}
+
+.screen-app .supplier-kpi-copy > span,
+.screen-app .supplier-status,
+.screen-app .access-role,
+.screen-app .access-status,
+.screen-app .list-footer,
+.screen-app .supplier-table-footer {
+  color: var(--tafiti-text-2) !important;
+  font-size: 10.5px !important;
+}
+
+.screen-app .access-person b,
+.screen-app .workflow-step-label,
+.screen-app .requester-section-heading h2,
+.screen-app .requester-item-entry-heading h2,
+.screen-app .supplier-field-slot > strong { font-size: 11.5px !important; }
+
+.screen-app .access-person small,
+.screen-app .access-table-row .muted { color: var(--tafiti-text-2) !important; font-size: 10px !important; }
+
+.screen-app .command-section-title,
+.screen-app .command-footer,
+.screen-app .record-detail-drawer > header > span:nth-child(2) > span:first-child { color: var(--tafiti-text-2) !important; font-size: 10px !important; }
+.screen-app .command-result,
+.screen-app .confirm-message,
+.screen-app .confirm-actions button,
+.screen-app .feedback-message,
+.screen-app .feedback-details > div,
+.screen-app .feedback-action,
+.screen-app .detail-view-screen > button:first-child,
+.screen-app .detail-view-screen .hover-bright,
+.screen-app .detail-view-screen .hover-surface2,
+.screen-app .detail-view-screen .hover-reject { font-size: 11px !important; }
+
+/* Company settings uses the same calm scale as the rest of the product. */
+.screen-app .company-settings-screen { padding-inline: 16px !important; }
+.screen-app .company-settings-pagehead { min-height: 56px; padding-bottom: 12px; }
+.screen-app .company-settings-pagehead h1 { font-size: 18px !important; }
+.screen-app .company-settings-pagehead p { color: var(--text-muted); font-size: 11px !important; }
+.screen-app .company-settings-page-actions select,
+.screen-app .company-settings-new { height: 34px; font-size: 12px !important; }
+.screen-app .company-settings-layout { grid-template-columns: 184px minmax(0, 1fr); gap: 14px; }
+.screen-app .company-settings-nav { min-height: 440px; padding: 11px 9px; }
+.screen-app .company-settings-nav-title { color: var(--text-muted); font-size: 9.5px !important; }
+.screen-app .company-settings-nav > button { height: 36px; color: var(--text-muted); font-size: 12px !important; }
+.screen-app .company-settings-nav-meta { color: var(--text-muted); font-size: 10.5px !important; }
+.screen-app .company-settings-section { padding: 16px; }
+.screen-app .company-settings-section-heading strong { font-size: 13px !important; }
+.screen-app .company-settings-section-heading span { color: var(--text-muted); font-size: 10.5px !important; }
+.screen-app .company-settings-label { color: var(--text-muted); font-size: 11px !important; }
+.screen-app .company-settings-hint { color: var(--text-muted); font-size: 10px !important; }
+.screen-app .company-settings-field input:not([type="checkbox"]):not([type="color"]),
+.screen-app .company-settings-field select,
+.screen-app .company-settings-page-actions select { height: 36px; min-height: 36px; font-size: 12px !important; }
+.screen-app .company-logo-dropzone { min-height: 104px; }
+.screen-app .company-logo-drop-copy strong { font-size: 11.5px !important; }
+.screen-app .company-logo-drop-copy small,
+.screen-app .company-color-control small { color: var(--text-muted); font-size: 10px !important; }
+.screen-app .company-regenerate-button,
+.screen-app .company-settings-savebar button,
+.screen-app .company-settings-state button { height: 34px; font-size: 11px !important; }
+.screen-app .company-theme-toggle,
+.screen-app .company-active-toggle { color: var(--text-muted); font-size: 10.5px !important; }
+.screen-app .company-active-toggle strong { font-size: 11px !important; }
+.screen-app .company-active-toggle small { color: var(--text-muted); font-size: 10px !important; }
+.screen-app .company-settings-savebar > div { color: var(--text-muted); font-size: 10px !important; }
+.screen-app .company-settings-savebar button { min-width: 116px; font-size: 12px !important; }
+.screen-app .company-settings-error { font-size: 11px !important; }
+.screen-app .company-settings-state strong { font-size: 13px !important; }
+.screen-app .company-settings-state span { color: var(--text-muted); font-size: 11px !important; }
+
+@media (max-width: 920px) {
+  .screen-app .company-settings-layout { grid-template-columns: 1fr; }
+}

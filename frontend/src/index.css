@@ -105,6 +105,15 @@ body {
   src: url('./assets/fonts/material-symbols-rounded.woff2') format('woff2');
 }
 
+/* Small companion subset for symbols added by the company settings screen. */
+@font-face {
+  font-family: 'Material Symbols Rounded Supplemental';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('./assets/fonts/material-symbols-rounded-settings.ttf') format('truetype');
+}
+
 /* Material Symbols icon helper */
 .ic {
   font-family: 'Material Symbols Rounded';
@@ -121,6 +130,11 @@ body {
   font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
   user-select: none;
   flex: none;
+}
+
+.ic.ic-supplemental {
+  font-family: 'Material Symbols Rounded Supplemental' !important;
+  font-weight: 400;
 }
 
 input::placeholder { color: var(--text-faint); }
