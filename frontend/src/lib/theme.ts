@@ -30,17 +30,17 @@ const LIGHT: Record<string, string> = {
 }
 
 const DARK: Record<string, string> = {
-  '--bg': '#0C0C10',
-  '--surface': '#15151B',
-  '--surface-2': '#1E1E26',
-  '--surface-3': '#272731',
-  '--text': '#F3F3F5',
-  '--text-muted': '#A0A0AA',
-  '--text-faint': '#6E6E78',
-  '--border': '#27272F',
-  '--border-2': '#33333D',
-  '--shadow': '0 1px 2px rgba(0,0,0,.4),0 12px 30px rgba(0,0,0,.4)',
-  '--shadow-sm': '0 1px 2px rgba(0,0,0,.4)',
+  '--bg': '#0D172B',
+  '--surface': '#12223D',
+  '--surface-2': '#192D49',
+  '--surface-3': '#263B55',
+  '--text': '#E2E9F2',
+  '--text-muted': '#9BACBF',
+  '--text-faint': '#617792',
+  '--border': '#203753',
+  '--border-2': '#2A4665',
+  '--shadow': '0 1px 2px rgba(0,0,0,.26),0 12px 30px rgba(0,0,0,.24)',
+  '--shadow-sm': '0 1px 2px rgba(0,0,0,.26)',
 }
 
 // Shared status colors across light and dark modes.

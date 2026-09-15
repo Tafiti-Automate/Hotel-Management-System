@@ -134,12 +134,12 @@ function readAppearance(): { mode: Mode; accentName: AccentName; density: Densit
   try {
     const saved = JSON.parse(localStorage.getItem(APPEARANCE_KEY) || '{}')
     return {
-      mode: saved.mode === 'dark' ? 'dark' : 'light',
+      mode: saved.mode === 'light' ? 'light' : 'dark',
       accentName: saved.accentName || 'Blue',
       density: saved.density === 'Compact' ? 'Compact' : 'Airy',
     }
   } catch {
-    return { mode: 'light', accentName: 'Blue', density: 'Airy' }
+    return { mode: 'dark', accentName: 'Blue', density: 'Airy' }
   }
 }
 

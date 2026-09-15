@@ -4761,3 +4761,268 @@ html[data-theme="light"] .screen-app .explorer-workspace-scroll::-webkit-scrollb
 html[data-theme="light"] .screen-app .supplier-table-scroll::-webkit-scrollbar-thumb,
 html[data-theme="light"] .screen-app .supplier-drawer-body::-webkit-scrollbar-thumb,
 html[data-theme="light"] .screen-app .form-body::-webkit-scrollbar-thumb { background: #aebdce !important; }
+
+/* ==========================================================================
+   Reference-layout stabilization
+   Resolves the remaining cascade conflicts between the legacy enterprise
+   layers and the compact TAFITI shell. This block is deliberately visual:
+   routes, handlers, permissions and API-backed workflows remain unchanged.
+   ========================================================================== */
+
+html[data-theme="dark"] .screen-app {
+  --tafiti-bg: #0d172b;
+  --tafiti-bg-deep: #0d172b;
+  --tafiti-sidebar: #0b172e;
+  --tafiti-header: #0e162a;
+  --tafiti-panel: #12223d;
+  --tafiti-panel-2: #192d49;
+  --tafiti-panel-3: #263b55;
+  --tafiti-field: #263b55;
+  --tafiti-field-hover: #2b425f;
+  --tafiti-border: #2a4665;
+  --tafiti-border-soft: #203753;
+  --tafiti-text: #e2e9f2;
+  --tafiti-text-2: #9bacbf;
+  --tafiti-text-3: #617792;
+}
+
+html[data-theme="dark"] .screen-app .tafiti-app-shell {
+  --bg: #0d172b;
+  --surface: #12223d;
+  --surface-2: #192d49;
+  --surface-3: #263b55;
+  --text: #e2e9f2;
+  --text-muted: #9bacbf;
+  --text-faint: #617792;
+  --border: #203753;
+  --border-2: #2a4665;
+}
+
+.screen-app .app-shell.tafiti-app-shell {
+  height: 100vh !important;
+  height: 100svh !important;
+  padding-top: 9px !important;
+  border-top: 0 !important;
+  background: var(--tafiti-bg-deep) !important;
+}
+
+.screen-app .tafiti-shell-topline {
+  height: 9px !important;
+  background: #303c4c !important;
+}
+
+.screen-app .app-main.tafiti-app-main,
+.screen-app .app-content.tafiti-app-content {
+  background: var(--tafiti-bg) !important;
+}
+
+.screen-app .app-content.tafiti-app-content {
+  padding: 18px 30px 30px !important;
+}
+
+.screen-app .sidebar.tafiti-sidebar {
+  background: var(--tafiti-sidebar) !important;
+  border-right-color: var(--tafiti-border-soft) !important;
+}
+
+.screen-app .tafiti-sidebar .tafiti-sidebar-brand {
+  order: 1;
+  margin-top: 9px !important;
+}
+
+.screen-app .tafiti-sidebar-nav { order: 2; }
+
+.screen-app .tafiti-sidebar-property {
+  order: 3;
+  padding-block: 3px !important;
+}
+
+.screen-app .tafiti-sidebar .tafiti-property-trigger {
+  min-height: 36px !important;
+  padding-block: 4px !important;
+  background: transparent !important;
+}
+
+.screen-app .tafiti-sidebar .tafiti-branch-menu {
+  top: auto;
+  bottom: calc(100% + 3px);
+}
+
+.screen-app .tafiti-sidebar-footer { order: 4; }
+
+@media (min-width: 961px) {
+  .screen-app .sidebar-mobile-toggle { display: none !important; }
+}
+
+.screen-app .app-header.tafiti-app-header {
+  background: var(--tafiti-header) !important;
+  border-bottom-color: var(--tafiti-border-soft) !important;
+}
+
+.screen-app .tafiti-app-header-top {
+  padding-inline: 22px !important;
+}
+
+/* Full-canvas create/edit pages. The existing drawer close/save callbacks are
+   retained; only the desktop presentation changes to the reference layout. */
+.screen-app .form-overlay {
+  inset: 58px 0 0 195px !important;
+  background: var(--tafiti-bg) !important;
+  backdrop-filter: none !important;
+  animation: none !important;
+}
+
+.screen-app .form-drawer {
+  inset: 58px 0 0 195px !important;
+  width: auto !important;
+  max-width: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--tafiti-bg) !important;
+  box-shadow: none !important;
+  animation: enterprise-page-enter .16s ease-out both !important;
+}
+
+.screen-app .form-drawer > .form-page-header {
+  min-height: 64px !important;
+  flex: 0 0 64px;
+  justify-content: flex-start !important;
+  gap: 10px;
+  padding: 12px 30px !important;
+  border-bottom: 0 !important;
+  background: var(--tafiti-bg) !important;
+}
+
+.screen-app .form-page-title {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.screen-app .form-page-title > div:first-child {
+  color: var(--tafiti-text) !important;
+  font-size: 14px !important;
+  line-height: 1.2 !important;
+  font-weight: 690 !important;
+}
+
+.screen-app .form-page-subtitle {
+  margin: 0 !important;
+  color: var(--tafiti-text-3) !important;
+  font-size: 7.6px !important;
+  line-height: 1.35;
+}
+
+.screen-app .form-drawer .form-back-button {
+  order: -1;
+  width: 26px !important;
+  height: 26px !important;
+  min-height: 26px !important;
+  flex: 0 0 26px;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 6px !important;
+  background: var(--tafiti-panel-2) !important;
+  color: var(--tafiti-text-2) !important;
+}
+
+.screen-app .form-drawer .form-step-progress {
+  flex: 0 0 auto;
+  margin: 0 30px 12px;
+  padding: 5px !important;
+  border: 1px solid var(--tafiti-border-soft) !important;
+  border-radius: 6px;
+  background: var(--tafiti-panel-2);
+}
+
+.screen-app .form-drawer .form-step-progress > span {
+  height: 2px !important;
+}
+
+.screen-app .form-drawer .form-body {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  align-content: start;
+  gap: 18px 12px !important;
+  margin: 0 30px 14px;
+  padding: 20px 22px 24px !important;
+  border: 1px solid var(--tafiti-border) !important;
+  border-radius: 15px !important;
+  background: var(--tafiti-panel) !important;
+}
+
+.screen-app .form-drawer .form-body > section,
+.screen-app .form-drawer .form-body > .form-helper-card {
+  grid-column: 1 / -1;
+}
+
+.screen-app .form-drawer .form-body :where(input:not([type="checkbox"]):not([type="radio"]), select) {
+  height: 29px !important;
+  min-height: 29px !important;
+  border-color: var(--tafiti-border) !important;
+  border-radius: 5px !important;
+  background: var(--tafiti-field) !important;
+  color: var(--tafiti-text) !important;
+  box-shadow: none !important;
+  font-size: 8.3px !important;
+}
+
+.screen-app .form-drawer .form-body textarea {
+  min-height: 72px !important;
+  border-color: var(--tafiti-border) !important;
+  border-radius: 5px !important;
+  background: var(--tafiti-field) !important;
+  color: var(--tafiti-text) !important;
+  box-shadow: none !important;
+  font-size: 8.3px !important;
+}
+
+.screen-app .form-drawer .form-body label,
+.screen-app .form-drawer .form-body label > span {
+  color: var(--tafiti-text-2) !important;
+  font-size: 7.4px !important;
+}
+
+.screen-app .form-drawer .form-footer {
+  min-height: 50px !important;
+  flex: 0 0 50px;
+  padding: 0 30px 18px !important;
+  border: 0 !important;
+  background: var(--tafiti-bg) !important;
+}
+
+.screen-app .form-drawer .form-footer button {
+  min-width: 0 !important;
+  min-height: 29px !important;
+  height: 29px !important;
+  padding: 0 11px !important;
+  border-radius: 5px !important;
+  font-size: 7.5px !important;
+}
+
+@media (max-width: 960px) {
+  .screen-app .app-shell.tafiti-app-shell {
+    height: auto !important;
+    min-height: 100svh !important;
+    padding-top: 7px !important;
+  }
+
+  .screen-app .tafiti-sidebar-property { display: none; }
+
+  .screen-app .form-overlay,
+  .screen-app .form-drawer {
+    inset: 110px 0 0 !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .screen-app .app-content.tafiti-app-content { padding: 14px 10px 24px !important; }
+  .screen-app .tafiti-app-header-top { padding-inline: 8px !important; }
+  .screen-app .form-drawer > .form-page-header { padding-inline: 14px !important; }
+  .screen-app .form-drawer .form-step-progress { margin-inline: 14px; }
+  .screen-app .form-drawer .form-body {
+    grid-template-columns: minmax(0, 1fr) !important;
+    margin-inline: 10px;
+    padding: 15px 14px 19px !important;
+  }
+  .screen-app .form-drawer .form-footer { padding-inline: 14px !important; }
+}

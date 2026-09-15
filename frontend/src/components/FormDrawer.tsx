@@ -148,12 +148,12 @@ export default function FormDrawer() {
   const title = f.id
     ? `Edit ${conf.singular || ''}`
     : f.preset === 'majorGroup'
-      ? 'Create Major Group'
+      ? 'New Major Group'
       : f.preset === 'itemGroup'
-        ? 'Create Item Group'
+        ? 'New Item Group'
         : f.preset === 'item'
-          ? 'Create Item'
-          : `Add ${conf.singular || ''}`
+          ? 'New Item'
+          : `New ${conf.singular || ''}`
   const editingRecord = f.id
     ? app.data[f.entity].find((record) => record.id === f.id)
     : null
@@ -254,14 +254,23 @@ export default function FormDrawer() {
     <>
       <div className="form-overlay" onClick={app.formSaving ? undefined : app.closeForm} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(16,17,33,.4)' }} />
       <div className="form-drawer" style={{ position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 71, width: 520, maxWidth: '94vw', background: 'var(--surface)', boxShadow: '-8px 0 28px rgba(15,23,42,.16)', display: 'flex', flexDirection: 'column', animation: 'slideIn .22s ease' }}>
-        <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div><div style={{ fontSize: 17, fontWeight: 650, color: 'var(--text)' }}>{title}</div>{wizard && <div style={{ marginTop: 4, color: 'var(--text-faint)', fontSize: 12 }}>Step {step + 1} of {pageCount}</div>}</div>
-          <button type="button" onClick={app.closeForm} disabled={app.formSaving} className="hover-text" style={{ width: 32, height: 32, border: 'none', background: 'var(--surface-2)', borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: app.formSaving ? 'wait' : 'pointer', color: 'var(--text-muted)' }}>
-            <Icon name="close" size={19} />
+        <div className="form-page-header" style={{ padding: '18px 22px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div className="form-page-title">
+            <div style={{ fontSize: 17, fontWeight: 650, color: 'var(--text)' }}>{title}</div>
+            <div className="form-page-subtitle" style={{ marginTop: 4, color: 'var(--text-faint)', fontSize: 12 }}>
+              {wizard
+                ? `Step ${step + 1} of ${pageCount}`
+                : f.id
+                  ? `Update this ${String(conf.singular || 'record').toLowerCase()}`
+                  : `Create a new ${String(conf.singular || 'record').toLowerCase()}`}
+            </div>
+          </div>
+          <button type="button" aria-label="Back to the previous page" title="Back" onClick={app.closeForm} disabled={app.formSaving} className="hover-text form-back-button" style={{ width: 32, height: 32, border: 'none', background: 'var(--surface-2)', borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: app.formSaving ? 'wait' : 'pointer', color: 'var(--text-muted)' }}>
+            <Icon name="arrow_back" size={19} />
           </button>
         </div>
 
-        {wizard && <div style={{ display: 'grid', gridTemplateColumns: `repeat(${pageCount},1fr)`, gap: 5, padding: '12px 22px', borderBottom: '1px solid var(--border)' }}>{Array.from({ length: pageCount }).map((_, index) => <span key={index} style={{ height: 3, borderRadius: 2, background: index <= step ? 'var(--accent)' : 'var(--border)' }} />)}</div>}
+        {wizard && <div className="form-step-progress" style={{ display: 'grid', gridTemplateColumns: `repeat(${pageCount},1fr)`, gap: 5, padding: '12px 22px', borderBottom: '1px solid var(--border)' }}>{Array.from({ length: pageCount }).map((_, index) => <span key={index} style={{ height: 3, borderRadius: 2, background: index <= step ? 'var(--accent)' : 'var(--border)' }} />)}</div>}
 
         <div className="form-body" style={{ flex: 1, overflowY: 'auto', padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
           {f.entity === 'employees' && <section style={{ display: 'grid', gridTemplateColumns: '88px minmax(0,1fr)', gap: 18, padding: 18, border: '1px solid color-mix(in srgb, var(--accent) 16%, var(--border))', borderRadius: 14, background: 'linear-gradient(180deg, color-mix(in srgb, var(--accent) 4%, white), var(--surface))', boxShadow: '0 1px 2px rgba(15,23,42,.04)' }}>
