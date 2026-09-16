@@ -35,7 +35,9 @@ export default function App() {
     return () => window.removeEventListener('hotel-theme-updated', listener)
   }, [app.screen])
 
-  const vars = { ...themeVars({ mode: app.mode, accentName: app.accentName, density: app.density }), ...brandThemeVars(brand, app.mode) }
+  // Brand colors remain available for logos/documents, while the application
+  // chrome keeps the selected high-contrast corporate appearance.
+  const vars = { ...brandThemeVars(brand, app.mode), ...themeVars({ mode: app.mode, accentName: app.accentName, density: app.density }) }
 
   const rootStyle: CSSProperties = {
     ...(vars as CSSProperties),

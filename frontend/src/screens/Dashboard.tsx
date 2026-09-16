@@ -54,6 +54,8 @@ export default function Dashboard() {
   const department = app.user.departmentName || '—'
   const branch = app.currentBranch || app.user.branchName || '—'
   const visibleRecords = view.tasks.reduce((total, task) => total + task.count, 0)
+  const performanceTasks = view.tasks.slice(0, 4)
+  const performanceMax = Math.max(1, ...performanceTasks.map((task) => task.count))
 
   return (
     <div className="role-dashboard tafiti-dashboard">
@@ -133,11 +135,15 @@ export default function Dashboard() {
             <div className="dashboard-rail-heading">
               <h3>Needs Attention</h3>
             </div>
-            <p>
-              {visibleRecords
-                ? `${visibleRecords} record${visibleRecords === 1 ? '' : 's'} currently visible in your role queues.`
-                : 'All caught up. Nothing needs attention.'}
-            </p>
+            <div className={`dashboard-attention-status${visibleRecords ? ' has-items' : ' is-clear'}`}>
+              <span className="dashboard-attention-dot" aria-hidden="true" />
+              <strong>
+                {visibleRecords
+                  ? `${visibleRecords} record${visibleRecords === 1 ? '' : 's'} currently visible`
+                  : 'All caught up'}
+              </strong>
+            </div>
+            <p>{visibleRecords ? 'Review the relevant role queues when ready.' : 'Nothing needs attention right now.'}</p>
           </section>
 
           <section className="dashboard-rail-card dashboard-performance-card">
@@ -146,8 +152,8 @@ export default function Dashboard() {
               <span>Where things stand right now</span>
             </div>
             <div className="dashboard-performance-grid">
-              {view.tasks.slice(0, 4).map((task) => (
-                <PerformanceMetric key={task.label} task={task} />
+              {performanceTasks.map((task) => (
+                <PerformanceMetric key={task.label} task={task} maxCount={performanceMax} />
               ))}
             </div>
           </section>
@@ -199,11 +205,12 @@ function Task({ task, onClick }: { task: TaskCard; onClick: () => void }) {
   )
 }
 
-function PerformanceMetric({ task }: { task: TaskCard }) {
+function PerformanceMetric({ task, maxCount }: { task: TaskCard; maxCount: number }) {
   const tone = task.tone || 'accent'
+  const progress = task.count === 0 ? 0 : Math.max(14, Math.round((task.count / maxCount) * 100))
   return (
     <div className={`dashboard-performance-item tone-${tone}`}>
-      <span className="dashboard-performance-ring"><strong>{task.count}</strong></span>
+      <span className="dashboard-performance-ring" style={{ '--progress': `${progress}%` } as CSSProperties}><strong>{task.count}</strong></span>
       <small>{task.label}</small>
     </div>
   )

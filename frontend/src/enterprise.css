@@ -5528,3 +5528,275 @@ html[data-theme="dark"] .screen-app {
 @media (max-width: 920px) {
   .screen-app .company-settings-layout { grid-template-columns: 1fr; }
 }
+
+/* ========================================================================
+   CORPORATE LIGHT / DARK SYSTEM
+   Neutral canvases, elevated white/slate cards, crisp borders, and one clear
+   blue interaction color. These tokens are the final visual source of truth.
+   ======================================================================== */
+html[data-theme="light"] .screen-app {
+  --tafiti-bg: #f8fafc;
+  --tafiti-bg-deep: #f8fafc;
+  --tafiti-sidebar: #ffffff;
+  --tafiti-header: #ffffff;
+  --tafiti-panel: #ffffff;
+  --tafiti-panel-2: #f8fafc;
+  --tafiti-panel-3: #f1f5f9;
+  --tafiti-field: #ffffff;
+  --tafiti-field-hover: #f8fafc;
+  --tafiti-border: #e2e8f0;
+  --tafiti-border-soft: #e2e8f0;
+  --tafiti-text: #0f172a;
+  --tafiti-text-2: #475569;
+  --tafiti-text-3: #64748b;
+  --corporate-shadow: 0 1px 3px rgba(15, 23, 42, .10);
+  --performance-track: #e2e8f0;
+}
+
+html[data-theme="dark"] .screen-app {
+  --tafiti-bg: #0f172a;
+  --tafiti-bg-deep: #0f172a;
+  --tafiti-sidebar: #111827;
+  --tafiti-header: #111827;
+  --tafiti-panel: #1e293b;
+  --tafiti-panel-2: #172033;
+  --tafiti-panel-3: #334155;
+  --tafiti-field: #111827;
+  --tafiti-field-hover: #172033;
+  --tafiti-border: #334155;
+  --tafiti-border-soft: #334155;
+  --tafiti-text: #f8fafc;
+  --tafiti-text-2: #94a3b8;
+  --tafiti-text-3: #94a3b8;
+  --corporate-shadow: 0 1px 3px rgba(0, 0, 0, .32);
+  --performance-track: #334155;
+}
+
+.screen-app,
+.screen-app .app-shell,
+.screen-app .tafiti-app-main,
+.screen-app .tafiti-app-content,
+.screen-app .app-content {
+  font-family: var(--font-sans) !important;
+  background: var(--tafiti-bg) !important;
+}
+
+.screen-app .app-shell.tafiti-app-shell { padding-top: 4px !important; }
+.screen-app .tafiti-shell-topline {
+  height: 4px !important;
+  background: var(--accent) !important;
+}
+
+.screen-app .sidebar.tafiti-sidebar {
+  background: var(--tafiti-sidebar) !important;
+  border-right-color: var(--tafiti-border) !important;
+}
+
+.screen-app .app-header.tafiti-app-header {
+  background: var(--tafiti-header) !important;
+  border-bottom-color: var(--tafiti-border) !important;
+}
+
+.screen-app .tafiti-sidebar .tafiti-sidebar-brand,
+.screen-app .tafiti-sidebar .tafiti-property-trigger,
+.screen-app .tafiti-sidebar .tafiti-sidebar-footer {
+  border-color: var(--tafiti-border) !important;
+  background: var(--tafiti-panel) !important;
+  box-shadow: var(--corporate-shadow) !important;
+}
+
+.screen-app .tafiti-sidebar .tafiti-sidebar-brand-mark {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--tafiti-border)) !important;
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
+}
+
+.screen-app .tafiti-sidebar .tafiti-sidebar-brand-mark .ic { color: var(--accent) !important; }
+
+.screen-app .tafiti-sidebar .tafiti-sidebar-nav-item.active,
+.screen-app .tafiti-sidebar .tafiti-sidebar-nav-item.active:hover {
+  color: #ffffff !important;
+  background: var(--accent) !important;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 30%, transparent) !important;
+}
+.screen-app .tafiti-sidebar .tafiti-sidebar-nav-item.active .ic,
+.screen-app .tafiti-sidebar .tafiti-sidebar-nav-item.active:hover .ic { color: #ffffff !important; }
+
+.screen-app .app-content :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  border-color: var(--tafiti-border) !important;
+  background: var(--tafiti-field) !important;
+  color: var(--tafiti-text) !important;
+}
+.screen-app .app-content :where(input, select, textarea):hover { border-color: var(--border-2) !important; }
+.screen-app .app-content :where(input, select, textarea):focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent) !important;
+}
+
+.screen-app .app-content :where(
+  .erp-primary,
+  .access-primary,
+  .inventory-primary-action,
+  .company-settings-savebar button,
+  button[style*="background: var(--accent)"]
+) {
+  border-color: var(--accent) !important;
+  background: var(--accent) !important;
+  color: #ffffff !important;
+}
+
+.screen-app :where(
+  .dashboard-week-summary,
+  .dashboard-task-card,
+  .dashboard-summary-strip,
+  .dashboard-panel,
+  .dashboard-rail-card,
+  .workflow-path,
+  .finance-kpi-card,
+  .procurement-hero-card,
+  .receiving-hero-card,
+  .inventory-records-card,
+  .inventory-action-form,
+  .procurement-queue-card,
+  .procurement-detail-panel,
+  .finance-table-card,
+  .finance-action-panel,
+  .workbench-action-panel,
+  .workflow-queue-panel,
+  .workflow-control-panel,
+  .explorer-workspace-layout,
+  .article-master-layout,
+  .unit-master-layout,
+  .catalogue-explorer-layout,
+  .quotation-explorer-layout,
+  .data-table,
+  .access-card,
+  .role-editor-card,
+  .company-settings-nav,
+  .company-settings-section,
+  .company-settings-savebar
+) {
+  border-color: var(--tafiti-border) !important;
+  border-radius: 8px !important;
+  background: var(--tafiti-panel) !important;
+  box-shadow: var(--corporate-shadow) !important;
+}
+
+html[data-theme="light"] .screen-app .company-settings-screen {
+  --settings-panel: #ffffff;
+  --settings-panel-2: #f8fafc;
+  --settings-line: #e2e8f0;
+}
+html[data-theme="dark"] .screen-app .company-settings-screen {
+  --settings-panel: #1e293b;
+  --settings-panel-2: #111827;
+  --settings-line: #334155;
+}
+
+/* Dashboard type hierarchy and neutral card treatment. */
+.screen-app .tafiti-dashboard .dashboard-week-copy strong,
+.screen-app .tafiti-dashboard .dashboard-panel-header h3,
+.screen-app .dashboard-rail-heading h3 { color: var(--tafiti-text) !important; font-size: 12px !important; font-weight: 700 !important; }
+.screen-app .tafiti-dashboard .dashboard-week-copy small,
+.screen-app .tafiti-dashboard .dashboard-panel-header span,
+.screen-app .dashboard-rail-heading span { color: var(--tafiti-text-3) !important; font-size: 10px !important; }
+.screen-app .tafiti-dashboard .dashboard-week-summary > p,
+.screen-app .dashboard-rail-card > p { color: var(--tafiti-text-2) !important; font-size: 10.5px !important; }
+.screen-app .tafiti-dashboard .dashboard-task-label { color: var(--tafiti-text-2) !important; font-size: 11px !important; }
+.screen-app .tafiti-dashboard .dashboard-task-count { color: var(--tafiti-text) !important; font-size: 20px !important; font-weight: 700 !important; }
+.screen-app .tafiti-dashboard .dashboard-task-hint { color: var(--tafiti-text-3) !important; font-size: 9.5px !important; }
+.screen-app .dashboard-summary-item span { color: var(--tafiti-text-3); font-size: 9.5px; }
+.screen-app .dashboard-summary-item strong { color: var(--tafiti-text); font-size: 12px; font-weight: 700; }
+.screen-app .tafiti-dashboard .dashboard-activity-copy strong { color: var(--tafiti-text) !important; font-size: 11px !important; }
+.screen-app .tafiti-dashboard .dashboard-activity-copy span,
+.screen-app .tafiti-dashboard .dashboard-activity-date { color: var(--tafiti-text-3) !important; font-size: 10px !important; }
+.screen-app .tafiti-dashboard .dashboard-context-row > span,
+.screen-app .tafiti-dashboard .dashboard-context-row strong { font-size: 10.5px !important; }
+
+.screen-app .tafiti-dashboard .dashboard-task-card::after { background: var(--accent); }
+.screen-app .tafiti-dashboard .dashboard-task-icon,
+.screen-app .tafiti-dashboard .dashboard-week-icon {
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
+}
+
+/* A compact status badge replaces the old full-panel attention wash. */
+.screen-app .dashboard-attention-status {
+  min-height: 34px;
+  margin-top: 12px;
+  padding: 7px 9px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid color-mix(in srgb, var(--warn) 28%, var(--tafiti-border));
+  border-radius: 6px;
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.screen-app .dashboard-attention-status.is-clear {
+  border-color: color-mix(in srgb, var(--good) 28%, var(--tafiti-border));
+  background: var(--good-soft);
+  color: var(--good);
+}
+.screen-app .dashboard-attention-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 15%, transparent);
+}
+.screen-app .dashboard-attention-status strong { font-size: 10.5px; font-weight: 700; }
+.screen-app .dashboard-attention-card > p { margin-top: 8px; }
+
+/* Real progress arcs: blue completion and a restrained theme-aware track. */
+.screen-app .dashboard-performance-ring {
+  --ring: var(--accent);
+  width: 58px;
+  height: 58px;
+  border: 0;
+  background: conic-gradient(var(--ring) 0 var(--progress, 0%), var(--performance-track) var(--progress, 0%) 100%);
+  box-shadow: none;
+}
+.screen-app .dashboard-performance-ring::before {
+  inset: 6px;
+  width: auto;
+  height: auto;
+  border-radius: 50%;
+  background: var(--tafiti-panel);
+}
+.screen-app .dashboard-performance-ring strong {
+  position: relative;
+  z-index: 1;
+  color: var(--tafiti-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+.screen-app .dashboard-performance-item.tone-warning .dashboard-performance-ring,
+.screen-app .dashboard-performance-item.tone-good .dashboard-performance-ring,
+.screen-app .dashboard-performance-item.tone-danger .dashboard-performance-ring { --ring: var(--accent); }
+.screen-app .dashboard-performance-item small { color: var(--tafiti-text-3); font-size: 10px; }
+
+@media (max-width: 960px) {
+  .screen-app .app-shell.tafiti-app-shell { padding-top: 4px !important; }
+  .screen-app .tafiti-shell-topline { height: 4px !important; }
+}
+/* Final specificity guards for legacy theme rules. */
+html[data-theme="dark"] .screen-app .app-content,
+html[data-theme="dark"] .screen-app .tafiti-app-content {
+  background: #0f172a !important;
+}
+
+html[data-theme="light"] .screen-app .tafiti-sidebar .tafiti-sidebar-nav-item.active,
+html[data-theme="light"] .screen-app .tafiti-sidebar .tafiti-sidebar-nav-item.active:hover {
+  background: var(--accent) !important;
+  color: #fff !important;
+}
+
+html[data-theme="light"] .screen-app .tafiti-sidebar .tafiti-sidebar-nav-item.active .ic {
+  color: #fff !important;
+}
+
+.screen-app .tafiti-dashboard .dashboard-panel-header {
+  background: transparent !important;
+}

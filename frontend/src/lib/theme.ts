@@ -16,41 +16,51 @@ export const accentMap: Record<AccentName, string> = {
 export const accentOrder: AccentName[] = ['Violet', 'Blue', 'Emerald', 'Brass', 'Rose', 'Slate']
 
 const LIGHT: Record<string, string> = {
-  '--bg': '#EAF0F7',
-  '--surface': '#FBFCFE',
-  '--surface-2': '#F1F5F9',
-  '--surface-3': '#E7EDF5',
-  '--text': '#10233F',
-  '--text-muted': '#3F536A',
-  '--text-faint': '#5D6F84',
-  '--border': '#D4DEE9',
-  '--border-2': '#BFCBDC',
-  '--shadow': '0 1px 2px rgba(15,35,63,.06),0 8px 22px rgba(15,35,63,.07)',
-  '--shadow-sm': '0 1px 3px rgba(15,35,63,.08)',
+  '--bg': '#F8FAFC',
+  '--surface': '#FFFFFF',
+  '--surface-2': '#F8FAFC',
+  '--surface-3': '#F1F5F9',
+  '--text': '#0F172A',
+  '--text-muted': '#475569',
+  '--text-faint': '#64748B',
+  '--border': '#E2E8F0',
+  '--border-2': '#CBD5E1',
+  '--shadow': '0 1px 3px rgba(15,23,42,.10)',
+  '--shadow-sm': '0 1px 2px rgba(15,23,42,.08)',
 }
 
 const DARK: Record<string, string> = {
-  '--bg': '#0D172B',
-  '--surface': '#12223D',
-  '--surface-2': '#192D49',
-  '--surface-3': '#263B55',
-  '--text': '#E2E9F2',
-  '--text-muted': '#BDCAD9',
-  '--text-faint': '#98A9BC',
-  '--border': '#203753',
-  '--border-2': '#2A4665',
-  '--shadow': '0 1px 2px rgba(0,0,0,.26),0 12px 30px rgba(0,0,0,.24)',
-  '--shadow-sm': '0 1px 2px rgba(0,0,0,.26)',
+  '--bg': '#0F172A',
+  '--surface': '#1E293B',
+  '--surface-2': '#172033',
+  '--surface-3': '#334155',
+  '--text': '#F8FAFC',
+  '--text-muted': '#94A3B8',
+  '--text-faint': '#94A3B8',
+  '--border': '#334155',
+  '--border-2': '#475569',
+  '--shadow': '0 1px 3px rgba(0,0,0,.32)',
+  '--shadow-sm': '0 1px 2px rgba(0,0,0,.28)',
 }
 
-// Shared status colors across light and dark modes.
-const STATUS_VARS: Record<string, string> = {
-  '--good': '#16A34A',
-  '--good-soft': 'rgba(22,163,74,.12)',
-  '--warn': '#D97706',
-  '--warn-soft': 'rgba(217,119,6,.14)',
-  '--bad': '#DC2626',
-  '--bad-soft': 'rgba(220,38,38,.12)',
+function statusVars(mode: Mode): Record<string, string> {
+  return mode === 'dark'
+    ? {
+        '--good': '#4ADE80',
+        '--good-soft': '#14532D',
+        '--warn': '#FBBF24',
+        '--warn-soft': '#422006',
+        '--bad': '#F87171',
+        '--bad-soft': '#450A0A',
+      }
+    : {
+        '--good': '#15803D',
+        '--good-soft': '#DCFCE7',
+        '--warn': '#B45309',
+        '--warn-soft': '#FEF3C7',
+        '--bad': '#B91C1C',
+        '--bad-soft': '#FEE2E2',
+      }
 }
 
 function hexA(h: string, a: number): string {
@@ -80,12 +90,13 @@ export interface ThemeOptions {
 
 /** Build the full set of CSS custom properties for the root element. */
 export function themeVars({ mode, accentName, density }: ThemeOptions): Record<string, string> {
-  const accent = accentMap[accentName] || accentMap.Violet
+  const selectedAccent = accentMap[accentName] || accentMap.Blue
+  const accent = accentName === 'Blue' && mode === 'dark' ? '#3B82F6' : selectedAccent
   const base = mode === 'dark' ? DARK : LIGHT
   const airy = density !== 'Compact'
   return {
     ...base,
-    ...STATUS_VARS,
+    ...statusVars(mode),
     '--accent': accent,
     '--accent-soft': hexA(accent, mode === 'dark' ? 0.24 : 0.1),
     '--accent-strong': shade(accent, -14),
