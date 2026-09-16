@@ -3579,6 +3579,22 @@ html[data-theme="dark"] .screen-app {
 .screen-app .dashboard-followup-card .dashboard-rail-action { margin-top: 12px; }
 
 /* ---------- Login: same TAFITI visual language, no auth-flow changes ---------- */
+.screen-login {
+  --tafiti-bg: var(--bg);
+  --tafiti-bg-deep: var(--bg);
+  --tafiti-panel: var(--surface);
+  --tafiti-panel-2: var(--surface-2);
+  --tafiti-panel-3: var(--surface-3);
+  --tafiti-border: var(--border);
+  --tafiti-border-soft: var(--border);
+  --tafiti-accent: var(--accent);
+  --tafiti-accent-bright: var(--accent);
+  --tafiti-accent-soft: var(--accent-soft);
+  --tafiti-text: var(--text);
+  --tafiti-text-2: var(--text-muted);
+  --tafiti-text-3: var(--text-faint);
+}
+
 .screen-login .auth-page {
   min-height: 100vh;
   position: relative;
@@ -3627,7 +3643,7 @@ html[data-theme="dark"] .screen-app {
   width: 100%;
   padding: 33px 35px 25px !important;
   border: 1px solid var(--tafiti-border) !important;
-  border-radius: 15px !important;
+  border-radius: 14px !important;
   background: var(--tafiti-panel) !important;
   box-shadow: 0 24px 55px rgba(0, 0, 0, .28) !important;
   color: var(--tafiti-text) !important;
@@ -3637,11 +3653,11 @@ html[data-theme="dark"] .screen-app {
 
 .screen-login .auth-card header { text-align: center; }
 .screen-login .auth-avatar {
-  width: 58px !important;
-  height: 58px !important;
-  margin: 0 auto 14px !important;
+  width: 68px !important;
+  height: 68px !important;
+  margin: 0 auto 16px !important;
   border: 1px solid var(--tafiti-border) !important;
-  border-radius: 12px !important;
+  border-radius: 14px !important;
   background: var(--tafiti-panel-2) !important;
   color: var(--tafiti-accent-bright) !important;
   box-shadow: none !important;
@@ -3677,21 +3693,28 @@ html[data-theme="dark"] .screen-app {
   gap: 9px !important;
   padding: 0 11px !important;
   border: 1px solid var(--tafiti-border) !important;
-  border-radius: 8px !important;
+  border-radius: 10px !important;
   background: var(--tafiti-panel) !important;
-  color: var(--tafiti-text-3) !important;
+  color: var(--tafiti-text-2) !important;
   box-shadow: none !important;
 }
 .screen-login .auth-input:focus-within {
   border-color: var(--tafiti-accent) !important;
   background: var(--tafiti-panel) !important;
-  box-shadow: 0 0 0 2px rgba(30, 123, 187, .12) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tafiti-accent) 16%, transparent) !important;
 }
 .screen-login .auth-input.is-invalid { border-color: #a84d62 !important; box-shadow: 0 0 0 2px rgba(168, 77, 98, .1) !important; }
 .screen-login .auth-input input { color: var(--tafiti-text) !important; font-size: 11px !important; }
-.screen-login .auth-input input::placeholder { color: var(--tafiti-text-3) !important; }
-.screen-login .auth-password-toggle { color: var(--tafiti-text-3) !important; }
-.screen-login .auth-password-toggle:hover { color: var(--tafiti-accent-bright) !important; background: #162b46 !important; }
+.screen-login .auth-input input::placeholder { color: var(--tafiti-text-2) !important; opacity: 1 !important; }
+.screen-login .auth-input input:-webkit-autofill,
+.screen-login .auth-input input:-webkit-autofill:hover,
+.screen-login .auth-input input:-webkit-autofill:focus,
+.screen-login .auth-input input:-webkit-autofill:active {
+  -webkit-text-fill-color: var(--tafiti-text) !important;
+  caret-color: var(--tafiti-text) !important;
+}
+.screen-login .auth-password-toggle { color: var(--tafiti-text-2) !important; border-radius: 8px !important; }
+.screen-login .auth-password-toggle:hover { color: var(--tafiti-accent-bright) !important; background: var(--tafiti-panel-2) !important; }
 .screen-login .auth-options { margin: 0 1px 17px !important; }
 .screen-login .auth-remember,
 .screen-login .auth-help-link { color: var(--tafiti-text-3) !important; font-size: 8.8px !important; }
@@ -3714,7 +3737,7 @@ html[data-theme="dark"] .screen-app {
 .screen-login .auth-submit {
   height: 42px !important;
   border: 1px solid #14659d !important;
-  border-radius: 8px !important;
+  border-radius: 10px !important;
   background: #0d6ca9 !important;
   box-shadow: none !important;
   color: #eef8ff !important;

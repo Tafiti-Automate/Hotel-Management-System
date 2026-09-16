@@ -171,7 +171,7 @@ export default function Login() {
         <div className="auth-card">
           <header>
             <span className="auth-avatar" aria-hidden="true">
-              <AuthIcon name="user" size={37} />
+              <AuthIcon name="user" size={42} />
             </span>
             <p className="auth-eyebrow">Hotel Operations ERP</p>
             <h1 id="login-title">Staff login</h1>
