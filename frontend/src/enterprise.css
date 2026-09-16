@@ -4232,8 +4232,8 @@ html[data-theme="dark"] .screen-app {
 .screen-app .unit-master-layout > aside,
 .screen-app .catalogue-explorer-layout > aside,
 .screen-app .quotation-explorer-layout > aside {
-  width: 170px !important;
-  min-width: 170px !important;
+  width: auto !important;
+  min-width: 0 !important;
   background: var(--tafiti-panel) !important;
   border-color: var(--tafiti-border-soft) !important;
 }
@@ -4242,11 +4242,7 @@ html[data-theme="dark"] .screen-app {
 .screen-app .unit-master-layout > aside button,
 .screen-app .catalogue-explorer-layout > aside button,
 .screen-app .quotation-explorer-layout > aside button {
-  min-height: 28px !important;
-  padding: 0 8px !important;
-  color: var(--tafiti-text-3) !important;
-  font-size: 7.5px !important;
-  border-radius: 4px !important;
+  border-radius: 6px;
 }
 .screen-app .explorer-workspace-pane button:hover,
 .screen-app .article-master-layout > aside button:hover,
