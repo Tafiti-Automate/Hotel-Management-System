@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from io import BytesIO
 import mimetypes
 import os
 from pathlib import PurePosixPath
 from typing import Any
+from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 
 from django.core.files.base import File
 from django.core.files.storage import Storage
@@ -21,6 +24,8 @@ class VercelBlobStorage(Storage):
     Blob URLs, so Django can serve them directly without a writable media
     directory on the serverless runtime.
     """
+
+    max_open_bytes = 10 * 1024 * 1024
 
     def __init__(self, token: str | None = None, prefix: str = "hotel-management-system/media"):
         self.token = token or os.environ.get("BLOB_READ_WRITE_TOKEN", "")
@@ -61,6 +66,28 @@ class VercelBlobStorage(Storage):
         if not url:
             raise RuntimeError("Vercel Blob upload completed without returning a file URL.")
         return str(url)
+
+    def _open(self, name: str, mode: str = "rb") -> File:
+        """Download a public Blob object for consumers that need file contents."""
+        if mode not in {"r", "rb"}:
+            raise ValueError("Vercel Blob files can only be opened for reading.")
+
+        parsed = urlparse(name)
+        hostname = (parsed.hostname or "").lower()
+        if parsed.scheme != "https" or not hostname.endswith(".blob.vercel-storage.com"):
+            raise ValueError("Vercel Blob file names must be public HTTPS Blob URLs.")
+
+        request = Request(name, headers={"User-Agent": "Hotel-Management-System/1.0"})
+        response = urlopen(request, timeout=10)
+        try:
+            content = response.read(self.max_open_bytes + 1)
+        finally:
+            response.close()
+        if len(content) > self.max_open_bytes:
+            raise ValueError("The stored media file is too large to open.")
+
+        filename = PurePosixPath(parsed.path).name or "blob"
+        return File(BytesIO(content), name=filename)
 
     def delete(self, name: str) -> None:
         if not name or not name.startswith("http"):

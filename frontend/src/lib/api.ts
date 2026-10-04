@@ -475,6 +475,10 @@ export function saveRole(id: string | null, values: Record<string, unknown>): Pr
 }
 
 function apiErrorDetail(body: unknown, fallback: string): string {
+  if (Array.isArray(body)) {
+    const messages = body.filter((item): item is string => typeof item === 'string')
+    return messages.join(' ') || fallback
+  }
   if (!body || typeof body !== 'object') return fallback
   const record = body as Record<string, unknown>
   if (typeof record.detail === 'string') {

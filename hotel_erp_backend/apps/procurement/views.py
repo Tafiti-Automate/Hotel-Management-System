@@ -1,6 +1,7 @@
 from decimal import Decimal, InvalidOperation
 from datetime import timedelta
 import json
+import logging
 import smtplib
 
 from django.http import Http404, HttpResponse
@@ -69,6 +70,9 @@ from apps.procurement.serializers import (
 from core.mixins.viewsets import CreatedByModelMixin
 
 
+logger = logging.getLogger(__name__)
+
+
 class PDFRenderer(BaseRenderer):
     """Allow controlled document actions to negotiate application/pdf."""
 
@@ -100,6 +104,13 @@ def email_delivery_failure_message(error):
     if isinstance(error, smtplib.SMTPException):
         return "The mail provider could not deliver the LPO. Check the backend email settings and retry."
     return "The LPO email could not be delivered. Check the backend mail configuration and retry."
+
+
+def document_generation_failure_message():
+    return (
+        "The LPO PDF could not be generated, so no email was sent. "
+        "Check the hotel logo/media storage and LPO data, then retry."
+    )
 
 
 def raise_drf_validation_error(error):
@@ -1659,6 +1670,16 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                 printed_by=request.user,
                 delivery_date=(timezone.now() + timedelta(days=order.lead_time_days or 0)).date(),
             )
+        except Exception as error:
+            logger.exception("Could not generate PDF for LPO %s", order.lpo_number)
+            communication.status = "failed"
+            communication.error_message = str(error)
+            communication.save(update_fields=["status", "error_message", "updated_at"])
+            order.email_status = "failed"
+            order.last_email_error = str(error)
+            order.save(update_fields=["email_status", "last_email_error", "updated_at"])
+            raise ValidationError({"detail": document_generation_failure_message()})
+        try:
             email = EmailMessage(
                 subject=subject,
                 body=(
@@ -1671,16 +1692,19 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
             email.attach(f"LPO-{order.lpo_number}.pdf", pdf, "application/pdf")
             email.send(fail_silently=False)
         except Exception as error:
+            logger.exception("Could not email LPO %s", order.lpo_number)
             communication.status = "failed"
             communication.error_message = str(error)
             communication.save(update_fields=["status", "error_message", "updated_at"])
             order.email_status = "failed"
             order.last_email_error = str(error)
             order.save(update_fields=["email_status", "last_email_error", "updated_at"])
-            raise ValidationError(
-                f"Email delivery failed; the lead-time clock was not started. "
-                f"{email_delivery_failure_message(error)}"
-            )
+            raise ValidationError({
+                "detail": (
+                    "Email delivery failed; the lead-time clock was not started. "
+                    f"{email_delivery_failure_message(error)}"
+                )
+            })
         try:
             with transaction.atomic():
                 order = PurchaseOrder.objects.select_for_update().get(pk=order.pk)
@@ -1735,6 +1759,16 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                 classification="ORIGINAL COPY",
                 printed_by=request.user,
             )
+        except Exception as error:
+            logger.exception("Could not generate PDF for resent LPO %s", order.lpo_number)
+            communication.status = "failed"
+            communication.error_message = str(error)
+            order.email_status = "failed"
+            order.last_email_error = str(error)
+            communication.save(update_fields=["status", "error_message", "updated_at"])
+            order.save(update_fields=["email_status", "last_email_error", "updated_at"])
+            raise ValidationError({"detail": document_generation_failure_message()})
+        try:
             email = EmailMessage(
                 subject=communication.subject,
                 body=(
@@ -1751,13 +1785,14 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
             order.email_status = "sent"
             order.last_email_error = ""
         except Exception as error:
+            logger.exception("Could not resend LPO %s", order.lpo_number)
             communication.status = "failed"
             communication.error_message = str(error)
             order.email_status = "failed"
             order.last_email_error = str(error)
-            raise ValidationError(
-                f"Email delivery failed. {email_delivery_failure_message(error)}"
-            )
+            raise ValidationError({
+                "detail": f"Email delivery failed. {email_delivery_failure_message(error)}"
+            })
         finally:
             communication.save(update_fields=["status", "sent_at", "error_message", "updated_at"])
             order.save(update_fields=["email_status", "last_email_error", "updated_at"])
@@ -1817,6 +1852,14 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
             )
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
+        except Exception:
+            logger.exception("Could not generate preview for LPO %s", order.lpo_number)
+            raise ValidationError({
+                "detail": (
+                    "The LPO preview could not be generated. Check the hotel logo/media "
+                    "storage and LPO data, then retry."
+                )
+            })
         response = HttpResponse(pdf, content_type="application/pdf")
         response["Content-Disposition"] = content_disposition_header(
             False,
@@ -1837,19 +1880,28 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
         order = self.get_object()
         self._require_procurement_manager(request)
         try:
-            print_record = order.record_print(printed_by=request.user)
-            classification = (
-                "ORIGINAL COPY"
-                if print_record.classification == "original"
-                else "COPY OF ORIGINAL"
-            )
-            pdf = build_purchase_order_pdf(
-                order,
-                classification=classification,
-                printed_by=request.user,
-            )
+            with transaction.atomic():
+                print_record = order.record_print(printed_by=request.user)
+                classification = (
+                    "ORIGINAL COPY"
+                    if print_record.classification == "original"
+                    else "COPY OF ORIGINAL"
+                )
+                pdf = build_purchase_order_pdf(
+                    order,
+                    classification=classification,
+                    printed_by=request.user,
+                )
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
+        except Exception:
+            logger.exception("Could not generate controlled PDF for LPO %s", order.lpo_number)
+            raise ValidationError({
+                "detail": (
+                    "The controlled LPO could not be generated. Check the hotel logo/media "
+                    "storage and LPO data, then retry."
+                )
+            })
         response = HttpResponse(pdf, content_type="application/pdf")
         response["Content-Disposition"] = content_disposition_header(
             False,

@@ -3,6 +3,7 @@
 from io import BytesIO
 from html import escape
 from decimal import Decimal, InvalidOperation
+import logging
 import re
 
 from django.conf import settings
@@ -21,6 +22,9 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 def _text(value):
@@ -79,12 +83,24 @@ def _logo(hotel):
         return None
     try:
         hotel.logo.open("rb")
-        content = BytesIO(hotel.logo.read())
-        hotel.logo.close()
-        logo = Image(content, width=58 * mm, height=23 * mm, kind="proportional")
+        try:
+            content = BytesIO(hotel.logo.read())
+        finally:
+            hotel.logo.close()
+        # Load eagerly while still inside the optional-logo guard. Otherwise
+        # ReportLab may defer a corrupt/unavailable image failure until the
+        # entire PDF is being built and prevent the LPO from opening.
+        logo = Image(
+            content,
+            width=58 * mm,
+            height=23 * mm,
+            kind="proportional",
+            lazy=0,
+        )
         logo.hAlign = "LEFT"
         return logo
-    except (OSError, ValueError):
+    except Exception:
+        logger.warning("Could not load the optional hotel logo for an LPO", exc_info=True)
         return None
 
 

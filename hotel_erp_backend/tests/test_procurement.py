@@ -35,6 +35,7 @@ from apps.procurement.models import (
     GoodsReceiptNote,
     PurchaseOrder,
     PurchaseOrderItem,
+    ProcurementCommunication,
     PurchaseRequisition,
     ProcurementDocumentSequence,
     RequisitionItem,
@@ -1222,6 +1223,73 @@ def test_supplier_email_contains_lpo_pdf_and_starts_lead_clock_after_success():
     assert mail.outbox[0].to == [supplier.email]
     assert mail.outbox[0].attachments[0].filename == f"LPO-{order.lpo_number}.pdf"
     assert mail.outbox[0].attachments[0].mimetype == "application/pdf"
+
+
+@pytest.mark.django_db
+@override_settings(
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    DEFAULT_FROM_EMAIL="purchasing@example.com",
+)
+def test_lpo_pdf_failure_is_not_reported_as_an_email_configuration_error(monkeypatch):
+    employee, department, supplier, item = create_procurement_context()
+    procurement_group, _ = Group.objects.get_or_create(name="Procurement Manager")
+    procurement_group.permissions.add(
+        Permission.objects.get(codename="change_purchaseorder")
+    )
+    employee.user.groups.add(procurement_group)
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        reason="Supplier document failure",
+        status=PRStatus.APPROVED,
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity=Decimal("1.00"),
+        approved_quantity=Decimal("1.00"),
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition,
+        supplier=supplier,
+        ordered_by=employee,
+    )
+    PurchaseOrderItem.objects.create(
+        purchase_order=order,
+        item=item,
+        quantity=Decimal("1.00"),
+        unit_cost=Decimal("5000.00"),
+    )
+    order.status = POStatus.APPROVED
+    order.save(update_fields=("status", "updated_at"))
+
+    def fail_document(*args, **kwargs):
+        raise NotImplementedError("storage cannot open the hotel logo")
+
+    monkeypatch.setattr(
+        "apps.procurement.views.build_purchase_order_pdf",
+        fail_document,
+    )
+    client = APIClient()
+    client.force_authenticate(employee.user)
+
+    response = client.post(
+        f"/api/v1/purchase-orders/{order.pk}/issue/",
+        {},
+        format="json",
+    )
+
+    assert response.status_code == 400
+    assert "PDF could not be generated" in str(response.data["detail"])
+    assert "mail configuration" not in str(response.data["detail"])
+    order.refresh_from_db()
+    assert order.status == POStatus.APPROVED
+    assert order.sent_at is None
+    assert order.email_status == "failed"
+    communication = ProcurementCommunication.objects.get(purchase_order=order)
+    assert communication.status == "failed"
+    assert "storage cannot open" in communication.error_message
+    assert len(mail.outbox) == 0
 
 
 @pytest.mark.django_db
