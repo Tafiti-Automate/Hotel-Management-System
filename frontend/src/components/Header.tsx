@@ -20,12 +20,12 @@ export default function Header() {
   const [notifications, setNotifications] = useState<NotificationRecord[]>([])
   const [notificationsLoading, setNotificationsLoading] = useState(true)
   const [notificationsError, setNotificationsError] = useState('')
-  const [now, setNow] = useState(() => new Date())
   const storesManager = isStoresManager(app.user)
   const departmentLabel = app.user.departmentName || app.user.role
   const moduleName = storesManager ? 'Stores & Inventory' : app.activeModule === 'hr' ? 'Human Resources' : departmentLabel
   const pageDescription = routeDescription(app.route, moduleName)
   const notificationCount = notifications.filter((notification) => !notification.is_read).length
+  const branchLabel = app.currentBranch || app.user.branchName || 'Current property'
 
   const loadNotifications = useCallback(async (showLoading = true) => {
     if (showLoading) setNotificationsLoading(true)
@@ -44,11 +44,6 @@ export default function Header() {
     const timer = window.setInterval(() => void loadNotifications(false), 60_000)
     return () => window.clearInterval(timer)
   }, [loadNotifications])
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), 60_000)
-    return () => window.clearInterval(timer)
-  }, [])
 
   useEffect(() => {
     if (!notificationsOpen) return
@@ -101,47 +96,28 @@ export default function Header() {
   }, [])
 
   return (
-    <header className="app-header tafiti-app-header">
-      <div className="app-header-top tafiti-app-header-top">
-        <div className="tafiti-header-left">
+    <header className="app-header tafiti-app-header tafiti-school-header">
+      <div className="app-header-top tafiti-app-header-top tafiti-school-header-top">
+        <div className="tafiti-header-left tafiti-school-header-left">
           <button
-            className="global-search-trigger tafiti-header-menu hover-surface2"
+            className="global-search-trigger tafiti-header-menu tafiti-school-search"
             onClick={() => setSearchOpen(true)}
-            aria-label="Open navigation and global search"
-            title="Navigation and search (Ctrl K)"
+            aria-label="Open global search"
+            title="Search anything (Ctrl K)"
           >
-            <Icon name="menu" size={16} />
-            <span className="header-search-label">Search</span>
+            <Icon name="search" size={15} />
+            <span className="header-search-label">Search anything…</span>
             <kbd>Ctrl K</kbd>
           </button>
-
-          <div className="header-page-context tafiti-header-page-context">
-            <strong>{app.crumb || 'Dashboard'}</strong>
-            <span>{pageDescription}</span>
-          </div>
         </div>
 
-        <div className="header-clock tafiti-header-clock" aria-label={`Local time ${formatCompactClock(now)}`}>
-          <strong>{formatCompactClock(now)}</strong>
-        </div>
-
-        <div className="header-actions tafiti-header-actions">
+        <div className="header-actions tafiti-header-actions tafiti-school-header-actions">
+          <span className="tafiti-school-context-chip">{branchLabel}</span>
           <span className={`header-live-state ${app.apiStatus === 'live' ? 'is-live' : app.apiStatus === 'offline' ? 'is-offline' : ''}`}>
             <i />
             {app.apiStatus === 'live' ? 'Live' : app.apiStatus === 'loading' ? 'Syncing' : app.apiStatus === 'offline' ? 'Offline' : 'Connecting'}
           </span>
-
           <span className="header-role-chip">{app.user.isSuperuser ? 'Admin' : app.user.role}</span>
-
-          <button
-            onClick={app.toggleMode}
-            title={app.mode === 'dark' ? 'Use light appearance' : 'Use dark appearance'}
-            aria-label={app.mode === 'dark' ? 'Use light appearance' : 'Use dark appearance'}
-            className="header-theme-trigger hover-surface2"
-            style={iconAction}
-          >
-            <Icon name={app.mode === 'dark' ? 'light_mode' : 'dark_mode'} size={16} />
-          </button>
 
           <div className="tafiti-header-popover-anchor">
             <button
@@ -149,12 +125,12 @@ export default function Header() {
               title="Notifications"
               aria-label={`Notifications${notificationCount ? `, ${notificationCount} unread` : ''}`}
               aria-expanded={notificationsOpen}
-              className="header-notification-trigger hover-surface2"
+              className="header-notification-trigger tafiti-school-icon-button"
               style={iconAction}
             >
               <Icon name={notificationCount ? 'notifications_active' : 'notifications'} size={16} />
               {notificationCount > 0 && (
-                <span className="tafiti-notification-badge">{notificationCount > 99 ? '99+' : notificationCount}</span>
+                <span className="tafiti-notification-badge">{notificationCount > 9 ? '9+' : notificationCount}</span>
               )}
             </button>
 
@@ -166,10 +142,10 @@ export default function Header() {
                     <div>Notifications</div>
                     <span>{notificationCount ? `${notificationCount} unread` : 'You are all caught up'}</span>
                   </div>
-                  <button onClick={() => void loadNotifications()} title="Refresh notifications" aria-label="Refresh notifications" className="hover-surface2" style={smallIconAction}>
+                  <button onClick={() => void loadNotifications()} title="Refresh notifications" aria-label="Refresh notifications" style={smallIconAction}>
                     <Icon name="refresh" size={17} />
                   </button>
-                  <button onClick={() => setNotificationsOpen(false)} title="Close notifications" aria-label="Close notifications" className="hover-surface2" style={smallIconAction}>
+                  <button onClick={() => setNotificationsOpen(false)} title="Close notifications" aria-label="Close notifications" style={smallIconAction}>
                     <Icon name="close" size={17} />
                   </button>
                 </header>
@@ -182,7 +158,7 @@ export default function Header() {
                     <button
                       key={notification.id}
                       onClick={() => void readNotification(notification)}
-                      className="notification-item hover-surface2"
+                      className="notification-item"
                       aria-label={`${notification.title}${notification.is_read ? '' : ', unread'}`}
                     >
                       <span className={`tafiti-notification-icon ${notification.is_read ? 'is-read' : ''}`}>
@@ -202,50 +178,59 @@ export default function Header() {
 
                 {notifications.length > 0 && (
                   <footer className="tafiti-notification-footer">
-                    <button onClick={() => void readAllNotifications()} disabled={!notificationCount}>
-                      Mark all as read
-                    </button>
+                    <button onClick={() => void readAllNotifications()} disabled={!notificationCount}>Mark all as read</button>
                   </footer>
                 )}
               </section>
             </>}
           </div>
 
-          <div className="tafiti-header-divider" />
-
           <div className="tafiti-header-popover-anchor">
             <button
               onClick={() => setProfileOpen((open) => !open)}
-              className="header-profile-trigger hover-surface2 tafiti-header-profile-trigger"
+              className="header-profile-trigger tafiti-header-profile-trigger tafiti-school-profile"
             >
-              <Avatar className="header-avatar" src={app.user.photoUrl} name={app.user.name} size={26} radius={7} />
+              <Avatar className="header-avatar" src={app.user.photoUrl} name={app.user.name} size={32} radius={16} />
               <span className="header-user-copy tafiti-header-user-copy">
                 <span>{app.user.name}</span>
                 <small>{departmentLabel}</small>
               </span>
-              <Icon name="expand_more" size={14} />
+              <Icon name="expand_more" size={13} />
             </button>
 
             {profileOpen && <>
               <div onClick={() => setProfileOpen(false)} className="tafiti-popover-backdrop" />
               <div className="tafiti-profile-menu">
-                <button onClick={app.toggleMode} className="hover-surface2" style={menuAction}>
-                  <Icon name={app.mode === 'dark' ? 'light_mode' : 'dark_mode'} size={18} />
+                <div className="tafiti-profile-summary">
+                  <strong>{app.user.name}</strong>
+                  <span>{app.user.role}</span>
+                </div>
+                <button onClick={app.toggleMode} style={menuAction}>
+                  <Icon name={app.mode === 'dark' ? 'light_mode' : 'dark_mode'} size={17} />
                   {app.mode === 'dark' ? 'Light appearance' : 'Dark appearance'}
                 </button>
                 {canSwitchModules(app.user) && (
-                  <button onClick={app.gotoModules} className="hover-surface2" style={menuAction}>
-                    <Icon name="apps" size={18} />
-                    Switch module
+                  <button onClick={app.gotoModules} style={menuAction}>
+                    <Icon name="apps" size={17} />
+                    Switch workspace
                   </button>
                 )}
-                <button onClick={app.logout} className="hover-surface2" style={{ ...menuAction, color: 'var(--bad)' }}>
-                  <Icon name="logout" size={18} />
+                <button onClick={app.logout} style={{ ...menuAction, color: 'var(--bad)' }}>
+                  <Icon name="logout" size={17} />
                   Sign out
                 </button>
               </div>
             </>}
           </div>
+        </div>
+      </div>
+
+      <div className="tafiti-school-breadcrumb-bar">
+        <div className="tafiti-school-breadcrumb">
+          <button type="button" onClick={() => app.navTo('dashboard', 'Dashboard')}>Home</button>
+          <Icon name="chevron_right" size={11} />
+          <strong>{app.crumb || 'Dashboard'}</strong>
+          <span>{pageDescription}</span>
         </div>
       </div>
 
@@ -272,21 +257,12 @@ function routeDescription(route: string, moduleName: string) {
     employees: 'Employee records and assignments',
     departments: 'Teams and operational departments',
     reports: 'Analytics and operational insights',
+    reportview: 'Detailed operational report',
     'audit-log': 'System activity and accountability',
     'access-management': 'Roles, permissions and user access',
     'hotel-profile': 'System configuration',
   }
   return descriptions[route] || moduleName
-}
-
-function formatCompactClock(date: Date) {
-  const datePart = new Intl.DateTimeFormat('en-UG', {
-    day: 'numeric', month: 'short', timeZone: 'Africa/Kampala',
-  }).format(date)
-  const timePart = new Intl.DateTimeFormat('en-UG', {
-    hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Africa/Kampala',
-  }).format(date)
-  return `${datePart} · ${timePart}`
 }
 
 function NotificationState({ icon, text, detail, action }: { icon: string; text: string; detail?: string; action?: () => void }) {
@@ -313,11 +289,11 @@ function notificationTime(value: string): string {
 }
 
 const iconAction: CSSProperties = {
-  width: 30,
-  height: 30,
-  border: 0,
-  borderRadius: 6,
-  background: 'transparent',
+  width: 36,
+  height: 36,
+  border: '1px solid var(--border)',
+  borderRadius: 9,
+  background: '#fff',
   display: 'grid',
   placeItems: 'center',
   color: 'var(--text-muted)',
@@ -329,7 +305,7 @@ const smallIconAction: CSSProperties = {
   width: 30,
   height: 30,
   border: 0,
-  borderRadius: 6,
+  borderRadius: 7,
   background: 'transparent',
   display: 'grid',
   placeItems: 'center',
@@ -341,7 +317,7 @@ const menuAction: CSSProperties = {
   width: '100%',
   height: 36,
   border: 0,
-  borderRadius: 5,
+  borderRadius: 7,
   background: 'transparent',
   display: 'flex',
   alignItems: 'center',
@@ -349,7 +325,8 @@ const menuAction: CSSProperties = {
   padding: '0 10px',
   color: 'var(--text-muted)',
   font: 'inherit',
-  fontSize: 12.5,
+  fontSize: 12,
+  fontWeight: 650,
   cursor: 'pointer',
   textAlign: 'left',
 }
