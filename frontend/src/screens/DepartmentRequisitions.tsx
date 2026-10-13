@@ -372,7 +372,7 @@ export default function DepartmentRequisitions() {
 
   const majorGroups = data.categories.filter((row) => !row.parent && row.is_active !== false)
   const itemGroups = data.categories.filter((row) => id(row.parent) === lineDraft.majorGroup && row.is_active !== false)
-  const selectableItems = data.items.filter((row) => id(row.category) === lineDraft.itemGroup && row.is_active !== false)
+  const selectableItems = [...data.items].filter((row) => row.is_active !== false).sort((a, b) => id(a.name).localeCompare(id(b.name)))
 
   return (
     <div className="hod-requisitions-page">
@@ -599,9 +599,9 @@ function DraftEditor({
           <div className="hod-add-line-grid">
             <label><span>Major Group</span><select value={lineDraft.majorGroup} onChange={(event) => setLineDraft({ ...lineDraft, majorGroup: event.target.value, itemGroup: '', item: '' })}><option value="">Choose group</option>{majorGroups.map((row) => <option key={id(row.id)} value={id(row.id)}>{id(row.name)}</option>)}</select></label>
             <label><span>Item Group</span><select disabled={!lineDraft.majorGroup} value={lineDraft.itemGroup} onChange={(event) => setLineDraft({ ...lineDraft, itemGroup: event.target.value, item: '' })}><option value="">Choose item group</option>{itemGroups.map((row) => <option key={id(row.id)} value={id(row.id)}>{id(row.name)}</option>)}</select></label>
-            <label className="span-2"><span>Article</span><select disabled={!lineDraft.itemGroup} value={lineDraft.item} onChange={(event) => setLineDraft({ ...lineDraft, item: event.target.value })}><option value="">Choose Article</option>{selectableItems.map((row) => <option key={id(row.id)} value={id(row.id)}>{id(row.name)} · {id(row.sku)}</option>)}</select></label>
+            <label className="span-2"><span>Article / item</span><select value={lineDraft.item} onChange={(event) => setLineDraft({ ...lineDraft, item: event.target.value })}><option value="">Choose Article</option>{selectableItems.map((row) => <option key={id(row.id)} value={id(row.id)}>{id(row.name)}{row.sku ? ` · ${id(row.sku)}` : ''}</option>)}</select></label>
             <label><span>Quantity</span><input min="0.01" step="0.01" type="number" value={lineDraft.quantity} onChange={(event) => setLineDraft({ ...lineDraft, quantity: event.target.value })} placeholder="0" /></label>
-            <label><span>UOM</span><input readOnly value={unit ? id(unit.abbreviation || unit.name) : ''} placeholder="Auto" /></label>
+            <label><span>UOM (auto)</span><input readOnly value={unit ? id(unit.abbreviation || unit.name) : ''} placeholder="Filled from Article" /></label>
             <label className="span-2"><span>Line note (optional)</span><input value={lineDraft.remarks} onChange={(event) => setLineDraft({ ...lineDraft, remarks: event.target.value })} placeholder="Usage or specification note" /></label>
             <button type="button" className="erp-primary hod-add-line-button" disabled={busy || !lineDraft.item || num(lineDraft.quantity) <= 0} onClick={saveLine}><Icon name={lineDraft.id ? 'save' : 'add'} size={16} color="#fff" /> {lineDraft.id ? 'Update Article' : 'Add Article'}</button>
           </div>
