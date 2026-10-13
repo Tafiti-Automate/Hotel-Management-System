@@ -1,0 +1,47 @@
+name: Mobile and persistence validation
+
+on:
+  push:
+    branches:
+      - chatgpt-mobile-data-audit-write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      DJANGO_SETTINGS_MODULE: core.settings.test
+      PYTHONPATH: ${{ github.workspace }}/hotel_erp_backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: hotel_erp_backend/requirements.txt
+      - run: pip install -r requirements.txt
+        working-directory: hotel_erp_backend
+      - run: python manage.py check --settings=core.settings.test
+        working-directory: hotel_erp_backend
+      - name: Core persistence and retrieval smoke tests
+        run: >-
+          pytest -q
+          tests/test_department_head_requisitions.py
+          tests/test_hod_draft_save_regression.py
+          tests/test_employee_registration.py
+          tests/test_vendors.py
+          tests/test_reports.py
+          tests/test_report_role_access.py
+        working-directory: hotel_erp_backend
+      - name: Broader inventory procurement finance scan
+        continue-on-error: true
+        run: pytest -q tests/test_inventory.py tests/test_procurement.py tests/test_finance_integration.py
+        working-directory: hotel_erp_backend
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
