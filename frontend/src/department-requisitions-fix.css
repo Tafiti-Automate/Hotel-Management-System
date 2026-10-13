@@ -1,0 +1,30 @@
+/* Department requisition hotfix.
+   Keeps the direct Article picker while restoring the Quantity and Line note fields
+   that were accidentally hidden by stale positional selectors in the polish layer. */
+
+.screen-app .hod-add-line-grid > label:nth-of-type(1),
+.screen-app .hod-add-line-grid > label:nth-of-type(2) {
+  display: flex !important;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.screen-app .hod-article-picker > input {
+  pointer-events: auto !important;
+  cursor: text;
+}
+
+.screen-app .hod-article-picker {
+  z-index: 8;
+}
+
+.screen-app .hod-article-options {
+  z-index: 60 !important;
+}
+
+@media (max-width: 640px) {
+  .screen-app .hod-add-line-grid > label:nth-of-type(1),
+  .screen-app .hod-add-line-grid > label:nth-of-type(2) {
+    grid-column: auto;
+  }
+}
