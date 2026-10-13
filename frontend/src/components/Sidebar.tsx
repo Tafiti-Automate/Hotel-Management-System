@@ -8,17 +8,10 @@ interface NavItem { route: string; label: string }
 interface NavGroup { heading: string; items: NavItem[] }
 
 const workflowNav: Record<string, NavGroup[]> = {
-  requester: [
-    { heading: 'Workspace', items: [
-      { route: 'dashboard', label: 'Dashboard' },
-      { route: 'workflow-stores', label: 'My requisitions' },
-    ] },
-    { heading: 'Control', items: [{ route: 'reports', label: 'Reports' }] },
-  ],
   'department head': [
     { heading: 'Workspace', items: [
       { route: 'dashboard', label: 'Dashboard' },
-      { route: 'workflow-stores', label: 'Department approvals' },
+      { route: 'workflow-stores', label: 'Department requisitions' },
     ] },
     { heading: 'Control', items: [{ route: 'reports', label: 'Reports' }] },
   ],
@@ -106,7 +99,7 @@ const hrGroups: NavGroup[] = [
 const navIcons: Record<string, string> = {
   dashboard: 'space_dashboard',
   'hr-dashboard': 'groups',
-  'workflow-stores': 'warehouse',
+  'workflow-stores': 'assignment',
   'store-purchase-requests': 'shopping_cart_checkout',
   'workflow-procure': 'shopping_cart_checkout',
   'workflow-pay': 'payments',
