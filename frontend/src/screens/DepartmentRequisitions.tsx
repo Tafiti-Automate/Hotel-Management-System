@@ -58,6 +58,7 @@ export default function DepartmentRequisitions() {
   const [status, setStatus] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [requestDraft, setRequestDraft] = useState<Row>({})
   const [lineDraft, setLineDraft] = useState<LineDraft>(emptyLine)
   const [legacyQuantities, setLegacyQuantities] = useState<Record<string, string>>({})
@@ -370,8 +371,6 @@ export default function DepartmentRequisitions() {
     )
   }
 
-  const majorGroups = data.categories.filter((row) => !row.parent && row.is_active !== false)
-  const itemGroups = data.categories.filter((row) => id(row.parent) === lineDraft.majorGroup && row.is_active !== false)
   const selectableItems = [...data.items].filter((row) => row.is_active !== false).sort((a, b) => id(a.name).localeCompare(id(b.name)))
 
   return (
@@ -427,7 +426,11 @@ export default function DepartmentRequisitions() {
             </div>
           </div>
 
-          <div className="hod-filters">
+          <button type="button" className="hod-mobile-filter-toggle" onClick={() => setFiltersOpen((open) => !open)} aria-expanded={filtersOpen}>
+            <Icon name="tune" size={16} /> {filtersOpen ? 'Hide filters' : 'Filters'}
+            {(status || dateFrom || dateTo) && <span>Active</span>}
+          </button>
+          <div className={`hod-filters${filtersOpen ? ' mobile-open' : ''}`}>
             <label className="hod-search-field"><span>Search</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Requisition, purpose or Article…" /></label>
             <label><span>Status</span><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">All</option>{statuses.map((value) => <option key={value} value={value}>{friendlyStatus(value)}</option>)}</select></label>
             <label><span>From</span><input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label>
@@ -511,8 +514,6 @@ export default function DepartmentRequisitions() {
                     data={data}
                     lineDraft={lineDraft}
                     setLineDraft={setLineDraft}
-                    majorGroups={majorGroups}
-                    itemGroups={itemGroups}
                     selectableItems={selectableItems}
                     busy={busy}
                     saveDraft={() => void saveDraft()}
@@ -549,7 +550,7 @@ export default function DepartmentRequisitions() {
 
 function DraftEditor({
   requestDraft, setRequestDraft, lines, data, lineDraft, setLineDraft,
-  majorGroups, itemGroups, selectableItems, busy, saveDraft, submitDraft, deleteDraft,
+  selectableItems, busy, saveDraft, submitDraft, deleteDraft,
   saveLine, editLine, deleteLine,
 }: {
   requestDraft: Row
@@ -558,8 +559,6 @@ function DraftEditor({
   data: WorkspaceData
   lineDraft: LineDraft
   setLineDraft: (value: LineDraft) => void
-  majorGroups: Row[]
-  itemGroups: Row[]
   selectableItems: Row[]
   busy: boolean
   saveDraft: () => void
@@ -571,11 +570,16 @@ function DraftEditor({
 }) {
   const selectedItem = data.items.find((row) => id(row.id) === lineDraft.item)
   const unit = data.units.find((row) => id(row.id) === id(selectedItem?.base_unit))
+  const category = data.categories.find((row) => id(row.id) === id(selectedItem?.category))
+  const parentCategory = data.categories.find((row) => id(row.id) === id(category?.parent))
+  const selectedMeta = selectedItem ? [
+    id(parentCategory?.name), id(category?.name), id(unit?.abbreviation || unit?.name), id(selectedItem.sku),
+  ].filter(Boolean) : []
   const canSubmit = Boolean(requestDraft.store && lines.length)
   return (
     <div className="hod-editor">
       <section className="hod-editor-section">
-        <div className="hod-section-heading"><div><strong>Request details</strong><span>Department and requester come from your account.</span></div><button type="button" className="erp-secondary" onClick={saveDraft} disabled={busy}><Icon name="save" size={15} /> Save draft</button></div>
+        <div className="hod-section-heading"><div><strong>Request details</strong><span>Department and requester come from your account.</span></div></div>
         <div className="hod-form-grid">
           <label className="span-2"><span>Purpose / reason</span><textarea rows={3} value={id(requestDraft.purpose)} onChange={(event) => setRequestDraft({ ...requestDraft, purpose: event.target.value })} placeholder="What does the department need these Articles for?" /></label>
           <label><span>Required date</span><input type="date" value={id(requestDraft.required_date)} onChange={(event) => setRequestDraft({ ...requestDraft, required_date: event.target.value })} /></label>
@@ -597,11 +601,12 @@ function DraftEditor({
         <div className="hod-add-line-card">
           <div className="hod-add-line-title"><strong>{lineDraft.id ? 'Edit Article' : 'Add Article'}</strong>{lineDraft.id && <button type="button" onClick={() => setLineDraft(emptyLine)}>Cancel edit</button>}</div>
           <div className="hod-add-line-grid">
-            <label><span>Major Group</span><select value={lineDraft.majorGroup} onChange={(event) => setLineDraft({ ...lineDraft, majorGroup: event.target.value, itemGroup: '', item: '' })}><option value="">Choose group</option>{majorGroups.map((row) => <option key={id(row.id)} value={id(row.id)}>{id(row.name)}</option>)}</select></label>
-            <label><span>Item Group</span><select disabled={!lineDraft.majorGroup} value={lineDraft.itemGroup} onChange={(event) => setLineDraft({ ...lineDraft, itemGroup: event.target.value, item: '' })}><option value="">Choose item group</option>{itemGroups.map((row) => <option key={id(row.id)} value={id(row.id)}>{id(row.name)}</option>)}</select></label>
-            <label className="span-2"><span>Article / item</span><select value={lineDraft.item} onChange={(event) => setLineDraft({ ...lineDraft, item: event.target.value })}><option value="">Choose Article</option>{selectableItems.map((row) => <option key={id(row.id)} value={id(row.id)}>{id(row.name)}{row.sku ? ` · ${id(row.sku)}` : ''}</option>)}</select></label>
+            <div className="hod-article-picker-field span-2">
+              <span className="hod-field-label">Article / item</span>
+              <ArticlePicker items={selectableItems} categories={data.categories} value={lineDraft.item} onChange={(item) => setLineDraft({ ...lineDraft, item })} />
+              {selectedItem && <div className="hod-article-meta"><Icon name="auto_awesome" size={14} /><span>{selectedMeta.join(' · ')}</span></div>}
+            </div>
             <label><span>Quantity</span><input min="0.01" step="0.01" type="number" value={lineDraft.quantity} onChange={(event) => setLineDraft({ ...lineDraft, quantity: event.target.value })} placeholder="0" /></label>
-            <label><span>UOM (auto)</span><input readOnly value={unit ? id(unit.abbreviation || unit.name) : ''} placeholder="Filled from Article" /></label>
             <label className="span-2"><span>Line note (optional)</span><input value={lineDraft.remarks} onChange={(event) => setLineDraft({ ...lineDraft, remarks: event.target.value })} placeholder="Usage or specification note" /></label>
             <button type="button" className="erp-primary hod-add-line-button" disabled={busy || !lineDraft.item || num(lineDraft.quantity) <= 0} onClick={saveLine}><Icon name={lineDraft.id ? 'save' : 'add'} size={16} color="#fff" /> {lineDraft.id ? 'Update Article' : 'Add Article'}</button>
           </div>
@@ -609,12 +614,61 @@ function DraftEditor({
       </section>
 
       <div className="hod-editor-submit">
-        <button type="button" className="erp-secondary danger-text" disabled={busy} onClick={deleteDraft}><Icon name="delete" size={15} /> Delete draft</button>
+        <button type="button" className="erp-secondary danger-text hod-delete-draft" disabled={busy} onClick={deleteDraft}><Icon name="delete" size={15} /> Delete draft</button>
         <div className={`hod-submit-readiness${canSubmit ? ' ready' : ''}`}><Icon name={canSubmit ? 'check_circle' : 'info'} size={16} /><span>{canSubmit ? 'Ready to send directly to the Store Keeper.' : 'Choose an issuing store and add at least one Article.'}</span></div>
-        <button type="button" className="erp-primary" disabled={busy || !canSubmit} onClick={submitDraft}><Icon name="send" size={16} color="#fff" /> Submit to Stores</button>
+        <button type="button" className="erp-secondary hod-save-draft" disabled={busy} onClick={saveDraft}><Icon name="save" size={15} /> Save draft</button>
+        <button type="button" className="erp-primary hod-submit-stores" disabled={busy || !canSubmit} onClick={submitDraft}><Icon name="send" size={16} color="#fff" /> Submit to Stores</button>
       </div>
     </div>
   )
+}
+
+function ArticlePicker({ items, categories, value, onChange }: { items: Row[]; categories: Row[]; value: string; onChange: (value: string) => void }) {
+  const selectedItem = items.find((row) => id(row.id) === value)
+  const [query, setQuery] = useState(() => selectedItem ? articlePickerLabel(selectedItem) : '')
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    setQuery(selectedItem ? articlePickerLabel(selectedItem) : '')
+  }, [selectedItem])
+
+  const matches = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    const source = needle && selectedItem && query === articlePickerLabel(selectedItem) ? items : items.filter((item) => {
+      const category = categories.find((row) => id(row.id) === id(item.category))
+      const parent = categories.find((row) => id(row.id) === id(category?.parent))
+      return [item.name, item.sku, category?.name, parent?.name].map(id).join(' ').toLowerCase().includes(needle)
+    })
+    return source.slice(0, 30)
+  }, [categories, items, query, selectedItem])
+
+  return <div className="hod-article-picker">
+    <Icon name="search" size={17} />
+    <input value={query} placeholder="Search Article name or code" autoComplete="off" aria-label="Search Article" aria-expanded={open}
+      onFocus={() => setOpen(true)}
+      onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+      onChange={(event) => { setQuery(event.target.value); if (value) onChange(''); setOpen(true) }}
+    />
+    {value && <button type="button" className="hod-article-clear" aria-label="Clear selected Article" onMouseDown={(event) => event.preventDefault()} onClick={() => { onChange(''); setQuery(''); setOpen(true) }}><Icon name="close" size={15} /></button>}
+    {open && <div className="hod-article-options" role="listbox">
+      {matches.map((item) => {
+        const category = categories.find((row) => id(row.id) === id(item.category))
+        const parent = categories.find((row) => id(row.id) === id(category?.parent))
+        return <button type="button" key={id(item.id)} role="option" aria-selected={id(item.id) === value}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => { onChange(id(item.id)); setQuery(articlePickerLabel(item)); setOpen(false) }}
+        >
+          <span><strong>{id(item.name)}</strong><small>{[id(parent?.name), id(category?.name)].filter(Boolean).join(' · ') || 'Article'}</small></span>
+          <em>{id(item.sku) || 'No code'}</em>
+        </button>
+      })}
+      {!matches.length && <div className="hod-article-no-results"><Icon name="search_off" size={18} /><span>No matching Article</span></div>}
+    </div>}
+  </div>
+}
+
+function articlePickerLabel(item: Row) {
+  return id(item.sku) ? `${id(item.name)} · ${id(item.sku)}` : id(item.name)
 }
 
 function RequestDetails({ request, lines, data }: { request: Row; lines: Row[]; data: WorkspaceData }) {

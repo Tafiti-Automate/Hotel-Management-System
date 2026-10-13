@@ -46,7 +46,7 @@ export default function Header() {
   }, [loadNotifications])
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), 1000)
+    const timer = window.setInterval(() => setNow(new Date()), 60_000)
     return () => window.clearInterval(timer)
   }, [])
 
@@ -121,15 +121,8 @@ export default function Header() {
           </div>
         </div>
 
-        <div className="header-clock tafiti-header-clock" aria-label={`Local time ${formatClock(now)}`}>
-          <span className="tafiti-clock-copy">
-            <small>{formatClockDate(now)}</small>
-            <strong>{formatClock(now)}</strong>
-          </span>
-          <span className="tafiti-clock-icon" aria-hidden="true">
-            <Icon name="schedule" size={13} />
-          </span>
-          <Icon name="expand_more" size={11} />
+        <div className="header-clock tafiti-header-clock" aria-label={`Local time ${formatCompactClock(now)}`}>
+          <strong>{formatCompactClock(now)}</strong>
         </div>
 
         <div className="header-actions tafiti-header-actions">
@@ -286,16 +279,14 @@ function routeDescription(route: string, moduleName: string) {
   return descriptions[route] || moduleName
 }
 
-function formatClockDate(date: Date) {
-  return new Intl.DateTimeFormat('en-UG', {
-    weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Africa/Kampala',
-  }).format(date).toUpperCase()
-}
-
-function formatClock(date: Date) {
-  return new Intl.DateTimeFormat('en-UG', {
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'Africa/Kampala',
+function formatCompactClock(date: Date) {
+  const datePart = new Intl.DateTimeFormat('en-UG', {
+    day: 'numeric', month: 'short', timeZone: 'Africa/Kampala',
   }).format(date)
+  const timePart = new Intl.DateTimeFormat('en-UG', {
+    hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Africa/Kampala',
+  }).format(date)
+  return `${datePart} · ${timePart}`
 }
 
 function NotificationState({ icon, text, detail, action }: { icon: string; text: string; detail?: string; action?: () => void }) {
