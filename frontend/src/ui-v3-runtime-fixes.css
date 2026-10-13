@@ -1,0 +1,471 @@
+/* Tafiti Hotel ERP UI V3 runtime corrections.
+   Presentation only. No workflow, permissions, API calls, calculations or status transitions live here. */
+
+/* --------------------------------------------------------------------------
+   Robust shell targeting
+   -------------------------------------------------------------------------- */
+.application-root .tafiti-sidebar {
+  width: 224px !important;
+  min-width: 224px !important;
+  background: linear-gradient(180deg, #0b2f55 0%, #092744 100%) !important;
+  border-right: 1px solid rgba(255,255,255,.08) !important;
+  color: #eaf2fb !important;
+  box-shadow: none !important;
+}
+.application-root .tafiti-sidebar.is-collapsed {
+  width: 60px !important;
+  min-width: 60px !important;
+}
+.application-root .tafiti-sidebar-brand,
+.application-root .tafiti-sidebar-footer {
+  border-color: rgba(255,255,255,.08) !important;
+}
+.application-root .tafiti-sidebar-brand-title,
+.application-root .sidebar-brand-title,
+.application-root .tafiti-property-value,
+.application-root .tafiti-sidebar-user-name {
+  color: #fff !important;
+}
+.application-root .sidebar-brand-subtitle,
+.application-root .tafiti-property-label,
+.application-root .sidebar-nav-heading,
+.application-root .tafiti-sidebar-user-role {
+  color: #9db3cc !important;
+}
+.application-root .tafiti-sidebar-property,
+.application-root .tafiti-sidebar-user {
+  background: rgba(255,255,255,.045) !important;
+  border-color: rgba(255,255,255,.09) !important;
+}
+.application-root .tafiti-property-trigger,
+.application-root .tafiti-sidebar-nav-item,
+.application-root .tafiti-module-switch,
+.application-root .tafiti-sidebar-collapse,
+.application-root .tafiti-sidebar-expand,
+.application-root .tafiti-sidebar-mobile-toggle,
+.application-root .tafiti-sidebar-user button {
+  color: #dce8f4 !important;
+}
+.application-root .tafiti-sidebar-nav-item:hover,
+.application-root .tafiti-property-trigger:hover {
+  background: rgba(255,255,255,.065) !important;
+  color: #fff !important;
+}
+.application-root .tafiti-sidebar-nav-item.active {
+  background: #1d6fdc !important;
+  color: #fff !important;
+  box-shadow: none !important;
+}
+.application-root .tafiti-sidebar .ic { color: currentColor !important; }
+
+.application-root .tafiti-app-header {
+  min-height: 58px !important;
+  background: #123e6d !important;
+  border-bottom: 1px solid rgba(255,255,255,.08) !important;
+  box-shadow: none !important;
+}
+.application-root .tafiti-app-header-top {
+  min-height: 58px !important;
+  padding: 0 16px !important;
+}
+.application-root .tafiti-header-page-context strong,
+.application-root .tafiti-header-user-copy > span {
+  color: #fff !important;
+}
+.application-root .tafiti-header-user-copy small,
+.application-root .tafiti-header-theme-trigger,
+.application-root .tafiti-header-notification-trigger {
+  color: #b4c9dd !important;
+}
+.application-root .tafiti-header-menu {
+  border-color: rgba(255,255,255,.14) !important;
+  background: rgba(255,255,255,.08) !important;
+  color: #fff !important;
+}
+.application-root .header-role-chip,
+.application-root .header-live-state {
+  border-color: rgba(255,255,255,.16) !important;
+  background: rgba(255,255,255,.07) !important;
+  color: #e5eff9 !important;
+}
+.application-root .tafiti-header-clock { display: none !important; }
+
+/* --------------------------------------------------------------------------
+   Report detail workspace
+   -------------------------------------------------------------------------- */
+.application-root .report-view-screen {
+  width: 100% !important;
+  max-width: 1380px !important;
+  margin-inline: auto !important;
+}
+
+.application-root .report-back-button {
+  min-height: 34px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  margin: 0 0 12px !important;
+  padding: 0 10px !important;
+  border: 1px solid var(--ui-line-strong, var(--border)) !important;
+  border-radius: 7px !important;
+  background: var(--ui-panel, var(--surface)) !important;
+  color: var(--ui-text, var(--text)) !important;
+  font: inherit !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+  box-shadow: none !important;
+}
+.application-root .report-back-button:hover { background: var(--ui-panel-soft, var(--surface-2)) !important; }
+
+.application-root .report-view-header {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 20px !important;
+  margin: 0 0 14px !important;
+  padding: 0 0 14px !important;
+  border-bottom: 1px solid var(--ui-line, var(--border)) !important;
+}
+.application-root .report-view-header > div:first-child { min-width: 0 !important; }
+.application-root .report-view-eyebrow {
+  margin-bottom: 4px !important;
+  color: var(--ui-accent, var(--accent)) !important;
+  font-size: 9px !important;
+  font-weight: 800 !important;
+  letter-spacing: .08em !important;
+  text-transform: uppercase !important;
+}
+.application-root .report-view-header h1 {
+  margin: 0 !important;
+  color: var(--ui-text, var(--text)) !important;
+  font-size: 26px !important;
+  line-height: 1.15 !important;
+  font-weight: 760 !important;
+  letter-spacing: -.025em !important;
+}
+.application-root .report-view-header p {
+  margin: 5px 0 0 !important;
+  color: var(--ui-muted, var(--text-muted)) !important;
+  font-size: 12px !important;
+  line-height: 1.45 !important;
+}
+.application-root .report-view-meta {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  margin-top: 8px !important;
+  color: var(--ui-faint, var(--text-faint)) !important;
+  font-size: 10.5px !important;
+}
+.application-root .report-live-status {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  padding: 3px 7px !important;
+  border: 1px solid #b7e4ca !important;
+  border-radius: 999px !important;
+  background: #edf9f2 !important;
+  color: #237a4c !important;
+  font-size: 9px !important;
+  font-weight: 750 !important;
+}
+.application-root .report-live-status i {
+  width: 6px !important;
+  height: 6px !important;
+  border-radius: 50% !important;
+  background: #36b56d !important;
+}
+.application-root .report-export-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+  flex: none !important;
+}
+.application-root .report-export-actions button {
+  min-width: 84px !important;
+  height: 36px !important;
+  justify-content: center !important;
+  border-color: var(--ui-line-strong, var(--border)) !important;
+  border-radius: 7px !important;
+  background: var(--ui-panel, var(--surface)) !important;
+  color: var(--ui-text, var(--text)) !important;
+  box-shadow: none !important;
+}
+.application-root .report-export-actions button:hover { background: var(--ui-panel-soft, var(--surface-2)) !important; }
+
+.application-root .report-document-notice {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 9px !important;
+  margin: 0 0 12px !important;
+  padding: 10px 12px !important;
+  border: 1px solid #cbdff7 !important;
+  border-radius: 8px !important;
+  background: #f3f8fe !important;
+  color: #355270 !important;
+  font-size: 11px !important;
+  line-height: 1.45 !important;
+}
+
+.application-root .report-filter-shell {
+  margin-bottom: 12px !important;
+  overflow: hidden !important;
+  border: 1px solid var(--ui-line, var(--border)) !important;
+  border-radius: 10px !important;
+  background: var(--ui-panel, var(--surface)) !important;
+  box-shadow: none !important;
+}
+.application-root .report-filter-toolbar {
+  min-height: 48px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+  padding: 6px 8px !important;
+  border-bottom: 1px solid var(--ui-line, var(--border)) !important;
+  background: var(--ui-panel-soft, var(--surface-2)) !important;
+}
+.application-root .report-filter-toggle,
+.application-root .report-date-presets button,
+.application-root .report-clear-filters,
+.application-root .report-refresh-button {
+  min-height: 34px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 0 10px !important;
+  border: 1px solid var(--ui-line-strong, var(--border)) !important;
+  border-radius: 7px !important;
+  background: var(--ui-panel, var(--surface)) !important;
+  color: var(--ui-text, var(--text)) !important;
+  font: inherit !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+  box-shadow: none !important;
+}
+.application-root .report-filter-toggle > span {
+  min-width: 18px !important;
+  padding: 1px 5px !important;
+  border-radius: 999px !important;
+  background: var(--ui-accent, var(--accent)) !important;
+  color: #fff !important;
+  font-size: 8.5px !important;
+  text-align: center !important;
+}
+.application-root .report-date-presets {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+.application-root .report-date-presets button:hover,
+.application-root .report-filter-toggle:hover,
+.application-root .report-clear-filters:hover,
+.application-root .report-refresh-button:hover {
+  background: #edf4ff !important;
+  border-color: #bfd3ef !important;
+}
+.application-root .report-filter-toolbar-spacer { flex: 1 !important; }
+.application-root .report-filter-toolbar > span {
+  min-height: 34px !important;
+  max-width: 340px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  border-color: var(--ui-line, var(--border)) !important;
+  background: var(--ui-panel, var(--surface)) !important;
+  color: var(--ui-muted, var(--text-muted)) !important;
+}
+
+.application-root .report-filter-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+  padding: 12px !important;
+}
+.application-root .report-filter-field {
+  min-width: 0 !important;
+  display: grid !important;
+  gap: 5px !important;
+}
+.application-root .report-filter-field > span {
+  color: var(--ui-muted, var(--text-muted)) !important;
+  font-size: 9px !important;
+  font-weight: 800 !important;
+  letter-spacing: .045em !important;
+  text-transform: uppercase !important;
+}
+.application-root .report-filter-field :where(input, select) {
+  width: 100% !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  padding: 0 9px !important;
+  border: 1px solid var(--ui-line-strong, var(--border)) !important;
+  border-radius: 7px !important;
+  background: var(--ui-panel, var(--surface)) !important;
+  color: var(--ui-text, var(--text)) !important;
+  font: inherit !important;
+  font-size: 11px !important;
+  box-shadow: none !important;
+}
+
+.application-root .report-results-shell {
+  overflow: hidden !important;
+  border: 1px solid var(--ui-line, var(--border)) !important;
+  border-radius: 10px !important;
+  background: var(--ui-panel, var(--surface)) !important;
+  box-shadow: none !important;
+}
+.application-root .report-results-summary {
+  min-height: 48px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  padding: 8px 12px !important;
+  border-bottom: 1px solid var(--ui-line, var(--border)) !important;
+}
+.application-root .report-results-summary > div {
+  display: flex !important;
+  align-items: baseline !important;
+  gap: 8px !important;
+}
+.application-root .report-results-summary strong {
+  color: var(--ui-text, var(--text)) !important;
+  font-size: 12px !important;
+}
+.application-root .report-results-summary span {
+  color: var(--ui-faint, var(--text-faint)) !important;
+  font-size: 10.5px !important;
+}
+.application-root .report-results-summary button {
+  min-height: 32px !important;
+  padding: 0 10px !important;
+  border: 1px solid #e0b3b3 !important;
+  border-radius: 6px !important;
+  background: #fff7f7 !important;
+  color: #ad3030 !important;
+  font: inherit !important;
+  font-size: 10px !important;
+  font-weight: 750 !important;
+}
+.application-root .report-results-scroll {
+  overflow: auto !important;
+  max-height: calc(100vh - 360px) !important;
+}
+.application-root .report-table-header {
+  min-height: 40px !important;
+  align-items: center !important;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 3 !important;
+  border-bottom: 1px solid var(--ui-line, var(--border)) !important;
+  background: var(--ui-panel-soft, var(--surface-2)) !important;
+}
+.application-root .report-table-header > div {
+  padding: 0 10px !important;
+  color: var(--ui-faint, var(--text-faint)) !important;
+  font-size: 9px !important;
+  font-weight: 800 !important;
+  letter-spacing: .04em !important;
+  text-transform: uppercase !important;
+}
+.application-root .report-record-row {
+  min-height: 48px !important;
+  align-items: center !important;
+  border-bottom: 1px solid var(--ui-line, var(--border)) !important;
+  background: var(--ui-panel, var(--surface)) !important;
+  color: var(--ui-text, var(--text)) !important;
+}
+.application-root .report-record-row:hover { background: #f6f9fd !important; }
+.application-root .report-record-row > div,
+.application-root .report-totals-row > div {
+  padding: 8px 10px !important;
+  font-size: 10.5px !important;
+  line-height: 1.35 !important;
+}
+.application-root .report-totals-row {
+  min-height: 48px !important;
+  align-items: center !important;
+  border-top: 1px solid var(--ui-line-strong, var(--border)) !important;
+  background: var(--ui-panel-soft, var(--surface-2)) !important;
+  font-weight: 750 !important;
+}
+.application-root .report-result-state {
+  min-height: 210px !important;
+  display: grid !important;
+  place-items: center !important;
+  align-content: center !important;
+  gap: 6px !important;
+  padding: 30px !important;
+  text-align: center !important;
+}
+.application-root .report-result-state > span {
+  width: 42px !important;
+  height: 42px !important;
+  display: grid !important;
+  place-items: center !important;
+  border-radius: 10px !important;
+  background: var(--ui-panel-soft, var(--surface-2)) !important;
+  color: var(--ui-faint, var(--text-faint)) !important;
+}
+.application-root .report-result-state strong { color: var(--ui-text, var(--text)) !important; font-size: 12.5px !important; }
+.application-root .report-result-state p { margin: 0 !important; color: var(--ui-muted, var(--text-muted)) !important; font-size: 11px !important; }
+
+.application-root .report-pagination {
+  min-height: 48px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  padding: 8px 12px !important;
+  border-top: 1px solid var(--ui-line, var(--border)) !important;
+  color: var(--ui-muted, var(--text-muted)) !important;
+  font-size: 10.5px !important;
+}
+.application-root .report-pagination > div {
+  display: flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+}
+.application-root .report-pagination button {
+  min-height: 30px !important;
+  border-color: var(--ui-line-strong, var(--border)) !important;
+  background: var(--ui-panel, var(--surface)) !important;
+  color: var(--ui-muted, var(--text-muted)) !important;
+}
+.application-root .report-pagination button:disabled { opacity: .45 !important; cursor: default !important; }
+
+.appearance-dark .report-live-status {
+  background: rgba(48, 143, 91, .14) !important;
+  border-color: rgba(71, 177, 119, .34) !important;
+  color: #9be0ba !important;
+}
+.appearance-dark .report-document-notice {
+  background: rgba(44, 93, 151, .16) !important;
+  border-color: rgba(92, 145, 209, .34) !important;
+  color: #bcd5ef !important;
+}
+.appearance-dark .report-record-row:hover,
+.appearance-dark .report-date-presets button:hover,
+.appearance-dark .report-filter-toggle:hover,
+.appearance-dark .report-clear-filters:hover,
+.appearance-dark .report-refresh-button:hover {
+  background: var(--ui-panel-soft, var(--surface-2)) !important;
+}
+
+@media (max-width: 1100px) {
+  .application-root .report-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .application-root .report-view-header { align-items: stretch !important; }
+}
+
+@media (max-width: 760px) {
+  .application-root .report-view-header { flex-direction: column !important; gap: 12px !important; }
+  .application-root .report-export-actions { width: 100% !important; }
+  .application-root .report-export-actions button { flex: 1 !important; min-width: 0 !important; }
+  .application-root .report-filter-toolbar { flex-wrap: wrap !important; }
+  .application-root .report-filter-toolbar-spacer { display: none !important; }
+  .application-root .report-filter-toolbar > span { order: 3; width: 100% !important; max-width: none !important; }
+  .application-root .report-filter-grid { grid-template-columns: 1fr !important; }
+  .application-root .report-pagination { align-items: flex-start !important; flex-direction: column !important; }
+}
