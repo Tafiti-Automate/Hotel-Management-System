@@ -1,0 +1,535 @@
+name: ChatGPT GUI pass 2
+
+on:
+  push:
+    branches:
+      - chatgpt-gui-pass-2
+
+jobs:
+  update-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: chatgpt-gui-pass-2
+          fetch-depth: 0
+
+      - name: Apply GUI polish
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: Path, old: str, new: str, label: str):
+              text = path.read_text()
+              if old not in text:
+                  raise SystemExit(f'Pattern not found for {label}')
+              path.write_text(text.replace(old, new, 1))
+
+          header = Path('frontend/src/components/Header.tsx')
+          replace_once(
+              header,
+              "    const timer = window.setInterval(() => setNow(new Date()), 1000)\n",
+              "    const timer = window.setInterval(() => setNow(new Date()), 60_000)\n",
+              'clock interval',
+          )
+          replace_once(
+              header,
+              '''        <div className="header-clock tafiti-header-clock" aria-label={`Local time ${formatClock(now)}`}>
+          <span className="tafiti-clock-copy">
+            <small>{formatClockDate(now)}</small>
+            <strong>{formatClock(now)}</strong>
+          </span>
+          <span className="tafiti-clock-icon" aria-hidden="true">
+            <Icon name="schedule" size={13} />
+          </span>
+          <Icon name="expand_more" size={11} />
+        </div>
+''',
+              '''        <div className="header-clock tafiti-header-clock" aria-label={`Local time ${formatCompactClock(now)}`}>
+          <strong>{formatCompactClock(now)}</strong>
+        </div>
+''',
+              'clock markup',
+          )
+          replace_once(
+              header,
+              '''function formatClockDate(date: Date) {
+  return new Intl.DateTimeFormat('en-UG', {
+    weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Africa/Kampala',
+  }).format(date).toUpperCase()
+}
+
+function formatClock(date: Date) {
+  return new Intl.DateTimeFormat('en-UG', {
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'Africa/Kampala',
+  }).format(date)
+}
+''',
+              '''function formatCompactClock(date: Date) {
+  const datePart = new Intl.DateTimeFormat('en-UG', {
+    day: 'numeric', month: 'short', timeZone: 'Africa/Kampala',
+  }).format(date)
+  const timePart = new Intl.DateTimeFormat('en-UG', {
+    hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Africa/Kampala',
+  }).format(date)
+  return `${datePart} · ${timePart}`
+}
+''',
+              'clock formatting',
+          )
+
+          screen = Path('frontend/src/screens/DepartmentRequisitions.tsx')
+          replace_once(
+              screen,
+              "  const [dateTo, setDateTo] = useState('')\n",
+              "  const [dateTo, setDateTo] = useState('')\n  const [filtersOpen, setFiltersOpen] = useState(false)\n",
+              'mobile filter state',
+          )
+          replace_once(
+              screen,
+              '''  const majorGroups = data.categories.filter((row) => !row.parent && row.is_active !== false)
+  const itemGroups = data.categories.filter((row) => id(row.parent) === lineDraft.majorGroup && row.is_active !== false)
+  const selectableItems = [...data.items].filter((row) => row.is_active !== false).sort((a, b) => id(a.name).localeCompare(id(b.name)))
+''',
+              '''  const selectableItems = [...data.items].filter((row) => row.is_active !== false).sort((a, b) => id(a.name).localeCompare(id(b.name)))
+''',
+              'article collections',
+          )
+          replace_once(
+              screen,
+              '''          <div className="hod-filters">
+''',
+              '''          <button type="button" className="hod-mobile-filter-toggle" onClick={() => setFiltersOpen((open) => !open)} aria-expanded={filtersOpen}>
+            <Icon name="tune" size={16} /> {filtersOpen ? 'Hide filters' : 'Filters'}
+            {(status || dateFrom || dateTo) && <span>Active</span>}
+          </button>
+          <div className={`hod-filters${filtersOpen ? ' mobile-open' : ''}`}>
+''',
+              'mobile filter toggle',
+          )
+          replace_once(
+              screen,
+              '''                    majorGroups={majorGroups}
+                    itemGroups={itemGroups}
+                    selectableItems={selectableItems}
+''',
+              '''                    selectableItems={selectableItems}
+''',
+              'draft editor props usage',
+          )
+          replace_once(
+              screen,
+              '''  requestDraft, setRequestDraft, lines, data, lineDraft, setLineDraft,
+  majorGroups, itemGroups, selectableItems, busy, saveDraft, submitDraft, deleteDraft,
+''',
+              '''  requestDraft, setRequestDraft, lines, data, lineDraft, setLineDraft,
+  selectableItems, busy, saveDraft, submitDraft, deleteDraft,
+''',
+              'draft editor signature',
+          )
+          replace_once(
+              screen,
+              '''  majorGroups: Row[]
+  itemGroups: Row[]
+  selectableItems: Row[]
+''',
+              '''  selectableItems: Row[]
+''',
+              'draft editor prop types',
+          )
+          replace_once(
+              screen,
+              '''  const selectedItem = data.items.find((row) => id(row.id) === lineDraft.item)
+  const unit = data.units.find((row) => id(row.id) === id(selectedItem?.base_unit))
+  const canSubmit = Boolean(requestDraft.store && lines.length)
+''',
+              '''  const selectedItem = data.items.find((row) => id(row.id) === lineDraft.item)
+  const unit = data.units.find((row) => id(row.id) === id(selectedItem?.base_unit))
+  const category = data.categories.find((row) => id(row.id) === id(selectedItem?.category))
+  const parentCategory = data.categories.find((row) => id(row.id) === id(category?.parent))
+  const selectedMeta = selectedItem ? [
+    id(parentCategory?.name), id(category?.name), id(unit?.abbreviation || unit?.name), id(selectedItem.sku),
+  ].filter(Boolean) : []
+  const canSubmit = Boolean(requestDraft.store && lines.length)
+''',
+              'article metadata',
+          )
+          replace_once(
+              screen,
+              '''        <div className="hod-section-heading"><div><strong>Request details</strong><span>Department and requester come from your account.</span></div><button type="button" className="erp-secondary" onClick={saveDraft} disabled={busy}><Icon name="save" size={15} /> Save draft</button></div>
+''',
+              '''        <div className="hod-section-heading"><div><strong>Request details</strong><span>Department and requester come from your account.</span></div></div>
+''',
+              'remove top save action',
+          )
+          replace_once(
+              screen,
+              '''          <div className="hod-add-line-grid">
+            <label><span>Major Group</span><select value={lineDraft.majorGroup} onChange={(event) => setLineDraft({ ...lineDraft, majorGroup: event.target.value, itemGroup: '', item: '' })}><option value="">Choose group</option>{majorGroups.map((row) => <option key={id(row.id)} value={id(row.id)}>{id(row.name)}</option>)}</select></label>
+            <label><span>Item Group</span><select disabled={!lineDraft.majorGroup} value={lineDraft.itemGroup} onChange={(event) => setLineDraft({ ...lineDraft, itemGroup: event.target.value, item: '' })}><option value="">Choose item group</option>{itemGroups.map((row) => <option key={id(row.id)} value={id(row.id)}>{id(row.name)}</option>)}</select></label>
+            <label className="span-2"><span>Article / item</span><select value={lineDraft.item} onChange={(event) => setLineDraft({ ...lineDraft, item: event.target.value })}><option value="">Choose Article</option>{selectableItems.map((row) => <option key={id(row.id)} value={id(row.id)}>{id(row.name)}{row.sku ? ` · ${id(row.sku)}` : ''}</option>)}</select></label>
+            <label><span>Quantity</span><input min="0.01" step="0.01" type="number" value={lineDraft.quantity} onChange={(event) => setLineDraft({ ...lineDraft, quantity: event.target.value })} placeholder="0" /></label>
+            <label><span>UOM (auto)</span><input readOnly value={unit ? id(unit.abbreviation || unit.name) : ''} placeholder="Filled from Article" /></label>
+            <label className="span-2"><span>Line note (optional)</span><input value={lineDraft.remarks} onChange={(event) => setLineDraft({ ...lineDraft, remarks: event.target.value })} placeholder="Usage or specification note" /></label>
+            <button type="button" className="erp-primary hod-add-line-button" disabled={busy || !lineDraft.item || num(lineDraft.quantity) <= 0} onClick={saveLine}><Icon name={lineDraft.id ? 'save' : 'add'} size={16} color="#fff" /> {lineDraft.id ? 'Update Article' : 'Add Article'}</button>
+          </div>
+''',
+              '''          <div className="hod-add-line-grid">
+            <div className="hod-article-picker-field span-2">
+              <span className="hod-field-label">Article / item</span>
+              <ArticlePicker
+                items={selectableItems}
+                categories={data.categories}
+                value={lineDraft.item}
+                onChange={(item) => setLineDraft({ ...lineDraft, item })}
+              />
+              {selectedItem && <div className="hod-article-meta"><Icon name="auto_awesome" size={14} /><span>{selectedMeta.join(' · ')}</span></div>}
+            </div>
+            <label><span>Quantity</span><input min="0.01" step="0.01" type="number" value={lineDraft.quantity} onChange={(event) => setLineDraft({ ...lineDraft, quantity: event.target.value })} placeholder="0" /></label>
+            <label className="span-2"><span>Line note (optional)</span><input value={lineDraft.remarks} onChange={(event) => setLineDraft({ ...lineDraft, remarks: event.target.value })} placeholder="Usage or specification note" /></label>
+            <button type="button" className="erp-primary hod-add-line-button" disabled={busy || !lineDraft.item || num(lineDraft.quantity) <= 0} onClick={saveLine}><Icon name={lineDraft.id ? 'save' : 'add'} size={16} color="#fff" /> {lineDraft.id ? 'Update Article' : 'Add Article'}</button>
+          </div>
+''',
+              'searchable article picker',
+          )
+          replace_once(
+              screen,
+              '''      <div className="hod-editor-submit">
+        <button type="button" className="erp-secondary danger-text" disabled={busy} onClick={deleteDraft}><Icon name="delete" size={15} /> Delete draft</button>
+        <div className={`hod-submit-readiness${canSubmit ? ' ready' : ''}`}><Icon name={canSubmit ? 'check_circle' : 'info'} size={16} /><span>{canSubmit ? 'Ready to send directly to the Store Keeper.' : 'Choose an issuing store and add at least one Article.'}</span></div>
+        <button type="button" className="erp-primary" disabled={busy || !canSubmit} onClick={submitDraft}><Icon name="send" size={16} color="#fff" /> Submit to Stores</button>
+      </div>
+''',
+              '''      <div className="hod-editor-submit">
+        <button type="button" className="erp-secondary danger-text hod-delete-draft" disabled={busy} onClick={deleteDraft}><Icon name="delete" size={15} /> Delete draft</button>
+        <div className={`hod-submit-readiness${canSubmit ? ' ready' : ''}`}><Icon name={canSubmit ? 'check_circle' : 'info'} size={16} /><span>{canSubmit ? 'Ready to send directly to the Store Keeper.' : 'Choose an issuing store and add at least one Article.'}</span></div>
+        <button type="button" className="erp-secondary hod-save-draft" disabled={busy} onClick={saveDraft}><Icon name="save" size={15} /> Save draft</button>
+        <button type="button" className="erp-primary hod-submit-stores" disabled={busy || !canSubmit} onClick={submitDraft}><Icon name="send" size={16} color="#fff" /> Submit to Stores</button>
+      </div>
+''',
+              'sticky draft actions',
+          )
+          marker = '''function RequestDetails({ request, lines, data }: { request: Row; lines: Row[]; data: WorkspaceData }) {\n'''
+          if marker not in screen.read_text():
+              raise SystemExit('ArticlePicker insertion marker not found')
+          picker = r'''function ArticlePicker({ items, categories, value, onChange }: { items: Row[]; categories: Row[]; value: string; onChange: (value: string) => void }) {
+  const selectedItem = items.find((row) => id(row.id) === value)
+  const [query, setQuery] = useState(() => selectedItem ? articlePickerLabel(selectedItem) : '')
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    setQuery(selectedItem ? articlePickerLabel(selectedItem) : '')
+  }, [selectedItem])
+
+  const matches = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    const source = needle && selectedItem && query === articlePickerLabel(selectedItem) ? items : items.filter((item) => {
+      const category = categories.find((row) => id(row.id) === id(item.category))
+      const parent = categories.find((row) => id(row.id) === id(category?.parent))
+      return [item.name, item.sku, category?.name, parent?.name].map(id).join(' ').toLowerCase().includes(needle)
+    })
+    return source.slice(0, 30)
+  }, [categories, items, query, selectedItem])
+
+  return <div className="hod-article-picker">
+    <Icon name="search" size={17} />
+    <input
+      value={query}
+      placeholder="Search Article name or code"
+      autoComplete="off"
+      aria-label="Search Article"
+      aria-expanded={open}
+      onFocus={() => setOpen(true)}
+      onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+      onChange={(event) => {
+        setQuery(event.target.value)
+        if (value) onChange('')
+        setOpen(true)
+      }}
+    />
+    {value && <button type="button" className="hod-article-clear" aria-label="Clear selected Article" onMouseDown={(event) => event.preventDefault()} onClick={() => { onChange(''); setQuery(''); setOpen(true) }}><Icon name="close" size={15} /></button>}
+    {open && <div className="hod-article-options" role="listbox">
+      {matches.map((item) => {
+        const category = categories.find((row) => id(row.id) === id(item.category))
+        const parent = categories.find((row) => id(row.id) === id(category?.parent))
+        return <button
+          type="button"
+          key={id(item.id)}
+          role="option"
+          aria-selected={id(item.id) === value}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => { onChange(id(item.id)); setQuery(articlePickerLabel(item)); setOpen(false) }}
+        >
+          <span><strong>{id(item.name)}</strong><small>{[id(parent?.name), id(category?.name)].filter(Boolean).join(' · ') || 'Article'}</small></span>
+          <em>{id(item.sku) || 'No code'}</em>
+        </button>
+      })}
+      {!matches.length && <div className="hod-article-no-results"><Icon name="search_off" size={18} /><span>No matching Article</span></div>}
+    </div>}
+  </div>
+}
+
+function articlePickerLabel(item: Row) {
+  return id(item.sku) ? `${id(item.name)} · ${id(item.sku)}` : id(item.name)
+}
+
+'''
+          text = screen.read_text().replace(marker, picker + marker, 1)
+          screen.write_text(text)
+
+          css = Path('frontend/src/department-requisitions-polish.css')
+          css.write_text(css.read_text() + r'''
+
+/* ---------- GUI pass 2: direct Article search, compact time and mobile actions ---------- */
+.screen-app .header-clock.tafiti-header-clock {
+  height: 28px !important;
+  padding: 0 8px !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 7px !important;
+  background: var(--surface) !important;
+  box-shadow: none !important;
+}
+.screen-app .header-clock.tafiti-header-clock > strong {
+  font-size: 10.5px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0 !important;
+  white-space: nowrap;
+}
+
+.screen-app .hod-mobile-filter-toggle {
+  display: none;
+}
+
+.screen-app .hod-article-picker-field {
+  min-width: 0;
+}
+.screen-app .hod-field-label {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-faint);
+  font-size: 8.5px;
+  font-weight: 750;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+.screen-app .hod-article-picker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.screen-app .hod-article-picker > .ic {
+  position: absolute;
+  left: 10px;
+  z-index: 2;
+  color: var(--text-faint);
+  pointer-events: none;
+}
+.screen-app .hod-article-picker > input {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 38px 0 34px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+}
+.screen-app .hod-article-clear {
+  position: absolute;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.screen-app .hod-article-options {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 5px);
+  left: 0;
+  right: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--border-2);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, .16);
+}
+.screen-app .hod-article-options > button {
+  width: 100%;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.screen-app .hod-article-options > button:last-of-type { border-bottom: 0; }
+.screen-app .hod-article-options > button:hover,
+.screen-app .hod-article-options > button[aria-selected="true"] {
+  background: var(--accent-soft);
+}
+.screen-app .hod-article-options > button span { min-width: 0; }
+.screen-app .hod-article-options strong,
+.screen-app .hod-article-options small { display: block; }
+.screen-app .hod-article-options strong { font-size: 11px; }
+.screen-app .hod-article-options small { margin-top: 2px; color: var(--text-muted); font-size: 9px; }
+.screen-app .hod-article-options em { flex: none; color: var(--text-faint); font-size: 9px; font-style: normal; }
+.screen-app .hod-article-no-results {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.screen-app .hod-article-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  color: var(--text-muted);
+  font-size: 9px;
+  line-height: 1.35;
+}
+.screen-app .hod-article-meta .ic { color: var(--accent); }
+
+.screen-app .hod-add-line-grid {
+  grid-template-columns: minmax(0, 1.5fr) minmax(120px, .55fr) auto !important;
+  align-items: end;
+}
+.screen-app .hod-add-line-grid > .span-2 { grid-column: span 2; }
+.screen-app .hod-add-line-button { min-width: 130px; }
+
+.screen-app .hod-editor-submit {
+  grid-template-columns: auto minmax(180px, 1fr) auto auto !important;
+}
+
+@media (max-width: 960px) {
+  .screen-app .header-clock.tafiti-header-clock { display: none !important; }
+}
+
+@media (max-width: 640px) {
+  .screen-app .hod-mobile-filter-toggle {
+    width: calc(100% - 20px);
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    margin: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--surface);
+    color: var(--text-muted);
+    font: inherit;
+    font-weight: 650;
+  }
+  .screen-app .hod-mobile-filter-toggle > span {
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 9px;
+  }
+  .screen-app .hod-filters { display: none !important; }
+  .screen-app .hod-filters.mobile-open { display: grid !important; }
+
+  .screen-app .hod-add-line-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .screen-app .hod-add-line-grid > .span-2 { grid-column: auto; }
+  .screen-app .hod-add-line-button { width: 100%; min-height: 44px; }
+  .screen-app .hod-article-picker > input { min-height: 44px; font-size: 16px !important; }
+  .screen-app .hod-article-options { max-height: min(48vh, 330px); }
+  .screen-app .hod-article-options > button { min-height: 56px; }
+
+  .screen-app .hod-editor-submit {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 7px;
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+  }
+  .screen-app .hod-submit-readiness {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+  .screen-app .hod-delete-draft {
+    display: none !important;
+  }
+  .screen-app .hod-save-draft,
+  .screen-app .hod-submit-stores {
+    min-height: 46px !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .screen-app .hod-editor-submit {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .screen-app .hod-submit-readiness {
+    grid-column: 1 / -1 !important;
+  }
+}
+''')
+
+          responsive = Path('frontend/src/responsive.css')
+          responsive.write_text(responsive.read_text() + r'''
+
+/* GUI pass 2: safer cross-screen phone ergonomics. */
+@media (max-width: 760px) {
+  .screen-app :where(.erp-primary, .erp-secondary, .erp-danger, button, [role="button"]) {
+    min-height: 42px;
+  }
+  .screen-app :where(.record-detail-drawer, .procurement-detail-drawer, .form-drawer, .modal-card) {
+    max-width: 100vw !important;
+  }
+  .screen-app :where(.data-table, .access-table-wrap, .report-records-card, .inventory-records-card, .procurement-records-card) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .screen-app :where(.toolbar, .list-toolbar, .workbench-toolbar, .page-actions) {
+    flex-wrap: wrap;
+  }
+}
+''')
+          PY
+
+      - name: Commit GUI changes
+        run: |
+          git config user.name "Watumwa"
+          git config user.email "127853693+watumwa@users.noreply.github.com"
+          git add frontend/src/components/Header.tsx frontend/src/screens/DepartmentRequisitions.tsx frontend/src/department-requisitions-polish.css frontend/src/responsive.css
+          git commit -m "refactor(ux): simplify mobile requisition entry and header time"
+          git push origin HEAD:chatgpt-gui-pass-2
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
