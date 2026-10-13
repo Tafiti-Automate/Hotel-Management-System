@@ -180,6 +180,16 @@ def test_store_keeper_quantity_can_only_stay_same_or_reduce_after_first_decision
     assert client.post(f"/api/v1/store-requisitions/{request_id}/submit/", {}, format="json").status_code == 200
 
     client.force_authenticate(keeper_user)
+
+    # Stores must not be able to rewrite the Department Head's original request.
+    tamper = client.patch(
+        f"/api/v1/store-requisition-items/{line_id}/",
+        {"quantity_requested": "12.00"},
+        format="json",
+    )
+    assert tamper.status_code == 400
+    assert "audit trail" in str(tamper.data).lower()
+
     first = client.patch(
         f"/api/v1/store-requisition-items/{line_id}/",
         {"quantity_approved": "6.00", "storekeeper_comment": "Carry six"},
