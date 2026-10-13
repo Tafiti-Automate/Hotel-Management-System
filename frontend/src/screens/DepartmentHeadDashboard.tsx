@@ -6,15 +6,17 @@ const key = (value: unknown) => id(value).trim().toLowerCase()
 
 export default function DepartmentHeadDashboard() {
   const app = useApp()
+  // fetchBackendData already receives the HOD-scoped requisition queryset from the
+  // backend, so this dashboard should use the returned department records directly.
   const requests = app.data.storeRequisitions || []
-  const own = requests.filter((row) => id(row.requestedBy || row.requested_by) === app.user.employeeId)
+  const own = requests
   const drafts = own.filter((row) => key(row.statusCode || row.status) === 'draft')
   const atStores = own.filter((row) => ['submitted', 'approved', 'partially_approved', 'partially_issued'].includes(key(row.statusCode || row.status)))
   const procurement = own.filter((row) => key(row.statusCode || row.status) === 'awaiting_procurement')
   const completed = own.filter((row) => ['issued', 'completed'].includes(key(row.statusCode || row.status)))
   const rejected = own.filter((row) => key(row.statusCode || row.status) === 'rejected')
   const recent = [...own]
-    .sort((a, b) => id(b.createdAt || b.created_at).localeCompare(id(a.createdAt || a.created_at)))
+    .sort((a, b) => id(b.date || b.createdAt || b.created_at).localeCompare(id(a.date || a.createdAt || a.created_at)))
     .slice(0, 7)
 
   return (
@@ -50,16 +52,16 @@ export default function DepartmentHeadDashboard() {
       <div className="hod-dashboard-layout">
         <section className="hod-dashboard-panel">
           <header>
-            <div><strong>Recent requisitions</strong><span>Your latest Department requests</span></div>
+            <div><strong>Recent requisitions</strong><span>Latest requests visible in your Department scope</span></div>
             <button type="button" onClick={() => app.navTo('workflow-stores', 'Department requisitions')}>Open register <Icon name="arrow_forward" size={14} /></button>
           </header>
           <div className="hod-dashboard-list">
             {recent.map((row) => (
-              <button type="button" key={id(row.id)} onClick={() => app.navTo('workflow-stores', 'Department requisitions')}>
-                <span className="hod-dashboard-ref">{id(row.requisitionNo || row.requisition_no || row.number || row.id)}</span>
-                <span className="hod-dashboard-record-copy"><strong>{id(row.purpose) || 'Department requisition'}</strong><small>{id(row.storeName || row.store_name) || 'Store pending'}</small></span>
+              <button type="button" key={id(row.apiId || row.id)} onClick={() => app.navTo('workflow-stores', 'Department requisitions')}>
+                <span className="hod-dashboard-ref">{id(row.id || row.requisitionNo || row.requisition_no || row.number)}</span>
+                <span className="hod-dashboard-record-copy"><strong>{id(row.purpose) || 'Department requisition'}</strong><small>{id(row.store || row.storeName || row.store_name) || 'Store pending'}</small></span>
                 <Status value={id(row.statusCode || row.status)} />
-                <span className="hod-dashboard-date">{formatDate(row.createdAt || row.created_at)}</span>
+                <span className="hod-dashboard-date">{formatDate(row.date || row.createdAt || row.created_at)}</span>
                 <Icon name="chevron_right" size={16} />
               </button>
             ))}
