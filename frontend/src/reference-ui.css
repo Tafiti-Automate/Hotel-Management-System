@@ -1,0 +1,692 @@
+/* Procurement & Inventory reference UI
+   Visual implementation only. No permissions, workflow transitions, quantities,
+   approval rules, calculations or API behavior are changed here. */
+
+.screen-app {
+  --ref-navy: #073b74;
+  --ref-navy-deep: #052e5c;
+  --ref-blue: #0b6cf2;
+  --ref-blue-strong: #075fd8;
+  --ref-blue-soft: #eaf3ff;
+  --ref-canvas: #f4f7fb;
+  --ref-line: #d9e4f2;
+  --ref-line-strong: #c5d5e8;
+  --ref-ink: #10233f;
+  --ref-muted: #64748b;
+  --ref-card: #ffffff;
+  --ref-shadow: 0 1px 2px rgba(15, 43, 77, .05);
+}
+
+/* --------------------------------------------------------------------------
+   Application chrome — dark operational shell, bright work canvas
+   -------------------------------------------------------------------------- */
+.screen-app .app-shell {
+  background: var(--ref-canvas) !important;
+}
+
+.screen-app .app-content {
+  background: var(--ref-canvas) !important;
+  padding: 14px 16px 18px !important;
+}
+
+.screen-app .tafiti-app-header,
+.screen-app .tafiti-app-header-top {
+  background: linear-gradient(100deg, var(--ref-navy-deep), var(--ref-navy)) !important;
+  color: #fff !important;
+  border-color: rgba(255,255,255,.12) !important;
+  box-shadow: 0 1px 0 rgba(1,18,39,.22) !important;
+}
+
+.screen-app .tafiti-app-header {
+  min-height: 54px !important;
+}
+
+.screen-app .tafiti-app-header-top {
+  min-height: 54px !important;
+  padding: 0 14px !important;
+}
+
+.screen-app .tafiti-header-page-context strong,
+.screen-app .tafiti-header-page-context span,
+.screen-app .tafiti-header-clock,
+.screen-app .tafiti-header-clock strong,
+.screen-app .tafiti-header-actions,
+.screen-app .tafiti-header-profile-trigger,
+.screen-app .tafiti-header-user-copy > span,
+.screen-app .tafiti-header-user-copy > small,
+.screen-app .header-theme-trigger,
+.screen-app .header-notification-trigger,
+.screen-app .tafiti-header-menu {
+  color: #fff !important;
+}
+
+.screen-app .tafiti-header-page-context span,
+.screen-app .tafiti-header-user-copy > small {
+  color: rgba(255,255,255,.72) !important;
+}
+
+.screen-app .global-search-trigger,
+.screen-app .header-theme-trigger,
+.screen-app .header-notification-trigger,
+.screen-app .tafiti-header-profile-trigger {
+  border-color: rgba(255,255,255,.13) !important;
+}
+
+.screen-app .global-search-trigger:hover,
+.screen-app .header-theme-trigger:hover,
+.screen-app .header-notification-trigger:hover,
+.screen-app .tafiti-header-profile-trigger:hover {
+  background: rgba(255,255,255,.09) !important;
+}
+
+.screen-app .header-live-state {
+  color: #dff9e8 !important;
+  border-color: rgba(163,230,53,.24) !important;
+  background: rgba(22,163,74,.15) !important;
+}
+
+.screen-app .header-role-chip {
+  color: #eaf3ff !important;
+  border-color: rgba(147,197,253,.28) !important;
+  background: rgba(59,130,246,.18) !important;
+}
+
+.screen-app .tafiti-sidebar {
+  background: linear-gradient(180deg, #0b3e74 0%, #062f5d 68%, #05294f 100%) !important;
+  color: #e9f3ff !important;
+  border-right: 1px solid rgba(4,28,55,.38) !important;
+  box-shadow: 1px 0 0 rgba(255,255,255,.03) inset !important;
+}
+
+.screen-app .tafiti-sidebar-brand {
+  min-height: 60px !important;
+  border-bottom: 1px solid rgba(255,255,255,.10) !important;
+}
+
+.screen-app .tafiti-sidebar-brand-mark {
+  background: linear-gradient(145deg, #2785ff, #0b65e8) !important;
+  box-shadow: 0 5px 14px rgba(0,0,0,.16) !important;
+}
+
+.screen-app .sidebar-brand-title,
+.screen-app .tafiti-sidebar-user-name,
+.screen-app .tafiti-property-value {
+  color: #fff !important;
+}
+
+.screen-app .sidebar-brand-subtitle,
+.screen-app .tafiti-sidebar-user-role,
+.screen-app .tafiti-property-label,
+.screen-app .sidebar-nav-heading {
+  color: rgba(231,242,255,.66) !important;
+}
+
+.screen-app .sidebar-nav-heading {
+  font-size: 10px !important;
+  letter-spacing: .075em !important;
+  text-transform: uppercase !important;
+  font-weight: 700 !important;
+}
+
+.screen-app .tafiti-sidebar-property {
+  margin: 8px !important;
+  border: 1px solid rgba(255,255,255,.10) !important;
+  background: rgba(255,255,255,.055) !important;
+  border-radius: 7px !important;
+}
+
+.screen-app .tafiti-property-trigger,
+.screen-app .tafiti-property-trigger .ic {
+  color: #e8f3ff !important;
+}
+
+.screen-app .tafiti-sidebar-nav-item {
+  margin: 1px 7px !important;
+  min-height: 36px !important;
+  padding: 7px 9px !important;
+  border-radius: 5px !important;
+  color: rgba(235,244,255,.86) !important;
+}
+
+.screen-app .tafiti-sidebar-nav-item:hover {
+  background: rgba(255,255,255,.075) !important;
+  color: #fff !important;
+}
+
+.screen-app .tafiti-sidebar-nav-item.active {
+  background: linear-gradient(90deg, #0b70f2, #0a63db) !important;
+  color: #fff !important;
+  box-shadow: 0 3px 10px rgba(0,29,77,.22) !important;
+}
+
+.screen-app .tafiti-sidebar-nav-item.active .ic,
+.screen-app .tafiti-sidebar-nav-item .ic {
+  color: inherit !important;
+}
+
+.screen-app .tafiti-sidebar-footer {
+  border-top: 1px solid rgba(255,255,255,.10) !important;
+  background: rgba(3,28,57,.22) !important;
+}
+
+.screen-app .tafiti-sidebar-user {
+  border-color: rgba(255,255,255,.10) !important;
+  background: rgba(255,255,255,.055) !important;
+}
+
+/* --------------------------------------------------------------------------
+   Shared surface system — compact enterprise panels from the supplied reference
+   -------------------------------------------------------------------------- */
+.screen-app :where(.enterprise-workspace, .role-dashboard, .hod-dashboard, .hod-requisitions-page, .store-purchase-screen, .article-master-screen, .report-view-screen) {
+  max-width: 1580px !important;
+}
+
+.screen-app :where(.enterprise-workspace, .role-dashboard, .hod-dashboard, .hod-requisitions-page) h1 {
+  color: var(--ref-ink) !important;
+}
+
+.screen-app :where(.erp-primary, button.primary, .access-primary) {
+  background: linear-gradient(180deg, var(--ref-blue), var(--ref-blue-strong)) !important;
+  border-color: var(--ref-blue-strong) !important;
+  color: #fff !important;
+  box-shadow: 0 1px 2px rgba(11,108,242,.18) !important;
+}
+
+.screen-app :where(.erp-primary, button.primary, .access-primary):hover:not(:disabled) {
+  filter: brightness(.97);
+  transform: translateY(-1px);
+}
+
+.screen-app .erp-secondary {
+  background: #fff !important;
+  border-color: var(--ref-line-strong) !important;
+  color: #28445f !important;
+}
+
+.screen-app :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  background: #fff !important;
+  border-color: var(--ref-line-strong) !important;
+  color: var(--ref-ink) !important;
+  border-radius: 5px !important;
+}
+
+.screen-app :where(input, select, textarea)::placeholder {
+  color: #8a9bb0 !important;
+}
+
+.screen-app :where(.enterprise-workspace, .role-dashboard, .hod-dashboard, .hod-requisitions-page, .store-purchase-screen, .article-master-screen)
+  :where(section, aside)[style*="background: var(--surface)"],
+.screen-app :where(.workbench-grid, .procurement-queue-card, .procurement-detail-panel, .receiving-table-card, .dashboard-rail-card) {
+  border-color: var(--ref-line) !important;
+  box-shadow: var(--ref-shadow) !important;
+}
+
+/* Tables */
+.screen-app :where(.data-head, .receiving-ready-header) {
+  background: #f7faff !important;
+  color: #6a7e96 !important;
+  border-color: var(--ref-line) !important;
+}
+
+.screen-app :where(.data-row, .procurement-record-row, .report-record-row) {
+  border-color: var(--ref-line) !important;
+}
+
+.screen-app :where(.data-row, .procurement-record-row, .report-record-row):hover {
+  background: #f7fbff !important;
+}
+
+/* --------------------------------------------------------------------------
+   HOD dashboard — reference panel 1
+   -------------------------------------------------------------------------- */
+.screen-app .hod-dashboard-hero {
+  padding: 12px 14px !important;
+  background: #fff !important;
+  border: 1px solid var(--ref-line) !important;
+  border-radius: 6px !important;
+  box-shadow: var(--ref-shadow) !important;
+}
+
+.screen-app .hod-dashboard-hero h1 {
+  font-size: 20px !important;
+  margin: 0 !important;
+}
+
+.screen-app .hod-dashboard-hero p {
+  display: none !important;
+}
+
+.screen-app .hod-dashboard-flow {
+  display: none !important;
+}
+
+.screen-app .hod-dashboard-kpis,
+.screen-app .task-card-grid {
+  gap: 8px !important;
+}
+
+.screen-app .hod-dashboard-metric,
+.screen-app .dashboard-task-card {
+  background: #fff !important;
+  border: 1px solid var(--ref-line) !important;
+  border-radius: 6px !important;
+  box-shadow: var(--ref-shadow) !important;
+}
+
+.screen-app .hod-dashboard-metric strong,
+.screen-app .dashboard-task-count {
+  color: var(--ref-ink) !important;
+}
+
+.screen-app .hod-dashboard-layout > section,
+.screen-app .hod-dashboard-layout > aside > section {
+  background: #fff !important;
+  border-color: var(--ref-line) !important;
+  border-radius: 6px !important;
+  box-shadow: var(--ref-shadow) !important;
+}
+
+/* --------------------------------------------------------------------------
+   HOD requisitions — reference panels 2 and 3
+   -------------------------------------------------------------------------- */
+.screen-app .hod-page-header {
+  padding: 0 0 10px !important;
+  margin-bottom: 8px !important;
+  border-bottom: 1px solid var(--ref-line) !important;
+}
+
+.screen-app .hod-page-header h1 {
+  font-size: 21px !important;
+  margin: 0 !important;
+}
+
+.screen-app .hod-page-header p,
+.screen-app .hod-page-eyebrow,
+.screen-app .hod-flow-strip {
+  display: none !important;
+}
+
+.screen-app .hod-kpi-strip {
+  gap: 7px !important;
+  margin-bottom: 8px !important;
+}
+
+.screen-app .hod-kpi-card {
+  min-height: 64px !important;
+  border: 1px solid var(--ref-line) !important;
+  border-radius: 6px !important;
+  background: #fff !important;
+  box-shadow: var(--ref-shadow) !important;
+}
+
+.screen-app .hod-requisition-workspace {
+  gap: 8px !important;
+  min-height: calc(100vh - 190px) !important;
+}
+
+.screen-app .hod-register,
+.screen-app .hod-detail-panel {
+  background: #fff !important;
+  border: 1px solid var(--ref-line) !important;
+  border-radius: 6px !important;
+  box-shadow: var(--ref-shadow) !important;
+}
+
+.screen-app .hod-register-header,
+.screen-app .hod-detail-header,
+.screen-app .hod-editor-section,
+.screen-app .hod-detail-footer {
+  border-color: var(--ref-line) !important;
+}
+
+.screen-app .hod-filter-tabs {
+  border-radius: 5px !important;
+  background: #f3f7fc !important;
+}
+
+.screen-app .hod-filter-tab.active {
+  background: #fff !important;
+  color: var(--ref-blue) !important;
+  box-shadow: 0 1px 2px rgba(15,43,77,.08) !important;
+}
+
+.screen-app .hod-request-row {
+  min-height: 60px !important;
+  border-color: var(--ref-line) !important;
+}
+
+.screen-app .hod-request-row:hover,
+.screen-app .hod-request-row.active {
+  background: var(--ref-blue-soft) !important;
+}
+
+.screen-app .hod-request-row.active {
+  box-shadow: inset 3px 0 0 var(--ref-blue) !important;
+}
+
+.screen-app .hod-detail-header {
+  background: #fbfdff !important;
+}
+
+.screen-app .hod-form-grid {
+  gap: 8px !important;
+}
+
+.screen-app .hod-form-grid textarea {
+  min-height: 70px !important;
+}
+
+.screen-app .hod-line-list,
+.screen-app .hod-add-line-card {
+  border-color: var(--ref-line) !important;
+  border-radius: 5px !important;
+}
+
+.screen-app .hod-add-line-card {
+  background: #f9fbfe !important;
+}
+
+.screen-app .hod-line-row {
+  border-color: var(--ref-line) !important;
+}
+
+.screen-app .hod-article-picker,
+.screen-app .hod-article-options {
+  border-color: var(--ref-line-strong) !important;
+  box-shadow: 0 8px 24px rgba(12,47,84,.10) !important;
+}
+
+.screen-app .hod-article-meta {
+  color: #466987 !important;
+  background: #eff6ff !important;
+  border: 1px solid #d8e9ff !important;
+}
+
+.screen-app .hod-editor-submit {
+  background: #f8fbff !important;
+  border-color: var(--ref-line) !important;
+}
+
+/* Submitted/closed HOD records become a visibly controlled audit view. */
+.screen-app .hod-record-detail {
+  position: relative;
+}
+
+.screen-app .hod-record-detail::before {
+  content: 'LOCKED RECORD  •  AUDIT VIEW';
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  margin: 0 0 10px;
+  padding: 0 11px 0 34px;
+  border: 1px solid #d5e5f7;
+  border-radius: 5px;
+  background:
+    linear-gradient(90deg, rgba(11,108,242,.10), rgba(11,108,242,.03)),
+    #f8fbff;
+  color: #2c5f92;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .06em;
+}
+
+.screen-app .hod-record-detail::after {
+  content: 'lock';
+  position: absolute;
+  top: 10px;
+  left: 11px;
+  font-family: 'Material Symbols Rounded';
+  color: var(--ref-blue);
+  font-size: 16px;
+}
+
+.screen-app .hod-detail-summary-grid,
+.screen-app .hod-purpose-card,
+.screen-app .hod-record-section,
+.screen-app .hod-progress {
+  border-color: var(--ref-line) !important;
+  border-radius: 5px !important;
+  background: #fff !important;
+}
+
+.screen-app .hod-audit-line {
+  border-color: var(--ref-line) !important;
+}
+
+/* --------------------------------------------------------------------------
+   Store Keeper — reference panels 4, 5 and 6
+   -------------------------------------------------------------------------- */
+.screen-app .inventory-workbench > .workbench-hero,
+.screen-app .procurement-workbench > div:first-child,
+.screen-app .finance-workbench > .workbench-hero {
+  padding: 10px 12px !important;
+  margin-bottom: 8px !important;
+  background: #fff !important;
+  border: 1px solid var(--ref-line) !important;
+  border-radius: 6px !important;
+  box-shadow: var(--ref-shadow) !important;
+}
+
+.screen-app :where(.inventory-workbench, .procurement-workbench, .finance-workbench) .workbench-hero h1,
+.screen-app .procurement-workbench > div:first-child h1 {
+  font-size: 20px !important;
+  margin: 1px 0 !important;
+}
+
+.screen-app :where(.inventory-workbench, .procurement-workbench, .finance-workbench) .workbench-hero > div > div:last-child {
+  display: none !important;
+}
+
+.screen-app .inventory-workbench-navigation {
+  margin-bottom: 8px !important;
+  border: 1px solid var(--ref-line) !important;
+  border-radius: 6px !important;
+  background: #fff !important;
+}
+
+.screen-app .inventory-nav-group {
+  min-height: 44px !important;
+  border-color: var(--ref-line) !important;
+}
+
+.screen-app .inventory-nav-button.active,
+.screen-app .inventory-nav-button[aria-current="true"] {
+  color: var(--ref-blue) !important;
+  background: var(--ref-blue-soft) !important;
+  border-color: #cfe1fb !important;
+}
+
+.screen-app .inventory-workbench .workbench-grid,
+.screen-app .procurement-workbench .workbench-grid,
+.screen-app .finance-workbench .workbench-grid {
+  border-color: var(--ref-line) !important;
+  border-radius: 6px !important;
+  background: #fff !important;
+}
+
+.screen-app .store-purchase-metrics > div,
+.screen-app .store-purchase-grid > section {
+  border: 1px solid var(--ref-line) !important;
+  border-radius: 6px !important;
+  background: #fff !important;
+  box-shadow: var(--ref-shadow) !important;
+}
+
+.screen-app .store-purchase-line {
+  border: 1px solid var(--ref-line) !important;
+  border-radius: 5px !important;
+}
+
+/* --------------------------------------------------------------------------
+   Cost Controller — reference panels 7 and 8
+   -------------------------------------------------------------------------- */
+.screen-app :where(.explorer-workspace-layout, .article-master-layout, .unit-master-layout) {
+  border: 1px solid var(--ref-line) !important;
+  border-radius: 6px !important;
+  background: #fff !important;
+  box-shadow: var(--ref-shadow) !important;
+}
+
+.screen-app :where(.explorer-workspace-pane, .article-master-explorer, .unit-master-layout > aside) {
+  background: #f8fbff !important;
+  border-color: var(--ref-line) !important;
+}
+
+.screen-app :where(.explorer-workspace-screen, .article-master-screen) > header {
+  padding-bottom: 8px !important;
+  margin-bottom: 8px !important;
+  border-bottom: 1px solid var(--ref-line) !important;
+}
+
+.screen-app :where(.explorer-workspace-screen, .article-master-screen) > header h1 {
+  font-size: 20px !important;
+}
+
+/* --------------------------------------------------------------------------
+   Procurement — reference panel 9
+   -------------------------------------------------------------------------- */
+.screen-app .procurement-queue-tabs {
+  background: #fff !important;
+  border: 1px solid var(--ref-line) !important;
+  border-radius: 6px !important;
+}
+
+.screen-app .procurement-queue-tab {
+  border-radius: 5px !important;
+}
+
+.screen-app .procurement-queue-tab.is-active {
+  background: var(--ref-blue-soft) !important;
+  box-shadow: inset 0 -2px 0 var(--ref-blue) !important;
+}
+
+.screen-app .workflow-path {
+  border-color: var(--ref-line) !important;
+  border-radius: 6px !important;
+}
+
+.screen-app .workflow-path-step.is-active {
+  background: var(--ref-blue-soft) !important;
+  box-shadow: inset 0 -2px 0 var(--ref-blue) !important;
+}
+
+.screen-app .procurement-detail-panel {
+  background: #fff !important;
+  border-color: var(--ref-line) !important;
+}
+
+/* --------------------------------------------------------------------------
+   Finance + GM approval views — reference panels 10 and 11
+   -------------------------------------------------------------------------- */
+.screen-app .finance-workbench .workbench-grid,
+.screen-app .procurement-workbench-grid {
+  background: #fff !important;
+}
+
+.screen-app .finance-workbench :where(.status-chip, [class*="status"]),
+.screen-app .procurement-workbench :where(.status-chip, [class*="status"]) {
+  font-weight: 700;
+}
+
+.screen-app .procurement-detail-panel :where(.erp-primary, button[style*="var(--good)"]) {
+  min-height: 38px !important;
+}
+
+/* --------------------------------------------------------------------------
+   Receiving / GRN — reference panel 12
+   -------------------------------------------------------------------------- */
+.screen-app .receiving-workspace {
+  max-width: 1580px !important;
+}
+
+.screen-app .receiving-hero-card,
+.screen-app .receiving-table-card,
+.screen-app .receiving-detail-screen > section {
+  background: #fff !important;
+  border: 1px solid var(--ref-line) !important;
+  border-radius: 6px !important;
+  box-shadow: var(--ref-shadow) !important;
+}
+
+.screen-app .receiving-view-tabs {
+  background: #f5f8fc !important;
+  border-color: var(--ref-line) !important;
+  border-radius: 6px !important;
+}
+
+.screen-app .receiving-view-tabs > button[aria-selected="true"],
+.screen-app .receiving-view-tabs > button.active {
+  background: #fff !important;
+  color: var(--ref-blue) !important;
+  box-shadow: inset 0 -2px 0 var(--ref-blue) !important;
+}
+
+.screen-app .receiving-line-grid {
+  border-color: var(--ref-line) !important;
+}
+
+/* --------------------------------------------------------------------------
+   Reports — same language as the operational workspaces
+   -------------------------------------------------------------------------- */
+.screen-app .reports-page,
+.screen-app .report-view-screen {
+  --report-panel-radius: 6px;
+}
+
+.screen-app .reports-page :where(section, article),
+.screen-app .report-view-screen :where(section, article) {
+  border-color: var(--ref-line) !important;
+  box-shadow: var(--ref-shadow) !important;
+}
+
+/* --------------------------------------------------------------------------
+   Semantic states — use colour for meaning, not decoration
+   -------------------------------------------------------------------------- */
+.screen-app :where(.status-good, .is-completed, .is-approved) {
+  color: #15803d !important;
+}
+
+.screen-app :where(.status-warning, .is-pending) {
+  color: #b45309 !important;
+}
+
+.screen-app :where(.status-bad, .is-rejected) {
+  color: #b91c1c !important;
+}
+
+/* --------------------------------------------------------------------------
+   Responsive — keep the same dense operational hierarchy on smaller screens
+   -------------------------------------------------------------------------- */
+@media (max-width: 1240px) {
+  .screen-app .tafiti-header-clock { display: none !important; }
+  .screen-app .app-content { padding: 12px !important; }
+}
+
+@media (max-width: 960px) {
+  .screen-app .app-content { padding: 10px !important; }
+  .screen-app .tafiti-app-header-top { padding-inline: 10px !important; }
+  .screen-app .hod-requisition-workspace { min-height: auto !important; }
+}
+
+@media (max-width: 720px) {
+  .screen-app .tafiti-app-header,
+  .screen-app .tafiti-app-header-top { min-height: 50px !important; }
+
+  .screen-app .tafiti-header-page-context span,
+  .screen-app .header-live-state,
+  .screen-app .header-role-chip { display: none !important; }
+
+  .screen-app .app-content { padding: 8px !important; }
+
+  .screen-app .hod-page-header,
+  .screen-app .hod-dashboard-hero { border-radius: 5px !important; }
+
+  .screen-app :where(.hod-register, .hod-detail-panel, .workbench-grid, .receiving-table-card, .explorer-workspace-layout, .article-master-layout) {
+    border-radius: 5px !important;
+  }
+
+  .screen-app :where(.erp-primary, .erp-secondary) {
+    min-height: 42px !important;
+  }
+}
