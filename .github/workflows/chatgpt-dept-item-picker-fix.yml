@@ -3,21 +3,20 @@ name: ChatGPT department Article picker fix
 on:
   push:
     branches:
-      - back$front
+      - 'back$front'
 
 permissions:
   contents: write
 
 jobs:
   fix-and-validate:
-    if: github.event.head_commit.message == 'ci: validate department Article picker field fix'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: back$front
+          ref: 'back$front'
           fetch-depth: 0
 
       - name: Fix requisition Article entry fields
@@ -52,9 +51,13 @@ jobs:
    Quantity and Line note, so positional selectors would hide required inputs. */
 
 '''
-          if old not in text:
-              raise SystemExit('Expected stale Article-picker CSS block was not found')
-          path.write_text(text.replace(old, new, 1))
+          if old in text:
+              path.write_text(text.replace(old, new, 1))
+              print('Removed stale positional field-hiding CSS')
+          elif 'Do not hide fields by nth-of-type' in text:
+              print('Article picker CSS already fixed')
+          else:
+              raise SystemExit('Could not verify Article-picker CSS state')
           PY
 
       - name: Set up Node
@@ -83,4 +86,4 @@ jobs:
           git add frontend/src/department-requisitions-polish.css
           git diff --cached --quiet && exit 0
           git commit -m "fix(ux): restore quantity and Article requisition controls"
-          git push origin HEAD:back$front
+          git push origin HEAD:'back$front'
