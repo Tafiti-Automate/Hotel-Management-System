@@ -1,243 +1,63 @@
 /* Corrections after applying the visual reference.
    Presentation only: no workflow, permissions, API, quantity, or status logic changes. */
 
-/* --------------------------------------------------------------------------
-   One coherent navigation frame
-   -------------------------------------------------------------------------- */
-.screen-app .tafiti-sidebar {
-  background: #0b315b !important;
-  border-right-color: #164a7c !important;
-  color: #e8f1fb !important;
-  box-shadow: none !important;
-}
-.screen-app .tafiti-sidebar-brand,
-.screen-app .tafiti-sidebar-property,
-.screen-app .tafiti-sidebar-footer {
-  border-color: rgba(255,255,255,.10) !important;
-}
-.screen-app .sidebar-brand-title,
-.screen-app .tafiti-property-value,
-.screen-app .tafiti-sidebar-user-name {
-  color: #fff !important;
-}
-.screen-app .sidebar-brand-subtitle,
-.screen-app .tafiti-property-label,
-.screen-app .sidebar-nav-heading,
-.screen-app .tafiti-sidebar-user-role {
-  color: #9fb8d3 !important;
-}
-.screen-app .tafiti-property-trigger,
-.screen-app .tafiti-sidebar-nav-item,
-.screen-app .tafiti-module-switch,
-.screen-app .tafiti-sidebar-collapse,
-.screen-app .tafiti-sidebar-expand,
-.screen-app .tafiti-sidebar-mobile-toggle,
-.screen-app .tafiti-sidebar-user button {
-  color: #dce9f6 !important;
-}
-.screen-app .tafiti-sidebar-nav-item:hover,
-.screen-app .tafiti-property-trigger:hover,
-.screen-app .tafiti-module-switch:hover {
-  background: rgba(255,255,255,.07) !important;
-}
-.screen-app .tafiti-sidebar-nav-item.active {
-  color: #fff !important;
-  background: #1673e6 !important;
-  box-shadow: inset 3px 0 0 #69a8ff !important;
-}
-.screen-app .tafiti-sidebar-brand-mark {
-  background: #1673e6 !important;
-  border-color: rgba(255,255,255,.20) !important;
-}
-.screen-app .tafiti-sidebar-property {
-  background: rgba(255,255,255,.035) !important;
-}
-.screen-app .tafiti-sidebar .ic { color: currentColor !important; }
+.screen-app .tafiti-sidebar { background:#0b315b!important; border-right-color:#164a7c!important; color:#e8f1fb!important; box-shadow:none!important; }
+.screen-app .tafiti-sidebar-brand,.screen-app .tafiti-sidebar-property,.screen-app .tafiti-sidebar-footer { border-color:rgba(255,255,255,.10)!important; }
+.screen-app .sidebar-brand-title,.screen-app .tafiti-property-value,.screen-app .tafiti-sidebar-user-name { color:#fff!important; }
+.screen-app .sidebar-brand-subtitle,.screen-app .tafiti-property-label,.screen-app .sidebar-nav-heading,.screen-app .tafiti-sidebar-user-role { color:#9fb8d3!important; }
+.screen-app .tafiti-property-trigger,.screen-app .tafiti-sidebar-nav-item,.screen-app .tafiti-module-switch,.screen-app .tafiti-sidebar-collapse,.screen-app .tafiti-sidebar-expand,.screen-app .tafiti-sidebar-mobile-toggle,.screen-app .tafiti-sidebar-user button { color:#dce9f6!important; }
+.screen-app .tafiti-sidebar-nav-item:hover,.screen-app .tafiti-property-trigger:hover,.screen-app .tafiti-module-switch:hover { background:rgba(255,255,255,.07)!important; }
+.screen-app .tafiti-sidebar-nav-item.active { color:#fff!important; background:#1673e6!important; box-shadow:inset 3px 0 0 #69a8ff!important; }
+.screen-app .tafiti-sidebar-brand-mark { background:#1673e6!important; border-color:rgba(255,255,255,.20)!important; }
+.screen-app .tafiti-sidebar-property { background:rgba(255,255,255,.035)!important; }
+.screen-app .tafiti-sidebar .ic { color:currentColor!important; }
 
-/* --------------------------------------------------------------------------
-   Header: supporting chrome, not the main visual event
-   -------------------------------------------------------------------------- */
-.screen-app .tafiti-app-header {
-  background: #103e6f !important;
-  border-bottom-color: #1b568c !important;
-}
-.screen-app .tafiti-app-header-top {
-  min-height: 60px !important;
-}
-.screen-app .tafiti-header-page-context > span {
-  display: none !important;
-}
-.screen-app .tafiti-header-page-context > strong {
-  font-size: 14px !important;
-}
-.screen-app .tafiti-header-clock { opacity: .92; }
+.screen-app .tafiti-app-header { background:#103e6f!important; border-bottom-color:#1b568c!important; }
+.screen-app .tafiti-app-header-top { min-height:60px!important; }
+.screen-app .tafiti-header-page-context>span { display:none!important; }
+.screen-app .tafiti-header-page-context>strong { font-size:14px!important; }
+.screen-app .tafiti-header-clock { opacity:.92; }
 
-/* --------------------------------------------------------------------------
-   Department requisition screen: compact operational workspace
-   -------------------------------------------------------------------------- */
-.screen-app .hod-requisitions-page {
-  max-width: none !important;
-}
-.screen-app .hod-requisitions-page > .hod-page-header {
-  margin-bottom: 8px !important;
-  padding-bottom: 9px !important;
-}
-.screen-app .hod-requisitions-page > .hod-page-header .hod-page-eyebrow,
-.screen-app .hod-requisitions-page > .hod-page-header p {
-  display: none !important;
-}
-.screen-app .hod-requisitions-page > .hod-page-header h1 {
-  font-size: 24px !important;
-  line-height: 1.2 !important;
-}
+.screen-app .hod-requisitions-page { max-width:none!important; }
+.screen-app .hod-requisitions-page>.hod-page-header { margin-bottom:8px!important; padding-bottom:9px!important; }
+.screen-app .hod-requisitions-page>.hod-page-header .hod-page-eyebrow,.screen-app .hod-requisitions-page>.hod-page-header p { display:none!important; }
+.screen-app .hod-requisitions-page>.hod-page-header h1 { font-size:24px!important; line-height:1.2!important; }
 
-/* The dashboard owns the big KPI treatment. On this register, counters are a thin summary strip. */
-.screen-app .hod-requisitions-page .hod-kpi-grid {
-  min-height: 0 !important;
-  margin: 0 0 8px !important;
-  border-radius: 7px !important;
-}
-.screen-app .hod-requisitions-page .hod-kpi-card {
-  min-height: 54px !important;
-  padding: 7px 10px !important;
-}
-.screen-app .hod-requisitions-page .hod-kpi-card > span {
-  width: 30px !important;
-  height: 30px !important;
-}
-.screen-app .hod-requisitions-page .hod-kpi-card strong {
-  font-size: 17px !important;
-}
+.screen-app .hod-requisitions-page .hod-kpi-grid { min-height:0!important; margin:0 0 8px!important; border-radius:7px!important; }
+.screen-app .hod-requisitions-page .hod-kpi-card { min-height:54px!important; padding:7px 10px!important; }
+.screen-app .hod-requisitions-page .hod-kpi-card>span { width:30px!important; height:30px!important; }
+.screen-app .hod-requisitions-page .hod-kpi-card strong { font-size:17px!important; }
 
-/* Balanced master/detail. The prior 35/65 split made the blank panel look enormous. */
-.screen-app .hod-workspace {
-  min-height: 560px !important;
-  grid-template-columns: minmax(500px, .98fr) minmax(0, 1.12fr) !important;
-  border-radius: 8px !important;
-}
-.screen-app .hod-list-panel,
-.screen-app .hod-detail-panel {
-  min-width: 0 !important;
-}
-.screen-app .hod-list-panel {
-  background: #f8fbff !important;
-}
-.screen-app .hod-detail-panel {
-  background: #fff !important;
-}
+.screen-app .hod-workspace { min-height:560px!important; grid-template-columns:minmax(500px,.98fr) minmax(0,1.12fr)!important; border-radius:8px!important; }
+.screen-app .hod-list-panel,.screen-app .hod-detail-panel { min-width:0!important; }
+.screen-app .hod-list-panel { background:#f8fbff!important; }
+.screen-app .hod-detail-panel { background:#fff!important; }
+.screen-app .hod-workspace:has(.hod-detail-empty) { grid-template-columns:minmax(0,1fr)!important; }
+.screen-app .hod-workspace:has(.hod-detail-empty) .hod-detail-panel { display:none!important; }
+.screen-app .hod-workspace:has(.hod-detail-empty) .hod-list-panel { border-right:0!important; }
+.screen-app .hod-workspace:has(.hod-detail-empty) .hod-request-list { max-height:640px!important; }
 
-/* When nothing is selected, do not waste most of the screen on a giant empty white canvas. */
-.screen-app .hod-workspace:has(.hod-detail-empty) {
-  grid-template-columns: minmax(0, 1fr) !important;
-}
-.screen-app .hod-workspace:has(.hod-detail-empty) .hod-detail-panel {
-  display: none !important;
-}
-.screen-app .hod-workspace:has(.hod-detail-empty) .hod-list-panel {
-  border-right: 0 !important;
-}
-.screen-app .hod-workspace:has(.hod-detail-empty) .hod-request-list {
-  max-height: 640px !important;
-}
+.screen-app .hod-list-heading { min-height:48px!important; padding:7px 10px!important; }
+.screen-app .hod-list-heading strong { font-size:12.5px!important; }
+.screen-app .hod-segmented button { min-height:30px!important; font-size:10px!important; }
+.screen-app .hod-filters { padding:7px 9px!important; gap:6px!important; background:#f3f7fc!important; }
+.screen-app .hod-filters label>span,.screen-app .hod-field-label { font-size:9.5px!important; letter-spacing:.03em!important; }
+.screen-app .hod-filters input,.screen-app .hod-filters select { min-height:34px!important; }
 
-.screen-app .hod-list-heading {
-  min-height: 48px !important;
-  padding: 7px 10px !important;
-}
-.screen-app .hod-list-heading strong {
-  font-size: 12.5px !important;
-}
-.screen-app .hod-segmented button {
-  min-height: 30px !important;
-  font-size: 10px !important;
-}
+.screen-app .hod-request-row { min-height:66px!important; padding:9px 11px!important; background:#fff!important; }
+.screen-app .hod-request-row:hover { background:#f1f6fc!important; }
+.screen-app .hod-request-row.selected { background:#eaf3ff!important; box-shadow:inset 3px 0 0 #1673e6!important; }
+.screen-app .hod-request-ref { color:#1266d5!important; font-weight:750!important; }
 
-/* Filters should feel like a toolbar, not a separate form. */
-.screen-app .hod-filters {
-  padding: 7px 9px !important;
-  gap: 6px !important;
-  background: #f3f7fc !important;
-}
-.screen-app .hod-filters label > span,
-.screen-app .hod-field-label {
-  font-size: 9.5px !important;
-  letter-spacing: .03em !important;
-}
-.screen-app .hod-filters input,
-.screen-app .hod-filters select {
-  min-height: 34px !important;
-}
+.screen-app .hod-detail-header { min-height:70px!important; padding:11px 14px!important; border-bottom:1px solid var(--border)!important; }
+.screen-app .hod-detail-header h2 { font-size:20px!important; }
+.screen-app .hod-detail-scroll { padding:12px 14px!important; }
+.screen-app .hod-editor-section,.screen-app .hod-record-section,.screen-app .hod-purpose-card { border-radius:7px!important; box-shadow:none!important; }
 
-/* Dense, readable queue rows. */
-.screen-app .hod-request-row {
-  min-height: 66px !important;
-  padding: 9px 11px !important;
-  background: #fff !important;
-}
-.screen-app .hod-request-row:hover {
-  background: #f1f6fc !important;
-}
-.screen-app .hod-request-row.selected {
-  background: #eaf3ff !important;
-  box-shadow: inset 3px 0 0 #1673e6 !important;
-}
-.screen-app .hod-request-ref {
-  color: #1266d5 !important;
-  font-weight: 750 !important;
-}
+@media(max-width:1180px){.screen-app .hod-workspace:not(:has(.hod-detail-empty)){grid-template-columns:minmax(420px,.9fr) minmax(0,1.1fr)!important;}}
+@media(max-width:820px){.screen-app .hod-workspace,.screen-app .hod-workspace:not(:has(.hod-detail-empty)){grid-template-columns:1fr!important}.screen-app .hod-workspace .hod-detail-panel.open{display:block!important}}
 
-/* Selected record should resemble the reference's compact audit/detail canvas. */
-.screen-app .hod-detail-header {
-  min-height: 70px !important;
-  padding: 11px 14px !important;
-  border-bottom: 1px solid var(--border) !important;
-}
-.screen-app .hod-detail-header h2 {
-  font-size: 20px !important;
-}
-.screen-app .hod-detail-scroll {
-  padding: 12px 14px !important;
-}
-.screen-app .hod-editor-section,
-.screen-app .hod-record-section,
-.screen-app .hod-purpose-card {
-  border-radius: 7px !important;
-  box-shadow: none !important;
-}
-
-/* --------------------------------------------------------------------------
-   Responsive
-   -------------------------------------------------------------------------- */
-@media (max-width: 1180px) {
-  .screen-app .hod-workspace:not(:has(.hod-detail-empty)) {
-    grid-template-columns: minmax(420px, .9fr) minmax(0, 1.1fr) !important;
-  }
-}
-
-@media (max-width: 820px) {
-  .screen-app .hod-workspace,
-  .screen-app .hod-workspace:not(:has(.hod-detail-empty)) {
-    grid-template-columns: 1fr !important;
-  }
-  .screen-app .hod-workspace .hod-detail-panel.open {
-    display: block !important;
-  }
-}
-
-/* --------------------------------------------------------------------------
-   Dark appearance companion
-   -------------------------------------------------------------------------- */
-.appearance-dark.screen-app .hod-detail-panel,
-.appearance-dark.screen-app .hod-list-panel,
-.appearance-dark.screen-app .hod-request-row {
-  background: var(--surface) !important;
-}
-.appearance-dark.screen-app .hod-filters {
-  background: var(--surface-2) !important;
-}
-.appearance-dark.screen-app .hod-request-row:hover {
-  background: var(--surface-2) !important;
-}
-.appearance-dark.screen-app .hod-request-row.selected {
-  background: color-mix(in srgb, var(--accent) 18%, var(--surface)) !important;
-}
+.appearance-dark.screen-app .hod-detail-panel,.appearance-dark.screen-app .hod-list-panel,.appearance-dark.screen-app .hod-request-row { background:var(--surface)!important; }
+.appearance-dark.screen-app .hod-filters { background:var(--surface-2)!important; }
+.appearance-dark.screen-app .hod-request-row:hover { background:var(--surface-2)!important; }
+.appearance-dark.screen-app .hod-request-row.selected { background:color-mix(in srgb,var(--accent) 18%,var(--surface))!important; }
