@@ -1,0 +1,76 @@
+name: Simplify department article picker
+
+on:
+  push:
+    branches:
+      - chatgpt-simplify-article-picker
+
+permissions:
+  contents: write
+
+jobs:
+  update-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: chatgpt-simplify-article-picker
+          fetch-depth: 0
+
+      - name: Simplify article selection
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          tsx = Path('frontend/src/screens/DepartmentRequisitions.tsx')
+          text = tsx.read_text()
+
+          old = "const selectableItems = data.items.filter((row) => id(row.category) === lineDraft.itemGroup && row.is_active !== false)"
+          new = "const selectableItems = [...data.items].filter((row) => row.is_active !== false).sort((a, b) => id(a.name).localeCompare(id(b.name)))"
+          if old in text:
+              text = text.replace(old, new, 1)
+
+          old_select = '''<label className="span-2"><span>Article</span><select disabled={!lineDraft.itemGroup} value={lineDraft.item} onChange={(event) => setLineDraft({ ...lineDraft, item: event.target.value })}><option value="">Choose Article</option>{selectableItems.map((row) => <option key={id(row.id)} value={id(row.id)}>{id(row.name)} · {id(row.sku)}</option>)}</select></label>'''
+          new_select = '''<label className="span-2"><span>Article / item</span><select value={lineDraft.item} onChange={(event) => setLineDraft({ ...lineDraft, item: event.target.value })}><option value="">Choose Article</option>{selectableItems.map((row) => <option key={id(row.id)} value={id(row.id)}>{id(row.name)}{row.sku ? ` · ${id(row.sku)}` : ''}</option>)}</select></label>'''
+          if old_select in text:
+              text = text.replace(old_select, new_select, 1)
+
+          text = text.replace('<label><span>UOM</span><input readOnly value={unit ? id(unit.abbreviation || unit.name) : \'\'} placeholder="Auto" /></label>', '<label><span>UOM (auto)</span><input readOnly value={unit ? id(unit.abbreviation || unit.name) : \'\'} placeholder="Filled from Article" /></label>', 1)
+          tsx.write_text(text)
+
+          css = Path('frontend/src/department-requisitions-polish.css')
+          css_text = css.read_text()
+          marker = '/* Simplified Article picker: hierarchy is inferred from the selected Article. */'
+          if marker not in css_text:
+              css_text += '''\n\n/* Simplified Article picker: hierarchy is inferred from the selected Article. */\n.screen-app .hod-add-line-grid > label:nth-of-type(1),\n.screen-app .hod-add-line-grid > label:nth-of-type(2) {\n  display: none !important;\n}\n\n.screen-app .hod-add-line-grid > label:nth-of-type(6) {\n  grid-column: span 3;\n}\n\n@media (max-width: 640px) {\n  .screen-app .hod-add-line-grid > label:nth-of-type(3),\n  .screen-app .hod-add-line-grid > label:nth-of-type(6) {\n    grid-column: auto;\n  }\n}\n'''
+              css.write_text(css_text)
+          PY
+
+      - name: Commit picker simplification when needed
+        run: |
+          if git diff --quiet; then
+            echo "No source changes needed"
+          else
+            git config user.name "Watumwa"
+            git config user.email "127853693+watumwa@users.noreply.github.com"
+            git add frontend/src/screens/DepartmentRequisitions.tsx frontend/src/department-requisitions-polish.css
+            git commit -m "refactor(ux): choose Article directly in department requisitions"
+            git push origin HEAD:chatgpt-simplify-article-picker
+          fi
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
