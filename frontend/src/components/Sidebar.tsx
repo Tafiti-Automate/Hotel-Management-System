@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { useApp } from '../state/AppContext'
 import { Icon } from './Icon'
 import { Avatar } from './Avatar'
@@ -136,6 +136,12 @@ export default function Sidebar() {
   const branchLocked = !canSwitchBranches(app.user) && Boolean(app.user.branchId)
   const branches = branchLocked ? app.data.branches.filter((branch) => String(branch.id) === app.user.branchId) : app.data.branches
   const width = collapsed ? 58 : 195
+
+  useEffect(() => {
+    const openMobileNavigation = () => setMobileOpen(true)
+    window.addEventListener('tafiti-sidebar-open', openMobileNavigation)
+    return () => window.removeEventListener('tafiti-sidebar-open', openMobileNavigation)
+  }, [])
 
   const navStyle = (active: boolean): CSSProperties => ({
     width: '100%',
