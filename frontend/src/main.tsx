@@ -4,6 +4,7 @@ import './index.css'
 import './enterprise.css'
 import './responsive.css'
 import './department-requisitions-polish.css'
+import './department-requisitions-fix.css'
 import App from './App'
 import { AppProvider } from './state/AppContext'
 
