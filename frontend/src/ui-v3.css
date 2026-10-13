@@ -1,0 +1,941 @@
+/* ========================================================================== 
+   Tafiti Hotel ERP — UI V3
+   One coherent visual layer for the authenticated ERP.
+   Presentation only: workflow, permissions, API behaviour and calculations stay unchanged.
+   ========================================================================== */
+
+.screen-app {
+  --ui-navy: #0b2f55;
+  --ui-navy-2: #123e6d;
+  --ui-navy-3: #184f87;
+  --ui-accent: var(--accent, #2563eb);
+  --ui-bg: #f3f6fa;
+  --ui-panel: #ffffff;
+  --ui-panel-soft: #f8fafc;
+  --ui-line: #dfe6ef;
+  --ui-line-strong: #cbd6e3;
+  --ui-text: #17263c;
+  --ui-muted: #66758a;
+  --ui-faint: #8a98aa;
+  --ui-shadow: 0 1px 2px rgba(15, 35, 60, .04), 0 6px 18px rgba(15, 35, 60, .04);
+  --ui-radius: 10px;
+  --ui-radius-sm: 7px;
+}
+
+.appearance-dark.screen-app {
+  --ui-bg: #0f1723;
+  --ui-panel: #172233;
+  --ui-panel-soft: #111c2a;
+  --ui-line: #2a394c;
+  --ui-line-strong: #3a4c61;
+  --ui-text: #ecf3fb;
+  --ui-muted: #9fb0c4;
+  --ui-faint: #7f91a8;
+  --ui-shadow: 0 1px 2px rgba(0,0,0,.2), 0 6px 18px rgba(0,0,0,.12);
+}
+
+.screen-app,
+.screen-app .tafiti-app-shell,
+.screen-app .tafiti-app-main {
+  background: var(--ui-bg) !important;
+}
+
+.screen-app .tafiti-shell-topline { display: none !important; }
+
+/* --------------------------------------------------------------------------
+   Shell / sidebar
+   -------------------------------------------------------------------------- */
+.screen-app .tafiti-sidebar {
+  width: 224px !important;
+  min-width: 224px !important;
+  background: linear-gradient(180deg, var(--ui-navy) 0%, #092744 100%) !important;
+  border-right: 1px solid rgba(255,255,255,.07) !important;
+  color: #eaf2fb !important;
+  box-shadow: none !important;
+}
+
+.screen-app .tafiti-sidebar.is-collapsed {
+  width: 60px !important;
+  min-width: 60px !important;
+}
+
+.screen-app .tafiti-sidebar-brand {
+  min-height: 66px !important;
+  padding: 10px 12px !important;
+  border-bottom: 1px solid rgba(255,255,255,.08) !important;
+}
+
+.screen-app .tafiti-sidebar-brand-mark {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 9px !important;
+  background: #1d72e8 !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.16) !important;
+}
+
+.screen-app .tafiti-sidebar-brand-copy,
+.screen-app .tafiti-property-copy,
+.screen-app .tafiti-sidebar-user-copy {
+  min-width: 0 !important;
+}
+
+.screen-app .sidebar-brand-title,
+.screen-app .tafiti-sidebar-user-name,
+.screen-app .tafiti-property-value {
+  color: #fff !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.screen-app .sidebar-brand-title {
+  max-width: 118px !important;
+  font-size: 14px !important;
+  font-weight: 750 !important;
+  letter-spacing: -.01em !important;
+}
+
+.screen-app .sidebar-brand-subtitle,
+.screen-app .tafiti-property-label,
+.screen-app .tafiti-sidebar-user-role {
+  color: #9db3cc !important;
+  font-size: 10px !important;
+}
+
+.screen-app .tafiti-sidebar-property {
+  margin: 10px 9px 6px !important;
+  padding: 0 !important;
+  border: 1px solid rgba(255,255,255,.09) !important;
+  border-radius: 9px !important;
+  background: rgba(255,255,255,.045) !important;
+  box-shadow: none !important;
+}
+
+.screen-app .tafiti-property-trigger {
+  min-height: 54px !important;
+  padding: 9px 10px !important;
+  color: #e4eef8 !important;
+}
+
+.screen-app .tafiti-sidebar-nav {
+  padding: 6px 8px 12px !important;
+}
+
+.screen-app .tafiti-sidebar-nav-group {
+  margin-top: 10px !important;
+}
+
+.screen-app .sidebar-nav-heading {
+  min-height: 22px !important;
+  padding: 0 8px !important;
+  color: #89a2be !important;
+  font-size: 9px !important;
+  font-weight: 800 !important;
+  letter-spacing: .10em !important;
+  text-transform: uppercase !important;
+}
+
+.screen-app .tafiti-sidebar-nav-item {
+  min-height: 38px !important;
+  margin: 2px 0 !important;
+  padding: 0 10px !important;
+  gap: 9px !important;
+  border-radius: 7px !important;
+  color: #d9e6f3 !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+
+.screen-app .tafiti-sidebar-nav-item:hover {
+  background: rgba(255,255,255,.065) !important;
+  color: #fff !important;
+}
+
+.screen-app .tafiti-sidebar-nav-item.active {
+  background: #1d6fdc !important;
+  color: #fff !important;
+  box-shadow: none !important;
+}
+
+.screen-app .tafiti-sidebar-nav-item.active .ic { color: #fff !important; }
+.screen-app .tafiti-sidebar .ic { color: currentColor !important; }
+
+.screen-app .tafiti-sidebar-footer {
+  padding: 9px !important;
+  border-top: 1px solid rgba(255,255,255,.08) !important;
+}
+
+.screen-app .tafiti-sidebar-user {
+  padding: 8px !important;
+  border-radius: 8px !important;
+  background: rgba(255,255,255,.045) !important;
+}
+
+.screen-app .tafiti-module-switch,
+.screen-app .tafiti-sidebar-collapse,
+.screen-app .tafiti-sidebar-expand,
+.screen-app .tafiti-sidebar-mobile-toggle,
+.screen-app .tafiti-sidebar-user button {
+  color: #dce8f4 !important;
+}
+
+/* --------------------------------------------------------------------------
+   Header
+   -------------------------------------------------------------------------- */
+.screen-app .tafiti-app-header {
+  min-height: 58px !important;
+  background: var(--ui-navy-2) !important;
+  border-bottom: 1px solid rgba(255,255,255,.08) !important;
+  box-shadow: none !important;
+}
+
+.screen-app .tafiti-app-header-top {
+  min-height: 58px !important;
+  padding: 0 16px !important;
+}
+
+.screen-app .tafiti-header-left { gap: 10px !important; }
+
+.screen-app .tafiti-header-menu {
+  width: 34px !important;
+  min-width: 34px !important;
+  height: 34px !important;
+  padding: 0 !important;
+  border: 1px solid rgba(255,255,255,.14) !important;
+  border-radius: 7px !important;
+  background: rgba(255,255,255,.08) !important;
+  color: #fff !important;
+}
+
+.screen-app .tafiti-header-menu .header-search-label,
+.screen-app .tafiti-header-menu kbd { display: none !important; }
+
+.screen-app .tafiti-header-page-context strong {
+  color: #fff !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+}
+
+.screen-app .tafiti-header-page-context span { display: none !important; }
+.screen-app .tafiti-header-clock { display: none !important; }
+
+.screen-app .tafiti-header-actions { gap: 6px !important; }
+
+.screen-app .header-live-state,
+.screen-app .header-role-chip {
+  min-height: 26px !important;
+  padding: 0 8px !important;
+  border: 1px solid rgba(255,255,255,.15) !important;
+  border-radius: 999px !important;
+  background: rgba(255,255,255,.07) !important;
+  color: #dbe8f5 !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+}
+
+.screen-app .header-live-state.is-live i { background: #5bd68b !important; }
+
+.screen-app .header-theme-trigger,
+.screen-app .header-notification-trigger {
+  color: #d8e6f4 !important;
+}
+
+.screen-app .tafiti-header-divider { background: rgba(255,255,255,.15) !important; }
+
+.screen-app .tafiti-header-profile-trigger {
+  min-height: 42px !important;
+  padding: 4px 6px !important;
+  color: #fff !important;
+}
+
+.screen-app .tafiti-header-user-copy > span { color: #fff !important; font-size: 11.5px !important; }
+.screen-app .tafiti-header-user-copy small { color: #a9bfd6 !important; font-size: 9.5px !important; }
+
+/* --------------------------------------------------------------------------
+   Main canvas and shared page rhythm
+   -------------------------------------------------------------------------- */
+.screen-app .tafiti-app-content {
+  padding: 18px 20px 28px !important;
+  background: var(--ui-bg) !important;
+}
+
+.screen-app .enterprise-workspace,
+.screen-app .role-dashboard,
+.screen-app .hod-dashboard,
+.screen-app .hod-requisitions-page,
+.screen-app .reports-screen,
+.screen-app .report-view-screen,
+.screen-app .store-purchase-screen,
+.screen-app .article-master-screen,
+.screen-app .explorer-workspace-screen,
+.screen-app .access-page,
+.screen-app .workflow-hub,
+.screen-app .list-view {
+  width: 100% !important;
+  max-width: 1380px !important;
+  margin-inline: auto !important;
+}
+
+.screen-app .ui-page-header,
+.screen-app .enterprise-workspace > header,
+.screen-app .article-master-screen > header,
+.screen-app .store-purchase-screen > header,
+.screen-app .hod-page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 14px !important;
+  padding: 0 0 12px !important;
+  border-bottom: 1px solid var(--ui-line) !important;
+}
+
+.screen-app .ui-page-heading,
+.screen-app .ui-page-header > div:first-child { min-width: 0; }
+
+.screen-app .ui-eyebrow,
+.screen-app .reports-page-eyebrow,
+.screen-app .hod-page-eyebrow {
+  display: block !important;
+  margin-bottom: 4px !important;
+  color: var(--ui-accent) !important;
+  font-size: 9px !important;
+  font-weight: 800 !important;
+  letter-spacing: .09em !important;
+  text-transform: uppercase !important;
+}
+
+.screen-app .ui-page-header h1,
+.screen-app .enterprise-workspace > header h1,
+.screen-app .article-master-screen > header h1,
+.screen-app .store-purchase-screen > header h1,
+.screen-app .hod-page-header h1,
+.screen-app .role-dashboard h1 {
+  margin: 0 !important;
+  color: var(--ui-text) !important;
+  font-size: 24px !important;
+  line-height: 1.18 !important;
+  font-weight: 740 !important;
+  letter-spacing: -.025em !important;
+}
+
+.screen-app .ui-page-header p,
+.screen-app .enterprise-workspace > header p,
+.screen-app .article-master-screen > header p,
+.screen-app .store-purchase-screen > header p,
+.screen-app .hod-page-header p {
+  margin: 4px 0 0 !important;
+  color: var(--ui-muted) !important;
+  font-size: 11.5px !important;
+  line-height: 1.45 !important;
+}
+
+/* --------------------------------------------------------------------------
+   Controls
+   -------------------------------------------------------------------------- */
+.screen-app :where(input, select, textarea) {
+  border: 1px solid var(--ui-line-strong) !important;
+  border-radius: 7px !important;
+  background: var(--ui-panel) !important;
+  color: var(--ui-text) !important;
+  box-shadow: none !important;
+}
+
+.screen-app :where(input, select):not([type="checkbox"]):not([type="radio"]) {
+  min-height: 36px !important;
+}
+
+.screen-app textarea { min-height: 72px; }
+.screen-app :where(input, select, textarea)::placeholder { color: var(--ui-faint) !important; }
+
+.screen-app :where(input, select, textarea):focus {
+  outline: 0 !important;
+  border-color: var(--ui-accent) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-accent) 12%, transparent) !important;
+}
+
+.screen-app .erp-primary,
+.screen-app .access-primary,
+.screen-app button[style*="background: var(--accent)"] {
+  min-height: 36px !important;
+  padding: 0 12px !important;
+  border: 1px solid color-mix(in srgb, var(--ui-accent) 90%, #173e7a) !important;
+  border-radius: 7px !important;
+  background: var(--ui-accent) !important;
+  color: #fff !important;
+  box-shadow: none !important;
+  font-weight: 700 !important;
+}
+
+.screen-app .erp-secondary {
+  min-height: 36px !important;
+  padding: 0 12px !important;
+  border: 1px solid var(--ui-line-strong) !important;
+  border-radius: 7px !important;
+  background: var(--ui-panel) !important;
+  color: var(--ui-text) !important;
+  box-shadow: none !important;
+  font-weight: 650 !important;
+}
+
+.screen-app button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ui-accent) 70%, transparent) !important;
+  outline-offset: 2px !important;
+}
+
+/* --------------------------------------------------------------------------
+   Shared cards / panels / table language
+   -------------------------------------------------------------------------- */
+.screen-app .dashboard-panel,
+.screen-app .dashboard-rail-card,
+.screen-app .reports-index,
+.screen-app .receiving-table-card,
+.screen-app .record-detail-drawer,
+.screen-app .article-master-layout,
+.screen-app .unit-master-layout,
+.screen-app .explorer-workspace-layout,
+.screen-app .workbench-grid,
+.screen-app .procurement-detail-panel,
+.screen-app .store-purchase-grid > section {
+  border: 1px solid var(--ui-line) !important;
+  border-radius: var(--ui-radius) !important;
+  background: var(--ui-panel) !important;
+  box-shadow: none !important;
+}
+
+.screen-app .data-head,
+.screen-app .reports-index-header,
+.screen-app .receiving-ready-header {
+  background: var(--ui-panel-soft) !important;
+  border-bottom: 1px solid var(--ui-line) !important;
+}
+
+.screen-app .data-row,
+.screen-app .procurement-record-row,
+.screen-app .dashboard-activity-row,
+.screen-app .report-record-row {
+  border-bottom: 1px solid var(--ui-line) !important;
+  background: var(--ui-panel) !important;
+}
+
+.screen-app .data-row:hover,
+.screen-app .procurement-record-row:hover,
+.screen-app .dashboard-activity-row:hover,
+.screen-app .report-record-row:hover {
+  background: #f6f9fd !important;
+}
+
+.appearance-dark.screen-app .data-row:hover,
+.appearance-dark.screen-app .procurement-record-row:hover,
+.appearance-dark.screen-app .dashboard-activity-row:hover,
+.appearance-dark.screen-app .report-record-row:hover {
+  background: var(--ui-panel-soft) !important;
+}
+
+/* --------------------------------------------------------------------------
+   Dashboards
+   -------------------------------------------------------------------------- */
+.screen-app .tafiti-dashboard-grid {
+  grid-template-columns: minmax(0, 1fr) 280px !important;
+  gap: 12px !important;
+  align-items: start !important;
+}
+
+.screen-app .dashboard-week-summary {
+  margin-bottom: 10px !important;
+  padding: 13px 15px !important;
+  border: 1px solid var(--ui-line) !important;
+  border-radius: var(--ui-radius) !important;
+  background: var(--ui-panel) !important;
+  box-shadow: none !important;
+}
+
+.screen-app .dashboard-week-summary > p,
+.screen-app .dashboard-week-tags { display: none !important; }
+
+.screen-app .task-card-grid {
+  grid-template-columns: repeat(4, minmax(0,1fr)) !important;
+  gap: 8px !important;
+}
+
+.screen-app .dashboard-task-card {
+  min-height: 94px !important;
+  padding: 12px !important;
+  border: 1px solid var(--ui-line) !important;
+  border-radius: var(--ui-radius) !important;
+  background: var(--ui-panel) !important;
+  box-shadow: none !important;
+}
+
+.screen-app .dashboard-task-card:hover {
+  border-color: color-mix(in srgb, var(--ui-accent) 30%, var(--ui-line)) !important;
+  background: #f9fbfe !important;
+}
+
+.appearance-dark.screen-app .dashboard-task-card:hover { background: var(--ui-panel-soft) !important; }
+
+.screen-app .dashboard-task-icon {
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 8px !important;
+}
+
+.screen-app .dashboard-task-label { color: var(--ui-muted) !important; font-size: 10.5px !important; }
+.screen-app .dashboard-task-count { color: var(--ui-text) !important; font-size: 23px !important; }
+.screen-app .dashboard-task-hint { display: none !important; }
+
+.screen-app .dashboard-summary-strip {
+  margin: 10px 0 !important;
+  border: 1px solid var(--ui-line) !important;
+  border-radius: var(--ui-radius) !important;
+  background: var(--ui-panel) !important;
+  overflow: hidden !important;
+}
+
+.screen-app .dashboard-summary-item { min-height: 52px !important; }
+.screen-app .dashboard-performance-card { display: none !important; }
+.screen-app .tafiti-dashboard-rail { gap: 10px !important; position: sticky; top: 10px; }
+
+/* --------------------------------------------------------------------------
+   HOD requisitions
+   -------------------------------------------------------------------------- */
+.screen-app .hod-flow-strip { display: none !important; }
+
+.screen-app .hod-kpi-grid {
+  grid-template-columns: repeat(4, minmax(0,1fr)) !important;
+  gap: 8px !important;
+  margin-bottom: 10px !important;
+}
+
+.screen-app .hod-kpi-card {
+  min-height: 66px !important;
+  padding: 9px 11px !important;
+  border: 1px solid var(--ui-line) !important;
+  border-radius: var(--ui-radius) !important;
+  background: var(--ui-panel) !important;
+  box-shadow: none !important;
+}
+
+.screen-app .hod-kpi-card > span {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 8px !important;
+}
+
+.screen-app .hod-kpi-card strong { font-size: 18px !important; color: var(--ui-text) !important; }
+.screen-app .hod-kpi-card small { font-size: 9.5px !important; color: var(--ui-muted) !important; }
+
+.screen-app .hod-workspace {
+  min-height: 610px !important;
+  grid-template-columns: minmax(430px, .9fr) minmax(0, 1.1fr) !important;
+  border: 1px solid var(--ui-line) !important;
+  border-radius: var(--ui-radius) !important;
+  background: var(--ui-panel) !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+}
+
+.screen-app .hod-list-panel {
+  min-width: 0 !important;
+  background: var(--ui-panel) !important;
+  border-right: 1px solid var(--ui-line) !important;
+}
+
+.screen-app .hod-detail-panel {
+  min-width: 0 !important;
+  background: var(--ui-panel) !important;
+}
+
+.screen-app .hod-list-heading {
+  min-height: 54px !important;
+  padding: 9px 12px !important;
+  background: var(--ui-panel) !important;
+  border-bottom: 1px solid var(--ui-line) !important;
+}
+
+.screen-app .hod-filters {
+  padding: 9px 10px !important;
+  gap: 6px !important;
+  background: var(--ui-panel-soft) !important;
+  border-bottom: 1px solid var(--ui-line) !important;
+}
+
+.screen-app .hod-request-row {
+  min-height: 64px !important;
+  padding: 9px 11px !important;
+  border-bottom: 1px solid var(--ui-line) !important;
+  background: var(--ui-panel) !important;
+}
+
+.screen-app .hod-request-row:hover { background: #f6f9fd !important; }
+.screen-app .hod-request-row.selected {
+  background: #edf4ff !important;
+  box-shadow: inset 3px 0 0 var(--ui-accent) !important;
+}
+
+.appearance-dark.screen-app .hod-request-row:hover { background: var(--ui-panel-soft) !important; }
+.appearance-dark.screen-app .hod-request-row.selected { background: color-mix(in srgb, var(--ui-accent) 14%, var(--ui-panel)) !important; }
+
+.screen-app .hod-detail-empty {
+  min-height: 420px !important;
+  padding: 36px !important;
+  color: var(--ui-muted) !important;
+}
+
+.screen-app .hod-editor-section,
+.screen-app .hod-record-section,
+.screen-app .hod-purpose-card {
+  border-color: var(--ui-line) !important;
+  background: var(--ui-panel) !important;
+}
+
+.screen-app .hod-add-line-card {
+  border: 1px dashed var(--ui-line-strong) !important;
+  border-radius: var(--ui-radius) !important;
+  background: var(--ui-panel-soft) !important;
+}
+
+.screen-app .hod-editor-submit {
+  background: var(--ui-panel) !important;
+  border-top: 1px solid var(--ui-line) !important;
+}
+
+/* --------------------------------------------------------------------------
+   Reports catalogue
+   -------------------------------------------------------------------------- */
+.screen-app .reports-page-header { align-items: center !important; }
+
+.screen-app .reports-search-box {
+  position: relative;
+  width: min(340px, 38vw);
+  min-width: 240px;
+}
+
+.screen-app .reports-search-box > .ic {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ui-faint) !important;
+  pointer-events: none;
+}
+
+.screen-app .reports-search-box input {
+  width: 100%;
+  min-height: 38px !important;
+  padding: 0 38px !important;
+}
+
+.screen-app .reports-search-box button {
+  position: absolute;
+  right: 5px;
+  top: 4px;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ui-muted);
+}
+
+.screen-app .reports-summary-bar {
+  display: grid;
+  grid-template-columns: 130px 130px minmax(180px,1fr) minmax(180px,1fr);
+  margin-bottom: 12px;
+  border: 1px solid var(--ui-line);
+  border-radius: var(--ui-radius);
+  background: var(--ui-panel);
+  overflow: hidden;
+}
+
+.screen-app .reports-summary-bar > div {
+  min-width: 0;
+  min-height: 58px;
+  padding: 9px 12px;
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: center;
+  border-right: 1px solid var(--ui-line);
+}
+
+.screen-app .reports-summary-bar > div:last-child { border-right: 0; }
+.screen-app .reports-summary-bar span { color: var(--ui-muted); font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.screen-app .reports-summary-bar strong { margin-bottom: 2px; color: var(--ui-text); font-size: 13px; font-weight: 750; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.screen-app .reports-summary-bar > div:first-child strong,
+.screen-app .reports-summary-bar > div:nth-child(2) strong { font-size: 19px; }
+
+.screen-app .reports-toolbar {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 5px;
+  border: 1px solid var(--ui-line);
+  border-radius: var(--ui-radius);
+  background: var(--ui-panel-soft);
+}
+
+.screen-app .reports-area-tabs { display: flex; gap: 3px; min-width: 0; overflow-x: auto; }
+.screen-app .reports-area-tabs button {
+  min-height: 32px !important;
+  padding: 0 9px !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ui-muted);
+  font-size: 10.5px !important;
+  font-weight: 700;
+}
+.screen-app .reports-area-tabs button.is-active {
+  border-color: var(--ui-line);
+  background: var(--ui-panel);
+  color: var(--ui-accent);
+}
+.screen-app .reports-area-tabs button span {
+  min-width: 20px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--ui-panel);
+  color: var(--ui-faint);
+  font-size: 9px;
+}
+.screen-app .reports-result-count { padding-right: 8px; color: var(--ui-faint); font-size: 10px; font-weight: 700; }
+
+.screen-app .reports-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 10px;
+}
+
+.screen-app .report-catalog-card {
+  min-width: 0;
+  min-height: 196px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--ui-line);
+  border-radius: var(--ui-radius);
+  background: var(--ui-panel);
+  color: var(--ui-text);
+  text-align: left;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.screen-app .report-catalog-card:hover {
+  border-color: color-mix(in srgb, var(--ui-accent) 35%, var(--ui-line));
+  box-shadow: var(--ui-shadow);
+  transform: translateY(-1px);
+}
+
+.screen-app .report-catalog-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.screen-app .report-catalog-icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ui-accent) 10%, var(--ui-panel));
+  color: var(--ui-accent);
+}
+
+.screen-app .report-catalog-area {
+  padding: 3px 7px;
+  border: 1px solid var(--ui-line);
+  border-radius: 999px;
+  background: var(--ui-panel-soft);
+  color: var(--ui-muted);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.screen-app .report-catalog-copy { min-width: 0; flex: 1; }
+.screen-app .report-catalog-title-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.screen-app .report-catalog-title-row h2 { margin: 0 !important; color: var(--ui-text) !important; font-size: 15px !important; line-height: 1.3 !important; }
+.screen-app .report-catalog-copy p { margin: 5px 0 0; color: var(--ui-muted); font-size: 11px; line-height: 1.45; }
+.screen-app .report-catalog-control { padding: 2px 6px; border-radius: 999px; background: #eef5ff; color: #1c63c8; font-size: 8px; font-weight: 800; }
+.appearance-dark.screen-app .report-catalog-control { background: rgba(37,99,235,.18); color: #91b8ff; }
+
+.screen-app .report-catalog-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding-top: 9px;
+  border-top: 1px solid var(--ui-line);
+}
+.screen-app .report-catalog-meta div { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.screen-app .report-catalog-meta span { color: var(--ui-faint); font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.screen-app .report-catalog-meta strong { color: var(--ui-text); font-size: 10.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.screen-app .report-catalog-open { display: flex; align-items: center; gap: 5px; color: var(--ui-accent); font-size: 10.5px; font-weight: 800; }
+
+.screen-app .reports-empty-state {
+  min-height: 280px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 6px;
+  padding: 32px;
+  border: 1px solid var(--ui-line);
+  border-radius: var(--ui-radius);
+  background: var(--ui-panel);
+  text-align: center;
+}
+
+/* --------------------------------------------------------------------------
+   Procurement / Stores / Finance workbenches
+   -------------------------------------------------------------------------- */
+.screen-app .finance-workbench > .workbench-hero,
+.screen-app .inventory-workbench > .workbench-hero,
+.screen-app .procurement-hero-card,
+.screen-app .receiving-hero-card {
+  margin-bottom: 12px !important;
+  padding: 0 0 12px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--ui-line) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.screen-app .workbench-hero h1,
+.screen-app .procurement-hero-card h1,
+.screen-app .receiving-hero-card h1 {
+  font-size: 24px !important;
+  color: var(--ui-text) !important;
+}
+
+.screen-app .procurement-queue-tabs,
+.screen-app .receiving-view-tabs {
+  display: flex !important;
+  gap: 4px !important;
+  padding: 4px !important;
+  margin-bottom: 10px !important;
+  border: 1px solid var(--ui-line) !important;
+  border-radius: var(--ui-radius) !important;
+  background: var(--ui-panel-soft) !important;
+  overflow-x: auto;
+}
+
+.screen-app .procurement-queue-tab,
+.screen-app .receiving-view-tabs > button {
+  min-height: 42px !important;
+  border-radius: 7px !important;
+  box-shadow: none !important;
+}
+
+.screen-app .workflow-path {
+  margin-bottom: 10px !important;
+  border: 1px solid var(--ui-line) !important;
+  border-radius: var(--ui-radius) !important;
+  background: var(--ui-panel) !important;
+  box-shadow: none !important;
+  overflow: hidden;
+}
+
+.screen-app .workflow-path-header { display: none !important; }
+.screen-app .workflow-path-step { min-height: 54px !important; border-radius: 0 !important; }
+.screen-app .workflow-path-description { display: none !important; }
+
+.screen-app .procurement-detail-panel {
+  position: sticky;
+  top: 10px;
+  max-height: calc(100vh - 92px);
+  overflow-y: auto;
+}
+
+/* --------------------------------------------------------------------------
+   Master data / explorer screens
+   -------------------------------------------------------------------------- */
+.screen-app .article-master-layout,
+.screen-app .unit-master-layout,
+.screen-app .explorer-workspace-layout {
+  overflow: hidden !important;
+}
+
+.screen-app .article-master-explorer,
+.screen-app .unit-master-layout > aside,
+.screen-app .explorer-workspace-pane {
+  background: var(--ui-panel-soft) !important;
+  border-right: 1px solid var(--ui-line) !important;
+}
+
+.screen-app .article-master-explorer button:hover,
+.screen-app .unit-master-layout > aside button:hover,
+.screen-app .explorer-workspace-pane button:hover {
+  background: color-mix(in srgb, var(--ui-accent) 8%, var(--ui-panel-soft)) !important;
+}
+
+/* --------------------------------------------------------------------------
+   Report view
+   -------------------------------------------------------------------------- */
+.screen-app .report-view-screen > div[style*="overflow: auto"] {
+  border: 1px solid var(--ui-line) !important;
+  border-radius: var(--ui-radius) !important;
+  background: var(--ui-panel) !important;
+  box-shadow: none !important;
+}
+
+.screen-app .report-view-screen > div[style*="flex-wrap: wrap"] {
+  border-color: var(--ui-line) !important;
+  background: var(--ui-panel-soft) !important;
+  box-shadow: none !important;
+}
+
+/* --------------------------------------------------------------------------
+   Small screens
+   -------------------------------------------------------------------------- */
+@media (max-width: 1180px) {
+  .screen-app .task-card-grid { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
+  .screen-app .tafiti-dashboard-grid { grid-template-columns: minmax(0,1fr) 250px !important; }
+  .screen-app .hod-workspace { grid-template-columns: minmax(380px, .9fr) minmax(0,1.1fr) !important; }
+  .screen-app .reports-summary-bar { grid-template-columns: 110px 110px 1fr 1fr; }
+}
+
+@media (max-width: 960px) {
+  .screen-app .tafiti-dashboard-grid { grid-template-columns: 1fr !important; }
+  .screen-app .tafiti-dashboard-rail,
+  .screen-app .procurement-detail-panel { position: static !important; max-height: none !important; }
+  .screen-app .reports-card-grid { grid-template-columns: 1fr 1fr; }
+  .screen-app .hod-workspace { grid-template-columns: 1fr !important; }
+  .screen-app .hod-list-panel { border-right: 0 !important; }
+}
+
+@media (max-width: 760px) {
+  .screen-app .tafiti-app-content { padding: 12px !important; }
+  .screen-app .tafiti-app-header-top { padding-inline: 10px !important; }
+  .screen-app .header-role-chip { display: none !important; }
+  .screen-app .tafiti-header-user-copy { display: none !important; }
+  .screen-app .ui-page-header,
+  .screen-app .enterprise-workspace > header,
+  .screen-app .hod-page-header { align-items: stretch !important; flex-direction: column !important; }
+  .screen-app .reports-search-box { width: 100%; min-width: 0; }
+  .screen-app .reports-summary-bar { grid-template-columns: 1fr 1fr; }
+  .screen-app .reports-summary-bar > div:nth-child(2) { border-right: 0; }
+  .screen-app .reports-summary-bar > div:nth-child(-n+2) { border-bottom: 1px solid var(--ui-line); }
+  .screen-app .reports-card-grid { grid-template-columns: 1fr; }
+  .screen-app .task-card-grid,
+  .screen-app .hod-kpi-grid { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
+}
+
+@media (max-width: 520px) {
+  .screen-app .task-card-grid,
+  .screen-app .hod-kpi-grid { grid-template-columns: 1fr !important; }
+  .screen-app .reports-summary-bar { grid-template-columns: 1fr; }
+  .screen-app .reports-summary-bar > div { border-right: 0 !important; border-bottom: 1px solid var(--ui-line); }
+  .screen-app .reports-summary-bar > div:last-child { border-bottom: 0; }
+  .screen-app .report-catalog-meta { grid-template-columns: 1fr; }
+}
