@@ -125,7 +125,6 @@ def test_setup_hotel_roles_creates_operational_groups():
 
     assert set(Group.objects.values_list("name", flat=True)) == {
         "System Administrator",
-        "Requester",
         "Department Head",
         "Cost Controller",
         "Store Keeper",
@@ -134,27 +133,31 @@ def test_setup_hotel_roles_creates_operational_groups():
         "Procurement Manager",
         "General Manager",
     }
-    requester = Group.objects.get(name="Requester")
+    assert not Group.objects.filter(name="Requester").exists()
+
     store_keeper = Group.objects.get(name="Store Keeper")
     department_head = Group.objects.get(name="Department Head")
     financial_manager = Group.objects.get(name="Financial Manager")
     receiving_clerk = Group.objects.get(name="Receiving Clerk")
     procurement_manager = Group.objects.get(name="Procurement Manager")
 
-    assert requester.permissions.filter(codename="add_storerequisition").exists()
-    assert requester.permissions.filter(codename="add_storerequisitionitem").exists()
     assert store_keeper.permissions.filter(codename="change_storerequisition").exists()
     assert not store_keeper.permissions.filter(codename="add_storerequisition").exists()
     assert store_keeper.permissions.filter(codename="change_storerequisitionitem").exists()
+
+    # Department Head is now the Department requisition originator.
+    assert department_head.permissions.filter(codename="add_storerequisition").exists()
+    assert department_head.permissions.filter(codename="add_storerequisitionitem").exists()
     assert department_head.permissions.filter(codename="change_storerequisition").exists()
     assert department_head.permissions.filter(codename="change_storerequisitionitem").exists()
+    assert department_head.permissions.filter(codename="view_category").exists()
+    assert department_head.permissions.filter(codename="view_storelocation").exists()
     assert not department_head.permissions.filter(codename="view_inventorybalance").exists()
+
     assert financial_manager.permissions.filter(codename="change_purchaseorder").exists()
     assert financial_manager.permissions.filter(codename="change_purchaseorderapprovalworkflow").exists()
     assert receiving_clerk.permissions.filter(codename="change_goodsreceiptnote").exists()
     assert procurement_manager.permissions.filter(codename="change_purchaseorder").exists()
-    assert procurement_manager.permissions.filter(codename="add_vendorquotation").exists()
-    assert procurement_manager.permissions.filter(codename="change_vendorquotationitem").exists()
     assert not procurement_manager.permissions.filter(codename="change_goodsreceiptnote").exists()
     assert not procurement_manager.permissions.filter(codename="view_supplierinvoice").exists()
 
@@ -208,6 +211,7 @@ def test_ensure_superuser_creates_and_updates_from_env(monkeypatch):
 
     user.refresh_from_db()
     assert user.check_password("new-password")
+
 
 @pytest.mark.django_db
 def test_current_user_payload_has_stable_user_and_employee_identifiers(client):
