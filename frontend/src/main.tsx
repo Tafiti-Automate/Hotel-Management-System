@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import './enterprise.css'
 import './responsive.css'
+import './department-requisitions-polish.css'
 import App from './App'
 import { AppProvider } from './state/AppContext'
 
