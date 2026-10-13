@@ -45,34 +45,34 @@ export default function Reports() {
   }, [activeArea, permittedReports, search])
 
   return (
-    <div className="enterprise-workspace reports-screen">
-      <header className="reports-page-header">
-        <div>
-          <div className="reports-page-eyebrow">{app.user.role} · Reporting</div>
+    <div className="enterprise-workspace reports-screen ui-page">
+      <header className="ui-page-header reports-page-header">
+        <div className="ui-page-heading">
+          <span className="ui-eyebrow">{app.user.role} · Reporting</span>
           <h1>Reports</h1>
-          <p>Only reports assigned to your role and working scope are shown here.</p>
+          <p>Operational and management reports available within your current role and working scope.</p>
         </div>
         <div className="reports-search-box">
-          <Icon name="search" size={18} color="var(--text-faint)" />
+          <Icon name="search" size={17} />
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search reports, areas or documents"
+            placeholder="Search reports"
             aria-label="Search reports"
           />
           {search && (
             <button type="button" onClick={() => setSearch('')} aria-label="Clear report search">
-              <Icon name="close" size={17} />
+              <Icon name="close" size={16} />
             </button>
           )}
         </div>
       </header>
 
-      <section className="reports-overview-grid" aria-label="Report overview">
-        <ReportMetric label="Available reports" value={String(permittedReports.length)} icon="analytics" />
-        <ReportMetric label="Report areas" value={String(areas.length)} icon="category" />
-        <ReportMetric label="Current scope" value={scope} icon="visibility" compact />
-        <ReportMetric label="Exports" value="PDF · Excel · CSV" icon="download" compact />
+      <section className="reports-summary-bar" aria-label="Reporting scope">
+        <div><strong>{permittedReports.length}</strong><span>Available reports</span></div>
+        <div><strong>{areas.length}</strong><span>Report areas</span></div>
+        <div><strong>{scope}</strong><span>Current scope</span></div>
+        <div><strong>PDF · Excel · CSV</strong><span>Export formats</span></div>
       </section>
 
       <div className="reports-toolbar">
@@ -94,54 +94,45 @@ export default function Reports() {
         <div className="reports-result-count">{visibleReports.length} report{visibleReports.length === 1 ? '' : 's'}</div>
       </div>
 
-      <section className="reports-index" aria-label="Available reports">
-        <div className="reports-index-header">
-          {['Report', 'Area', 'Scope', 'Output', ''].map((label) => <div key={label || 'action'}>{label}</div>)}
-        </div>
+      {visibleReports.length > 0 ? (
+        <section className="reports-card-grid" aria-label="Available reports">
+          {visibleReports.map((report) => (
+            <button
+              key={report.id}
+              type="button"
+              onClick={() => app.openReport(report.id)}
+              className="report-catalog-card"
+            >
+              <div className="report-catalog-card-top">
+                <span className="report-catalog-icon"><Icon name={report.icon} size={18} /></span>
+                <span className="report-catalog-area">{report.grp}</span>
+              </div>
 
-        {visibleReports.map((report) => (
-          <button
-            key={report.id}
-            type="button"
-            onClick={() => app.openReport(report.id)}
-            className="reports-index-row hover-surface2"
-          >
-            <div className="reports-index-main">
-              <span className="reports-index-icon"><Icon name={report.icon} size={18} /></span>
-              <span className="reports-index-copy">
-                <span className="reports-index-title">
-                  <strong>{report.title}</strong>
-                  {report.controlledDocument && <em>{documentLabel(report)}</em>}
-                </span>
-                <small>{report.desc}</small>
-              </span>
-            </div>
-            <div className="reports-index-area">{report.grp}</div>
-            <div className="reports-index-scope">{scope}</div>
-            <div className="reports-index-formats">
-              {['PDF', 'Excel', 'CSV'].map((format) => <span key={format}>{format}</span>)}
-            </div>
-            <div className="reports-index-open">Open <Icon name="arrow_forward" size={16} /></div>
-          </button>
-        ))}
+              <div className="report-catalog-copy">
+                <div className="report-catalog-title-row">
+                  <h2>{report.title}</h2>
+                  {report.controlledDocument && <span className="report-catalog-control">{documentLabel(report)}</span>}
+                </div>
+                <p>{report.desc}</p>
+              </div>
 
-        {!visibleReports.length && (
-          <div className="reports-empty-state">
-            <span><Icon name="search_off" size={22} /></span>
-            <strong>No reports found</strong>
-            <p>{search ? 'Try a different report name or clear the search.' : 'No reports are available in this area for your role.'}</p>
-            {(search || activeArea !== 'All') && <button type="button" onClick={() => { setSearch(''); setSelectedArea('All') }}>Clear filters</button>}
-          </div>
-        )}
-      </section>
+              <div className="report-catalog-meta">
+                <div><span>Scope</span><strong>{scope}</strong></div>
+                <div className="report-catalog-formats"><span>Output</span><strong>PDF · Excel · CSV</strong></div>
+              </div>
+
+              <div className="report-catalog-open">Open report <Icon name="arrow_forward" size={15} /></div>
+            </button>
+          ))}
+        </section>
+      ) : (
+        <section className="reports-empty-state">
+          <span><Icon name="search_off" size={22} /></span>
+          <strong>No reports found</strong>
+          <p>{search ? 'Try a different report name or clear the search.' : 'No reports are available in this area for your role.'}</p>
+          {(search || activeArea !== 'All') && <button type="button" onClick={() => { setSearch(''); setSelectedArea('All') }}>Clear filters</button>}
+        </section>
+      )}
     </div>
   )
-}
-
-function ReportMetric({ label, value, icon, compact = false }: { label: string; value: string; icon: string; compact?: boolean }) {
-  return <div className="reports-overview-card">
-    <span><Icon name={icon} size={17} /></span>
-    <small>{label}</small>
-    <strong className={compact ? 'is-compact' : ''}>{value}</strong>
-  </div>
 }
