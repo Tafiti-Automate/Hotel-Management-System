@@ -1,0 +1,759 @@
+/* Role workspace UX polish.
+   Presentation only: no permissions, statuses, transitions, calculations, or API flows are changed here. */
+
+/* --------------------------------------------------------------------------
+   Global role-focused workspaces
+   -------------------------------------------------------------------------- */
+.screen-app .enterprise-workspace,
+.screen-app .role-dashboard,
+.screen-app .hod-dashboard {
+  --role-section-gap: 12px;
+}
+
+.screen-app .enterprise-workspace > header,
+.screen-app .store-purchase-screen > header,
+.screen-app .article-master-screen > header {
+  margin-bottom: 12px !important;
+}
+
+.screen-app .enterprise-workspace > header h1,
+.screen-app .article-master-screen > header h1,
+.screen-app .store-purchase-screen > header h1 {
+  font-size: clamp(23px, 2.2vw, 28px) !important;
+}
+
+.screen-app .enterprise-workspace > header p,
+.screen-app .article-master-screen > header p,
+.screen-app .store-purchase-screen > header p {
+  margin-top: 4px !important;
+}
+
+.screen-app .enterprise-workspace button,
+.screen-app .role-dashboard button {
+  transition: border-color .12s ease, background .12s ease, color .12s ease, opacity .12s ease;
+}
+
+.screen-app .enterprise-workspace button:focus-visible,
+.screen-app .role-dashboard button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 65%, transparent);
+  outline-offset: 2px;
+}
+
+/* --------------------------------------------------------------------------
+   Role dashboards: work that needs attention first, duplicate decoration last
+   -------------------------------------------------------------------------- */
+.screen-app .tafiti-dashboard-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 292px) !important;
+  gap: 12px !important;
+  align-items: start;
+}
+
+.screen-app .dashboard-week-summary {
+  padding: 14px 16px !important;
+  margin-bottom: 10px !important;
+  border-radius: 9px !important;
+  box-shadow: none !important;
+}
+
+.screen-app .dashboard-week-title-row {
+  gap: 9px !important;
+}
+
+.screen-app .dashboard-week-summary > p {
+  margin: 8px 0 0 !important;
+  max-width: 860px;
+  font-size: 12px !important;
+  line-height: 1.45 !important;
+}
+
+.screen-app .dashboard-week-tags {
+  display: none !important;
+}
+
+.screen-app .task-card-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+}
+
+.screen-app .dashboard-task-card {
+  min-height: 94px !important;
+  padding: 11px 12px !important;
+  display: grid !important;
+  grid-template-columns: 32px minmax(0, 1fr) 16px !important;
+  grid-template-rows: auto auto !important;
+  column-gap: 9px !important;
+  row-gap: 3px !important;
+  align-items: center !important;
+}
+
+.screen-app .dashboard-task-icon {
+  width: 32px !important;
+  height: 32px !important;
+  grid-row: 1 / span 2;
+}
+
+.screen-app .dashboard-task-card > .ic {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+}
+
+.screen-app .dashboard-task-label {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: 10.5px !important;
+}
+
+.screen-app .dashboard-task-count {
+  grid-column: 2;
+  grid-row: 2;
+  font-size: 21px !important;
+  line-height: 1 !important;
+}
+
+.screen-app .dashboard-task-hint {
+  display: none !important;
+}
+
+.screen-app .dashboard-summary-strip {
+  margin: 10px 0 !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+}
+
+.screen-app .dashboard-summary-item {
+  min-height: 48px !important;
+  padding: 8px 10px !important;
+}
+
+.screen-app .dashboard-panel-header {
+  min-height: 50px !important;
+  padding: 10px 13px !important;
+}
+
+.screen-app .dashboard-activity-row {
+  min-height: 56px !important;
+  padding-block: 8px !important;
+}
+
+.screen-app .dashboard-activity-copy strong {
+  font-size: 11.5px !important;
+}
+
+.screen-app .dashboard-activity-copy span,
+.screen-app .dashboard-activity-date {
+  font-size: 10.5px !important;
+}
+
+.screen-app .tafiti-dashboard-rail {
+  gap: 10px !important;
+  position: sticky;
+  top: 10px;
+}
+
+.screen-app .dashboard-rail-card {
+  border-radius: 9px !important;
+  box-shadow: none !important;
+}
+
+/* The task cards already show the same counts. Remove the duplicate ring chart. */
+.screen-app .dashboard-performance-card {
+  display: none !important;
+}
+
+.screen-app .dashboard-attention-card,
+.screen-app .dashboard-followup-card,
+.screen-app .dashboard-context-panel {
+  padding: 13px !important;
+}
+
+.screen-app .dashboard-attention-card p,
+.screen-app .dashboard-followup-card p {
+  font-size: 11px !important;
+  line-height: 1.45 !important;
+}
+
+.screen-app .dashboard-rail-action {
+  width: 100%;
+  justify-content: space-between !important;
+}
+
+/* --------------------------------------------------------------------------
+   Department Head: keep the request itself dominant
+   -------------------------------------------------------------------------- */
+.screen-app .hod-dashboard-hero {
+  padding: 16px 18px !important;
+  gap: 16px !important;
+}
+
+.screen-app .hod-dashboard-hero h1 {
+  font-size: clamp(22px, 2.5vw, 28px) !important;
+}
+
+.screen-app .hod-dashboard-hero p {
+  margin-top: 5px !important;
+  max-width: 680px;
+  font-size: 11.5px !important;
+}
+
+.screen-app .hod-dashboard-flow {
+  padding: 7px 9px !important;
+  gap: 5px !important;
+  margin-bottom: 10px !important;
+}
+
+.screen-app .hod-dashboard-flow-step {
+  padding: 6px 8px !important;
+}
+
+.screen-app .hod-dashboard-flow-step > span {
+  width: 28px !important;
+  height: 28px !important;
+}
+
+.screen-app .hod-dashboard-kpis {
+  gap: 8px !important;
+  margin-bottom: 10px !important;
+}
+
+.screen-app .hod-dashboard-metric {
+  min-height: 68px !important;
+  padding: 10px 11px !important;
+}
+
+.screen-app .hod-dashboard-metric > span {
+  width: 32px !important;
+  height: 32px !important;
+}
+
+.screen-app .hod-dashboard-metric strong {
+  font-size: 19px !important;
+}
+
+.screen-app .hod-dashboard-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(230px, 280px) !important;
+  gap: 10px !important;
+}
+
+.screen-app .hod-dashboard-side {
+  gap: 9px !important;
+}
+
+.screen-app .hod-request-row {
+  min-height: 62px !important;
+}
+
+/* --------------------------------------------------------------------------
+   Store Keeper: queue first, supporting navigation compact
+   -------------------------------------------------------------------------- */
+.screen-app .inventory-workbench-navigation {
+  margin-bottom: 10px !important;
+}
+
+.screen-app .inventory-nav-group {
+  min-height: 52px;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 7px 9px !important;
+}
+
+.screen-app .inventory-nav-group-copy {
+  min-width: 150px;
+}
+
+.screen-app .inventory-nav-group-copy small {
+  display: none !important;
+}
+
+.screen-app .inventory-nav-actions {
+  display: flex !important;
+  gap: 5px !important;
+  flex-wrap: wrap;
+}
+
+.screen-app .inventory-nav-button {
+  min-height: 34px !important;
+  padding: 6px 10px !important;
+  font-size: 11px !important;
+}
+
+.screen-app .inventory-workbench .workbench-grid {
+  align-items: start !important;
+}
+
+.screen-app .inventory-workbench .workbench-grid > aside {
+  position: sticky;
+  top: 10px;
+  max-height: calc(100vh - 100px);
+  overflow: auto;
+}
+
+/* Store replenishment: create on the left, recent requests on the right. */
+.screen-app .store-purchase-metrics {
+  gap: 7px !important;
+  margin-bottom: 10px !important;
+}
+
+.screen-app .store-purchase-metrics > div {
+  min-height: 62px !important;
+  padding: 9px 11px !important;
+}
+
+.screen-app .store-purchase-grid {
+  grid-template-columns: minmax(0, 1.4fr) minmax(310px, .6fr) !important;
+  gap: 10px !important;
+}
+
+.screen-app .store-purchase-grid > section:last-child {
+  position: sticky;
+  top: 10px;
+}
+
+.screen-app .store-purchase-line {
+  padding: 8px !important;
+  background: var(--surface) !important;
+}
+
+/* --------------------------------------------------------------------------
+   Cost Controller: catalogue maintenance should feel like one explorer
+   -------------------------------------------------------------------------- */
+.screen-app .article-master-screen {
+  max-width: 1500px !important;
+}
+
+.screen-app .article-master-screen > header {
+  padding-bottom: 11px;
+  border-bottom: 1px solid var(--border);
+}
+
+.screen-app .article-master-screen > header p {
+  display: none;
+}
+
+.screen-app .article-master-screen > div[style*="position: relative"] {
+  margin-bottom: 8px !important;
+}
+
+.screen-app .article-master-layout {
+  grid-template-columns: 310px minmax(0, 1fr) !important;
+  border-radius: 9px !important;
+}
+
+.screen-app .article-master-explorer {
+  background: color-mix(in srgb, var(--surface-2) 74%, var(--surface)) !important;
+}
+
+.screen-app .article-master-explorer-tree {
+  padding: 6px !important;
+}
+
+.screen-app .article-master-layout > main,
+.screen-app .article-master-layout > section {
+  min-width: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Procurement / Finance / General Manager: current queue and selected record
+   -------------------------------------------------------------------------- */
+.screen-app .procurement-hero-card,
+.screen-app .receiving-hero-card {
+  padding: 0 0 11px !important;
+  margin-bottom: 10px !important;
+}
+
+.screen-app .procurement-hero-card .workbench-hero,
+.screen-app .receiving-hero-card {
+  min-height: 52px;
+}
+
+.screen-app .procurement-hero-card .workbench-hero > span,
+.screen-app .receiving-hero-card > span {
+  width: 34px !important;
+  height: 34px !important;
+}
+
+.screen-app .procurement-hero-card h1,
+.screen-app .receiving-hero-card h1 {
+  font-size: 23px !important;
+}
+
+.screen-app .procurement-hero-card .workbench-hero > div > div:last-child,
+.screen-app .receiving-hero-card > div > div:last-child {
+  font-size: 11.5px !important;
+}
+
+.screen-app .procurement-queue-tabs {
+  display: flex !important;
+  gap: 4px !important;
+  padding: 5px !important;
+  margin-bottom: 10px !important;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.screen-app .procurement-queue-tab {
+  flex: 0 0 132px;
+  min-height: 50px !important;
+  padding: 7px 9px !important;
+}
+
+.screen-app .procurement-queue-tab.is-active {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+/* The large explanatory workflow header repeats the role hero. Keep just the stages. */
+.screen-app .procurement-workbench .workflow-path-header {
+  display: none !important;
+}
+
+.screen-app .procurement-workbench .workflow-path {
+  margin-bottom: 10px !important;
+}
+
+.screen-app .procurement-workbench .workflow-path-step {
+  min-height: 52px !important;
+  padding: 7px 9px !important;
+}
+
+.screen-app .procurement-workbench .workflow-path-number {
+  width: 22px !important;
+  height: 22px !important;
+  font-size: 10px !important;
+}
+
+.screen-app .procurement-workbench .workflow-path-description {
+  display: none !important;
+}
+
+.screen-app .procurement-workbench .workflow-path-actor {
+  font-size: 9px !important;
+}
+
+.screen-app .procurement-workbench .workflow-path-label {
+  margin-top: 1px !important;
+  font-size: 10.5px !important;
+}
+
+.screen-app .procurement-workbench-grid {
+  gap: 0 !important;
+}
+
+.screen-app .procurement-queue-card {
+  min-width: 0;
+}
+
+.screen-app .procurement-detail-panel {
+  position: sticky;
+  top: 10px;
+  max-height: calc(100vh - 96px);
+  overflow-y: auto;
+  padding: 14px !important;
+}
+
+.screen-app .procurement-workbench [style*="padding: 18px"] {
+  box-shadow: none !important;
+}
+
+/* Finance and GM use one approval stage: do not make a single-stage path consume space. */
+.screen-app .procurement-workbench .receiving-view-tabs {
+  margin-bottom: 10px !important;
+}
+
+.screen-app .procurement-workbench .receiving-view-tabs > button {
+  min-height: 50px !important;
+  padding: 8px 10px !important;
+}
+
+/* --------------------------------------------------------------------------
+   Receiving Clerk: ready deliveries first, GRN history second
+   -------------------------------------------------------------------------- */
+.screen-app .receiving-workspace > div:nth-child(2) {
+  width: max-content;
+  max-width: 100%;
+  padding: 4px !important;
+  margin-bottom: 10px !important;
+}
+
+.screen-app .receiving-workspace > div:nth-child(2) > button {
+  min-width: 150px;
+  min-height: 46px;
+  padding: 7px 10px !important;
+}
+
+.screen-app .receiving-table-card {
+  border-radius: 9px !important;
+  box-shadow: none !important;
+}
+
+.screen-app .receiving-search-grid {
+  padding: 10px 12px !important;
+}
+
+.screen-app .receiving-ready-header {
+  padding: 8px 13px !important;
+}
+
+.screen-app .receiving-detail-screen > button:first-child {
+  margin-bottom: 9px !important;
+}
+
+.screen-app .receiving-detail-screen > section {
+  border-radius: 9px !important;
+  box-shadow: none !important;
+}
+
+.screen-app .receiving-document-fields {
+  margin-bottom: 10px !important;
+}
+
+.screen-app .receiving-line-grid {
+  min-width: 0;
+}
+
+.screen-app .grn-document-screen .screen-document-view {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding: 8px 0;
+  background: var(--bg);
+}
+
+/* --------------------------------------------------------------------------
+   Responsive behaviour across all role screens
+   -------------------------------------------------------------------------- */
+@media (max-width: 1180px) {
+  .screen-app .task-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .screen-app .tafiti-dashboard-grid {
+    grid-template-columns: minmax(0, 1fr) 250px !important;
+  }
+
+  .screen-app .article-master-layout {
+    grid-template-columns: 280px minmax(0, 1fr) !important;
+  }
+
+  .screen-app .store-purchase-grid {
+    grid-template-columns: minmax(0, 1.2fr) minmax(290px, .8fr) !important;
+  }
+}
+
+@media (max-width: 960px) {
+  .screen-app .tafiti-dashboard-grid,
+  .screen-app .hod-dashboard-layout,
+  .screen-app .store-purchase-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .screen-app .tafiti-dashboard-rail,
+  .screen-app .store-purchase-grid > section:last-child,
+  .screen-app .inventory-workbench .workbench-grid > aside,
+  .screen-app .procurement-detail-panel {
+    position: static !important;
+    max-height: none !important;
+  }
+
+  .screen-app .tafiti-dashboard-rail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: grid !important;
+  }
+
+  .screen-app .dashboard-followup-card {
+    grid-column: 1 / -1;
+  }
+
+  .screen-app .article-master-layout {
+    grid-template-columns: 240px minmax(0, 1fr) !important;
+  }
+
+  .screen-app .procurement-workbench-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .screen-app .procurement-workbench-grid > aside {
+    border-left: 0 !important;
+    border-top: 1px solid var(--border) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .screen-app .screen-app .app-content,
+  .screen-app .app-content {
+    padding-inline: 10px !important;
+  }
+
+  .screen-app .dashboard-week-summary {
+    padding: 11px 12px !important;
+  }
+
+  .screen-app .task-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .screen-app .dashboard-task-card {
+    min-height: 82px !important;
+  }
+
+  .screen-app .dashboard-summary-strip {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .screen-app .tafiti-dashboard-rail {
+    grid-template-columns: 1fr !important;
+  }
+
+  .screen-app .hod-dashboard-hero {
+    align-items: stretch !important;
+    flex-direction: column;
+    padding: 13px !important;
+  }
+
+  .screen-app .hod-dashboard-hero .erp-primary {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .screen-app .hod-dashboard-flow {
+    padding: 5px !important;
+  }
+
+  .screen-app .hod-dashboard-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .screen-app .inventory-nav-group {
+    align-items: stretch !important;
+    flex-direction: column;
+    gap: 6px !important;
+  }
+
+  .screen-app .inventory-nav-group-copy {
+    min-width: 0;
+  }
+
+  .screen-app .inventory-nav-actions {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .screen-app .article-master-layout {
+    display: block !important;
+  }
+
+  .screen-app .article-master-explorer {
+    max-height: 310px;
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--border) !important;
+  }
+
+  .screen-app .procurement-queue-tabs {
+    margin-inline: -1px;
+    padding-bottom: 7px !important;
+  }
+
+  .screen-app .procurement-queue-tab {
+    flex-basis: 120px;
+  }
+
+  .screen-app .procurement-workbench .workflow-path {
+    overflow-x: auto !important;
+  }
+
+  .screen-app .procurement-workbench .workflow-path-steps {
+    min-width: max-content;
+  }
+
+  .screen-app .procurement-workbench .workflow-path-step {
+    min-width: 128px !important;
+  }
+
+  .screen-app .receiving-workspace > div:nth-child(2) {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .screen-app .receiving-workspace > div:nth-child(2) > button {
+    min-width: 0;
+  }
+
+  .screen-app .receiving-search-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .screen-app .receiving-ready-header {
+    display: none !important;
+  }
+
+  .screen-app .receiving-table-card > button {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    gap: 5px 10px !important;
+    padding: 11px 12px !important;
+  }
+
+  .screen-app .receiving-table-card > button > :nth-child(2),
+  .screen-app .receiving-table-card > button > :nth-child(3) {
+    grid-column: 1;
+  }
+
+  .screen-app .receiving-table-card > button > :nth-child(4),
+  .screen-app .receiving-table-card > button > :nth-child(5) {
+    grid-column: 2;
+  }
+
+  .screen-app .receiving-document-fields {
+    grid-template-columns: 1fr !important;
+  }
+
+  .screen-app .receiving-detail-screen .receiving-line-grid {
+    grid-template-columns: 1fr 90px !important;
+    gap: 7px !important;
+  }
+
+  .screen-app .receiving-detail-screen .receiving-line-grid > :nth-child(n+3) {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 520px) {
+  .screen-app .task-card-grid,
+  .screen-app .hod-dashboard-kpis,
+  .screen-app .inventory-nav-actions {
+    grid-template-columns: 1fr !important;
+  }
+
+  .screen-app .dashboard-summary-strip {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .screen-app .dashboard-summary-item:nth-child(n+5) {
+    grid-column: 1 / -1;
+  }
+
+  .screen-app .procurement-hero-card .workbench-hero,
+  .screen-app .receiving-hero-card {
+    align-items: flex-start !important;
+    flex-wrap: wrap;
+  }
+
+  .screen-app .procurement-hero-card .workbench-hero > button,
+  .screen-app .receiving-hero-card > button {
+    width: 100%;
+    margin-left: 0 !important;
+    justify-content: center;
+  }
+
+  .screen-app .store-purchase-form-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .screen-app .store-purchase-line {
+    grid-template-columns: 1fr !important;
+  }
+
+  .screen-app .store-purchase-line > button:last-child {
+    width: 100%;
+  }
+}
