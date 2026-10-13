@@ -9,22 +9,15 @@ from django.db import transaction
 
 ROLE_SPECS = {
     "System Administrator": {"all": True},
-    "Requester": {
+    "Department Head": {
+        # The Department Head is now the originator of Department requisitions.
+        # They may maintain only their own draft/rejected request through API
+        # object-level controls; submitted records remain read-only to the HOD.
         "crud": {"inventory": ["storerequisition", "storerequisitionitem"]},
         "view": {
             "departments": ["department", "branch"],
-            # Requesters need read-only catalogue hierarchy data so the
-            # Major Group -> Item Group -> Item selectors can be populated.
-            # No category/item maintenance or supplier-price permissions are granted.
-            "inventory": ["category", "item", "unitofmeasure"],
-        },
-    },
-    "Department Head": {
-        "change": {"inventory": ["storerequisition", "storerequisitionitem"]},
-        "view": {
-            "departments": ["department", "branch"],
             "employees": ["employee"],
-            "inventory": ["item", "unitofmeasure"],
+            "inventory": ["category", "item", "storelocation", "unitofmeasure"],
         },
     },
     "Cost Controller": {
@@ -97,12 +90,19 @@ ROLE_SPECS = {
     },
 }
 
-# Existing installations used several spellings/cases. All assignments are migrated
-# into the canonical roles before the legacy groups are removed.
+# Requester/Department Requester is retired. Existing accounts are deliberately
+# not promoted to Department Head automatically because that would grant approval
+# authority to users who may never have been department heads.
+RETIRED_ROLE_NAMES = (
+    "Requester",
+    "Department Requester",
+    "REQUESTER",
+    "DEPARTMENT REQUESTER",
+)
+
+# Existing installations used several spellings/cases. All non-retired aliases
+# are migrated into the canonical roles before the legacy groups are removed.
 ROLE_ALIASES = {
-    "Department Requester": "Requester",
-    "REQUESTER": "Requester",
-    "DEPARTMENT REQUESTER": "Requester",
     "DEPARTMENT HEAD": "Department Head",
     "COST CONTROLLER": "Cost Controller",
     "STORE KEEPER": "Store Keeper",
@@ -159,12 +159,23 @@ def sync_client_roles(*, reset_permissions=True):
     approved operational permission sets are always restored.
     """
     groups = {}
-    created_roles = set()
     for name in ROLE_SPECS:
-        group, created = Group.objects.get_or_create(name=name)
+        group, _ = Group.objects.get_or_create(name=name)
         groups[name] = group
-        if created:
-            created_roles.add(name)
+
+    # Retire Department Requester without silently promoting old accounts to HOD.
+    # Administrators can explicitly assign the correct operational role afterward.
+    for retired_name in RETIRED_ROLE_NAMES:
+        retired = Group.objects.filter(name=retired_name).first()
+        if not retired:
+            continue
+        retired.user_set.clear()
+        try:
+            from apps.approvals.models import ApprovalMatrixRule
+            ApprovalMatrixRule.objects.filter(approver_role=retired).update(approver_role=None)
+        except Exception:
+            pass
+        retired.delete()
 
     # Move users from old role names to the canonical roles.
     for old_name, new_name in ROLE_ALIASES.items():
