@@ -120,7 +120,7 @@ export default function Reports() {
                     onClick={() => app.openReport(report.id)}
                     className="tafiti-report-link"
                   >
-                    <span className="tafiti-report-link-icon"><Icon name={index % 2 ? 'description' : report.icon} size={15} /></span>
+                    <span className="tafiti-report-link-icon"><Icon name={index % 2 ? 'description' : 'bar_chart'} size={15} /></span>
                     <span className="tafiti-report-link-copy">
                       <strong>{report.title}</strong>
                       <small>{report.desc}</small>
