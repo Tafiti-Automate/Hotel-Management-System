@@ -1,0 +1,687 @@
+/* Department Head requisition polish
+   Visual-only overrides. No workflow, permissions, data or API behaviour lives here. */
+
+/* ---------- application chrome ---------- */
+.screen-app .tafiti-header-page-context > span {
+  display: none !important;
+}
+
+.screen-app .header-clock.tafiti-header-clock {
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
+  transform: none !important;
+  min-width: 0 !important;
+  width: auto !important;
+  height: 30px !important;
+  padding: 0 8px !important;
+  gap: 5px !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+
+.screen-app .tafiti-header-clock .tafiti-clock-copy {
+  display: block !important;
+}
+
+.screen-app .tafiti-header-clock .tafiti-clock-copy small,
+.screen-app .tafiti-clock-icon,
+.screen-app .tafiti-header-clock > .ic:last-child {
+  display: none !important;
+}
+
+.screen-app .tafiti-header-clock .tafiti-clock-copy strong {
+  margin: 0 !important;
+  font-size: 10.5px !important;
+  letter-spacing: .01em !important;
+}
+
+.screen-app .tafiti-sidebar:not(.is-collapsed) {
+  width: 218px !important;
+}
+
+.screen-app .tafiti-sidebar:not(.is-collapsed) .tafiti-sidebar-brand-copy,
+.screen-app .tafiti-sidebar:not(.is-collapsed) .tafiti-sidebar-user-copy,
+.screen-app .tafiti-sidebar:not(.is-collapsed) .tafiti-property-copy {
+  min-width: 0;
+}
+
+.screen-app .tafiti-sidebar:not(.is-collapsed) .sidebar-brand-title,
+.screen-app .tafiti-sidebar:not(.is-collapsed) .tafiti-sidebar-user-name,
+.screen-app .tafiti-sidebar:not(.is-collapsed) .tafiti-property-value {
+  max-width: none !important;
+}
+
+/* ---------- page introduction ---------- */
+.screen-app .hod-requisitions-page {
+  max-width: 1460px;
+}
+
+.screen-app .hod-page-header {
+  align-items: center;
+  margin-bottom: 8px;
+  padding: 0 0 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.screen-app .hod-page-header > div:first-child {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.screen-app .hod-page-eyebrow,
+.screen-app .hod-page-header p {
+  display: none;
+}
+
+.screen-app .hod-page-header h1 {
+  font-size: 22px !important;
+  line-height: 1.2 !important;
+  letter-spacing: -.02em;
+}
+
+.screen-app .hod-page-actions {
+  gap: 7px;
+}
+
+.screen-app .hod-page-actions > button {
+  min-height: 34px;
+  padding-inline: 12px;
+}
+
+/* ---------- compact workflow ---------- */
+.screen-app .hod-flow-strip {
+  min-height: 44px;
+  gap: 4px;
+  margin-bottom: 8px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.screen-app .hod-flow-step {
+  gap: 6px;
+  padding: 4px 7px;
+  border-radius: 6px;
+}
+
+.screen-app .hod-flow-step > span {
+  width: 27px;
+  height: 27px;
+  border-radius: 6px;
+}
+
+.screen-app .hod-flow-step strong {
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.screen-app .hod-flow-step small {
+  display: none;
+}
+
+.screen-app .hod-flow-strip > .ic {
+  width: 14px;
+  opacity: .65;
+}
+
+/* ---------- summary counters as a single quiet strip ---------- */
+.screen-app .hod-kpi-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin-bottom: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.screen-app .hod-kpi-card {
+  min-height: 48px;
+  gap: 9px;
+  padding: 7px 11px;
+  border: 0;
+  border-right: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.screen-app .hod-kpi-card:last-child {
+  border-right: 0;
+}
+
+.screen-app .hod-kpi-card > span {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+}
+
+.screen-app .hod-kpi-card strong {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.screen-app .hod-kpi-card small {
+  margin-top: 3px;
+  font-size: 9.5px;
+}
+
+/* ---------- master/detail workspace ---------- */
+.screen-app .hod-workspace {
+  min-height: 610px;
+  grid-template-columns: minmax(460px, .92fr) minmax(0, 1.38fr);
+  border-radius: 9px;
+  box-shadow: none;
+}
+
+.screen-app .hod-list-panel {
+  background: color-mix(in srgb, var(--surface-2) 58%, var(--surface));
+}
+
+.screen-app .hod-list-heading {
+  min-height: 52px;
+  padding: 8px 11px;
+  background: var(--surface);
+}
+
+.screen-app .hod-list-heading strong {
+  font-size: 12px;
+}
+
+.screen-app .hod-list-heading span {
+  font-size: 9.5px;
+}
+
+.screen-app .hod-segmented {
+  border-radius: 6px;
+}
+
+.screen-app .hod-segmented button {
+  min-height: 27px;
+  padding-inline: 8px;
+  font-size: 9.3px;
+}
+
+.screen-app .hod-filters {
+  grid-template-columns: minmax(165px, 1fr) 105px 116px 116px auto;
+  gap: 6px;
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--surface-2) 78%, var(--surface));
+}
+
+.screen-app .hod-filters label > span,
+.screen-app .hod-form-grid label > span,
+.screen-app .hod-add-line-grid label > span {
+  font-size: 8.5px;
+  letter-spacing: .02em;
+}
+
+.screen-app .hod-filters :where(input, select),
+.screen-app .hod-form-grid :where(input, select, textarea),
+.screen-app .hod-add-line-grid :where(input, select) {
+  min-height: 34px;
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.screen-app .hod-filters input,
+.screen-app .hod-filters select {
+  padding-inline: 8px;
+}
+
+.screen-app .hod-clear-filter {
+  min-height: 34px;
+}
+
+.screen-app .hod-request-list {
+  max-height: 690px;
+}
+
+.screen-app .hod-request-row {
+  min-height: 62px;
+  grid-template-columns: 86px minmax(0, 1fr) 78px auto 14px;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface);
+}
+
+.screen-app .hod-request-row:hover {
+  background: color-mix(in srgb, var(--accent-soft) 22%, var(--surface));
+}
+
+.screen-app .hod-request-row.selected {
+  background: color-mix(in srgb, var(--accent-soft) 74%, var(--surface));
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.screen-app .hod-request-ref {
+  font-size: 10.7px;
+}
+
+.screen-app .hod-request-main strong {
+  font-size: 11px;
+}
+
+.screen-app .hod-request-main small {
+  margin-top: 2px;
+  font-size: 9.3px;
+}
+
+.screen-app .hod-request-date {
+  font-size: 9px;
+}
+
+.screen-app .hod-status {
+  min-height: 20px;
+  padding-inline: 6px;
+  font-size: 8.5px;
+}
+
+/* ---------- selected requisition ---------- */
+.screen-app .hod-detail-panel {
+  min-height: 610px;
+}
+
+.screen-app .hod-detail-header {
+  min-height: 58px;
+  padding: 8px 16px;
+}
+
+.screen-app .hod-detail-header span {
+  font-size: 8.5px;
+}
+
+.screen-app .hod-detail-header h2 {
+  margin: 2px 0 0;
+  font-size: 17px !important;
+}
+
+.screen-app .hod-detail-header p {
+  margin-top: 2px;
+  font-size: 9.8px;
+}
+
+.screen-app .hod-detail-scroll {
+  padding: 0 16px 14px;
+}
+
+.screen-app .hod-editor {
+  gap: 0;
+}
+
+.screen-app .hod-editor-section {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.screen-app .hod-editor-section + .hod-editor-section {
+  margin-top: 2px;
+  border-top: 1px solid var(--border);
+}
+
+.screen-app .hod-section-heading {
+  min-height: 42px;
+  padding: 8px 0;
+  border-bottom: 0;
+  background: transparent;
+}
+
+.screen-app .hod-section-heading strong {
+  font-size: 11.5px;
+}
+
+.screen-app .hod-section-heading > div > span {
+  display: none;
+}
+
+.screen-app .hod-section-heading > .erp-secondary {
+  min-height: 32px;
+  padding-inline: 10px;
+  background: var(--surface) !important;
+}
+
+.screen-app .hod-form-grid {
+  gap: 8px 10px;
+  padding: 0 0 12px;
+}
+
+.screen-app .hod-form-grid textarea {
+  min-height: 68px;
+  max-height: 120px;
+}
+
+.screen-app .hod-count-chip {
+  min-height: 22px;
+}
+
+.screen-app .hod-line-list {
+  margin-bottom: 9px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+}
+
+.screen-app .hod-line-row {
+  min-height: 56px;
+  padding: 7px 10px;
+}
+
+.screen-app .hod-line-copy strong {
+  font-size: 11px;
+}
+
+.screen-app .hod-line-copy span,
+.screen-app .hod-line-copy small {
+  font-size: 9px;
+}
+
+.screen-app .hod-line-actions button {
+  width: 29px;
+  height: 29px;
+}
+
+.screen-app .hod-line-empty {
+  min-height: 70px;
+}
+
+.screen-app .hod-add-line-card {
+  padding: 10px;
+  border: 1px dashed var(--border-2);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--surface-2) 72%, var(--surface));
+}
+
+.screen-app .hod-add-line-title {
+  margin-bottom: 7px;
+}
+
+.screen-app .hod-add-line-grid {
+  gap: 7px;
+}
+
+.screen-app .hod-add-line-button {
+  min-height: 34px;
+}
+
+.screen-app .hod-editor-submit {
+  position: sticky;
+  bottom: 0;
+  z-index: 7;
+  grid-template-columns: auto minmax(180px, 1fr) auto;
+  margin: 12px -16px -14px;
+  padding: 9px 16px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  box-shadow: 0 -7px 18px rgba(15, 23, 42, .06);
+  backdrop-filter: blur(8px);
+}
+
+.screen-app .hod-submit-readiness {
+  font-size: 9.5px;
+}
+
+.screen-app .hod-editor-submit > button {
+  min-height: 34px;
+}
+
+/* ---------- read-only requisition view ---------- */
+.screen-app .hod-detail-summary-grid {
+  margin-top: 12px;
+  margin-bottom: 9px;
+}
+
+.screen-app .hod-info-box,
+.screen-app .hod-purpose-card,
+.screen-app .hod-record-section,
+.screen-app .hod-progress-card {
+  border-radius: 7px;
+  box-shadow: none;
+}
+
+.screen-app .hod-purpose-card {
+  margin-bottom: 9px;
+}
+
+.screen-app .hod-progress-card {
+  margin-top: 9px;
+}
+
+/* ---------- tablet ---------- */
+@media (max-width: 1240px) {
+  .screen-app .header-clock.tafiti-header-clock {
+    display: none !important;
+  }
+
+  .screen-app .hod-workspace {
+    grid-template-columns: minmax(400px, .9fr) minmax(0, 1.1fr);
+  }
+
+  .screen-app .hod-filters {
+    grid-template-columns: minmax(150px, 1fr) 100px 110px 110px;
+  }
+
+  .screen-app .hod-clear-filter {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .screen-app .hod-request-row {
+    grid-template-columns: 82px minmax(0, 1fr) auto 14px;
+  }
+
+  .screen-app .hod-request-date {
+    display: none;
+  }
+}
+
+@media (max-width: 960px) {
+  .screen-app .tafiti-sidebar:not(.is-collapsed) {
+    width: min(86vw, 280px) !important;
+  }
+
+  .screen-app .hod-page-header {
+    align-items: center;
+    flex-direction: row;
+  }
+
+  .screen-app .hod-flow-strip {
+    margin-inline: 0;
+  }
+
+  .screen-app .hod-kpi-grid {
+    display: flex;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .screen-app .hod-kpi-card {
+    min-width: 124px;
+    flex: 1 0 124px;
+  }
+
+  .screen-app .hod-workspace {
+    min-height: 560px;
+    display: block;
+  }
+
+  .screen-app .hod-list-panel {
+    border-right: 0;
+  }
+
+  .screen-app .hod-list-heading {
+    align-items: center;
+    flex-direction: row;
+  }
+
+  .screen-app .hod-filters {
+    grid-template-columns: minmax(0, 1fr) minmax(110px, .55fr);
+  }
+
+  .screen-app .hod-search-field {
+    grid-column: 1 / -1;
+  }
+
+  .screen-app .hod-clear-filter {
+    grid-column: 1 / -1;
+  }
+
+  .screen-app .hod-detail-panel {
+    min-height: 560px;
+  }
+
+  .screen-app .hod-detail-scroll {
+    padding-inline: 14px;
+  }
+
+  .screen-app .hod-editor-submit {
+    margin-inline: -14px;
+    padding-inline: 14px;
+  }
+}
+
+/* ---------- phone ---------- */
+@media (max-width: 640px) {
+  .screen-app .hod-page-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .screen-app .hod-page-header h1 {
+    font-size: 20px !important;
+  }
+
+  .screen-app .hod-page-actions {
+    width: 100%;
+  }
+
+  .screen-app .hod-page-actions > button {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .screen-app .hod-flow-strip {
+    min-height: 42px;
+    padding: 4px 6px;
+  }
+
+  .screen-app .hod-flow-step {
+    padding-inline: 5px;
+  }
+
+  .screen-app .hod-flow-step > span {
+    width: 25px;
+    height: 25px;
+  }
+
+  .screen-app .hod-flow-step strong {
+    font-size: 9.7px;
+  }
+
+  .screen-app .hod-kpi-card {
+    min-width: 112px;
+    flex-basis: 112px;
+  }
+
+  .screen-app .hod-list-heading {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .screen-app .hod-segmented {
+    width: 100%;
+  }
+
+  .screen-app .hod-segmented button {
+    flex: 1;
+    min-width: 0;
+    padding-inline: 5px;
+  }
+
+  .screen-app .hod-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .screen-app .hod-search-field {
+    grid-column: 1 / -1;
+  }
+
+  .screen-app .hod-request-row {
+    min-height: 70px;
+    grid-template-columns: 78px minmax(0, 1fr) 14px;
+  }
+
+  .screen-app .hod-request-row .hod-status {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .screen-app .hod-detail-header {
+    align-items: flex-start;
+  }
+
+  .screen-app .hod-detail-scroll {
+    padding: 0 11px 12px;
+  }
+
+  .screen-app .hod-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .screen-app .hod-form-grid .span-2,
+  .screen-app .hod-add-line-grid .span-2 {
+    grid-column: auto;
+  }
+
+  .screen-app .hod-add-line-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .screen-app .hod-editor-submit {
+    grid-template-columns: 1fr 1fr;
+    margin: 10px -11px -12px;
+    padding: 8px 11px;
+  }
+
+  .screen-app .hod-submit-readiness {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .screen-app .hod-editor-submit > button {
+    min-height: 42px;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 420px) {
+  .screen-app .hod-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .screen-app .hod-search-field,
+  .screen-app .hod-clear-filter {
+    grid-column: auto;
+  }
+
+  .screen-app .hod-editor-submit {
+    grid-template-columns: 1fr;
+  }
+
+  .screen-app .hod-submit-readiness {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .screen-app .hod-editor-submit > button {
+    width: 100%;
+  }
+}
