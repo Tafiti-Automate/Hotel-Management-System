@@ -505,7 +505,6 @@ export default function DepartmentRequisitions() {
                   />
                 ) : editable ? (
                   <DraftEditor
-                    request={selected}
                     requestDraft={requestDraft}
                     setRequestDraft={setRequestDraft}
                     lines={selectedLines}
@@ -549,11 +548,10 @@ export default function DepartmentRequisitions() {
 }
 
 function DraftEditor({
-  request, requestDraft, setRequestDraft, lines, data, lineDraft, setLineDraft,
+  requestDraft, setRequestDraft, lines, data, lineDraft, setLineDraft,
   majorGroups, itemGroups, selectableItems, busy, saveDraft, submitDraft, deleteDraft,
   saveLine, editLine, deleteLine,
 }: {
-  request: Row
   requestDraft: Row
   setRequestDraft: (value: Row) => void
   lines: Row[]
