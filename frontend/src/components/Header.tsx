@@ -95,10 +95,21 @@ export default function Header() {
     return () => window.removeEventListener('keydown', openSearch)
   }, [])
 
+  const openMobileNavigation = () => window.dispatchEvent(new Event('tafiti-sidebar-open'))
+
   return (
     <header className="app-header tafiti-app-header tafiti-school-header">
       <div className="app-header-top tafiti-app-header-top tafiti-school-header-top">
         <div className="tafiti-header-left tafiti-school-header-left">
+          <button
+            type="button"
+            className="tafiti-school-mobile-menu"
+            onClick={openMobileNavigation}
+            aria-label="Open navigation"
+            title="Open navigation"
+          >
+            <Icon name="menu" size={17} />
+          </button>
           <button
             className="global-search-trigger tafiti-header-menu tafiti-school-search"
             onClick={() => setSearchOpen(true)}
