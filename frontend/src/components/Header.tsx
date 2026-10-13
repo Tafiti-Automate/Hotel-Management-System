@@ -117,7 +117,7 @@ export default function Header() {
             title="Search anything (Ctrl K)"
           >
             <Icon name="search" size={15} />
-            <span className="header-search-label">Search anything…</span>
+            <span className="header-search-label">Search records, requisitions, LPOs, suppliers…</span>
             <kbd>Ctrl K</kbd>
           </button>
         </div>

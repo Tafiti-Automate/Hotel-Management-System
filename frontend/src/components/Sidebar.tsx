@@ -170,7 +170,7 @@ export default function Sidebar() {
     >
       <div className="sidebar-brand tafiti-sidebar-brand">
         <div className="sidebar-brand-mark tafiti-sidebar-brand-mark">
-          <Icon name="apartment" size={20} color="#fff" fill />
+          <Icon name="inventory_2" size={20} color="#fff" fill />
         </div>
 
         {!collapsed && (

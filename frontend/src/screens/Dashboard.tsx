@@ -54,140 +54,83 @@ export default function Dashboard() {
   const department = app.user.departmentName || '—'
   const branch = app.currentBranch || app.user.branchName || '—'
   const visibleRecords = view.tasks.reduce((total, task) => total + task.count, 0)
-  const performanceTasks = view.tasks.slice(0, 4)
-  const performanceMax = Math.max(1, ...performanceTasks.map((task) => task.count))
+  const overviewTasks = view.tasks.slice(0, 5)
+  const activityRows = view.activities.slice(0, 6)
 
   return (
-    <div className="role-dashboard tafiti-dashboard">
-      <div className="tafiti-dashboard-grid">
-        <div className="tafiti-dashboard-main">
-          <section className="dashboard-week-summary">
-            <div className="dashboard-week-title-row">
-              <span className="dashboard-week-icon"><Icon name="add" size={15} /></span>
-              <div className="dashboard-week-copy">
-                <strong>This Week</strong>
-                <small>{formatDashboardDate()} · {statusLabel}</small>
-              </div>
-              <button type="button" onClick={app.refreshData} className="dashboard-week-refresh" aria-label="Refresh dashboard" title="Refresh dashboard">
-                <Icon name="refresh" size={15} />
-              </button>
-            </div>
-            <p>
-              {visibleRecords
-                ? `${visibleRecords} record${visibleRecords === 1 ? ' is' : 's are'} visible across your current responsibilities. Open a workspace below to continue work.`
-                : 'There is no outstanding activity in your current view. Your operational queues are clear and ready for the next request.'}
-            </p>
-            <div className="dashboard-week-tags">
-              {view.tasks.slice(0, 3).map((task) => <span key={task.label}>{task.count} {task.label.toLowerCase()}</span>)}
-            </div>
-          </section>
-
-          <section className="dashboard-kpi-section" aria-label="Current workload">
-            <div className="task-card-grid">
-              {view.tasks.map((task) => (
-                <Task key={task.label} task={task} onClick={() => app.navTo(task.route, task.routeLabel)} />
-              ))}
-            </div>
-          </section>
-
-          <section className="dashboard-summary-strip" aria-label="Current working scope">
-            <SummaryItem label="Visible" value={String(visibleRecords)} />
-            <SummaryItem label="Role" value={app.user.role || '—'} />
-            <SummaryItem label="Department" value={department} />
-            <SummaryItem label="Property" value={branch} />
-            <SummaryItem label="Data" value={statusLabel} tone={synced ? 'good' : app.apiStatus === 'offline' ? 'bad' : undefined} />
-          </section>
-
-          <section className="dashboard-panel dashboard-queue-panel">
-            <div className="dashboard-panel-header">
-              <div>
-                <h3>{view.queueTitle}</h3>
-                <span>{view.queueHint}</span>
-              </div>
-              <button type="button" onClick={() => app.navTo(view.queueRoute, view.queueRouteLabel)} className="dashboard-link-button">
-                Open workspace <Icon name="arrow_forward" size={14} />
-              </button>
-            </div>
-            <div className="dashboard-activity-list">
-              {view.activities.slice(0, 8).map((row) => (
-                <button
-                  key={`${row.id}-${row.title}`}
-                  type="button"
-                  onClick={() => app.navTo(row.route, row.routeLabel)}
-                  className="dashboard-activity-row"
-                >
-                  <div className="dashboard-activity-copy">
-                    <strong>{row.title}</strong>
-                    <span>{row.detail}</span>
-                  </div>
-                  <span style={statusBadge(row.status)}>{friendlyStatus(row.status)}</span>
-                  <span className="dashboard-activity-date">{row.date || ''}</span>
-                  <Icon name="chevron_right" size={16} color="var(--text-faint)" />
-                </button>
-              ))}
-              {!view.activities.length && <EmptyState />}
-            </div>
-          </section>
+    <div className="role-dashboard tafiti-dashboard reference-dashboard">
+      <section className="reference-dashboard-heading">
+        <div>
+          <h1>Dashboard</h1>
+          <p>{view.subtitle}</p>
         </div>
+        <button type="button" onClick={app.refreshData} className="reference-dashboard-date" title="Refresh dashboard">
+          <Icon name="schedule" size={16} />
+          <span>{formatDashboardDate()}</span>
+          <Icon name="refresh" size={15} />
+        </button>
+      </section>
 
-        <aside className="tafiti-dashboard-rail" aria-label="Dashboard information">
-          <section className="dashboard-rail-card dashboard-attention-card">
-            <div className="dashboard-rail-heading">
-              <h3>Needs Attention</h3>
-            </div>
-            <div className={`dashboard-attention-status${visibleRecords ? ' has-items' : ' is-clear'}`}>
-              <span className="dashboard-attention-dot" aria-hidden="true" />
-              <strong>
-                {visibleRecords
-                  ? `${visibleRecords} record${visibleRecords === 1 ? '' : 's'} currently visible`
-                  : 'All caught up'}
-              </strong>
-            </div>
-            <p>{visibleRecords ? 'Review the relevant role queues when ready.' : 'Nothing needs attention right now.'}</p>
-          </section>
+      <section className="dashboard-kpi-section" aria-label="Current workload">
+        <div className="task-card-grid">
+          {view.tasks.map((task) => (
+            <Task key={task.label} task={task} onClick={() => app.navTo(task.route, task.routeLabel)} />
+          ))}
+        </div>
+      </section>
 
-          <section className="dashboard-rail-card dashboard-performance-card">
-            <div className="dashboard-rail-heading">
-              <h3>Performance</h3>
-              <span>Where things stand right now</span>
-            </div>
-            <div className="dashboard-performance-grid">
-              {performanceTasks.map((task) => (
-                <PerformanceMetric key={task.label} task={task} maxCount={performanceMax} />
-              ))}
-            </div>
-          </section>
+      <section className="reference-dashboard-panels" aria-label="Operational overview">
+        <WorkloadOverview tasks={overviewTasks} total={visibleRecords} onOpen={() => app.navTo(view.queueRoute, view.queueRouteLabel)} />
 
-          <section className="dashboard-rail-card dashboard-context-panel">
-            <div className="dashboard-rail-heading">
-              <h3>Work Context</h3>
-              <span>Current account scope</span>
-            </div>
-            <div className="dashboard-context-list">
-              <ContextRow label="Role" value={app.user.role || '—'} />
-              {app.user.departmentName && <ContextRow label="Department" value={department} />}
-              {(app.currentBranch || app.user.branchName) && <ContextRow label="Property" value={branch} />}
-              <ContextRow label="Data" value={statusLabel} tone={synced ? 'good' : app.apiStatus === 'offline' ? 'bad' : undefined} />
-              {view.context.map((item) => <ContextRow key={item.label} label={item.label} value={item.value} />)}
-            </div>
-          </section>
+        <section className="reference-dashboard-panel reference-distribution-panel">
+          <PanelHeading title="Queue distribution" action="View details" onClick={() => app.navTo(view.queueRoute, view.queueRouteLabel)} />
+          <p className="reference-panel-copy">Live records grouped by the queues available to you.</p>
+          <QueueBars tasks={overviewTasks} />
+        </section>
 
-          <section className="dashboard-rail-card dashboard-followup-card">
-            <div className="dashboard-rail-heading"><h3>{view.primaryAction ? view.primaryAction.title : 'Continue Work'}</h3></div>
-            <p>{view.primaryAction ? view.primaryAction.hint : view.queueHint}</p>
-            <button
-              type="button"
-              className="dashboard-rail-action"
-              onClick={() => view.primaryAction
-                ? app.navTo(view.primaryAction.route, view.primaryAction.label)
-                : app.navTo(view.queueRoute, view.queueRouteLabel)}
-            >
-              {view.primaryAction ? view.primaryAction.label : `Open ${view.queueRouteLabel}`}
-              <Icon name="arrow_forward" size={14} />
-            </button>
-          </section>
-        </aside>
-      </div>
+        <section className="reference-dashboard-panel reference-activity-panel">
+          <PanelHeading title="Recent activities" action="View all" onClick={() => app.navTo(view.queueRoute, view.queueRouteLabel)} />
+          <div className="dashboard-activity-list">
+            {activityRows.map((row) => (
+              <button
+                key={`${row.id}-${row.title}`}
+                type="button"
+                onClick={() => app.navTo(row.route, row.routeLabel)}
+                className="dashboard-activity-row"
+              >
+                <span className="reference-activity-icon"><Icon name={activityIcon(row.status)} size={17} /></span>
+                <div className="dashboard-activity-copy">
+                  <strong>{row.title}</strong>
+                  <span>{row.detail}</span>
+                </div>
+                <span style={statusBadge(row.status)}>{friendlyStatus(row.status)}</span>
+                <Icon name="chevron_right" size={16} color="var(--text-faint)" />
+              </button>
+            ))}
+            {!activityRows.length && <EmptyState />}
+          </div>
+        </section>
+      </section>
+
+      <section className="reference-dashboard-footer" aria-label="Current working scope">
+        <div className="reference-scope-copy">
+          <span className={`reference-live-dot ${synced ? 'is-live' : app.apiStatus === 'offline' ? 'is-offline' : ''}`} />
+          <div><strong>{statusLabel} workspace</strong><span>{app.user.role || 'Operations'}{department !== '—' ? ` · ${department}` : ''}{branch !== '—' ? ` · ${branch}` : ''}</span></div>
+        </div>
+        <div className="reference-scope-values">
+          {view.context.slice(0, 2).map((item) => <span key={item.label}><small>{item.label}</small><strong>{item.value}</strong></span>)}
+        </div>
+        <button
+          type="button"
+          className="reference-dashboard-continue"
+          onClick={() => view.primaryAction
+            ? app.navTo(view.primaryAction.route, view.primaryAction.label)
+            : app.navTo(view.queueRoute, view.queueRouteLabel)}
+        >
+          {view.primaryAction ? view.primaryAction.label : `Open ${view.queueRouteLabel}`}
+          <Icon name="arrow_forward" size={15} />
+        </button>
+      </section>
     </div>
   )
 }
@@ -205,28 +148,64 @@ function Task({ task, onClick }: { task: TaskCard; onClick: () => void }) {
   )
 }
 
-function PerformanceMetric({ task, maxCount }: { task: TaskCard; maxCount: number }) {
-  const tone = task.tone || 'accent'
-  const progress = task.count === 0 ? 0 : Math.max(14, Math.round((task.count / maxCount) * 100))
+function PanelHeading({ title, action, onClick }: { title: string; action: string; onClick: () => void }) {
+  return <div className="reference-panel-heading"><h2>{title}</h2><button type="button" onClick={onClick}>{action}<Icon name="arrow_forward" size={14} /></button></div>
+}
+
+function WorkloadOverview({ tasks, total, onOpen }: { tasks: TaskCard[]; total: number; onOpen: () => void }) {
+  const slices = workloadSlices(tasks)
   return (
-    <div className={`dashboard-performance-item tone-${tone}`}>
-      <span className="dashboard-performance-ring" style={{ '--progress': `${progress}%` } as CSSProperties}><strong>{task.count}</strong></span>
-      <small>{task.label}</small>
+    <section className="reference-dashboard-panel reference-workload-panel">
+      <PanelHeading title="Work status" action="View details" onClick={onOpen} />
+      <div className="reference-workload-body">
+        <div className="reference-workload-donut" style={{ background: slices.gradient }}>
+          <div><strong>{total.toLocaleString('en-UG')}</strong><span>Records</span></div>
+        </div>
+        <div className="reference-workload-legend">
+          {slices.items.map((task) => <div key={task.label}><i className={`tone-${task.tone || 'accent'}`} /><span>{task.label}</span><strong>{task.count.toLocaleString('en-UG')}</strong></div>)}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function QueueBars({ tasks }: { tasks: TaskCard[] }) {
+  const maximum = Math.max(1, ...tasks.map((task) => task.count))
+  return (
+    <div className="reference-queue-chart" role="img" aria-label="Queue distribution based on live record counts">
+      {tasks.map((task) => {
+        const height = task.count ? Math.max(12, Math.round((task.count / maximum) * 100)) : 4
+        return <div key={task.label} className="reference-queue-bar"><span className={`tone-${task.tone || 'accent'}`} style={{ height: `${height}%` }} title={`${task.label}: ${task.count}`} /><small>{shortLabel(task.label)}</small></div>
+      })}
     </div>
   )
 }
 
-function SummaryItem({ label, value, tone }: { label: string; value: string; tone?: 'good' | 'bad' }) {
-  return (
-    <div className="dashboard-summary-item">
-      <span>{label}</span>
-      <strong className={tone ? `tone-${tone}` : ''}>{value}</strong>
-    </div>
-  )
+function workloadSlices(tasks: TaskCard[]) {
+  const total = tasks.reduce((sum, task) => sum + task.count, 0)
+  if (!total) return { gradient: 'conic-gradient(#dbe4f0 0 100%)', items: tasks }
+  const colours: Record<NonNullable<TaskCard['tone']>, string> = { accent: '#2563eb', warning: '#f59e0b', good: '#20b26b', danger: '#ef4765' }
+  let point = 0
+  const slices = tasks.map((task) => {
+    const end = point + (task.count / total) * 100
+    const colour = colours[task.tone || 'accent']
+    const slice = `${colour} ${point}% ${end}%`
+    point = end
+    return slice
+  })
+  return { gradient: `conic-gradient(${slices.join(', ')})`, items: tasks }
 }
 
-function ContextRow({ label, value, tone }: { label: string; value: string; tone?: 'good' | 'bad' }) {
-  return <div className="dashboard-context-row"><span>{label}</span><strong className={tone ? `tone-${tone}` : ''}>{value}</strong></div>
+function shortLabel(label: string) {
+  return label.split(/[· ]/).filter(Boolean).map((word) => word[0]).join('').slice(0, 3).toUpperCase() || 'Q'
+}
+
+function activityIcon(status: string) {
+  const key = statusKey(status)
+  if (/approved|received|issued|completed|active/.test(key)) return 'task_alt'
+  if (/rejected|cancelled|exception/.test(key)) return 'error'
+  if (/pending|partial|awaiting|draft/.test(key)) return 'schedule'
+  return 'receipt_long'
 }
 
 function dashboardFor(role: string, data: any): DashboardView {
