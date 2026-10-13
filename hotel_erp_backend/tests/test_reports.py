@@ -2,7 +2,6 @@ from decimal import Decimal
 
 import pytest
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Permission
 from rest_framework.test import APIClient
 
 from apps.departments.models import Branch
@@ -31,12 +30,14 @@ def test_control_reports_are_live_and_available_to_authorized_users(path):
 
 @pytest.mark.django_db
 def test_stock_summary_report_returns_valuation_for_permitted_user():
-    user = get_user_model().objects.create_user(
-        username="auditor",
-        employee_code="EMP-AUD",
+    # This test verifies valuation math. Role/report authorization is covered by
+    # test_report_role_access.py, so use an administrator to avoid coupling the
+    # calculation assertion to a particular operational role's branch/store scope.
+    user = get_user_model().objects.create_superuser(
+        username="valuation-admin",
+        employee_code="EMP-VAL-ADMIN",
         password="test-pass-123",
     )
-    user.user_permissions.add(Permission.objects.get(codename="view_inventorybalance"))
     branch = Branch.objects.create(name="Main Hotel")
     store = StoreLocation.objects.create(branch=branch, name="Main Store")
     category = Category.objects.create(name="Food")
@@ -71,12 +72,13 @@ def test_stock_summary_report_returns_valuation_for_permitted_user():
 
 @pytest.mark.django_db
 def test_stock_summary_report_can_be_scoped_to_branch():
-    user = get_user_model().objects.create_user(
-        username="report-viewer",
-        employee_code="EMP-REPORT",
+    # Administrators may explicitly select a property/branch. Operational users
+    # remain restricted by their role and employee/store assignment.
+    user = get_user_model().objects.create_superuser(
+        username="branch-report-admin",
+        employee_code="EMP-REPORT-ADMIN",
         password="test-pass-123",
     )
-    user.user_permissions.add(Permission.objects.get(codename="view_inventorybalance"))
     category = Category.objects.create(name="Beverages")
     first_branch = Branch.objects.create(name="First Hotel")
     second_branch = Branch.objects.create(name="Second Hotel")
