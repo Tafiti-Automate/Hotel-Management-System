@@ -12,6 +12,7 @@ const ReportView = lazy(() => import('./ReportView'))
 const HotelProfile = lazy(() => import('./HotelProfile'))
 const WorkflowHub = lazy(() => import('./WorkflowHub'))
 const HRDashboard = lazy(() => import('./HRDashboard'))
+const DepartmentHeadDashboard = lazy(() => import('./DepartmentHeadDashboard'))
 const ProcurementWorkbench = lazy(() => import('./ProcurementWorkbench'))
 const FinanceWorkbench = lazy(() => import('./FinanceWorkbench'))
 const InventoryWorkbench = lazy(() => import('./InventoryWorkbench'))
@@ -40,8 +41,8 @@ export default function AppShell() {
   const role = String(app.user.role || '').trim().toLowerCase()
 
   let content: React.ReactNode = null
-  if (!canAccessRoute(app.user, route)) content = <Dashboard />
-  else if (route === 'dashboard') content = <Dashboard />
+  if (!canAccessRoute(app.user, route)) content = role === 'department head' ? <DepartmentHeadDashboard /> : <Dashboard />
+  else if (route === 'dashboard') content = role === 'department head' ? <DepartmentHeadDashboard /> : <Dashboard />
   else if (route === 'hr-dashboard') content = <HRDashboard />
   else if (route === 'workflow-procure') content = <ProcurementWorkbench />
   else if (route === 'workflow-stores') content = role === 'department head' ? <DepartmentRequisitions /> : <InventoryWorkbench />
