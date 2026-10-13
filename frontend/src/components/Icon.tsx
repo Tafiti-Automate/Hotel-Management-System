@@ -23,14 +23,17 @@ const SUPPLEMENTAL_ICONS = new Set([
   'upload',
 ])
 
-// The bundled primary symbol font is intentionally small. A few Material
-// Symbol names used by newer screens are not in that subset; alias them to
-// equivalent symbols that are known to exist so the raw ligature text can
-// never appear in the interface.
+// The bundled primary symbol font is intentionally small. Alias newer symbol
+// names to equivalent glyphs that are known to exist in the bundled subset so
+// raw ligature text can never leak into the interface.
 const SAFE_ALIASES: Record<string, string> = {
   analytics: 'bar_chart',
   monitoring: 'bar_chart',
   visibility: 'description',
+  filter_alt: 'tune',
+  filter_alt_off: 'tune',
+  sync: 'refresh',
+  search_off: 'search',
 }
 
 /** Material Symbols Rounded glyph. */
