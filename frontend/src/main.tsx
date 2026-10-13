@@ -5,6 +5,7 @@ import './enterprise.css'
 import './responsive.css'
 import './tafiti-school-ui.css'
 import './tafiti-school-auth.css'
+import './tafiti-school-finishing.css'
 import App from './App'
 import { AppProvider } from './state/AppContext'
 
