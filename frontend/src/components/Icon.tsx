@@ -23,14 +23,25 @@ const SUPPLEMENTAL_ICONS = new Set([
   'upload',
 ])
 
+// The bundled primary symbol font is intentionally small. A few Material
+// Symbol names used by newer screens are not in that subset; alias them to
+// equivalent symbols that are known to exist so the raw ligature text can
+// never appear in the interface.
+const SAFE_ALIASES: Record<string, string> = {
+  analytics: 'bar_chart',
+  monitoring: 'bar_chart',
+  visibility: 'description',
+}
+
 /** Material Symbols Rounded glyph. */
 export function Icon({ name, size = 20, color, fill, weight, style }: IconProps) {
+  const safeName = SAFE_ALIASES[name] || name
   const fvs: string[] = []
   if (fill) fvs.push("'FILL' 1")
   if (weight) fvs.push(`'wght' ${weight}`)
   return (
     <span
-      className={`ic${SUPPLEMENTAL_ICONS.has(name) ? ' ic-supplemental' : ''}`}
+      className={`ic${SUPPLEMENTAL_ICONS.has(safeName) ? ' ic-supplemental' : ''}`}
       aria-hidden="true"
       style={{
         fontSize: size,
@@ -39,7 +50,7 @@ export function Icon({ name, size = 20, color, fill, weight, style }: IconProps)
         ...style,
       }}
     >
-      {name}
+      {safeName}
     </span>
   )
 }
