@@ -1,0 +1,986 @@
+/* ========================================================================== 
+   TAFITI HOTEL ERP — PREMIUM SAAS DESIGN SYSTEM
+   Presentation only. No workflow, permission, API, quantity or approval logic.
+   ========================================================================== */
+
+/* ---------- Core palette & typography ---------- */
+.application-root {
+  --saas-navy-950: #071426;
+  --saas-navy-900: #0a1d38;
+  --saas-navy-850: #0d284b;
+  --saas-navy-800: #12345f;
+  --saas-blue-700: #1f5fd6;
+  --saas-blue-600: #2f6fed;
+  --saas-blue-500: #4b83f1;
+  --saas-blue-100: #eaf2ff;
+  --saas-blue-50: #f4f8ff;
+  --saas-canvas: #f4f7fb;
+  --saas-panel: #ffffff;
+  --saas-panel-soft: #f8fafd;
+  --saas-border: #e3e9f2;
+  --saas-border-strong: #d5dfec;
+  --saas-text: #172033;
+  --saas-text-2: #2f3c55;
+  --saas-muted: #6e7c93;
+  --saas-faint: #93a0b4;
+  --saas-success: #169b62;
+  --saas-warning: #d98b1f;
+  --saas-danger: #d6455d;
+  --saas-purple: #7857d7;
+  --saas-radius-sm: 8px;
+  --saas-radius: 12px;
+  --saas-radius-lg: 16px;
+  --saas-shadow-xs: 0 1px 2px rgba(14, 35, 67, .04);
+  --saas-shadow-sm: 0 8px 24px rgba(14, 35, 67, .055), 0 1px 2px rgba(14, 35, 67, .035);
+  --saas-shadow-md: 0 16px 42px rgba(14, 35, 67, .10);
+
+  --bg: var(--saas-canvas) !important;
+  --surface: var(--saas-panel) !important;
+  --surface-2: var(--saas-panel-soft) !important;
+  --surface-3: #eef3f9 !important;
+  --border: var(--saas-border) !important;
+  --border-2: var(--saas-border-strong) !important;
+  --text: var(--saas-text) !important;
+  --text-muted: var(--saas-muted) !important;
+  --text-faint: var(--saas-faint) !important;
+  --accent: var(--saas-blue-600) !important;
+  --accent-soft: var(--saas-blue-100) !important;
+  --good: var(--saas-success) !important;
+  --warn: var(--saas-warning) !important;
+  --bad: var(--saas-danger) !important;
+  --shadow-sm: var(--saas-shadow-xs) !important;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  background: var(--saas-canvas) !important;
+  color: var(--saas-text) !important;
+}
+
+* { box-sizing: border-box; }
+button, input, select, textarea { font: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
+
+/* ---------- Application shell ---------- */
+.screen-app {
+  min-height: 100vh;
+  background: var(--saas-canvas) !important;
+}
+
+.screen-app .app-shell,
+.screen-app .tafiti-app-shell {
+  min-height: 100vh !important;
+  height: 100vh !important;
+  display: flex !important;
+  overflow: hidden !important;
+  background: var(--saas-canvas) !important;
+}
+
+.screen-app .tafiti-shell-topline { display: none !important; }
+
+.screen-app .app-main,
+.screen-app .tafiti-app-main {
+  min-width: 0 !important;
+  min-height: 0 !important;
+  flex: 1 1 auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  background: var(--saas-canvas) !important;
+}
+
+/* ---------- Sidebar ---------- */
+.screen-app aside.sidebar.tafiti-sidebar,
+.screen-app .sidebar.tafiti-sidebar {
+  position: relative !important;
+  top: auto !important;
+  z-index: 45 !important;
+  width: 248px !important;
+  min-width: 248px !important;
+  height: 100vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  background: linear-gradient(180deg, #0a2445 0%, #081d39 58%, #07182f 100%) !important;
+  border: 0 !important;
+  box-shadow: 10px 0 32px rgba(7, 24, 47, .13) !important;
+  color: #d9e5f5 !important;
+}
+
+.screen-app .tafiti-sidebar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(79, 131, 241, .18), transparent 24rem),
+    linear-gradient(180deg, rgba(255,255,255,.018), transparent 35%);
+}
+
+.screen-app .tafiti-sidebar > * { position: relative; z-index: 1; }
+
+.screen-app .tafiti-sidebar-brand {
+  min-height: 76px !important;
+  padding: 16px 14px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 11px !important;
+  border-bottom: 1px solid rgba(255,255,255,.08) !important;
+  background: transparent !important;
+}
+
+.screen-app .tafiti-sidebar-brand-mark {
+  width: 40px !important;
+  height: 40px !important;
+  flex: 0 0 40px !important;
+  display: grid !important;
+  place-items: center !important;
+  border-radius: 11px !important;
+  background: linear-gradient(145deg, #4b83f1, #2f6fed) !important;
+  box-shadow: 0 8px 20px rgba(47,111,237,.28) !important;
+}
+
+.screen-app .tafiti-sidebar-brand-copy { min-width: 0 !important; flex: 1 !important; }
+.screen-app .sidebar-brand-title,
+.screen-app .tafiti-sidebar-brand-copy .sidebar-brand-title {
+  color: #fff !important;
+  font-size: 14px !important;
+  font-weight: 760 !important;
+  letter-spacing: -.01em !important;
+}
+.screen-app .sidebar-brand-subtitle,
+.screen-app .tafiti-sidebar-brand-copy .sidebar-brand-subtitle {
+  margin-top: 3px !important;
+  color: #91a8c7 !important;
+  font-size: 9px !important;
+  font-weight: 700 !important;
+  letter-spacing: .08em !important;
+  text-transform: uppercase !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.screen-app .tafiti-sidebar-collapse,
+.screen-app .tafiti-sidebar-expand,
+.screen-app .tafiti-sidebar-mobile-toggle {
+  color: #94a9c7 !important;
+  background: transparent !important;
+  border: 0 !important;
+}
+
+.screen-app .tafiti-sidebar-property {
+  margin: 12px 12px 4px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.screen-app .tafiti-property-trigger {
+  width: 100% !important;
+  min-height: 62px !important;
+  padding: 10px 11px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  border: 1px solid rgba(255,255,255,.09) !important;
+  border-radius: 11px !important;
+  background: rgba(255,255,255,.045) !important;
+  color: #dce8f7 !important;
+  box-shadow: none !important;
+}
+
+.screen-app .tafiti-property-trigger > .ic { color: #70a0ff !important; }
+.screen-app .tafiti-property-copy { min-width: 0 !important; flex: 1 !important; text-align: left !important; }
+.screen-app .tafiti-property-label {
+  display: block !important;
+  color: #7890b0 !important;
+  font-size: 8px !important;
+  font-weight: 800 !important;
+  letter-spacing: .09em !important;
+  text-transform: uppercase !important;
+}
+.screen-app .tafiti-property-value {
+  display: block !important;
+  margin-top: 4px !important;
+  color: #eef5ff !important;
+  font-size: 11.5px !important;
+  font-weight: 650 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.screen-app .tafiti-sidebar-nav {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  padding: 8px 10px 18px !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(255,255,255,.12) transparent !important;
+}
+
+.screen-app .tafiti-sidebar-nav-group { margin-top: 15px !important; }
+.screen-app .tafiti-sidebar-nav-group:first-child { margin-top: 5px !important; }
+.screen-app .sidebar-nav-heading {
+  margin: 0 10px 7px !important;
+  color: #68809f !important;
+  font-size: 8.5px !important;
+  font-weight: 800 !important;
+  letter-spacing: .11em !important;
+  text-transform: uppercase !important;
+}
+
+.screen-app .sidebar-nav-item.tafiti-sidebar-nav-item {
+  width: 100% !important;
+  min-height: 40px !important;
+  margin: 2px 0 !important;
+  padding: 0 11px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  border: 0 !important;
+  border-radius: 9px !important;
+  background: transparent !important;
+  color: #aec0d8 !important;
+  font-size: 11.5px !important;
+  font-weight: 560 !important;
+  transition: background .14s ease, color .14s ease, transform .14s ease !important;
+}
+.screen-app .sidebar-nav-item.tafiti-sidebar-nav-item:hover {
+  background: rgba(255,255,255,.06) !important;
+  color: #fff !important;
+}
+.screen-app .sidebar-nav-item.tafiti-sidebar-nav-item.active {
+  background: linear-gradient(100deg, #2f6fed 0%, #3d7cf0 100%) !important;
+  color: #fff !important;
+  box-shadow: 0 8px 22px rgba(47,111,237,.26) !important;
+}
+.screen-app .sidebar-nav-item.tafiti-sidebar-nav-item .ic { color: currentColor !important; }
+.screen-app .tafiti-sidebar-nav-label { overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; }
+
+.screen-app .tafiti-sidebar-footer {
+  padding: 10px 12px 13px !important;
+  border-top: 1px solid rgba(255,255,255,.075) !important;
+  background: rgba(4, 15, 32, .14) !important;
+}
+.screen-app .tafiti-sidebar-user {
+  min-height: 52px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 9px !important;
+  padding: 8px !important;
+  border-radius: 10px !important;
+  background: rgba(255,255,255,.04) !important;
+  color: #fff !important;
+}
+.screen-app .tafiti-sidebar-user-copy { min-width: 0 !important; flex: 1 !important; }
+.screen-app .tafiti-sidebar-user-name { color: #f8fbff !important; font-size: 10.5px !important; font-weight: 700 !important; overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; }
+.screen-app .tafiti-sidebar-user-role { margin-top: 2px !important; color: #7891b3 !important; font-size: 9px !important; }
+.screen-app .tafiti-module-switch { min-height: 38px !important; margin-bottom: 7px !important; padding: 0 9px !important; border-radius: 8px !important; color: #9eb2cc !important; }
+
+/* ---------- Header ---------- */
+.screen-app .app-header,
+.screen-app .tafiti-app-header {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 35 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  flex: 0 0 auto !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: rgba(255,255,255,.96) !important;
+  box-shadow: 0 1px 0 var(--saas-border) !important;
+  backdrop-filter: blur(12px) !important;
+}
+
+.screen-app .tafiti-school-header-top {
+  min-height: 62px !important;
+  padding: 0 24px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 16px !important;
+  background: #fff !important;
+}
+
+.screen-app .tafiti-school-header-left { min-width: 0 !important; display: flex !important; align-items: center !important; gap: 9px !important; }
+.screen-app .tafiti-school-search {
+  width: min(360px, 34vw) !important;
+  height: 38px !important;
+  padding: 0 11px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 9px !important;
+  border: 1px solid var(--saas-border) !important;
+  border-radius: 10px !important;
+  background: #f8fafd !important;
+  color: var(--saas-muted) !important;
+  box-shadow: none !important;
+}
+.screen-app .tafiti-school-search:hover { border-color: #cdd9e9 !important; background: #fff !important; }
+.screen-app .tafiti-school-search kbd {
+  margin-left: auto !important;
+  padding: 2px 6px !important;
+  border: 1px solid var(--saas-border) !important;
+  border-radius: 5px !important;
+  background: #fff !important;
+  color: #8795aa !important;
+  font-size: 9px !important;
+  box-shadow: var(--saas-shadow-xs) !important;
+}
+.screen-app .header-search-label { overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; font-size: 11.5px !important; }
+
+.screen-app .tafiti-school-header-actions { display: flex !important; align-items: center !important; gap: 8px !important; }
+.screen-app .tafiti-school-context-chip,
+.screen-app .header-live-state,
+.screen-app .header-role-chip {
+  min-height: 28px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 0 9px !important;
+  border: 1px solid var(--saas-border) !important;
+  border-radius: 999px !important;
+  background: #fff !important;
+  color: var(--saas-muted) !important;
+  font-size: 9.5px !important;
+  font-weight: 700 !important;
+  white-space: nowrap !important;
+}
+.screen-app .header-role-chip { background: var(--saas-blue-50) !important; border-color: #dce8ff !important; color: var(--saas-blue-700) !important; }
+.screen-app .header-live-state.is-live i { background: #20b877 !important; }
+.screen-app .header-notification-trigger,
+.screen-app .tafiti-school-icon-button {
+  width: 36px !important;
+  height: 36px !important;
+  border: 1px solid var(--saas-border) !important;
+  border-radius: 10px !important;
+  background: #fff !important;
+  color: #66768f !important;
+  box-shadow: none !important;
+}
+.screen-app .tafiti-school-profile {
+  min-height: 42px !important;
+  padding: 4px 4px 4px 7px !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+  color: var(--saas-text) !important;
+}
+.screen-app .tafiti-school-profile:hover { background: #f6f8fb !important; }
+.screen-app .tafiti-header-user-copy { text-align: left !important; }
+.screen-app .tafiti-header-user-copy > span { color: var(--saas-text) !important; font-size: 10.5px !important; font-weight: 700 !important; }
+.screen-app .tafiti-header-user-copy small { display: block !important; margin-top: 1px !important; color: var(--saas-faint) !important; font-size: 8.5px !important; }
+
+.screen-app .tafiti-school-breadcrumb-bar {
+  min-height: 35px !important;
+  padding: 0 24px !important;
+  display: flex !important;
+  align-items: center !important;
+  border-top: 1px solid #f3f5f8 !important;
+  border-bottom: 1px solid var(--saas-border) !important;
+  background: #fbfcfe !important;
+}
+.screen-app .tafiti-school-breadcrumb { display: flex !important; align-items: center !important; gap: 6px !important; min-width: 0 !important; color: #8a98ad !important; font-size: 9.5px !important; }
+.screen-app .tafiti-school-breadcrumb button { padding: 0 !important; border: 0 !important; background: transparent !important; color: #7b899e !important; cursor: pointer !important; font-size: inherit !important; }
+.screen-app .tafiti-school-breadcrumb strong { color: #42506a !important; font-weight: 700 !important; }
+.screen-app .tafiti-school-breadcrumb > span:last-child { margin-left: auto !important; color: #9aa7b9 !important; overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; }
+
+/* ---------- Main content ---------- */
+.screen-app .app-content,
+.screen-app .tafiti-app-content {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: auto !important;
+  padding: 22px 24px 34px !important;
+  background:
+    radial-gradient(circle at 92% -4%, rgba(47,111,237,.045), transparent 28rem),
+    var(--saas-canvas) !important;
+}
+
+.screen-app .app-content > * {
+  width: 100% !important;
+  max-width: 1500px !important;
+  margin-inline: auto !important;
+}
+
+/* ---------- Shared headings ---------- */
+.screen-app :is(.hod-page-header,.role-dashboard-header,.workbench-hero,.enterprise-workspace > header,.list-toolbar,.access-heading,.workflow-hub-header) {
+  margin: 0 0 16px !important;
+}
+.screen-app :is(.hod-page-header,.role-dashboard-header,.enterprise-workspace > header,.list-toolbar,.access-heading,.workflow-hub-header) h1,
+.screen-app .workbench-hero h1 {
+  margin: 0 !important;
+  color: var(--saas-text) !important;
+  font-size: clamp(23px, 2.2vw, 30px) !important;
+  line-height: 1.15 !important;
+  letter-spacing: -.035em !important;
+  font-weight: 770 !important;
+}
+.screen-app :is(.hod-page-header,.role-dashboard-header,.enterprise-workspace > header,.list-toolbar,.access-heading,.workflow-hub-header) p,
+.screen-app .workbench-hero p {
+  max-width: 760px !important;
+  margin: 6px 0 0 !important;
+  color: var(--saas-muted) !important;
+  font-size: 11.5px !important;
+  line-height: 1.5 !important;
+}
+.screen-app .hod-page-eyebrow,
+.screen-app .report-view-eyebrow {
+  margin-bottom: 5px !important;
+  color: var(--saas-blue-600) !important;
+  font-size: 8.5px !important;
+  font-weight: 800 !important;
+  letter-spacing: .10em !important;
+  text-transform: uppercase !important;
+}
+
+/* ---------- Buttons ---------- */
+.screen-app :is(.erp-primary,.erp-secondary,.erp-danger,.access-primary,.dashboard-link-button,.report-back-button,.report-refresh-button,.report-clear-filters) {
+  min-height: 36px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 7px !important;
+  padding: 0 12px !important;
+  border-radius: 9px !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: -.005em !important;
+  box-shadow: none !important;
+  transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease, background .12s ease !important;
+}
+.screen-app .erp-primary,
+.screen-app .access-primary {
+  border: 1px solid #2d68df !important;
+  background: linear-gradient(180deg, #3a78f0 0%, #2f6fed 100%) !important;
+  color: #fff !important;
+  box-shadow: 0 7px 16px rgba(47,111,237,.17) !important;
+}
+.screen-app .erp-primary:hover,
+.screen-app .access-primary:hover { transform: translateY(-1px) !important; box-shadow: 0 10px 22px rgba(47,111,237,.22) !important; }
+.screen-app .erp-secondary,
+.screen-app .report-back-button,
+.screen-app .report-refresh-button,
+.screen-app .report-clear-filters {
+  border: 1px solid var(--saas-border) !important;
+  background: #fff !important;
+  color: #44536b !important;
+}
+.screen-app .erp-secondary:hover,
+.screen-app .report-back-button:hover { border-color: #c8d5e5 !important; background: #f8fafd !important; }
+.screen-app button:disabled { opacity: .48 !important; cursor: not-allowed !important; transform: none !important; box-shadow: none !important; }
+
+/* ---------- Form controls ---------- */
+.screen-app :where(input,select,textarea) {
+  border: 1px solid var(--saas-border-strong) !important;
+  border-radius: 9px !important;
+  background: #fff !important;
+  color: var(--saas-text) !important;
+  box-shadow: none !important;
+  transition: border-color .12s ease, box-shadow .12s ease, background .12s ease !important;
+}
+.screen-app :where(input,select) { min-height: 38px !important; }
+.screen-app :where(textarea) { line-height: 1.5 !important; }
+.screen-app :where(input,select,textarea):hover { border-color: #c6d3e4 !important; }
+.screen-app :where(input,select,textarea):focus {
+  outline: none !important;
+  border-color: var(--saas-blue-500) !important;
+  box-shadow: 0 0 0 3px rgba(47,111,237,.11) !important;
+}
+.screen-app label > span,
+.screen-app .hod-field-label,
+.screen-app .report-filter-field > span {
+  color: #75849a !important;
+  font-size: 8.5px !important;
+  font-weight: 800 !important;
+  letter-spacing: .055em !important;
+  text-transform: uppercase !important;
+}
+
+/* ---------- Shared cards / panels ---------- */
+.screen-app :is(.hod-list-panel,.hod-detail-panel,.hod-dashboard-panel,.inventory-records-card,.procurement-records-card,.report-records-card,.access-card,.explorer-workspace-layout,.article-master-layout,.unit-master-layout,.workbench-grid,.workflow-path,.report-filter-shell,.report-results-shell) {
+  border: 1px solid var(--saas-border) !important;
+  border-radius: var(--saas-radius) !important;
+  background: #fff !important;
+  box-shadow: var(--saas-shadow-xs) !important;
+}
+
+/* ---------- HOD dashboard/requisitions ---------- */
+.screen-app .hod-flow-strip,
+.screen-app .hod-dashboard-flow { display: none !important; }
+
+.screen-app .hod-kpi-grid,
+.screen-app .hod-dashboard-kpis {
+  display: grid !important;
+  grid-template-columns: repeat(4,minmax(0,1fr)) !important;
+  gap: 10px !important;
+  margin: 0 0 14px !important;
+}
+.screen-app .hod-kpi-card,
+.screen-app .hod-dashboard-metric {
+  min-height: 72px !important;
+  padding: 11px 13px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  border: 1px solid var(--saas-border) !important;
+  border-radius: 11px !important;
+  background: #fff !important;
+  box-shadow: var(--saas-shadow-xs) !important;
+}
+.screen-app .hod-kpi-card > span,
+.screen-app .hod-dashboard-metric > span {
+  width: 34px !important;
+  height: 34px !important;
+  flex: 0 0 34px !important;
+  display: grid !important;
+  place-items: center !important;
+  border-radius: 9px !important;
+  background: var(--saas-blue-50) !important;
+  color: var(--saas-blue-600) !important;
+}
+.screen-app .hod-kpi-card strong,
+.screen-app .hod-dashboard-metric strong { display: block !important; color: var(--saas-text) !important; font-size: 20px !important; line-height: 1 !important; font-weight: 760 !important; }
+.screen-app .hod-kpi-card small,
+.screen-app .hod-dashboard-metric small { display: block !important; margin-top: 4px !important; color: var(--saas-muted) !important; font-size: 9.5px !important; }
+
+.screen-app .hod-error {
+  min-height: 44px !important;
+  margin: 0 0 14px !important;
+  padding: 0 13px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  border: 1px solid #f3c7ce !important;
+  border-radius: 10px !important;
+  background: #fff5f6 !important;
+  color: #bd3f51 !important;
+  font-size: 10.5px !important;
+  box-shadow: none !important;
+}
+
+.screen-app .hod-workspace {
+  display: grid !important;
+  grid-template-columns: minmax(420px,.82fr) minmax(560px,1.18fr) !important;
+  gap: 12px !important;
+  align-items: start !important;
+}
+.screen-app .hod-workspace:not(.has-selection) { grid-template-columns: minmax(560px, 860px) !important; }
+.screen-app .hod-workspace:not(.has-selection) .hod-detail-panel { display: none !important; }
+.screen-app .hod-list-panel,
+.screen-app .hod-detail-panel { overflow: hidden !important; min-width: 0 !important; }
+.screen-app .hod-list-heading {
+  min-height: 62px !important;
+  padding: 11px 13px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  border-bottom: 1px solid var(--saas-border) !important;
+  background: #fff !important;
+}
+.screen-app .hod-list-heading strong { color: var(--saas-text) !important; font-size: 11.5px !important; }
+.screen-app .hod-list-heading span { display: block !important; margin-top: 3px !important; color: var(--saas-faint) !important; font-size: 9px !important; }
+.screen-app .hod-segmented {
+  padding: 3px !important;
+  display: flex !important;
+  gap: 2px !important;
+  border: 1px solid var(--saas-border) !important;
+  border-radius: 9px !important;
+  background: #f7f9fc !important;
+}
+.screen-app .hod-segmented button {
+  min-height: 30px !important;
+  padding: 0 9px !important;
+  border: 0 !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+  color: #728096 !important;
+  font-size: 9.5px !important;
+  font-weight: 700 !important;
+}
+.screen-app .hod-segmented button.active { background: #fff !important; color: var(--saas-blue-600) !important; box-shadow: var(--saas-shadow-xs) !important; }
+
+.screen-app .hod-filters {
+  display: grid !important;
+  grid-template-columns: minmax(150px,1.25fr) minmax(110px,.7fr) minmax(120px,.75fr) minmax(120px,.75fr) !important;
+  gap: 8px !important;
+  padding: 10px 12px !important;
+  border-bottom: 1px solid var(--saas-border) !important;
+  background: #fbfcfe !important;
+}
+.screen-app .hod-filters label { min-width: 0 !important; }
+.screen-app .hod-filters label > span { display: block !important; margin: 0 0 5px !important; }
+.screen-app .hod-filters :where(input,select) { width: 100% !important; min-width: 0 !important; height: 36px !important; min-height: 36px !important; font-size: 10.5px !important; }
+.screen-app .hod-mobile-filter-toggle { display: none !important; }
+
+.screen-app .hod-request-list { max-height: calc(100vh - 385px) !important; overflow: auto !important; }
+.screen-app .hod-request-row {
+  width: 100% !important;
+  min-height: 70px !important;
+  display: grid !important;
+  grid-template-columns: 92px minmax(0,1fr) 82px 104px 18px !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 10px 12px !important;
+  border: 0 !important;
+  border-bottom: 1px solid #edf1f6 !important;
+  border-radius: 0 !important;
+  background: #fff !important;
+  color: var(--saas-text) !important;
+  text-align: left !important;
+}
+.screen-app .hod-request-row:hover { background: #f8fbff !important; }
+.screen-app .hod-request-row.selected { background: #eef5ff !important; box-shadow: inset 3px 0 0 var(--saas-blue-600) !important; }
+.screen-app .hod-request-ref { color: var(--saas-blue-700) !important; font-size: 10.5px !important; font-weight: 800 !important; }
+.screen-app .hod-request-main { min-width: 0 !important; }
+.screen-app .hod-request-main strong { display: block !important; color: var(--saas-text) !important; font-size: 11px !important; overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; }
+.screen-app .hod-request-main small { display: block !important; margin-top: 3px !important; color: var(--saas-muted) !important; font-size: 9px !important; overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; }
+.screen-app .hod-request-date { color: #8796aa !important; font-size: 9px !important; white-space: nowrap !important; }
+
+.screen-app .hod-detail-panel { max-height: calc(100vh - 245px) !important; display: flex !important; flex-direction: column !important; }
+.screen-app .hod-detail-header {
+  min-height: 82px !important;
+  padding: 14px 16px !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  border-bottom: 1px solid var(--saas-border) !important;
+  background: #fff !important;
+}
+.screen-app .hod-detail-header span:first-child { color: #8a99ae !important; font-size: 8px !important; font-weight: 800 !important; letter-spacing: .08em !important; text-transform: uppercase !important; }
+.screen-app .hod-detail-header h2 { margin: 5px 0 0 !important; color: var(--saas-text) !important; font-size: 17px !important; letter-spacing: -.02em !important; }
+.screen-app .hod-detail-header p { margin: 4px 0 0 !important; color: var(--saas-muted) !important; font-size: 9.5px !important; }
+.screen-app .hod-detail-scroll { min-height: 0 !important; flex: 1 1 auto !important; overflow: auto !important; padding: 14px !important; background: #fbfcfe !important; }
+.screen-app .hod-editor { display: grid !important; gap: 12px !important; }
+.screen-app .hod-editor-section {
+  overflow: visible !important;
+  border: 1px solid var(--saas-border) !important;
+  border-radius: 11px !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+.screen-app .hod-section-heading { min-height: 52px !important; padding: 10px 12px !important; display: flex !important; align-items: center !important; justify-content: space-between !important; gap: 12px !important; border-bottom: 1px solid var(--saas-border) !important; background: #fbfcfe !important; border-radius: 11px 11px 0 0 !important; }
+.screen-app .hod-section-heading strong { color: var(--saas-text) !important; font-size: 10.5px !important; }
+.screen-app .hod-section-heading span { display: block !important; margin-top: 2px !important; color: var(--saas-muted) !important; font-size: 8.8px !important; text-transform: none !important; letter-spacing: 0 !important; }
+.screen-app .hod-form-grid,
+.screen-app .hod-add-line-grid { padding: 12px !important; gap: 10px !important; }
+.screen-app .hod-form-grid textarea { min-height: 74px !important; }
+.screen-app .hod-line-row { min-height: 62px !important; padding: 9px 12px !important; border-bottom: 1px solid #edf1f6 !important; background: #fff !important; }
+.screen-app .hod-add-line-card { margin: 10px !important; padding: 11px !important; border: 1px dashed #cbd7e8 !important; border-radius: 10px !important; background: #f8fbff !important; }
+.screen-app .hod-editor-submit { position: sticky !important; bottom: -14px !important; z-index: 8 !important; margin: 0 -14px -14px !important; padding: 10px 14px !important; display: flex !important; align-items: center !important; gap: 8px !important; border-top: 1px solid var(--saas-border) !important; background: rgba(255,255,255,.96) !important; backdrop-filter: blur(10px) !important; }
+.screen-app .hod-submit-readiness { margin-right: auto !important; color: var(--saas-muted) !important; font-size: 9.5px !important; }
+.screen-app .hod-submit-readiness.ready { color: var(--saas-success) !important; }
+
+/* ---------- Status pills ---------- */
+.screen-app :is(.status-chip,.status-badge,.hod-status,.access-status) {
+  border-radius: 999px !important;
+  font-size: 8.5px !important;
+  font-weight: 800 !important;
+  letter-spacing: .01em !important;
+  box-shadow: none !important;
+}
+
+/* ---------- Dashboard ---------- */
+.screen-app .role-dashboard,
+.screen-app .dashboard-screen,
+.screen-app .hod-dashboard { max-width: 1500px !important; }
+.screen-app .dashboard-kpi-grid,
+.screen-app .enterprise-kpi-grid,
+.screen-app .workbench-metrics {
+  display: grid !important;
+  grid-template-columns: repeat(4,minmax(0,1fr)) !important;
+  gap: 10px !important;
+}
+.screen-app :is(.dashboard-card,.enterprise-kpi-card,.workbench-metric,.metric-card) {
+  border: 1px solid var(--saas-border) !important;
+  border-radius: 11px !important;
+  background: #fff !important;
+  box-shadow: var(--saas-shadow-xs) !important;
+}
+
+/* ---------- Workbenches / operational grids ---------- */
+.screen-app .workbench-hero {
+  padding: 0 0 15px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--saas-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.screen-app .workflow-path { overflow: hidden !important; }
+.screen-app .workflow-path-header { padding: 10px 13px !important; border-bottom: 1px solid var(--saas-border) !important; background: #fafcfe !important; }
+.screen-app .workflow-path-steps { gap: 0 !important; padding: 0 !important; }
+.screen-app .workflow-path-step { min-height: 68px !important; border: 0 !important; border-right: 1px solid var(--saas-border) !important; border-radius: 0 !important; background: #fff !important; box-shadow: none !important; }
+.screen-app .workflow-path-step:last-child { border-right: 0 !important; }
+.screen-app .workflow-path-step.is-active { background: var(--saas-blue-50) !important; box-shadow: inset 0 -2px 0 var(--saas-blue-600) !important; }
+.screen-app .workbench-grid { overflow: hidden !important; gap: 0 !important; }
+.screen-app .workbench-grid > section { border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
+
+/* ---------- Tables ---------- */
+.screen-app :is(.data-table,.inventory-records-card,.procurement-records-card,.report-records-card,.access-table-wrap) {
+  overflow: hidden !important;
+  border: 1px solid var(--saas-border) !important;
+  border-radius: 11px !important;
+  background: #fff !important;
+  box-shadow: var(--saas-shadow-xs) !important;
+}
+.screen-app :is(.data-head,.access-table-head,.procurement-record-head,.report-record-head) {
+  min-height: 38px !important;
+  background: #f7f9fc !important;
+  color: #8290a4 !important;
+  font-size: 8.5px !important;
+  font-weight: 800 !important;
+  letter-spacing: .055em !important;
+  text-transform: uppercase !important;
+}
+.screen-app :is(.data-row,.access-table-row,.procurement-record-row,.report-record-row) {
+  border-top-color: #edf1f6 !important;
+  color: var(--saas-text-2) !important;
+  font-size: 10.5px !important;
+}
+.screen-app :is(.data-row,.access-table-row,.procurement-record-row,.report-record-row):hover { background: #f9fbfe !important; }
+
+/* ---------- Master-data explorers ---------- */
+.screen-app :is(.explorer-workspace-layout,.article-master-layout,.unit-master-layout) { overflow: hidden !important; }
+.screen-app :is(.explorer-workspace-pane,.article-master-layout > aside,.unit-master-layout > aside) { background: #f8fafd !important; border-right: 1px solid var(--saas-border) !important; }
+
+/* ---------- Reports center ---------- */
+.screen-app .tafiti-report-center { max-width: 1450px !important; }
+.screen-app .tafiti-report-center-header {
+  display: flex !important;
+  align-items: flex-end !important;
+  justify-content: space-between !important;
+  gap: 20px !important;
+  padding-bottom: 16px !important;
+  margin-bottom: 16px !important;
+  border-bottom: 1px solid var(--saas-border) !important;
+}
+.screen-app .tafiti-report-center-heading { display: flex !important; align-items: flex-start !important; gap: 12px !important; }
+.screen-app .tafiti-report-center-icon { width: 42px !important; height: 42px !important; display: grid !important; place-items: center !important; flex: 0 0 42px !important; border-radius: 11px !important; background: var(--saas-blue-100) !important; color: var(--saas-blue-600) !important; }
+.screen-app .tafiti-report-center-heading h1 { margin: 0 !important; font-size: 28px !important; letter-spacing: -.035em !important; color: var(--saas-text) !important; }
+.screen-app .tafiti-report-center-heading p { margin: 5px 0 0 !important; color: var(--saas-muted) !important; font-size: 11px !important; }
+.screen-app .tafiti-report-center-meta { margin-top: 8px !important; display: flex !important; align-items: center !important; gap: 7px !important; color: #8a98ac !important; font-size: 9px !important; }
+.screen-app .tafiti-report-center-meta i { width: 3px !important; height: 3px !important; border-radius: 50% !important; background: #c0cad8 !important; }
+.screen-app .tafiti-report-search { width: min(320px,38vw) !important; height: 38px !important; display: flex !important; align-items: center !important; gap: 8px !important; padding: 0 10px !important; border: 1px solid var(--saas-border-strong) !important; border-radius: 10px !important; background: #fff !important; }
+.screen-app .tafiti-report-search input { min-height: 0 !important; height: auto !important; flex: 1 !important; padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; font-size: 10.5px !important; }
+.screen-app .tafiti-report-search button { border: 0 !important; background: transparent !important; color: #8a98ad !important; }
+.screen-app .tafiti-report-groups { display: grid !important; grid-template-columns: repeat(2,minmax(0,1fr)) !important; gap: 12px !important; }
+.screen-app .tafiti-report-group-card { overflow: hidden !important; border: 1px solid var(--saas-border) !important; border-radius: 12px !important; background: #fff !important; box-shadow: var(--saas-shadow-xs) !important; }
+.screen-app .tafiti-report-group-header { min-height: 74px !important; padding: 13px 14px !important; display: flex !important; align-items: center !important; gap: 11px !important; border-bottom: 1px solid var(--saas-border) !important; background: #fafcfe !important; }
+.screen-app .tafiti-report-group-icon { width: 34px !important; height: 34px !important; display: grid !important; place-items: center !important; flex: 0 0 34px !important; border-radius: 9px !important; background: var(--saas-blue-100) !important; color: var(--saas-blue-600) !important; }
+.screen-app .tafiti-report-group-header > div { min-width: 0 !important; flex: 1 !important; }
+.screen-app .tafiti-report-group-header h2 { margin: 0 !important; color: var(--saas-text) !important; font-size: 12px !important; }
+.screen-app .tafiti-report-group-header p { margin: 3px 0 0 !important; color: var(--saas-muted) !important; font-size: 9px !important; line-height: 1.4 !important; }
+.screen-app .tafiti-report-group-count { min-width: 25px !important; height: 25px !important; display: grid !important; place-items: center !important; border-radius: 999px !important; background: #eef3f9 !important; color: #6f7f96 !important; font-size: 9px !important; font-weight: 800 !important; }
+.screen-app .tafiti-report-link { width: 100% !important; min-height: 68px !important; display: flex !important; align-items: center !important; gap: 10px !important; padding: 10px 13px !important; border: 0 !important; border-bottom: 1px solid #edf1f6 !important; background: #fff !important; color: inherit !important; text-align: left !important; }
+.screen-app .tafiti-report-link:last-child { border-bottom: 0 !important; }
+.screen-app .tafiti-report-link:hover { background: #f8fbff !important; }
+.screen-app .tafiti-report-link-icon { width: 30px !important; height: 30px !important; display: grid !important; place-items: center !important; flex: 0 0 30px !important; border-radius: 8px !important; background: #f1f5fb !important; color: #718099 !important; }
+.screen-app .tafiti-report-link-copy { min-width: 0 !important; flex: 1 !important; }
+.screen-app .tafiti-report-link-copy strong { display: block !important; color: var(--saas-text) !important; font-size: 10.5px !important; }
+.screen-app .tafiti-report-link-copy small { display: block !important; margin-top: 3px !important; color: var(--saas-muted) !important; font-size: 9px !important; overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; }
+.screen-app .tafiti-report-link em { padding: 4px 7px !important; border-radius: 999px !important; background: #f3f0ff !important; color: #6b54c7 !important; font-size: 8px !important; font-style: normal !important; font-weight: 800 !important; }
+.screen-app .tafiti-report-link-open { display: inline-flex !important; align-items: center !important; gap: 4px !important; color: var(--saas-blue-600) !important; font-size: 9px !important; font-weight: 800 !important; }
+
+/* ---------- Report detail ---------- */
+.screen-app .report-view-screen { max-width: 1450px !important; }
+.screen-app .report-back-button { margin-bottom: 13px !important; }
+.screen-app .report-view-header {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 20px !important;
+  padding-bottom: 15px !important;
+  margin-bottom: 14px !important;
+  border-bottom: 1px solid var(--saas-border) !important;
+}
+.screen-app .report-view-header h1 { margin: 3px 0 0 !important; color: var(--saas-text) !important; font-size: 26px !important; letter-spacing: -.035em !important; }
+.screen-app .report-view-header p { margin: 5px 0 0 !important; color: var(--saas-muted) !important; font-size: 10.5px !important; }
+.screen-app .report-filter-shell { overflow: hidden !important; margin-bottom: 12px !important; }
+.screen-app .report-filter-toolbar { min-height: 50px !important; padding: 8px 10px !important; display: flex !important; align-items: center !important; gap: 7px !important; border-bottom: 1px solid var(--saas-border) !important; background: #fafcfe !important; }
+.screen-app .report-filter-toggle,
+.screen-app .report-date-presets button { min-height: 32px !important; display: inline-flex !important; align-items: center !important; gap: 6px !important; padding: 0 9px !important; border: 1px solid var(--saas-border) !important; border-radius: 8px !important; background: #fff !important; color: #56657b !important; font-size: 9.5px !important; font-weight: 700 !important; }
+.screen-app .report-filter-toggle span { min-width: 18px !important; height: 18px !important; display: grid !important; place-items: center !important; border-radius: 999px !important; background: var(--saas-blue-600) !important; color: #fff !important; font-size: 8px !important; }
+.screen-app .report-date-presets { display: flex !important; gap: 5px !important; }
+.screen-app .report-filter-toolbar-spacer { flex: 1 !important; }
+.screen-app .report-filter-grid { display: grid !important; grid-template-columns: repeat(4,minmax(0,1fr)) !important; gap: 9px !important; padding: 11px !important; background: #fff !important; }
+.screen-app .report-filter-field { min-width: 0 !important; }
+.screen-app .report-filter-field > span { display: block !important; margin: 0 0 5px !important; }
+.screen-app .report-filter-field :where(input,select) { width: 100% !important; min-width: 0 !important; height: 36px !important; min-height: 36px !important; font-size: 10px !important; }
+.screen-app .report-result-state { min-height: 200px !important; display: grid !important; place-items: center !important; align-content: center !important; gap: 6px !important; padding: 28px !important; color: var(--saas-muted) !important; text-align: center !important; }
+.screen-app .report-result-state > span { width: 40px !important; height: 40px !important; display: grid !important; place-items: center !important; border-radius: 10px !important; background: #f1f5fb !important; color: #7c8ca4 !important; }
+.screen-app .report-result-state strong { color: var(--saas-text) !important; font-size: 11px !important; }
+.screen-app .report-result-state p { max-width: 460px !important; margin: 0 !important; color: var(--saas-muted) !important; font-size: 9.5px !important; }
+
+/* ---------- Alert / toast / modal polish ---------- */
+.workflow-alert-backdrop { backdrop-filter: blur(3px) !important; background: rgba(7,20,38,.30) !important; }
+.workflow-alert,
+.modal-card,
+.confirm-dialog,
+.form-drawer,
+.notification-panel,
+.record-detail-drawer {
+  border-color: var(--saas-border) !important;
+  border-radius: 14px !important;
+  background: #fff !important;
+  box-shadow: var(--saas-shadow-md) !important;
+}
+.notification-item { border-bottom-color: #edf1f6 !important; }
+
+/* ---------- Login ---------- */
+.screen-login .auth-page {
+  min-height: 100vh !important;
+  display: grid !important;
+  place-items: center !important;
+  padding: 28px !important;
+  background:
+    radial-gradient(circle at 15% 5%, rgba(47,111,237,.20), transparent 24rem),
+    radial-gradient(circle at 88% 86%, rgba(77,131,241,.12), transparent 26rem),
+    linear-gradient(145deg, #071426 0%, #0c2444 55%, #0b3262 100%) !important;
+}
+.screen-login .auth-orb { display: none !important; }
+.screen-login .auth-panel { width: min(430px,100%) !important; }
+.screen-login .auth-card {
+  padding: 30px !important;
+  border: 1px solid rgba(255,255,255,.18) !important;
+  border-radius: 20px !important;
+  background: rgba(255,255,255,.98) !important;
+  box-shadow: 0 28px 80px rgba(3,14,31,.30) !important;
+}
+.screen-login .auth-avatar { width: 58px !important; height: 58px !important; display: grid !important; place-items: center !important; margin: 0 auto 14px !important; border-radius: 16px !important; background: linear-gradient(145deg,#3f7df0,#2f6fed) !important; color: #fff !important; box-shadow: 0 12px 26px rgba(47,111,237,.24) !important; }
+.screen-login .auth-eyebrow { color: var(--saas-blue-600) !important; font-size: 8.5px !important; font-weight: 800 !important; letter-spacing: .11em !important; text-transform: uppercase !important; }
+.screen-login .auth-card h1 { color: var(--saas-text) !important; font-size: 28px !important; letter-spacing: -.035em !important; }
+.screen-login .auth-intro { color: var(--saas-muted) !important; font-size: 11px !important; }
+.screen-login .auth-input { min-height: 46px !important; border: 1px solid var(--saas-border-strong) !important; border-radius: 11px !important; background: #fbfcfe !important; }
+.screen-login .auth-input:focus-within { border-color: var(--saas-blue-500) !important; box-shadow: 0 0 0 3px rgba(47,111,237,.11) !important; background: #fff !important; }
+.screen-login .auth-input input { border: 0 !important; background: transparent !important; box-shadow: none !important; }
+.screen-login .auth-submit { min-height: 46px !important; border-radius: 11px !important; background: linear-gradient(180deg,#3a78f0,#2f6fed) !important; box-shadow: 0 10px 22px rgba(47,111,237,.22) !important; }
+
+/* ---------- Dark mode ---------- */
+.mode-dark.screen-app,
+.mode-dark.screen-app .app-main,
+.mode-dark.screen-app .tafiti-app-main,
+.mode-dark.screen-app .app-content,
+.mode-dark.screen-app .tafiti-app-content {
+  --saas-canvas: #0c1423;
+  --saas-panel: #111c2e;
+  --saas-panel-soft: #152238;
+  --saas-border: #22314a;
+  --saas-border-strong: #2b3b56;
+  --saas-text: #ecf2fb;
+  --saas-text-2: #d6e0ef;
+  --saas-muted: #98a9c1;
+  --saas-faint: #70829d;
+  background: #0c1423 !important;
+  color: #ecf2fb !important;
+}
+.mode-dark.screen-app .app-header,
+.mode-dark.screen-app .tafiti-school-header-top,
+.mode-dark.screen-app .tafiti-school-breadcrumb-bar,
+.mode-dark.screen-app :is(.hod-list-panel,.hod-detail-panel,.hod-kpi-card,.hod-dashboard-metric,.hod-editor-section,.tafiti-report-group-card,.report-filter-shell,.data-table,.workbench-grid) {
+  background: #111c2e !important;
+  border-color: #22314a !important;
+  color: #ecf2fb !important;
+}
+.mode-dark.screen-app :where(input,select,textarea),
+.mode-dark.screen-app .tafiti-school-search,
+.mode-dark.screen-app .tafiti-report-search,
+.mode-dark.screen-app .erp-secondary { background: #152238 !important; border-color: #2b3b56 !important; color: #d6e0ef !important; }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1180px) {
+  .screen-app .hod-workspace { grid-template-columns: minmax(350px,.9fr) minmax(480px,1.1fr) !important; }
+  .screen-app .hod-request-row { grid-template-columns: 82px minmax(0,1fr) 92px 18px !important; }
+  .screen-app .hod-request-date { display: none !important; }
+  .screen-app .report-filter-grid { grid-template-columns: repeat(3,minmax(0,1fr)) !important; }
+}
+
+@media (max-width: 980px) {
+  .screen-app .app-shell,
+  .screen-app .tafiti-app-shell { height: auto !important; min-height: 100vh !important; overflow: visible !important; }
+  .screen-app aside.sidebar.tafiti-sidebar,
+  .screen-app .sidebar.tafiti-sidebar {
+    position: fixed !important;
+    inset: 0 auto 0 0 !important;
+    z-index: 70 !important;
+    width: min(280px,86vw) !important;
+    min-width: min(280px,86vw) !important;
+    transform: translateX(-105%) !important;
+    transition: transform .18s ease !important;
+    box-shadow: 18px 0 46px rgba(7,24,47,.24) !important;
+  }
+  .screen-app .tafiti-sidebar.mobile-open { transform: translateX(0) !important; }
+  .screen-app .sidebar-mobile-backdrop { position: fixed !important; inset: 0 !important; z-index: 65 !important; border: 0 !important; background: rgba(7,20,38,.38) !important; backdrop-filter: blur(2px) !important; }
+  .screen-app .tafiti-sidebar-collapse,
+  .screen-app .tafiti-sidebar-expand { display: none !important; }
+  .screen-app .tafiti-sidebar-mobile-toggle { display: grid !important; margin-left: auto !important; }
+  .screen-app .tafiti-school-mobile-menu { display: grid !important; width: 36px !important; height: 36px !important; place-items: center !important; border: 1px solid var(--saas-border) !important; border-radius: 9px !important; background: #fff !important; color: #60708a !important; }
+  .screen-app .tafiti-school-search { width: min(310px,50vw) !important; }
+  .screen-app .tafiti-school-context-chip { display: none !important; }
+  .screen-app .app-content,
+  .screen-app .tafiti-app-content { overflow: visible !important; padding: 18px !important; }
+  .screen-app .hod-workspace { display: block !important; }
+  .screen-app .hod-list-panel { display: block !important; }
+  .screen-app .hod-workspace.has-selection .hod-list-panel { display: none !important; }
+  .screen-app .hod-detail-panel { max-height: none !important; }
+  .screen-app .hod-detail-mobile-bar { display: block !important; }
+  .screen-app .hod-request-list { max-height: none !important; }
+  .screen-app .tafiti-report-groups { grid-template-columns: 1fr !important; }
+  .screen-app .report-filter-grid { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
+  .screen-app .dashboard-kpi-grid,
+  .screen-app .enterprise-kpi-grid,
+  .screen-app .workbench-metrics { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
+}
+
+@media (max-width: 720px) {
+  .screen-app .tafiti-school-header-top { min-height: 58px !important; padding: 0 12px !important; }
+  .screen-app .tafiti-school-breadcrumb-bar { padding: 0 14px !important; }
+  .screen-app .tafiti-school-breadcrumb > span:last-child { display: none !important; }
+  .screen-app .tafiti-school-search { width: 38px !important; padding: 0 !important; justify-content: center !important; background: #fff !important; }
+  .screen-app .tafiti-school-search .header-search-label,
+  .screen-app .tafiti-school-search kbd { display: none !important; }
+  .screen-app .header-role-chip { display: none !important; }
+  .screen-app .tafiti-header-user-copy { display: none !important; }
+  .screen-app .app-content,
+  .screen-app .tafiti-app-content { padding: 14px 12px 24px !important; }
+  .screen-app .hod-page-header { align-items: flex-start !important; gap: 12px !important; }
+  .screen-app .hod-page-actions { display: flex !important; gap: 7px !important; }
+  .screen-app .hod-kpi-grid,
+  .screen-app .hod-dashboard-kpis { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
+  .screen-app .hod-filters { display: none !important; grid-template-columns: 1fr 1fr !important; }
+  .screen-app .hod-filters.mobile-open { display: grid !important; }
+  .screen-app .hod-search-field { grid-column: 1 / -1 !important; }
+  .screen-app .hod-mobile-filter-toggle { width: calc(100% - 24px) !important; min-height: 36px !important; margin: 8px 12px 0 !important; display: flex !important; align-items: center !important; justify-content: center !important; gap: 6px !important; border: 1px solid var(--saas-border) !important; border-radius: 8px !important; background: #fff !important; color: #53627a !important; font-size: 10px !important; font-weight: 700 !important; }
+  .screen-app .hod-request-row { grid-template-columns: 84px minmax(0,1fr) 18px !important; min-height: 66px !important; }
+  .screen-app .hod-request-row > :is(.hod-request-date,.status-chip,.status-badge,.hod-status) { display: none !important; }
+  .screen-app .hod-detail-scroll { padding: 10px !important; }
+  .screen-app .hod-form-grid,
+  .screen-app .hod-add-line-grid { grid-template-columns: 1fr !important; }
+  .screen-app .hod-form-grid .span-2,
+  .screen-app .hod-add-line-grid .span-2 { grid-column: auto !important; }
+  .screen-app .hod-editor-submit { flex-wrap: wrap !important; margin: 0 -10px -10px !important; padding: 10px !important; }
+  .screen-app .hod-submit-readiness { flex: 1 1 100% !important; order: -1 !important; }
+  .screen-app .tafiti-report-center-header,
+  .screen-app .report-view-header { align-items: stretch !important; flex-direction: column !important; }
+  .screen-app .tafiti-report-search { width: 100% !important; }
+  .screen-app .report-filter-toolbar { flex-wrap: wrap !important; }
+  .screen-app .report-filter-toolbar-spacer { display: none !important; }
+  .screen-app .report-filter-grid { grid-template-columns: 1fr !important; }
+  .screen-app .dashboard-kpi-grid,
+  .screen-app .enterprise-kpi-grid,
+  .screen-app .workbench-metrics { grid-template-columns: 1fr 1fr !important; }
+  .screen-app .data-table { overflow-x: auto !important; }
+  .screen-login .auth-page { padding: 18px !important; }
+  .screen-login .auth-card { padding: 24px 20px !important; border-radius: 17px !important; }
+}
+
+@media (max-width: 460px) {
+  .screen-app .hod-kpi-grid,
+  .screen-app .hod-dashboard-kpis,
+  .screen-app .dashboard-kpi-grid,
+  .screen-app .enterprise-kpi-grid,
+  .screen-app .workbench-metrics { grid-template-columns: 1fr !important; }
+  .screen-app .header-live-state { display: none !important; }
+  .screen-app .tafiti-school-header-actions { gap: 5px !important; }
+}
