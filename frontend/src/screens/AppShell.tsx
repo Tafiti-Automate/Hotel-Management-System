@@ -15,6 +15,7 @@ const HRDashboard = lazy(() => import('./HRDashboard'))
 const ProcurementWorkbench = lazy(() => import('./ProcurementWorkbench'))
 const FinanceWorkbench = lazy(() => import('./FinanceWorkbench'))
 const InventoryWorkbench = lazy(() => import('./InventoryWorkbench'))
+const DepartmentRequisitions = lazy(() => import('./DepartmentRequisitions'))
 const StorePurchaseRequests = lazy(() => import('./StorePurchaseRequests'))
 const InventoryCatalogue = lazy(() => import('./InventoryCatalogue'))
 const ArticleManagement = lazy(() => import('./ArticleManagement'))
@@ -36,13 +37,14 @@ const listRoutes: string[] = [
 export default function AppShell() {
   const app = useApp()
   const { route } = app
+  const role = String(app.user.role || '').trim().toLowerCase()
 
   let content: React.ReactNode = null
   if (!canAccessRoute(app.user, route)) content = <Dashboard />
   else if (route === 'dashboard') content = <Dashboard />
   else if (route === 'hr-dashboard') content = <HRDashboard />
   else if (route === 'workflow-procure') content = <ProcurementWorkbench />
-  else if (route === 'workflow-stores') content = <InventoryWorkbench />
+  else if (route === 'workflow-stores') content = role === 'department head' ? <DepartmentRequisitions /> : <InventoryWorkbench />
   else if (route === 'store-purchase-requests') content = <StorePurchaseRequests />
   else if (route === 'workflow-consume') content = <InventoryWorkbench />
   else if (route === 'categories') content = <InventoryCatalogue />
