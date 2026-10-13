@@ -1,0 +1,91 @@
+/* Dark-mode companion for the procurement/inventory reference UI. */
+.mode-dark.screen-app {
+  --ref-canvas: var(--bg);
+  --ref-card: var(--surface);
+  --ref-line: var(--border);
+  --ref-line-strong: var(--border-2);
+  --ref-ink: var(--text);
+  --ref-muted: var(--text-muted);
+  --ref-blue-soft: color-mix(in srgb, var(--accent) 18%, var(--surface));
+}
+
+.mode-dark.screen-app .app-shell,
+.mode-dark.screen-app .app-content {
+  background: var(--bg) !important;
+}
+
+.mode-dark.screen-app :where(.enterprise-workspace, .role-dashboard, .hod-dashboard, .hod-requisitions-page) h1,
+.mode-dark.screen-app .hod-dashboard-metric strong,
+.mode-dark.screen-app .dashboard-task-count {
+  color: var(--text) !important;
+}
+
+.mode-dark.screen-app :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea),
+.mode-dark.screen-app .erp-secondary,
+.mode-dark.screen-app .hod-dashboard-hero,
+.mode-dark.screen-app .hod-dashboard-metric,
+.mode-dark.screen-app .dashboard-task-card,
+.mode-dark.screen-app .hod-dashboard-layout > section,
+.mode-dark.screen-app .hod-dashboard-layout > aside > section,
+.mode-dark.screen-app .hod-register,
+.mode-dark.screen-app .hod-detail-panel,
+.mode-dark.screen-app .hod-detail-header,
+.mode-dark.screen-app .hod-detail-summary-grid,
+.mode-dark.screen-app .hod-purpose-card,
+.mode-dark.screen-app .hod-record-section,
+.mode-dark.screen-app .hod-progress,
+.mode-dark.screen-app .inventory-workbench > .workbench-hero,
+.mode-dark.screen-app .procurement-workbench > div:first-child,
+.mode-dark.screen-app .finance-workbench > .workbench-hero,
+.mode-dark.screen-app .inventory-workbench-navigation,
+.mode-dark.screen-app .inventory-workbench .workbench-grid,
+.mode-dark.screen-app .procurement-workbench .workbench-grid,
+.mode-dark.screen-app .finance-workbench .workbench-grid,
+.mode-dark.screen-app .store-purchase-metrics > div,
+.mode-dark.screen-app .store-purchase-grid > section,
+.mode-dark.screen-app :where(.explorer-workspace-layout, .article-master-layout, .unit-master-layout),
+.mode-dark.screen-app .procurement-queue-tabs,
+.mode-dark.screen-app .procurement-detail-panel,
+.mode-dark.screen-app .receiving-hero-card,
+.mode-dark.screen-app .receiving-table-card,
+.mode-dark.screen-app .receiving-detail-screen > section {
+  background: var(--surface) !important;
+  border-color: var(--border) !important;
+  color: var(--text) !important;
+}
+
+.mode-dark.screen-app :where(.explorer-workspace-pane, .article-master-explorer, .unit-master-layout > aside),
+.mode-dark.screen-app .hod-add-line-card,
+.mode-dark.screen-app .hod-editor-submit,
+.mode-dark.screen-app :where(.data-head, .receiving-ready-header),
+.mode-dark.screen-app .receiving-view-tabs {
+  background: var(--surface-2) !important;
+  border-color: var(--border) !important;
+}
+
+.mode-dark.screen-app .hod-request-row:hover,
+.mode-dark.screen-app .hod-request-row.active,
+.mode-dark.screen-app .procurement-queue-tab.is-active,
+.mode-dark.screen-app .workflow-path-step.is-active,
+.mode-dark.screen-app .inventory-nav-button.active,
+.mode-dark.screen-app .inventory-nav-button[aria-current="true"] {
+  background: color-mix(in srgb, var(--accent) 20%, var(--surface)) !important;
+}
+
+.mode-dark.screen-app .hod-record-detail::before {
+  color: #bfdbfe;
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-2));
+}
+
+.mode-dark.screen-app .hod-article-meta {
+  color: #bfdbfe !important;
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface)) !important;
+  border-color: color-mix(in srgb, var(--accent) 26%, var(--border)) !important;
+}
+
+.mode-dark.screen-app .hod-filter-tab.active,
+.mode-dark.screen-app .receiving-view-tabs > button[aria-selected="true"],
+.mode-dark.screen-app .receiving-view-tabs > button.active {
+  background: var(--surface-3) !important;
+}
