@@ -188,7 +188,7 @@ def test_store_keeper_quantity_can_only_stay_same_or_reduce_after_first_decision
         format="json",
     )
     assert tamper.status_code == 400
-    assert "audit trail" in str(tamper.data).lower()
+    assert "store keeper quantity and note" in str(tamper.data).lower()
 
     first = client.patch(
         f"/api/v1/store-requisition-items/{line_id}/",
