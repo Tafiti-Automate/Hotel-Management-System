@@ -1,0 +1,86 @@
+name: ChatGPT department Article picker fix
+
+on:
+  push:
+    branches:
+      - back$front
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-validate:
+    if: github.event.head_commit.message == 'ci: validate department Article picker field fix'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: back$front
+          fetch-depth: 0
+
+      - name: Fix requisition Article entry fields
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('frontend/src/department-requisitions-polish.css')
+          text = path.read_text()
+          old = '''/* Simplified Article picker: hierarchy is inferred from the selected Article. */
+.screen-app .hod-add-line-grid > label:nth-of-type(1),
+.screen-app .hod-add-line-grid > label:nth-of-type(2) {
+  display: none !important;
+}
+
+.screen-app .hod-add-line-grid > label:nth-of-type(6) {
+  grid-column: span 3;
+}
+
+@media (max-width: 640px) {
+  .screen-app .hod-add-line-grid > label:nth-of-type(3),
+  .screen-app .hod-add-line-grid > label:nth-of-type(6) {
+    grid-column: auto;
+  }
+}
+
+
+'''
+          new = '''/* Direct Article picker: hierarchy is inferred from the selected Article.
+   Do not hide fields by nth-of-type: the current editor contains only Article,
+   Quantity and Line note, so positional selectors would hide required inputs. */
+
+'''
+          if old not in text:
+              raise SystemExit('Expected stale Article-picker CSS block was not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Check diff
+        run: git diff --check
+
+      - name: Commit validated fix
+        shell: bash
+        run: |
+          git config user.name "Watumwa"
+          git config user.email "127853693+watumwa@users.noreply.github.com"
+          git add frontend/src/department-requisitions-polish.css
+          git diff --cached --quiet && exit 0
+          git commit -m "fix(ux): restore quantity and Article requisition controls"
+          git push origin HEAD:back$front
