@@ -49,7 +49,7 @@ export default function App() {
   }
 
   return (
-    <div className={`application-root screen-${app.screen}`} style={rootStyle}>
+    <div className={`application-root screen-${app.screen} mode-${app.mode}`} style={rootStyle}>
       {app.screen === 'login' && <Login />}
       {app.screen === 'launchpad' && <Launchpad />}
       {app.screen === 'app' && <AppShell />}
