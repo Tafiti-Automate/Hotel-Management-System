@@ -18,7 +18,6 @@ from apps.inventory.serializers import (
 from apps.inventory.views import (
     StoreRequisitionItemViewSet as BaseStoreRequisitionItemViewSet,
     StoreRequisitionViewSet as BaseStoreRequisitionViewSet,
-    assigned_store_ids,
     has_role,
     is_department_head,
     raise_drf_validation_error,
@@ -27,11 +26,12 @@ from core.constants.choices import StoreRequisitionStatus
 
 
 class ControlledStoreRequisitionItemSerializer(BaseStoreRequisitionItemSerializer):
-    """Keep Department/Stores quantities monotonic after a Stores decision.
+    """Protect the original Department request and keep Stores quantities monotonic.
 
-    The first Store Keeper decision may carry forward any quantity up to the
-    Department Head-approved limit. Once a line has been decided, every later
-    edit may only keep or reduce that quantity; it can never be increased again.
+    Before submission, the Department Head may edit the draft normally. Once the
+    requisition reaches Stores, the requested Article/UOM/quantity becomes audit
+    history. Stores may decide the carried-forward quantity, but a later edit may
+    only keep or reduce a quantity that Stores already decided; it can never raise it.
     """
 
     def validate(self, attrs):
@@ -39,6 +39,35 @@ class ControlledStoreRequisitionItemSerializer(BaseStoreRequisitionItemSerialize
         instance = self.instance
         if not instance or instance.requisition.status != StoreRequisitionStatus.SUBMITTED:
             return attrs
+
+        protected_values = {
+            "requisition": instance.requisition_id,
+            "item": instance.item_id,
+            "unit": instance.unit_id,
+            "quantity_requested": instance.quantity_requested,
+            "quantity_issued": instance.quantity_issued,
+            "remarks": instance.remarks,
+        }
+        protected_errors = {}
+        for field, current_value in protected_values.items():
+            if field not in attrs:
+                continue
+            incoming = attrs[field]
+            if hasattr(incoming, "pk"):
+                incoming = incoming.pk
+            if field in {"requisition", "item", "unit"}:
+                incoming = str(incoming or "")
+                current = str(current_value or "")
+            else:
+                current = current_value
+            if incoming != current:
+                protected_errors[field] = (
+                    "This value is locked after the Department Head submits the requisition. "
+                    "The original request must remain unchanged in the audit trail."
+                )
+        if protected_errors:
+            raise ValidationError(protected_errors)
+
         if "quantity_approved" not in attrs:
             return attrs
 
@@ -87,7 +116,7 @@ class StoreRequisitionViewSet(BaseStoreRequisitionViewSet):
     def perform_create(self, serializer):
         if not has_role(self.request.user, "System Administrator", "Department Head"):
             raise PermissionDenied("Only the Department Head can create a Department requisition.")
-        super(BaseStoreRequisitionViewSet, self).perform_create(serializer)
+        serializer.save(created_by=self.request.user)
 
     def _enforce_requester_edit(self, requisition):
         if has_role(self.request.user, "System Administrator"):
