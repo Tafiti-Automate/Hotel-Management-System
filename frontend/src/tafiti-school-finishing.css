@@ -1,0 +1,61 @@
+/* Small structural finishing rules for the Tafiti School-inspired shell. */
+
+.screen-app .tafiti-school-mobile-menu {
+  display: none;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  flex: 0 0 36px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  background: #fff;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.screen-app .tafiti-school-mobile-menu:hover {
+  border-color: #cdd9ea;
+  background: #f8fafd;
+  color: #2563eb;
+}
+
+.screen-app .hod-workspace:not(.has-selection) .hod-detail-panel {
+  display: none !important;
+}
+
+@media (max-width: 980px) {
+  .screen-app .tafiti-school-mobile-menu {
+    display: grid;
+  }
+
+  .screen-app .sidebar-mobile-backdrop {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 44 !important;
+    border: 0 !important;
+    background: rgba(7, 22, 51, .38) !important;
+    backdrop-filter: blur(1px) !important;
+  }
+
+  .screen-app .tafiti-sidebar.mobile-open {
+    z-index: 50 !important;
+    box-shadow: 16px 0 44px rgba(7, 22, 51, .24) !important;
+  }
+
+  .screen-app .tafiti-sidebar-collapse,
+  .screen-app .tafiti-sidebar-expand {
+    display: none !important;
+  }
+
+  .screen-app .tafiti-sidebar-mobile-toggle {
+    display: grid !important;
+    margin-left: auto !important;
+  }
+}
+
+@media (min-width: 981px) {
+  .screen-app .tafiti-sidebar-mobile-toggle,
+  .screen-app .sidebar-mobile-backdrop {
+    display: none !important;
+  }
+}
