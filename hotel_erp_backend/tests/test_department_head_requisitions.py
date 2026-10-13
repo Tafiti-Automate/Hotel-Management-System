@@ -41,7 +41,7 @@ def make_employee(*, username, code, department, branch, role):
 
 
 @pytest.mark.django_db
-def test_department_head_creates_and_submits_directly_to_stores():
+def test_department_head_creates_edits_and_submits_directly_to_stores():
     department = Department.objects.create(name="Food and Beverage")
     branch = Branch.objects.create(name="Main Property")
     store = StoreLocation.objects.create(branch=branch, name="Main Store", is_active=True)
@@ -75,10 +75,7 @@ def test_department_head_creates_and_submits_directly_to_stores():
     client.force_authenticate(hod_user)
     created = client.post(
         "/api/v1/store-requisitions/",
-        {
-            "store": str(store.pk),
-            "purpose": "Breakfast service",
-        },
+        {"store": str(store.pk), "purpose": "Breakfast service"},
         format="json",
     )
     assert created.status_code == 201, created.data
@@ -102,6 +99,20 @@ def test_department_head_creates_and_submits_directly_to_stores():
     )
     assert line.status_code == 201, line.data
 
+    # HOD-originated draft lines must be visible/editable before submission.
+    draft_lines = client.get(f"/api/v1/store-requisition-items/?requisition={request_id}")
+    assert draft_lines.status_code == 200
+    rows = draft_lines.data.get("results", draft_lines.data)
+    assert str(line.data["id"]) in {str(row["id"]) for row in rows}
+
+    edited = client.patch(
+        f"/api/v1/store-requisition-items/{line.data['id']}/",
+        {"quantity_requested": "8.00"},
+        format="json",
+    )
+    assert edited.status_code == 200, edited.data
+    assert Decimal(str(edited.data["quantity_requested"])) == Decimal("8.00")
+
     submitted = client.post(
         f"/api/v1/store-requisitions/{request_id}/submit/",
         {},
@@ -114,10 +125,10 @@ def test_department_head_creates_and_submits_directly_to_stores():
     assert requisition.status == StoreRequisitionStatus.SUBMITTED
     assert requisition.department_approved_by == hod
     assert requisition.department_approved_at is not None
-    assert request_line.hod_approved_quantity == Decimal("10.00")
+    assert request_line.base_quantity_requested == Decimal("8.00")
+    assert request_line.hod_approved_quantity == Decimal("8.00")
     assert request_line.quantity_approved == Decimal("0.00")
 
-    # The assigned Store Keeper receives the HOD-originated request immediately.
     client.force_authenticate(keeper_user)
     queue = client.get("/api/v1/store-requisitions/")
     assert queue.status_code == 200
@@ -181,7 +192,6 @@ def test_store_keeper_quantity_can_only_stay_same_or_reduce_after_first_decision
 
     client.force_authenticate(keeper_user)
 
-    # Stores must not be able to rewrite the Department Head's original request.
     tamper = client.patch(
         f"/api/v1/store-requisition-items/{line_id}/",
         {"quantity_requested": "12.00"},
