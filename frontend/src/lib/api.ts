@@ -827,6 +827,8 @@ function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey
       unit: text(values.uom),
       base_unit: unitId || null,
       reorder_level: num(values.reorder),
+      batch_tracking: text(values.batchTracking, 'No') === 'Yes',
+      expiry_tracking: text(values.expiryTracking, 'No') === 'Yes',
       business_type: toBackendBusinessType(values.businessType),
       is_active: true,
     }

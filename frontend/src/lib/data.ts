@@ -74,6 +74,8 @@ export const cfg: Record<string, EntityConfig> = {
       { key: 'businessType', label: 'Business classification', type: 'select', opts: 'businessTypes' },
       { key: 'uom', label: 'Base stock unit', type: 'select', opts: 'uoms' },
       { key: 'reorder', label: 'Reorder level', type: 'number' },
+      { key: 'batchTracking', label: 'Track batches / lots', type: 'select', opts: 'yesNo', hint: 'Turn on only when this Article needs supplier or lot traceability.' },
+      { key: 'expiryTracking', label: 'Require expiry date when receiving', type: 'select', opts: 'yesNo', hint: 'Turn on for Articles with a real use-by, best-before, or expiry date. Leave off for fresh produce and non-expiring Articles.' },
     ],
   },
   categories: {

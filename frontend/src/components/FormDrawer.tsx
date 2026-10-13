@@ -111,10 +111,14 @@ export default function FormDrawer() {
       seed.department = signedInEmployee.department
       seed.requester = signedInEmployee.name
     }
-    if (f.entity === 'items' && existing) {
-      const itemGroup = app.data.categories.find((category) => String(category.name) === String(existing.category))
-      const majorGroup = app.data.categories.find((category) => String(category.id) === String(itemGroup?.parentId))
-      seed.majorGroup = majorGroup?.name || ''
+    if (f.entity === 'items') {
+      seed.batchTracking = existing?.batchTracking ? 'Yes' : 'No'
+      seed.expiryTracking = existing?.expiryTracking ? 'Yes' : 'No'
+      if (existing) {
+        const itemGroup = app.data.categories.find((category) => String(category.name) === String(existing.category))
+        const majorGroup = app.data.categories.find((category) => String(category.id) === String(itemGroup?.parentId))
+        seed.majorGroup = majorGroup?.name || ''
+      }
     }
     setValues(seed)
     setEmployeePhoto(null)
@@ -141,7 +145,7 @@ export default function FormDrawer() {
     if (f.entity === 'categories' && !f.id && f.preset === 'majorGroup' && fd.key === 'parent') return false
     return true
   })
-  const wizard = visibleFields.length > 6
+  const wizard = visibleFields.length > 6 && f.entity !== 'items'
   const pageSize = 4
   const pageCount = wizard ? Math.ceil(visibleFields.length / pageSize) : 1
   const pageFields = wizard ? visibleFields.slice(step * pageSize, (step + 1) * pageSize) : visibleFields

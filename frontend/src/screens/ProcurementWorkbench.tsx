@@ -788,8 +788,10 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
                   {invalid && <div style={{ marginTop: 4, color: 'var(--bad)', fontSize: 9.5 }}>Cannot exceed the LPO balance of {due}</div>}
                 </div>
                 <div>
-                  <Input type="date" value={expiry} onChange={(value) => setExpiryDates((current) => ({ ...current, [lineId]: value }))} />
-                  <div style={{ marginTop: 4, color: invalidExpiry ? 'var(--bad)' : 'var(--text-faint)', fontSize: 9.5 }}>{invalidExpiry ? (expiry ? 'Cannot be before received date' : 'Required for this Article') : expiryRequired ? 'Required' : 'Optional'}</div>
+                  {expiryRequired ? <>
+                    <Input type="date" value={expiry} onChange={(value) => setExpiryDates((current) => ({ ...current, [lineId]: value }))} />
+                    <div style={{ marginTop: 4, color: invalidExpiry ? 'var(--bad)' : 'var(--text-faint)', fontSize: 9.5 }}>{invalidExpiry ? (expiry ? 'Cannot be before received date' : 'Required for this Article') : 'Required for this Article'}</div>
+                  </> : <div style={{ minHeight: 38, display: 'flex', alignItems: 'center', gap: 6, padding: '0 10px', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface-2)', color: 'var(--text-faint)', fontSize: 10.5 }}><Icon name="event_busy" size={15} /><span>No expiry tracking</span></div>}
                 </div>
                 <span style={{ color: 'var(--text-muted)' }}>{names.units.get(id(line.unit)) || 'Unit'}</span>
               </div>
@@ -1530,7 +1532,8 @@ function ReceiptPanel({ data, form, setForm, busy, run, orderLabel, receiptLabel
     </section>}
     {line && <Hint>Destination: {line.destination_type === 'workspace' ? `Department · ${names.departments.get(id(line.destination_department)) || 'inherited'}` : names.stores.get(id(line.destination_store)) || stores.find((store: Row) => id(store.id) === id(line.destination_store))?.name || 'Inherited LPO store'}.</Hint>}
     <Field label={`Quantity received now (${names.units.get(id(line?.unit)) || 'LPO unit'})`}><Input type="number" value={form.quantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field>
-    <Field label={`Expiry date${expiryRequired ? ' *' : ' (optional)'}`}><Input type="date" value={form.expiryDate || ''} onChange={(v) => setForm({ ...form, expiryDate: v })} /></Field>
+    {expiryRequired && <Field label="Expiry date *"><Input type="date" value={form.expiryDate || ''} onChange={(v) => setForm({ ...form, expiryDate: v })} /></Field>}
+    {!expiryRequired && line && <Hint>This Article does not use expiry tracking, so no expiry date is required.</Hint>}
     {invalidExpiry && <Hint>Expiry date cannot be earlier than the received date.</Hint>}
     {line && num(form.quantity) > outstanding && <Hint>The entered quantity is above the remaining receivable quantity on this LPO.</Hint>}
     {duplicate && <Hint>This LPO line is already on this GRN. Use a new GRN for a later partial delivery.</Hint>}
