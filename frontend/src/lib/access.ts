@@ -43,7 +43,6 @@ const routePermissions: Record<string, string[]> = {
 const hrApps = new Set(['employees', 'departments', 'accounts'])
 
 const strictRoleRoutes: Record<string, Set<string>> = {
-  requester: new Set(['dashboard', 'detail', 'workflow-stores', 'reports', 'reportview']),
   'department head': new Set(['dashboard', 'detail', 'workflow-stores', 'reports', 'reportview']),
   'store keeper': new Set(['dashboard', 'detail', 'workflow-stores', 'store-purchase-requests', 'reports', 'reportview']),
   'cost controller': new Set(['dashboard', 'detail', 'items', 'categories', 'uoms', 'itemUnits', 'suppliers', 'supplierItems', 'reports', 'reportview']),
@@ -54,10 +53,7 @@ const strictRoleRoutes: Record<string, Set<string>> = {
   'receiving clerk': new Set(['dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
 }
 
-
-
 export const roleReportIds: Record<string, string[]> = {
-  requester: ['departmentRequests', 'storeIssues'],
   'department head': ['departmentRequests', 'storeIssues'],
   'store keeper': [
     'departmentRequests', 'storeIssues', 'valuation', 'lowstock', 'movement', 'aging',
@@ -110,17 +106,11 @@ export function canAccessRoute(user: AccessUser, route: string): boolean {
   if (user.isSuperuser || roleKey(user) === 'system administrator') return true
   const strict = strictRoleRoutes[roleKey(user)]
   if (strict && !strict.has(route)) return false
-  // Store Keepers work only from the predecessor-driven Stores workflow.
-  // The generic Store Requisitions CRUD page belongs to department requesters
-  // and must never expose a create action to Stores.
-  if (roleKey(user) === 'store keeper' && route === 'storeRequisitions') return false
-  // Workflow routes are role boundaries, not only permission checks. This prevents
-  // Finance/Management users who happen to inherit inventory permissions from
-  // landing in Department/Stores queues.
+
   const role = roleKey(user)
-  if (route === 'workflow-stores' && !['department head', 'store keeper', 'requester'].includes(role)) return false
+  if (route === 'workflow-stores' && !['department head', 'store keeper'].includes(role)) return false
   if (route === 'store-purchase-requests' && role !== 'store keeper') return false
-  if (route === 'storeRequisitions' && role !== 'requester') return false
+  if (route === 'storeRequisitions') return false
   if (route === 'dashboard' || route === 'detail') return true
   if (route === 'reports' || route === 'reportview') return hasReportAccess(user)
   const required = routePermissions[route]
@@ -137,8 +127,7 @@ export function canAccessModule(user: AccessUser, module: 'operations' | 'hr'): 
 export function operationsLandingFor(user: AccessUser): { route: string; crumb: string } {
   const role = roleKey(user)
   const roleLanding: Record<string, { route: string; crumb: string }> = {
-    requester: { route: 'dashboard', crumb: 'My requisitions dashboard' },
-    'department head': { route: 'dashboard', crumb: 'Department approvals dashboard' },
+    'department head': { route: 'dashboard', crumb: 'Department requisitions dashboard' },
     'store keeper': { route: 'dashboard', crumb: 'Store Keeper dashboard' },
     'cost controller': { route: 'dashboard', crumb: 'Cost Controller dashboard' },
     'procurement manager': { route: 'dashboard', crumb: 'Procurement dashboard' },
