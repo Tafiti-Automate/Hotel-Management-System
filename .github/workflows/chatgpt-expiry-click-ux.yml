@@ -1,0 +1,107 @@
+name: ChatGPT expiry and click UX
+
+on:
+  push:
+    branches:
+      - chatgpt-expiry-click-ux
+
+permissions:
+  contents: write
+
+jobs:
+  update-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: chatgpt-expiry-click-ux
+          fetch-depth: 0
+
+      - name: Apply UX changes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: Path, old: str, new: str, label: str):
+              text = path.read_text()
+              if old not in text:
+                  raise SystemExit(f'Pattern not found for {label}')
+              path.write_text(text.replace(old, new, 1))
+
+          data = Path('frontend/src/lib/data.ts')
+          replace_once(
+              data,
+              "      { key: 'reorder', label: 'Reorder level', type: 'number' },\n",
+              "      { key: 'reorder', label: 'Reorder level', type: 'number' },\n      { key: 'batchTracking', label: 'Track batches / lots', type: 'select', opts: 'yesNo', hint: 'Turn on only when this Article needs supplier or lot traceability.' },\n      { key: 'expiryTracking', label: 'Require expiry date when receiving', type: 'select', opts: 'yesNo', hint: 'Turn on for Articles with a real use-by, best-before, or expiry date. Leave off for fresh produce and non-expiring Articles.' },\n",
+              'item tracking fields',
+          )
+
+          drawer = Path('frontend/src/components/FormDrawer.tsx')
+          replace_once(
+              drawer,
+              "    if (f.entity === 'items' && existing) {\n      const itemGroup = app.data.categories.find((category) => String(category.name) === String(existing.category))\n      const majorGroup = app.data.categories.find((category) => String(category.id) === String(itemGroup?.parentId))\n      seed.majorGroup = majorGroup?.name || ''\n    }\n",
+              "    if (f.entity === 'items') {\n      seed.batchTracking = existing?.batchTracking ? 'Yes' : 'No'\n      seed.expiryTracking = existing?.expiryTracking ? 'Yes' : 'No'\n      if (existing) {\n        const itemGroup = app.data.categories.find((category) => String(category.name) === String(existing.category))\n        const majorGroup = app.data.categories.find((category) => String(category.id) === String(itemGroup?.parentId))\n        seed.majorGroup = majorGroup?.name || ''\n      }\n    }\n",
+              'item tracking defaults',
+          )
+          replace_once(
+              drawer,
+              "  const wizard = visibleFields.length > 6\n",
+              "  const wizard = visibleFields.length > 6 && f.entity !== 'items'\n",
+              'single-page item form',
+          )
+
+          api = Path('frontend/src/lib/api.ts')
+          replace_once(
+              api,
+              "      reorder_level: num(values.reorder),\n      business_type: toBackendBusinessType(values.businessType),\n      is_active: true,\n",
+              "      reorder_level: num(values.reorder),\n      batch_tracking: text(values.batchTracking, 'No') === 'Yes',\n      expiry_tracking: text(values.expiryTracking, 'No') === 'Yes',\n      business_type: toBackendBusinessType(values.businessType),\n      is_active: true,\n",
+              'item tracking payload',
+          )
+
+          procurement = Path('frontend/src/screens/ProcurementWorkbench.tsx')
+          replace_once(
+              procurement,
+              "                <div>\n                  <Input type=\"date\" value={expiry} onChange={(value) => setExpiryDates((current) => ({ ...current, [lineId]: value }))} />\n                  <div style={{ marginTop: 4, color: invalidExpiry ? 'var(--bad)' : 'var(--text-faint)', fontSize: 9.5 }}>{invalidExpiry ? (expiry ? 'Cannot be before received date' : 'Required for this Article') : expiryRequired ? 'Required' : 'Optional'}</div>\n                </div>\n",
+              "                <div>\n                  {expiryRequired ? <>\n                    <Input type=\"date\" value={expiry} onChange={(value) => setExpiryDates((current) => ({ ...current, [lineId]: value }))} />\n                    <div style={{ marginTop: 4, color: invalidExpiry ? 'var(--bad)' : 'var(--text-faint)', fontSize: 9.5 }}>{invalidExpiry ? (expiry ? 'Cannot be before received date' : 'Required for this Article') : 'Required for this Article'}</div>\n                  </> : <div style={{ minHeight: 38, display: 'flex', alignItems: 'center', gap: 6, padding: '0 10px', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface-2)', color: 'var(--text-faint)', fontSize: 10.5 }}><Icon name=\"event_busy\" size={15} /><span>No expiry tracking</span></div>}\n                </div>\n",
+              'bulk receiving expiry visibility',
+          )
+          replace_once(
+              procurement,
+              "    <Field label={`Expiry date${expiryRequired ? ' *' : ' (optional)'}`}><Input type=\"date\" value={form.expiryDate || ''} onChange={(v) => setForm({ ...form, expiryDate: v })} /></Field>\n    {invalidExpiry && <Hint>Expiry date cannot be earlier than the received date.</Hint>}\n",
+              "    {expiryRequired && <Field label=\"Expiry date *\"><Input type=\"date\" value={form.expiryDate || ''} onChange={(v) => setForm({ ...form, expiryDate: v })} /></Field>}\n    {!expiryRequired && line && <Hint>This Article does not use expiry tracking, so no expiry date is required.</Hint>}\n    {invalidExpiry && <Hint>Expiry date cannot be earlier than the received date.</Hint>}\n",
+              'legacy receiving expiry visibility',
+          )
+
+          print('UX changes applied')
+          PY
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Check diff
+        run: git diff --check
+
+      - name: Commit validated changes
+        shell: bash
+        run: |
+          git config user.name "Watumwa"
+          git config user.email "127853693+watumwa@users.noreply.github.com"
+          git add frontend/src/lib/data.ts frontend/src/components/FormDrawer.tsx frontend/src/lib/api.ts frontend/src/screens/ProcurementWorkbench.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m "refactor(ux): make expiry tracking explicit and reduce item-form clicks"
+          git push origin HEAD:chatgpt-expiry-click-ux
