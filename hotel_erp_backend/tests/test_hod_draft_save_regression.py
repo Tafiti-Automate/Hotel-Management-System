@@ -13,8 +13,7 @@ from apps.inventory.models import Category, Item, StoreLocation, UnitOfMeasure
 User = get_user_model()
 
 
-@pytest.mark.django_db
-def test_hod_can_save_existing_draft_requisition_details():
+def build_hod_draft():
     department = Department.objects.create(name="Housekeeping Draft Save")
     branch = Branch.objects.create(name="Draft Save Property")
     store = StoreLocation.objects.create(branch=branch, name="Main Store", is_active=True)
@@ -52,8 +51,13 @@ def test_hod_can_save_existing_draft_requisition_details():
         format="json",
     )
     assert created.status_code == 201, created.data
+    return client, created.data["id"], store
 
-    request_id = created.data["id"]
+
+@pytest.mark.django_db
+def test_hod_can_save_existing_draft_requisition_details():
+    client, request_id, store = build_hod_draft()
+
     saved = client.patch(
         f"/api/v1/store-requisitions/{request_id}/",
         {
@@ -68,3 +72,27 @@ def test_hod_can_save_existing_draft_requisition_details():
     assert saved.data["purpose"] == "Housekeeping supplies"
     assert saved.data["required_date"] == "2026-10-13"
     assert str(saved.data["store"]) == str(store.pk)
+
+
+@pytest.mark.django_db
+def test_hod_draft_save_is_not_rolled_back_by_audit_failure(monkeypatch):
+    client, request_id, store = build_hod_draft()
+
+    def broken_audit_create(*args, **kwargs):
+        raise RuntimeError("simulated production audit failure")
+
+    monkeypatch.setattr("apps.audit_logs.models.AuditLog.objects.create", broken_audit_create)
+
+    saved = client.patch(
+        f"/api/v1/store-requisitions/{request_id}/",
+        {
+            "purpose": "Save even if audit is unavailable",
+            "required_date": "2026-10-14",
+            "store": str(store.pk),
+        },
+        format="json",
+    )
+
+    assert saved.status_code == 200, saved.data
+    assert saved.data["purpose"] == "Save even if audit is unavailable"
+    assert saved.data["required_date"] == "2026-10-14"
