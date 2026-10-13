@@ -16,13 +16,35 @@ function scopeForRole(role: string) {
 function documentLabel(report: ReportCard) {
   if (report.controlledDocument === 'lpo') return 'Controlled LPO'
   if (report.controlledDocument === 'grn') return 'GRN document'
-  return 'Operational report'
+  return ''
+}
+
+function areaDescription(area: string) {
+  const key = area.toLowerCase()
+  if (key.includes('department') || key.includes('store')) return 'Department demand, stock issues, movement and store accountability.'
+  if (key.includes('procurement') || key.includes('supplier')) return 'Purchasing activity, supplier performance, orders and sourcing controls.'
+  if (key.includes('receiv') || key.includes('grn')) return 'Deliveries, goods receipts, inspections and receiving controls.'
+  if (key.includes('finance') || key.includes('management')) return 'Approval, value, spend and management-level procurement reporting.'
+  if (key.includes('audit') || key.includes('control')) return 'Audit trail, exceptions, approvals and operational control reports.'
+  if (key.includes('inventory') || key.includes('stock')) return 'Inventory balances, valuation, aging and stock movement reports.'
+  return 'Operational reports available within your current responsibility.'
+}
+
+function areaIcon(area: string) {
+  const key = area.toLowerCase()
+  if (key.includes('department')) return 'assignment'
+  if (key.includes('store') || key.includes('inventory') || key.includes('stock')) return 'warehouse'
+  if (key.includes('procurement')) return 'shopping_cart_checkout'
+  if (key.includes('supplier')) return 'local_shipping'
+  if (key.includes('receiv') || key.includes('grn')) return 'inventory_2'
+  if (key.includes('finance') || key.includes('management')) return 'payments'
+  if (key.includes('audit') || key.includes('control')) return 'history'
+  return 'bar_chart'
 }
 
 export default function Reports() {
   const app = useApp()
   const [search, setSearch] = useState('')
-  const [selectedArea, setSelectedArea] = useState('All')
   const allowedIds = reportIdsForUser(app.user)
   const scope = scopeForRole(app.user.role)
 
@@ -30,109 +52,95 @@ export default function Reports() {
     () => allowedIds.includes('*') ? reports : reports.filter((report) => canViewReport(app.user, report.id)),
     [allowedIds, app.user],
   )
-  const areas = useMemo(
-    () => Array.from(new Set(permittedReports.map((report) => report.grp))).sort((a, b) => a.localeCompare(b)),
-    [permittedReports],
-  )
-  const activeArea = selectedArea === 'All' || areas.includes(selectedArea) ? selectedArea : 'All'
+
   const visibleReports = useMemo(() => {
     const query = search.trim().toLowerCase()
-    return permittedReports.filter((report) => {
-      if (activeArea !== 'All' && report.grp !== activeArea) return false
-      if (!query) return true
-      return [report.title, report.desc, report.grp].some((value) => value.toLowerCase().includes(query))
+    if (!query) return permittedReports
+    return permittedReports.filter((report) => [report.title, report.desc, report.grp].some((value) => value.toLowerCase().includes(query)))
+  }, [permittedReports, search])
+
+  const groups = useMemo(() => {
+    const byArea = new Map<string, ReportCard[]>()
+    visibleReports.forEach((report) => {
+      const rows = byArea.get(report.grp) || []
+      rows.push(report)
+      byArea.set(report.grp, rows)
     })
-  }, [activeArea, permittedReports, search])
+    return Array.from(byArea.entries()).sort(([a], [b]) => a.localeCompare(b))
+  }, [visibleReports])
 
   return (
-    <div className="enterprise-workspace reports-screen ui-page">
-      <header className="ui-page-header reports-page-header">
-        <div className="ui-page-heading">
-          <span className="ui-eyebrow">{app.user.role} · Reporting</span>
-          <h1>Reports</h1>
-          <p>Operational and management reports available within your current role and working scope.</p>
+    <section className="enterprise-workspace reports-screen tafiti-report-center">
+      <header className="tafiti-report-center-header">
+        <div className="tafiti-report-center-heading">
+          <span className="tafiti-report-center-icon"><Icon name="bar_chart" size={22} /></span>
+          <div>
+            <h1>Report Center</h1>
+            <p>Operational, inventory, procurement and management reports available to your current role.</p>
+            <div className="tafiti-report-center-meta">
+              <span>{app.user.role}</span>
+              <i />
+              <span>{scope}</span>
+              <i />
+              <span>{permittedReports.length} report{permittedReports.length === 1 ? '' : 's'}</span>
+            </div>
+          </div>
         </div>
-        <div className="reports-search-box">
-          <Icon name="search" size={17} />
+
+        <label className="tafiti-report-search">
+          <Icon name="search" size={15} />
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search reports"
+            placeholder="Search reports…"
             aria-label="Search reports"
           />
-          {search && (
-            <button type="button" onClick={() => setSearch('')} aria-label="Clear report search">
-              <Icon name="close" size={16} />
-            </button>
-          )}
-        </div>
+          {search && <button type="button" onClick={() => setSearch('')} aria-label="Clear report search"><Icon name="close" size={14} /></button>}
+        </label>
       </header>
 
-      <section className="reports-summary-bar" aria-label="Reporting scope">
-        <div><strong>{permittedReports.length}</strong><span>Available reports</span></div>
-        <div><strong>{areas.length}</strong><span>Report areas</span></div>
-        <div><strong>{scope}</strong><span>Current scope</span></div>
-        <div><strong>PDF · Excel · CSV</strong><span>Export formats</span></div>
-      </section>
+      {groups.length > 0 ? (
+        <div className="tafiti-report-groups">
+          {groups.map(([area, areaReports]) => (
+            <article key={area} className="tafiti-report-group-card">
+              <div className="tafiti-report-group-header">
+                <span className="tafiti-report-group-icon"><Icon name={areaIcon(area)} size={18} /></span>
+                <div>
+                  <h2>{area}</h2>
+                  <p>{areaDescription(area)}</p>
+                </div>
+                <span className="tafiti-report-group-count">{areaReports.length}</span>
+              </div>
 
-      <div className="reports-toolbar">
-        <div className="reports-area-tabs" role="tablist" aria-label="Filter reports by area">
-          {['All', ...areas].map((area) => (
-            <button
-              key={area}
-              type="button"
-              role="tab"
-              aria-selected={activeArea === area}
-              className={activeArea === area ? 'is-active' : ''}
-              onClick={() => setSelectedArea(area)}
-            >
-              {area}
-              <span>{area === 'All' ? permittedReports.length : permittedReports.filter((report) => report.grp === area).length}</span>
-            </button>
+              <div className="tafiti-report-group-list">
+                {areaReports.map((report, index) => (
+                  <button
+                    key={report.id}
+                    type="button"
+                    onClick={() => app.openReport(report.id)}
+                    className="tafiti-report-link"
+                  >
+                    <span className="tafiti-report-link-icon"><Icon name={index % 2 ? 'description' : report.icon} size={15} /></span>
+                    <span className="tafiti-report-link-copy">
+                      <strong>{report.title}</strong>
+                      <small>{report.desc}</small>
+                    </span>
+                    {report.controlledDocument && <em>{documentLabel(report)}</em>}
+                    <span className="tafiti-report-link-open">Open <Icon name="arrow_forward" size={13} /></span>
+                  </button>
+                ))}
+              </div>
+            </article>
           ))}
         </div>
-        <div className="reports-result-count">{visibleReports.length} report{visibleReports.length === 1 ? '' : 's'}</div>
-      </div>
-
-      {visibleReports.length > 0 ? (
-        <section className="reports-card-grid" aria-label="Available reports">
-          {visibleReports.map((report) => (
-            <button
-              key={report.id}
-              type="button"
-              onClick={() => app.openReport(report.id)}
-              className="report-catalog-card"
-            >
-              <div className="report-catalog-card-top">
-                <span className="report-catalog-icon"><Icon name={report.icon} size={18} /></span>
-                <span className="report-catalog-area">{report.grp}</span>
-              </div>
-
-              <div className="report-catalog-copy">
-                <div className="report-catalog-title-row">
-                  <h2>{report.title}</h2>
-                  {report.controlledDocument && <span className="report-catalog-control">{documentLabel(report)}</span>}
-                </div>
-                <p>{report.desc}</p>
-              </div>
-
-              <div className="report-catalog-meta">
-                <div><span>Scope</span><strong>{scope}</strong></div>
-                <div className="report-catalog-formats"><span>Output</span><strong>PDF · Excel · CSV</strong></div>
-              </div>
-
-              <div className="report-catalog-open">Open report <Icon name="arrow_forward" size={15} /></div>
-            </button>
-          ))}
-        </section>
       ) : (
-        <section className="reports-empty-state">
-          <span><Icon name="search_off" size={22} /></span>
+        <div className="reports-empty-state tafiti-card-empty">
+          <span><Icon name="search" size={22} /></span>
           <strong>No reports found</strong>
-          <p>{search ? 'Try a different report name or clear the search.' : 'No reports are available in this area for your role.'}</p>
-          {(search || activeArea !== 'All') && <button type="button" onClick={() => { setSearch(''); setSelectedArea('All') }}>Clear filters</button>}
-        </section>
+          <p>{search ? 'Try a different report name or clear the search.' : 'No reports are available for your current role.'}</p>
+          {search && <button type="button" onClick={() => setSearch('')}>Clear search</button>}
+        </div>
       )}
-    </div>
+    </section>
   )
 }
