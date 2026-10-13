@@ -25,6 +25,19 @@ from apps.inventory.views import (
 from core.constants.choices import StoreRequisitionStatus
 
 
+def department_head_requisition_scope(queryset, user):
+    """Return the Department Head's safe request scope, including their own drafts."""
+    employee = getattr(user, "employee_profile", None)
+    if not is_department_head(user) or not employee:
+        return None
+    return queryset.filter(
+        department=employee.department,
+        requested_by__branch=employee.branch,
+    ).filter(
+        Q(requested_by=employee) | ~Q(status=StoreRequisitionStatus.DRAFT)
+    )
+
+
 class ControlledStoreRequisitionItemSerializer(BaseStoreRequisitionItemSerializer):
     """Protect the original Department request and keep Stores quantities monotonic.
 
@@ -99,18 +112,9 @@ class StoreRequisitionViewSet(BaseStoreRequisitionViewSet):
     """
 
     def get_queryset(self):
-        user = self.request.user
-        employee = getattr(user, "employee_profile", None)
-        if is_department_head(user) and employee:
-            queryset = BaseStoreRequisitionViewSet.queryset.all().filter(
-                department=employee.department,
-                requested_by__branch=employee.branch,
-            )
-            # A Department Head may see their own drafts plus submitted/history
-            # for the department. Drafts created by another HOD stay private.
-            return queryset.filter(
-                Q(requested_by=employee) | ~Q(status=StoreRequisitionStatus.DRAFT)
-            )
+        scoped = department_head_requisition_scope(BaseStoreRequisitionViewSet.queryset.all(), self.request.user)
+        if scoped is not None:
+            return scoped
         return super().get_queryset()
 
     def perform_create(self, serializer):
@@ -263,6 +267,15 @@ class StoreRequisitionViewSet(BaseStoreRequisitionViewSet):
 
 class StoreRequisitionItemViewSet(BaseStoreRequisitionItemViewSet):
     serializer_class = ControlledStoreRequisitionItemSerializer
+
+    def get_queryset(self):
+        # The original item view inherits the legacy HOD scope that excluded all
+        # draft requests. HOD-originated requests need their own draft lines to be
+        # listable/editable while retaining the same department/branch isolation.
+        scoped_requests = department_head_requisition_scope(StoreRequisition.objects.all(), self.request.user)
+        if scoped_requests is not None:
+            return BaseStoreRequisitionItemViewSet.queryset.filter(requisition__in=scoped_requests)
+        return super().get_queryset()
 
     def _enforce_line_edit(self, requisition):
         if has_role(self.request.user, "System Administrator"):
