@@ -1,0 +1,477 @@
+/*
+ * Product interface refresh
+ * --------------------------------------------------------------------------
+ * A final, intentionally scoped visual layer for the hotel ERP. It only
+ * changes presentation: no route, API, permission, workflow or data behavior
+ * lives in this file.
+ */
+
+:root {
+  color-scheme: light;
+}
+
+.application-root {
+  --refresh-navy: #102a43;
+  --refresh-navy-deep: #071a2e;
+  --refresh-blue: #2477e6;
+  --refresh-blue-strong: #145dbe;
+  --refresh-canvas: #f5f8fc;
+  --refresh-panel: #ffffff;
+  --refresh-panel-soft: #f8fafc;
+  --refresh-line: #dce5f0;
+  --refresh-line-strong: #c9d6e6;
+  --refresh-ink: #14233a;
+  --refresh-muted: #60728a;
+  --refresh-faint: #8291a6;
+  --refresh-table-head: #f1f6fc;
+  --refresh-row-hover: #f5f9ff;
+  --refresh-shadow: 0 12px 30px rgba(22, 43, 74, .08), 0 2px 6px rgba(22, 43, 74, .04);
+  --refresh-shadow-raised: 0 18px 44px rgba(19, 42, 74, .12), 0 3px 10px rgba(19, 42, 74, .05);
+}
+
+/* Authentication ---------------------------------------------------------- */
+.screen-login .auth-page {
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 12% 14%, rgba(64, 144, 255, .25), transparent 28rem),
+    radial-gradient(circle at 92% 86%, rgba(27, 104, 207, .2), transparent 31rem),
+    linear-gradient(135deg, #09213b 0%, #0d2e52 52%, #12416f 100%) !important;
+}
+
+.screen-login .auth-page::before {
+  z-index: -1;
+  opacity: .45;
+  background-image:
+    linear-gradient(rgba(255,255,255,.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.055) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: none;
+}
+
+.screen-login .auth-page::after {
+  z-index: -1;
+  background: linear-gradient(120deg, rgba(255,255,255,.06), transparent 38%, rgba(3,14,31,.16));
+}
+
+.screen-login .auth-panel {
+  width: min(456px, 100%) !important;
+}
+
+.screen-login .auth-card {
+  padding: 38px 40px 30px !important;
+  color: var(--refresh-ink) !important;
+  border: 1px solid rgba(255,255,255,.6) !important;
+  border-radius: 22px !important;
+  background: rgba(255,255,255,.98) !important;
+  box-shadow: 0 28px 72px rgba(2, 17, 37, .3), 0 2px 8px rgba(2, 17, 37, .1) !important;
+  backdrop-filter: blur(18px);
+}
+
+.screen-login .auth-avatar {
+  width: 60px !important;
+  height: 60px !important;
+  margin-bottom: 15px !important;
+  border: 0 !important;
+  border-radius: 17px !important;
+  background: linear-gradient(145deg, #3d8aff, #1b68d1) !important;
+  box-shadow: 0 11px 24px rgba(30, 109, 224, .28) !important;
+}
+
+.screen-login .auth-eyebrow {
+  margin-bottom: 7px !important;
+  color: var(--refresh-blue-strong) !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  letter-spacing: .105em !important;
+}
+
+.screen-login .auth-card header h1 {
+  color: var(--refresh-ink) !important;
+  font-size: 28px !important;
+  font-weight: 750 !important;
+  letter-spacing: -.035em !important;
+  text-transform: none !important;
+}
+
+.screen-login .auth-intro {
+  margin: 8px 0 28px !important;
+  color: var(--refresh-muted) !important;
+  font-size: 13px !important;
+  line-height: 1.55 !important;
+}
+
+.screen-login .auth-label {
+  margin-bottom: 7px !important;
+  color: #344964 !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+}
+
+.screen-login .auth-field { margin-bottom: 17px !important; }
+
+.screen-login .auth-input {
+  min-height: 50px !important;
+  color: var(--refresh-muted) !important;
+  border: 1px solid var(--refresh-line) !important;
+  border-radius: 11px !important;
+  background: #fbfcfe !important;
+  box-shadow: none !important;
+}
+
+.screen-login .auth-input:focus-within {
+  color: var(--refresh-blue) !important;
+  border-color: var(--refresh-blue) !important;
+  background: #fff !important;
+  box-shadow: 0 0 0 4px rgba(36,119,230,.13) !important;
+}
+
+.screen-login .auth-input input,
+.screen-login .auth-input input:-webkit-autofill,
+.screen-login .auth-input input:-webkit-autofill:hover,
+.screen-login .auth-input input:-webkit-autofill:focus,
+.screen-login .auth-input input:-webkit-autofill:active {
+  color: var(--refresh-ink) !important;
+  -webkit-text-fill-color: var(--refresh-ink) !important;
+  caret-color: var(--refresh-ink) !important;
+}
+
+.screen-login .auth-input input::placeholder { color: #93a2b5 !important; }
+.screen-login .auth-password-toggle { color: var(--refresh-muted) !important; }
+.screen-login .auth-password-toggle:hover { color: var(--refresh-blue) !important; background: #eef5ff !important; }
+
+.screen-login .auth-options { margin: 2px 1px 22px !important; }
+.screen-login .auth-remember,
+.screen-login .auth-help-link {
+  color: var(--refresh-muted) !important;
+  font-size: 12px !important;
+}
+.screen-login .auth-help-link { color: var(--refresh-blue-strong) !important; font-weight: 700 !important; }
+.screen-login .auth-remember input { accent-color: var(--refresh-blue) !important; }
+
+.screen-login .auth-submit {
+  min-height: 50px !important;
+  border: 1px solid #1e69cc !important;
+  border-radius: 11px !important;
+  background: linear-gradient(135deg, #3385f4, #1d6bce) !important;
+  box-shadow: 0 10px 21px rgba(30, 105, 204, .24) !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  letter-spacing: .09em !important;
+}
+.screen-login .auth-submit:hover:not(:disabled) {
+  background: linear-gradient(135deg, #277aed, #155db9) !important;
+  box-shadow: 0 13px 25px rgba(30, 105, 204, .3) !important;
+}
+
+.screen-login .auth-security-note { color: var(--refresh-faint) !important; font-size: 11px !important; }
+.screen-login .auth-notice,
+.screen-login .auth-help { color: #36506f !important; border-color: #cbdcec !important; background: #f4f8fd !important; }
+.screen-login .auth-error { color: #9d2943 !important; border-color: #f1c7d0 !important; background: #fff4f6 !important; }
+
+/* Application frame ------------------------------------------------------ */
+.screen-app {
+  --bg: var(--refresh-canvas) !important;
+  --surface: var(--refresh-panel) !important;
+  --surface-2: var(--refresh-panel-soft) !important;
+  --surface-3: #edf3f9 !important;
+  --border: var(--refresh-line) !important;
+  --border-2: var(--refresh-line-strong) !important;
+  --text: var(--refresh-ink) !important;
+  --text-muted: var(--refresh-muted) !important;
+  --text-faint: var(--refresh-faint) !important;
+  --accent: var(--refresh-blue) !important;
+  --accent-soft: #eaf3ff !important;
+  --shadow-sm: 0 1px 2px rgba(19, 42, 74, .05) !important;
+  background: var(--refresh-canvas) !important;
+}
+
+.screen-app.mode-dark,
+html[data-theme="dark"] .screen-app {
+  --refresh-canvas: #101b2c;
+  --refresh-panel: #17263a;
+  --refresh-panel-soft: #1d2e45;
+  --refresh-line: #2d4059;
+  --refresh-line-strong: #405675;
+  --refresh-ink: #f2f6fc;
+  --refresh-muted: #bdcadd;
+  --refresh-faint: #91a2b9;
+  --refresh-blue: #63a5ff;
+  --refresh-blue-strong: #81b7ff;
+  --refresh-table-head: #20344c;
+  --refresh-row-hover: #1d3149;
+  --refresh-shadow: 0 12px 32px rgba(0, 0, 0, .22);
+  --refresh-shadow-raised: 0 20px 48px rgba(0, 0, 0, .34);
+}
+
+.screen-app .app-shell,
+.screen-app .tafiti-app-shell,
+.screen-app .app-main,
+.screen-app .tafiti-app-main {
+  background: var(--refresh-canvas) !important;
+}
+
+.screen-app aside.sidebar.tafiti-sidebar,
+.screen-app .sidebar.tafiti-sidebar {
+  width: 244px !important;
+  min-width: 244px !important;
+  background:
+    radial-gradient(circle at 6% 0%, rgba(79,142,255,.2), transparent 22rem),
+    linear-gradient(180deg, #102d50 0%, #0c2442 50%, #071a31 100%) !important;
+  box-shadow: 8px 0 28px rgba(7, 24, 47, .1) !important;
+}
+
+.screen-app .sidebar.tafiti-sidebar.is-collapsed {
+  width: 72px !important;
+  min-width: 72px !important;
+}
+
+.screen-app .tafiti-sidebar-brand {
+  min-height: 78px !important;
+  padding: 16px !important;
+}
+.screen-app .tafiti-sidebar-brand-mark {
+  width: 42px !important;
+  height: 42px !important;
+  flex-basis: 42px !important;
+  border-radius: 12px !important;
+  background: linear-gradient(145deg, #5a9aff, #2474dd) !important;
+}
+.screen-app .sidebar-brand-title { font-size: 14px !important; font-weight: 800 !important; }
+.screen-app .sidebar-brand-subtitle { color: #a9c0df !important; font-size: 9px !important; }
+.screen-app .tafiti-sidebar-property { margin: 14px 12px 7px !important; }
+.screen-app .tafiti-property-trigger {
+  min-height: 58px !important;
+  border-radius: 10px !important;
+  background: rgba(255,255,255,.06) !important;
+}
+.screen-app .tafiti-sidebar-nav { padding: 10px 10px 16px !important; }
+.screen-app .tafiti-sidebar-nav-group { margin-top: 19px !important; }
+.screen-app .sidebar-nav-heading { color: #8ea8c8 !important; font-size: 9px !important; }
+.screen-app .sidebar-nav-item.tafiti-sidebar-nav-item {
+  min-height: 38px !important;
+  margin: 2px 0 !important;
+  padding: 0 10px !important;
+  border-radius: 8px !important;
+  color: #c8d7ea !important;
+  font-size: 12px !important;
+  font-weight: 650 !important;
+}
+.screen-app .sidebar-nav-item.tafiti-sidebar-nav-item.active {
+  color: #fff !important;
+  background: linear-gradient(90deg, rgba(67,141,255,.3), rgba(67,141,255,.16)) !important;
+  box-shadow: inset 3px 0 0 #7db1ff !important;
+}
+.screen-app .sidebar-nav-item.tafiti-sidebar-nav-item:hover { background: rgba(255,255,255,.075) !important; color: #fff !important; }
+.screen-app .tafiti-sidebar-user { border-top-color: rgba(255,255,255,.1) !important; }
+
+.screen-app .app-header,
+.screen-app .tafiti-app-header {
+  min-height: 0 !important;
+  border-bottom: 1px solid var(--refresh-line) !important;
+  background: rgba(255,255,255,.96) !important;
+  box-shadow: 0 1px 0 rgba(18,43,73,.02) !important;
+}
+.screen-app.mode-dark .app-header,
+.screen-app.mode-dark .tafiti-app-header,
+html[data-theme="dark"] .screen-app .app-header,
+html[data-theme="dark"] .screen-app .tafiti-app-header { background: rgba(23,38,58,.96) !important; }
+
+.screen-app .app-header-top,
+.screen-app .tafiti-app-header-top {
+  min-height: 66px !important;
+  padding: 0 28px !important;
+}
+.screen-app .global-search-trigger,
+.screen-app .tafiti-school-search {
+  height: 38px !important;
+  min-width: min(390px, 34vw) !important;
+  border: 1px solid var(--refresh-line) !important;
+  border-radius: 9px !important;
+  background: var(--refresh-panel-soft) !important;
+  color: var(--refresh-muted) !important;
+  box-shadow: none !important;
+}
+.screen-app .global-search-trigger:hover { border-color: #abc5e4 !important; background: var(--refresh-panel) !important; }
+.screen-app .global-search-trigger kbd { border-color: var(--refresh-line) !important; background: var(--refresh-panel) !important; color: var(--refresh-faint) !important; }
+.screen-app .header-live-state,
+.screen-app .header-role-chip,
+.screen-app .tafiti-school-context-chip {
+  border-color: var(--refresh-line) !important;
+  background: var(--refresh-panel-soft) !important;
+  color: var(--refresh-muted) !important;
+}
+.screen-app .tafiti-school-breadcrumb-bar {
+  display: flex !important;
+  align-items: center !important;
+  min-height: 36px !important;
+  padding: 0 28px !important;
+  border-top: 1px solid var(--refresh-line) !important;
+  background: var(--refresh-panel-soft) !important;
+}
+.screen-app .tafiti-school-breadcrumb { color: var(--refresh-muted) !important; font-size: 11px !important; }
+.screen-app .tafiti-school-breadcrumb strong { color: var(--refresh-ink) !important; }
+
+.screen-app .app-content,
+.screen-app .tafiti-app-content {
+  max-width: none !important;
+  padding: 30px clamp(20px, 3vw, 42px) 48px !important;
+  background: var(--refresh-canvas) !important;
+}
+html[data-theme="dark"] .screen-app .app-content,
+html[data-theme="dark"] .screen-app .tafiti-app-content { background: var(--refresh-canvas) !important; }
+.screen-app .app-content > * { max-width: 1500px; margin-inline: auto; }
+.screen-app .app-content h1 {
+  color: var(--refresh-ink) !important;
+  font-size: clamp(25px, 2vw, 31px) !important;
+  font-weight: 780 !important;
+  letter-spacing: -.035em !important;
+}
+.screen-app .app-content h2,
+.screen-app .app-content h3 { color: var(--refresh-ink) !important; }
+
+/* Shared controls and data surfaces -------------------------------------- */
+.screen-app input:not([type="checkbox"]):not([type="radio"]),
+.screen-app select,
+.screen-app textarea {
+  color: var(--refresh-ink) !important;
+  border-color: var(--refresh-line) !important;
+  background-color: var(--refresh-panel) !important;
+  box-shadow: none !important;
+}
+.screen-app input:not([type="checkbox"]):not([type="radio"]):focus,
+.screen-app select:focus,
+.screen-app textarea:focus {
+  border-color: var(--refresh-blue) !important;
+  box-shadow: 0 0 0 3px rgba(36,119,230,.13) !important;
+}
+.screen-app input::placeholder,
+.screen-app textarea::placeholder { color: #96a4b6 !important; }
+
+.screen-app .list-toolbar { margin-bottom: 20px !important; }
+.screen-app .list-toolbar > div:first-child > p { color: var(--refresh-muted) !important; font-size: 13px !important; }
+.screen-app .list-actions { gap: 9px !important; }
+.screen-app .list-actions > button,
+.screen-app .list-toolbar button[style*="background: var(--accent)"],
+.screen-app .erp-primary,
+.screen-app .inventory-primary-action,
+.screen-app .supplier-table-primary {
+  border-radius: 9px !important;
+  box-shadow: 0 5px 12px rgba(36,119,230,.16) !important;
+}
+.screen-app .list-actions > button:hover,
+.screen-app .erp-primary:hover,
+.screen-app .inventory-primary-action:hover,
+.screen-app .supplier-table-primary:hover { transform: translateY(-1px); }
+
+.screen-app .table-command-bar {
+  min-height: 60px !important;
+  padding: 10px 12px !important;
+  border: 1px solid var(--refresh-line) !important;
+  border-bottom: 0 !important;
+  border-radius: 12px 12px 0 0 !important;
+  background: var(--refresh-panel) !important;
+}
+.screen-app .data-table {
+  border-color: var(--refresh-line) !important;
+  border-radius: 0 0 12px 12px !important;
+  box-shadow: var(--refresh-shadow) !important;
+}
+.screen-app .data-head { background: var(--refresh-table-head) !important; border-bottom-color: var(--refresh-line) !important; }
+.screen-app .data-head button { color: #526983 !important; font-size: 10px !important; font-weight: 800 !important; }
+.screen-app .data-row { min-height: 58px !important; border-bottom-color: #e8eef5 !important; }
+.screen-app .data-row:hover { background: var(--refresh-row-hover) !important; }
+.screen-app .data-cell { color: var(--refresh-ink) !important; font-size: 12.5px !important; }
+.screen-app .data-actions { opacity: .75; }
+.screen-app .data-row:hover .data-actions { opacity: 1; }
+.screen-app .list-footer { min-height: 54px !important; background: var(--refresh-panel-soft) !important; }
+
+.screen-app .dashboard-panel,
+.screen-app .reference-dashboard-panel,
+.screen-app .workbench-action-panel,
+.screen-app .inventory-records-card,
+.screen-app .supplier-table-shell,
+.screen-app .report-results-shell {
+  border-color: var(--refresh-line) !important;
+  border-radius: 13px !important;
+  box-shadow: var(--refresh-shadow) !important;
+}
+.screen-app .dashboard-task-card,
+.screen-app .finance-kpi-card,
+.screen-app .supplier-kpi-card,
+.screen-app .workbench-metric {
+  border-radius: 12px !important;
+  box-shadow: 0 5px 15px rgba(22,43,74,.055) !important;
+}
+.screen-app .dashboard-task-card:hover,
+.screen-app .finance-kpi-card:hover,
+.screen-app .supplier-kpi-card:hover { transform: translateY(-2px) !important; }
+
+.screen-app .workbench-hero,
+.screen-app .inventory-workbench-hero,
+.screen-app .procurement-hero-card {
+  border-radius: 14px !important;
+  box-shadow: var(--refresh-shadow) !important;
+}
+
+.screen-app .form-drawer,
+.screen-app .record-detail-drawer,
+.screen-app .procurement-detail-drawer {
+  border-left-color: var(--refresh-line) !important;
+  box-shadow: -18px 0 48px rgba(13,31,55,.16) !important;
+}
+.screen-app .form-drawer header,
+.screen-app .record-detail-drawer header { background: var(--refresh-panel) !important; }
+.screen-app .form-footer,
+.screen-app .record-detail-drawer footer { background: var(--refresh-panel-soft) !important; }
+
+/* Keep action hierarchy clear across screens that use inline button styles. */
+.screen-app button[style*="background: var(--surface)"] { border-radius: 8px !important; }
+.screen-app button[style*="background: var(--accent)"] { box-shadow: 0 5px 12px rgba(36,119,230,.17) !important; }
+.screen-app button[style*="background: var(--accent)"]:hover { filter: brightness(.98); transform: translateY(-1px); }
+
+/* Mobile keeps the task and action context visible without crowding tables. */
+@media (max-width: 980px) {
+  .screen-app .app-header-top,
+  .screen-app .tafiti-app-header-top,
+  .screen-app .tafiti-school-breadcrumb-bar { padding-inline: 18px !important; }
+  .screen-app .global-search-trigger,
+  .screen-app .tafiti-school-search { min-width: 0 !important; width: min(310px, 40vw) !important; }
+  .screen-app .app-content,
+  .screen-app .tafiti-app-content { padding: 24px 18px 38px !important; }
+}
+
+@media (max-width: 720px) {
+  .screen-login .auth-page { padding: 18px 14px !important; }
+  .screen-login .auth-card { padding: 30px 22px 24px !important; border-radius: 18px !important; }
+  .screen-login .auth-card header h1 { font-size: 25px !important; }
+
+  .screen-app .app-header-top,
+  .screen-app .tafiti-app-header-top { min-height: 60px !important; padding-inline: 12px !important; }
+  .screen-app .global-search-trigger,
+  .screen-app .tafiti-school-search { width: 38px !important; min-width: 38px !important; padding: 0 !important; justify-content: center !important; }
+  .screen-app .header-search-label,
+  .screen-app .global-search-trigger kbd,
+  .screen-app .header-role-chip,
+  .screen-app .tafiti-school-context-chip { display: none !important; }
+  .screen-app .tafiti-school-breadcrumb-bar { min-height: 34px !important; padding-inline: 14px !important; }
+  .screen-app .tafiti-school-breadcrumb span { display: none !important; }
+  .screen-app .app-content,
+  .screen-app .tafiti-app-content { padding: 20px 13px 32px !important; }
+  .screen-app .app-content h1 { font-size: 25px !important; }
+
+  .screen-app .list-toolbar { align-items: stretch !important; gap: 14px !important; }
+  .screen-app .list-actions { width: 100%; display: grid !important; grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+  .screen-app .list-actions > button:last-child { grid-column: 1 / -1; }
+  .screen-app .list-actions > button { justify-content: center !important; }
+  .screen-app .table-command-bar { align-items: stretch !important; flex-wrap: wrap !important; gap: 8px !important; }
+  .screen-app .list-search { flex: 1 1 100%; }
+  .screen-app .list-search input { width: 100% !important; }
+  .screen-app .table-command-bar select { flex: 1 1 calc(50% - 4px); max-width: none !important; }
+  .screen-app .date-filter { flex: 1 1 calc(50% - 4px); }
+  .screen-app .data-table { overflow-x: auto !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen-app *,
+  .screen-login * { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
+}
