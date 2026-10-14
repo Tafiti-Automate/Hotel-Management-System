@@ -395,6 +395,29 @@ html[data-theme="dark"] .screen-app .tafiti-app-content { background: var(--refr
   border-radius: 13px !important;
   box-shadow: var(--refresh-shadow) !important;
 }
+
+/* The Department Head view has its own semantic layout classes. Keep its
+   cards on the active surface so dark appearance never leaves light panels
+   with light text. */
+.screen-app .hod-dashboard-panel,
+.screen-app .hod-dashboard-metric,
+.screen-app .hod-dashboard-side > section {
+  border-color: var(--refresh-line) !important;
+  background: var(--refresh-panel) !important;
+  box-shadow: var(--refresh-shadow) !important;
+}
+.screen-app .hod-dashboard-panel > header,
+.screen-app .hod-dashboard-side > section > header,
+.screen-app .hod-dashboard-empty { background: var(--refresh-panel) !important; }
+.screen-app .hod-dashboard-panel > header strong,
+.screen-app .hod-dashboard-empty strong,
+.screen-app .hod-dashboard-side > section > header strong,
+.screen-app .hod-workload-row b,
+.screen-app .hod-context-row b { color: var(--refresh-ink) !important; }
+.screen-app .hod-dashboard-panel > header span,
+.screen-app .hod-dashboard-empty,
+.screen-app .hod-workload-row span,
+.screen-app .hod-context-row span { color: var(--refresh-muted) !important; }
 .screen-app .dashboard-task-card,
 .screen-app .finance-kpi-card,
 .screen-app .supplier-kpi-card,
