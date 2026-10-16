@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, type ReactNode } from 'react'
 import { useApp } from '../state/AppContext'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
@@ -12,12 +12,12 @@ const ReportView = lazy(() => import('./ReportView'))
 const HotelProfile = lazy(() => import('./HotelProfile'))
 const WorkflowHub = lazy(() => import('./WorkflowHub'))
 const HRDashboard = lazy(() => import('./HRDashboard'))
-const DepartmentHeadDashboard = lazy(() => import('./DepartmentHeadDashboard'))
 const ProcurementWorkbench = lazy(() => import('./ProcurementWorkbench'))
 const FinancialManagerLpoWorkspace = lazy(() => import('./FinancialManagerLpoWorkspace'))
+const ReceivingClerkWorkspaceV2 = lazy(() => import('./ReceivingClerkWorkspaceV2'))
 const FinanceWorkbench = lazy(() => import('./FinanceWorkbench'))
 const InventoryWorkbench = lazy(() => import('./InventoryWorkbench'))
-const DepartmentRequisitions = lazy(() => import('./DepartmentRequisitions'))
+const DepartmentSupplyWorkspace = lazy(() => import('./DepartmentSupplyWorkspace'))
 const StorePurchaseRequests = lazy(() => import('./StorePurchaseRequests'))
 const InventoryCatalogue = lazy(() => import('./InventoryCatalogue'))
 const ArticleManagement = lazy(() => import('./ArticleManagement'))
@@ -31,22 +31,26 @@ const listRoutes: string[] = [
   'items', 'locations', 'suppliers',
   'balances', 'ledgers', 'batches', 'requisitions', 'approvals', 'orders', 'grns',
   'reorderRules', 'storeRequisitions', 'stockIssues', 'storeReturns', 'inspections',
-  'supplierReturns',
-  'employees', 'departments',
-  'supplierItems',
+  'supplierReturns', 'employees', 'departments', 'supplierItems',
 ]
+
+const departmentSupplyRoles = new Set(['department supervisor', 'supervisor', 'department head', 'cost controller', 'store keeper'])
 
 export default function AppShell() {
   const app = useApp()
   const { route } = app
   const role = String(app.user.role || '').trim().toLowerCase()
 
-  let content: React.ReactNode = null
-  if (!canAccessRoute(app.user, route)) content = role === 'department head' ? <DepartmentHeadDashboard /> : <Dashboard />
-  else if (route === 'dashboard') content = role === 'department head' ? <DepartmentHeadDashboard /> : <Dashboard />
+  let content: ReactNode = null
+  if (!canAccessRoute(app.user, route)) content = <Dashboard />
+  else if (route === 'dashboard') content = <Dashboard />
   else if (route === 'hr-dashboard') content = <HRDashboard />
-  else if (route === 'workflow-procure') content = role === 'financial manager' ? <FinancialManagerLpoWorkspace /> : <ProcurementWorkbench />
-  else if (route === 'workflow-stores') content = role === 'department head' ? <DepartmentRequisitions /> : <InventoryWorkbench />
+  else if (route === 'workflow-procure') content = role === 'financial manager'
+    ? <FinancialManagerLpoWorkspace />
+    : role === 'receiving clerk'
+      ? <ReceivingClerkWorkspaceV2 />
+      : <ProcurementWorkbench />
+  else if (route === 'workflow-stores') content = departmentSupplyRoles.has(role) ? <DepartmentSupplyWorkspace /> : <InventoryWorkbench />
   else if (route === 'store-purchase-requests') content = <StorePurchaseRequests />
   else if (route === 'workflow-consume') content = <InventoryWorkbench />
   else if (route === 'categories') content = <InventoryCatalogue />
@@ -64,32 +68,18 @@ export default function AppShell() {
   else if (route === 'audit-log') content = <AuditLog />
   else if (route === 'access-management') content = <AccessManagement />
 
-  return (
-    <div className="app-shell tafiti-app-shell">
-      <span className="tafiti-shell-topline" aria-hidden="true" />
-      <Sidebar />
-
-      <div className="app-main tafiti-app-main">
-        <Header />
-        <main
-          className={`app-content tafiti-app-content route-${route}`}
-          data-route={route}
-        >
-          <Suspense fallback={<RouteLoading />}>{content}</Suspense>
-        </main>
-      </div>
+  return <div className="app-shell tafiti-app-shell">
+    <span className="tafiti-shell-topline" aria-hidden="true" />
+    <Sidebar />
+    <div className="app-main tafiti-app-main">
+      <Header />
+      <main className={`app-content tafiti-app-content route-${route}`} data-route={route}>
+        <Suspense fallback={<RouteLoading />}>{content}</Suspense>
+      </main>
     </div>
-  )
+  </div>
 }
 
 function RouteLoading() {
-  return (
-    <div className="route-loading" role="status" aria-live="polite">
-      <span className="route-loading-spinner" aria-hidden="true" />
-      <div>
-        <strong>Loading</strong>
-        <span>Preparing your workspace…</span>
-      </div>
-    </div>
-  )
+  return <div className="route-loading" role="status" aria-live="polite"><span className="route-loading-spinner" aria-hidden="true" /><div><strong>Loading</strong><span>Preparing your workspace…</span></div></div>
 }

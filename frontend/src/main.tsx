@@ -6,13 +6,10 @@ import './premium-mobile.css'
 import './reference-interface.css'
 import './responsive.css'
 import './interface-refresh.css'
+import './department-supply.css'
 import App from './App'
 import { AppProvider } from './state/AppContext'
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <AppProvider>
-      <App />
-    </AppProvider>
-  </StrictMode>,
+  <StrictMode><AppProvider><App /></AppProvider></StrictMode>,
 )

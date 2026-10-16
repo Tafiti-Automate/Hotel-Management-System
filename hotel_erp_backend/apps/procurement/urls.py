@@ -1,11 +1,14 @@
 from rest_framework.routers import DefaultRouter
 
-from apps.procurement.transaction_controls import PurchaseOrderViewSet, RequisitionItemViewSet
+from apps.procurement.transaction_controls import (
+    GoodsReceiptItemViewSet,
+    GoodsReceiptNoteViewSet,
+    PurchaseOrderViewSet,
+    RequisitionItemViewSet,
+)
 from apps.procurement.views import (
     GoodsInspectionItemViewSet,
     GoodsInspectionViewSet,
-    GoodsReceiptItemViewSet,
-    GoodsReceiptNoteViewSet,
     PurchaseOrderItemViewSet,
     ProcurementAttachmentViewSet,
     ProcurementCommunicationViewSet,

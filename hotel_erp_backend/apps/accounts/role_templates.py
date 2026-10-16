@@ -9,15 +9,26 @@ from django.db import transaction
 
 ROLE_SPECS = {
     "System Administrator": {"all": True},
-    "Department Head": {
-        # The Department Head is now the originator of Department requisitions.
-        # They may maintain only their own draft/rejected request through API
-        # object-level controls; submitted records remain read-only to the HOD.
+    "Department Supervisor": {
+        # Supervisors originate Department requests for their own department.
+        # Object-level API controls keep them on their own draft/rejected records.
         "crud": {"inventory": ["storerequisition", "storerequisitionitem"]},
         "view": {
             "departments": ["department", "branch"],
             "employees": ["employee"],
             "inventory": ["category", "item", "storelocation", "unitofmeasure"],
+        },
+    },
+    "Department Head": {
+        # HOD no longer originates the Department request. The HOD reviews the
+        # Supervisor request and may retain/reduce quantities or reject it.
+        "view": {
+            "departments": ["department", "branch"],
+            "employees": ["employee"],
+            "inventory": [
+                "category", "item", "storelocation", "unitofmeasure",
+                "storerequisition", "storerequisitionitem",
+            ],
         },
     },
     "Cost Controller": {
@@ -26,16 +37,32 @@ ROLE_SPECS = {
             "inventory": ["category", "item", "itemunitprice", "supplieritemprice", "unitofmeasure"],
             "procurement": ["procurementattachment"],
         },
-    },
-    "Store Keeper": {
-        # The Department request is predecessor data. Store Keeper may process it,
-        # select the destination store and record carried-forward quantities, but
-        # supplier/price permissions are deliberately absent.
-        "change": {"inventory": ["storerequisition", "storerequisitionitem"]},
         "view": {
             "departments": ["department", "branch"],
             "employees": ["employee"],
-            "inventory": ["item", "storelocation", "storekeeperassignment", "unitofmeasure"],
+            "inventory": [
+                "storerequisition", "storerequisitionitem", "storelocation", "inventorybalance",
+            ],
+        },
+    },
+    "Store Keeper": {
+        # Store Keeper controls internal stock after HOD + Cost Control approval,
+        # prepares the transfer/issue voucher and verifies supplier GRNs before SOH posting.
+        "crud": {
+            "inventory": ["stockissue", "stockissueitem"],
+        },
+        "view": {
+            "departments": ["department", "branch"],
+            "employees": ["employee"],
+            "inventory": [
+                "item", "storelocation", "storekeeperassignment", "unitofmeasure",
+                "inventorybalance", "storerequisition", "storerequisitionitem",
+                "inventorybatch", "stockledger",
+            ],
+            "procurement": [
+                "goodsreceiptnote", "goodsreceiptitem", "purchaseorder", "purchaseorderitem",
+            ],
+            "vendors": ["supplier"],
         },
     },
     "Procurement Manager": {
@@ -91,8 +118,8 @@ ROLE_SPECS = {
 }
 
 # Requester/Department Requester is retired. Existing accounts are deliberately
-# not promoted to Department Head automatically because that would grant approval
-# authority to users who may never have been department heads.
+# not promoted to Department Supervisor automatically because role elevation must
+# remain an explicit administrator decision.
 RETIRED_ROLE_NAMES = (
     "Requester",
     "Department Requester",
@@ -103,6 +130,9 @@ RETIRED_ROLE_NAMES = (
 # Existing installations used several spellings/cases. All non-retired aliases
 # are migrated into the canonical roles before the legacy groups are removed.
 ROLE_ALIASES = {
+    "Supervisor": "Department Supervisor",
+    "SUPERVISOR": "Department Supervisor",
+    "DEPARTMENT SUPERVISOR": "Department Supervisor",
     "DEPARTMENT HEAD": "Department Head",
     "COST CONTROLLER": "Cost Controller",
     "STORE KEEPER": "Store Keeper",
@@ -163,8 +193,7 @@ def sync_client_roles(*, reset_permissions=True):
         group, _ = Group.objects.get_or_create(name=name)
         groups[name] = group
 
-    # Retire Department Requester without silently promoting old accounts to HOD.
-    # Administrators can explicitly assign the correct operational role afterward.
+    # Retire the generic Requester role without silently promoting old accounts.
     for retired_name in RETIRED_ROLE_NAMES:
         retired = Group.objects.filter(name=retired_name).first()
         if not retired:
@@ -187,7 +216,6 @@ def sync_client_roles(*, reset_permissions=True):
         new_group = groups[new_name]
         for user in old_group.user_set.all():
             user.groups.add(new_group)
-        # Approval rules are migrated when that app/table is available.
         try:
             from apps.approvals.models import ApprovalMatrixRule
             ApprovalMatrixRule.objects.filter(approver_role=old_group).update(approver_role=new_group)
@@ -196,8 +224,6 @@ def sync_client_roles(*, reset_permissions=True):
         old_group.delete()
 
     for name, spec in ROLE_SPECS.items():
-        # Operational permissions are client-approved policy, not administrator
-        # configuration. Every synchronization restores the canonical permission set.
         groups[name].permissions.set(permissions_for_spec(spec))
 
     return groups

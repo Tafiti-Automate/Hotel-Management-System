@@ -1,11 +1,16 @@
 from rest_framework.routers import DefaultRouter
 
-from apps.inventory.transaction_controls import StoreRequisitionItemViewSet
-from apps.inventory.hod_draft_api import StoreRequisitionViewSet
+from apps.inventory.department_request_v2 import (
+    StoreRequisitionItemViewSet,
+    StoreRequisitionViewSet,
+)
+from apps.inventory.transaction_controls import (
+    InventoryBalanceViewSet,
+    StoreLocationViewSet,
+)
 from apps.inventory.views import (
     CategoryViewSet,
     DepartmentConsumptionViewSet,
-    InventoryBalanceViewSet,
     InventoryBatchViewSet,
     ReorderRuleViewSet,
     ItemViewSet,
@@ -19,7 +24,6 @@ from apps.inventory.views import (
     StockLedgerViewSet,
     StockTransferItemViewSet,
     StockTransferViewSet,
-    StoreLocationViewSet,
     StoreKeeperAssignmentViewSet,
     StoreReturnItemViewSet,
     StoreReturnViewSet,

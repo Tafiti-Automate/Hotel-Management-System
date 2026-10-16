@@ -1,39 +1,31 @@
-"""Monotonic Department Requisition quantity controls.
+"""Inventory controls shared across role-specific workspaces."""
 
-The original saved Department request is the ceiling for later edits. A Department Head
-or any downstream role may retain or reduce quantity, never increase it.
-"""
-
-from rest_framework import serializers
-
-from apps.inventory.department_request_api import (
-    ControlledStoreRequisitionItemSerializer as BaseStoreRequisitionItemSerializer,
-    StoreRequisitionItemViewSet as BaseStoreRequisitionItemViewSet,
+from apps.inventory.department_request_v2 import operational_stores_for_user
+from apps.inventory.views import (
+    InventoryBalanceViewSet as BaseInventoryBalanceViewSet,
+    StoreLocationViewSet as BaseStoreLocationViewSet,
+    has_role,
 )
 
 
-class StoreRequisitionItemSerializer(BaseStoreRequisitionItemSerializer):
-    def validate(self, attrs):
-        attrs = super().validate(attrs)
-        if not self.instance:
-            return attrs
-        if "quantity_requested" not in attrs and "unit" not in attrs:
-            return attrs
+class StoreLocationViewSet(BaseStoreLocationViewSet):
+    """Store Keepers can view every active store in their hotel/property scope."""
 
-        item = attrs.get("item", self.instance.item)
-        unit = attrs.get("unit", self.instance.unit)
-        quantity = attrs.get("quantity_requested", self.instance.quantity_requested)
-        candidate_base = item.quantity_in_base_units(quantity, unit)
-        current_base = self.instance.base_quantity_requested
-        if candidate_base > current_base:
-            raise serializers.ValidationError({
-                "quantity_requested": (
-                    "Requested quantity can only be retained or reduced after the line is created. "
-                    f"The current ceiling is {self.instance.quantity_requested}."
-                )
-            })
-        return attrs
+    def get_queryset(self):
+        if has_role(self.request.user, "Store Keeper") and not has_role(
+            self.request.user, "System Administrator", "General Manager"
+        ):
+            return operational_stores_for_user(self.request.user)
+        return super().get_queryset()
 
 
-class StoreRequisitionItemViewSet(BaseStoreRequisitionItemViewSet):
-    serializer_class = StoreRequisitionItemSerializer
+class InventoryBalanceViewSet(BaseInventoryBalanceViewSet):
+    """Expose SOH across the Store Keeper's hotel/property, not one assignment only."""
+
+    def get_queryset(self):
+        if has_role(self.request.user, "Store Keeper") and not has_role(
+            self.request.user, "System Administrator", "General Manager"
+        ):
+            store_ids = operational_stores_for_user(self.request.user).values_list("id", flat=True)
+            return self.queryset.filter(store_id__in=store_ids)
+        return super().get_queryset()
