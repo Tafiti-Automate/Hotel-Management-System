@@ -12,12 +12,13 @@ const ReportView = lazy(() => import('./ReportView'))
 const HotelProfile = lazy(() => import('./HotelProfile'))
 const WorkflowHub = lazy(() => import('./WorkflowHub'))
 const HRDashboard = lazy(() => import('./HRDashboard'))
+const DepartmentHeadDashboard = lazy(() => import('./DepartmentHeadDashboard'))
 const ProcurementWorkbench = lazy(() => import('./ProcurementWorkbench'))
 const FinancialManagerLpoWorkspace = lazy(() => import('./FinancialManagerLpoWorkspace'))
 const ReceivingClerkWorkspaceV2 = lazy(() => import('./ReceivingClerkWorkspaceV2'))
 const FinanceWorkbench = lazy(() => import('./FinanceWorkbench'))
 const InventoryWorkbench = lazy(() => import('./InventoryWorkbench'))
-const DepartmentSupplyWorkspace = lazy(() => import('./DepartmentSupplyWorkspace'))
+const DepartmentRequisitions = lazy(() => import('./DepartmentRequisitions'))
 const StorePurchaseRequests = lazy(() => import('./StorePurchaseRequests'))
 const InventoryCatalogue = lazy(() => import('./InventoryCatalogue'))
 const ArticleManagement = lazy(() => import('./ArticleManagement'))
@@ -34,25 +35,21 @@ const listRoutes: string[] = [
   'supplierReturns', 'employees', 'departments', 'supplierItems',
 ]
 
-const departmentSupplyRoles = new Set(['department supervisor', 'supervisor', 'department head', 'cost controller', 'store keeper'])
-
 export default function AppShell() {
   const app = useApp()
   const { route } = app
   const role = String(app.user.role || '').trim().toLowerCase()
-  const departmentSupplyRoute = departmentSupplyRoles.has(role) && (route === 'workflow-stores' || route === 'storeRequisitions')
 
   let content: ReactNode = null
-  if (!departmentSupplyRoute && !canAccessRoute(app.user, route)) content = <Dashboard />
-  else if (route === 'dashboard') content = <Dashboard />
+  if (!canAccessRoute(app.user, route)) content = role === 'department head' ? <DepartmentHeadDashboard /> : <Dashboard />
+  else if (route === 'dashboard') content = role === 'department head' ? <DepartmentHeadDashboard /> : <Dashboard />
   else if (route === 'hr-dashboard') content = <HRDashboard />
   else if (route === 'workflow-procure') content = role === 'financial manager'
     ? <FinancialManagerLpoWorkspace />
     : role === 'receiving clerk'
       ? <ReceivingClerkWorkspaceV2 />
       : <ProcurementWorkbench />
-  else if (departmentSupplyRoute) content = <DepartmentSupplyWorkspace />
-  else if (route === 'workflow-stores') content = <InventoryWorkbench />
+  else if (route === 'workflow-stores') content = role === 'department head' ? <DepartmentRequisitions /> : <InventoryWorkbench />
   else if (route === 'store-purchase-requests') content = <StorePurchaseRequests />
   else if (route === 'workflow-consume') content = <InventoryWorkbench />
   else if (route === 'categories') content = <InventoryCatalogue />
