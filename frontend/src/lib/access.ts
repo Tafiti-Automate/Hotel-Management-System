@@ -11,6 +11,7 @@ const routePermissions: Record<string, string[]> = {
   itemUnits: ['inventory.view_itemunitprice'],
   locations: ['inventory.view_storelocation'],
   balances: ['inventory.view_inventorybalance'],
+  'stock-on-hand': ['inventory.view_inventorybalance'],
   ledgers: ['inventory.view_stockledger'],
   batches: ['inventory.view_inventorybatch'],
   reorderRules: ['inventory.view_reorderrule'],
@@ -46,7 +47,7 @@ const strictRoleRoutes: Record<string, Set<string>> = {
   'department supervisor': new Set(['dashboard', 'detail']),
   supervisor: new Set(['dashboard', 'detail']),
   'department head': new Set(['dashboard', 'detail', 'workflow-stores', 'reports', 'reportview']),
-  'store keeper': new Set(['dashboard', 'detail', 'workflow-stores', 'store-purchase-requests', 'reports', 'reportview']),
+  'store keeper': new Set(['dashboard', 'detail', 'workflow-stores', 'stock-on-hand', 'store-purchase-requests', 'reports', 'reportview']),
   'cost controller': new Set(['dashboard', 'detail', 'items', 'categories', 'uoms', 'itemUnits', 'suppliers', 'supplierItems', 'reports', 'reportview']),
   'procurement manager': new Set(['dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
   'procurement officer': new Set(['dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
@@ -111,6 +112,7 @@ export function canAccessRoute(user: AccessUser, route: string): boolean {
 
   const role = roleKey(user)
   if (route === 'workflow-stores' && !['department head', 'store keeper'].includes(role)) return false
+  if (route === 'stock-on-hand' && role !== 'store keeper') return false
   if (route === 'store-purchase-requests' && role !== 'store keeper') return false
   if (route === 'storeRequisitions') return false
   if (route === 'dashboard' || route === 'detail') return true

@@ -18,6 +18,7 @@ const FinancialManagerLpoWorkspace = lazy(() => import('./FinancialManagerLpoWor
 const ReceivingClerkWorkspaceV2 = lazy(() => import('./ReceivingClerkWorkspaceV2'))
 const FinanceWorkbench = lazy(() => import('./FinanceWorkbench'))
 const InventoryWorkbench = lazy(() => import('./InventoryWorkbench'))
+const StockOnHand = lazy(() => import('./StockOnHand'))
 const DepartmentRequisitions = lazy(() => import('./DepartmentRequisitions'))
 const StorePurchaseRequests = lazy(() => import('./StorePurchaseRequests'))
 const InventoryCatalogue = lazy(() => import('./InventoryCatalogue'))
@@ -50,6 +51,7 @@ export default function AppShell() {
       ? <ReceivingClerkWorkspaceV2 />
       : <ProcurementWorkbench />
   else if (route === 'workflow-stores') content = role === 'department head' ? <DepartmentRequisitions /> : <InventoryWorkbench />
+  else if (route === 'stock-on-hand') content = <StockOnHand />
   else if (route === 'store-purchase-requests') content = <StorePurchaseRequests />
   else if (route === 'workflow-consume') content = <InventoryWorkbench />
   else if (route === 'categories') content = <InventoryCatalogue />

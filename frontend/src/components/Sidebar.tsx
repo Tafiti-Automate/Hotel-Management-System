@@ -19,6 +19,7 @@ const workflowNav: Record<string, NavGroup[]> = {
     { heading: 'Workspace', items: [
       { route: 'dashboard', label: 'Dashboard' },
       { route: 'workflow-stores', label: 'Store Keeper queue' },
+      { route: 'stock-on-hand', label: 'Stock on Hand' },
       { route: 'store-purchase-requests', label: 'Purchase requests' },
     ] },
     { heading: 'Control', items: [{ route: 'reports', label: 'Reports' }] },
@@ -68,6 +69,7 @@ const adminOperations: NavGroup[] = [
   { heading: 'Workspace', items: [
     { route: 'dashboard', label: 'Dashboard' },
     { route: 'workflow-stores', label: 'Department & Stores workflow' },
+    { route: 'stock-on-hand', label: 'Stock on Hand' },
     { route: 'workflow-procure', label: 'Procurement workflow' },
     { route: 'workflow-pay', label: 'Finance' },
   ] },
@@ -100,6 +102,7 @@ const navIcons: Record<string, string> = {
   dashboard: 'space_dashboard',
   'hr-dashboard': 'groups',
   'workflow-stores': 'assignment',
+  'stock-on-hand': 'inventory_2',
   'store-purchase-requests': 'shopping_cart_checkout',
   'workflow-procure': 'shopping_cart_checkout',
   'workflow-pay': 'payments',
