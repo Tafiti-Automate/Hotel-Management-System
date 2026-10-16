@@ -14,6 +14,7 @@ const WorkflowHub = lazy(() => import('./WorkflowHub'))
 const HRDashboard = lazy(() => import('./HRDashboard'))
 const DepartmentHeadDashboard = lazy(() => import('./DepartmentHeadDashboard'))
 const ProcurementWorkbench = lazy(() => import('./ProcurementWorkbench'))
+const FinancialManagerLpoWorkspace = lazy(() => import('./FinancialManagerLpoWorkspace'))
 const FinanceWorkbench = lazy(() => import('./FinanceWorkbench'))
 const InventoryWorkbench = lazy(() => import('./InventoryWorkbench'))
 const DepartmentRequisitions = lazy(() => import('./DepartmentRequisitions'))
@@ -44,7 +45,7 @@ export default function AppShell() {
   if (!canAccessRoute(app.user, route)) content = role === 'department head' ? <DepartmentHeadDashboard /> : <Dashboard />
   else if (route === 'dashboard') content = role === 'department head' ? <DepartmentHeadDashboard /> : <Dashboard />
   else if (route === 'hr-dashboard') content = <HRDashboard />
-  else if (route === 'workflow-procure') content = <ProcurementWorkbench />
+  else if (route === 'workflow-procure') content = role === 'financial manager' ? <FinancialManagerLpoWorkspace /> : <ProcurementWorkbench />
   else if (route === 'workflow-stores') content = role === 'department head' ? <DepartmentRequisitions /> : <InventoryWorkbench />
   else if (route === 'store-purchase-requests') content = <StorePurchaseRequests />
   else if (route === 'workflow-consume') content = <InventoryWorkbench />

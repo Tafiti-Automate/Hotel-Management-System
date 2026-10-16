@@ -1,6 +1,6 @@
 from rest_framework.routers import DefaultRouter
 
-from apps.inventory.department_request_api import StoreRequisitionItemViewSet
+from apps.inventory.transaction_controls import StoreRequisitionItemViewSet
 from apps.inventory.hod_draft_api import StoreRequisitionViewSet
 from apps.inventory.views import (
     CategoryViewSet,
