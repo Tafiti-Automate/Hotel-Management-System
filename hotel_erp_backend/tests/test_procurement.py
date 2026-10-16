@@ -145,6 +145,54 @@ def test_procurement_flow_models_link_together():
 
 
 @pytest.mark.django_db
+def test_new_requisition_date_is_server_assigned():
+    employee, department, _supplier, _item = create_procurement_context()
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        reason="Timestamp controlled request",
+        expected_date=timezone.localdate() - timedelta(days=3),
+    )
+
+    assert requisition.expected_date == timezone.localdate()
+
+
+@pytest.mark.django_db
+def test_draft_lpo_quantity_cannot_be_increased_after_a_reduction():
+    employee, department, supplier, item = create_procurement_context()
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee,
+        department=department,
+        reason="Reduction-only LPO draft",
+        status=PRStatus.APPROVED,
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition,
+        item=item,
+        quantity=Decimal("10.00"),
+        approved_quantity=Decimal("10.00"),
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition,
+        supplier=supplier,
+        ordered_by=employee,
+    )
+    line = PurchaseOrderItem.objects.create(
+        purchase_order=order,
+        item=item,
+        quantity=Decimal("10.00"),
+        unit_cost=Decimal("2000.00"),
+    )
+
+    line.quantity = Decimal("6.00")
+    line.save()
+    line.quantity = Decimal("7.00")
+
+    with pytest.raises(ValidationError, match="retained or reduced"):
+        line.save()
+
+
+@pytest.mark.django_db
 def test_goods_receipt_item_posts_received_stock_to_inventory():
     employee, department, supplier, item = create_procurement_context()
     branch = Branch.objects.create(name="Main Hotel")
@@ -206,7 +254,9 @@ def test_goods_receipt_item_posts_received_stock_to_inventory():
     assert receipt_item.base_quantity == Decimal("24.0000")
     assert receipt_item.store == store
     assert receipt_item.inventory_changes_applied is True
-    assert order.status == POStatus.PARTIALLY_RECEIVED
+    # A direct line-post does not complete the GRN workflow. The LPO receipt
+    # status changes only when the Goods Receipt Note is recorded/posted.
+    assert order.status == POStatus.ISSUED
     assert InventoryBalance.objects.get(item=item, store=store).quantity_in_stock == Decimal("24.00")
     batch = InventoryBatch.objects.get(item=item, store=store)
     assert batch.remaining_quantity == Decimal("24.00")
@@ -977,7 +1027,7 @@ def test_finance_reduction_preserves_procurement_quantity_and_audit_history():
     assert line.finance_approved_quantity == Decimal("6.00")
     assert line.approved_quantity == Decimal("6.00")
     assert order.total_amount == Decimal("12000.00")
-    assert order.activities.filter(action="finance_quantity_reduced").exists()
+    assert order.activities.filter(action="approval_stage_2_quantity_review").exists()
 
 
 @pytest.mark.django_db
@@ -1345,8 +1395,9 @@ def test_receiving_clerk_workspace_shows_only_ready_branch_lpos_without_prices()
 
     assert response.status_code == 200, response.data
     assert [row["id"] for row in response.data["orders"]] == [str(ready.pk)]
-    assert "total_amount" not in response.data["orders"][0]
-    assert "unit_cost" not in response.data["orderItems"][0]
+    assert response.data["orders"][0]["total_amount"] == "8000.00"
+    assert response.data["orderItems"][0]["unit_cost"] == "4000.00"
+    assert response.data["orderItems"][0]["outstanding_quantity"] == "2.00"
 
 
 @pytest.mark.django_db
@@ -1394,13 +1445,14 @@ def test_receiving_clerk_can_generate_grn_then_post_it_to_inventory():
 
     client = APIClient()
     client.force_authenticate(employee.user)
-    received_date = timezone.localdate()
-    expiry_date = received_date + timedelta(days=20)
+    system_received_date = timezone.localdate()
+    requested_received_date = system_received_date - timedelta(days=3)
+    expiry_date = system_received_date + timedelta(days=20)
     missing_expiry = client.post(
         f"/api/v1/purchase-orders/{order.pk}/receive-delivery/",
         {
             "supplier_invoice_no": "INV-MISSING-EXPIRY",
-            "received_date": received_date.isoformat(),
+            "received_date": requested_received_date.isoformat(),
             "lines": [{
                 "purchase_order_item": str(order_line.pk),
                 "quantity_received": "1.00",
@@ -1418,7 +1470,8 @@ def test_receiving_clerk_can_generate_grn_then_post_it_to_inventory():
         {
             "supplier_invoice_no": "INV-1001",
             "delivery_note_no": "DN-1001",
-            "received_date": received_date.isoformat(),
+            "received_date": requested_received_date.isoformat(),
+            "short_delivery_reason": "Supplier delivered the available stock; balance will follow.",
             "lines": [
                 {
                     "purchase_order_item": str(order_line.pk),
@@ -1436,6 +1489,7 @@ def test_receiving_clerk_can_generate_grn_then_post_it_to_inventory():
     receipt.refresh_from_db()
     order.refresh_from_db()
     assert receipt.status == "received"
+    assert receipt.received_date == system_received_date
     assert receipt.supplier_invoice_no == "INV-1001"
     assert receipt_line.quantity_received == Decimal("1.00")
     assert receipt_line.expiry_date == expiry_date
@@ -1656,7 +1710,7 @@ def test_receiving_clerk_workspace_keeps_grn_after_lpo_is_fully_received():
     assert generated.status_code == 201, generated.data
     receipt_id = generated.data["id"]
     order.refresh_from_db()
-    assert order.status == POStatus.ISSUED
+    assert order.status == POStatus.RECEIVED
 
     posted = client.post(
         f"/api/v1/grns/{receipt_id}/post-to-inventory/",

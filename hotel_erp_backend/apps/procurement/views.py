@@ -306,8 +306,6 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             SupplierItemPrice,
         )
         from apps.notifications.services import notify_roles
-        from django.utils.dateparse import parse_date
-
         employee = self._store_purchase_employee(request)
         assignments = StoreKeeperAssignment.objects.select_related("store__branch").filter(
             employee=employee,
@@ -388,7 +386,6 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
 
         store_id = str(request.data.get("store") or "").strip()
         reason = str(request.data.get("reason") or "").strip()
-        expected_date_raw = str(request.data.get("expected_date") or "").strip()
         payload_lines = request.data.get("lines") or []
         short_delivery_reason = str(request.data.get("short_delivery_reason") or "").strip()
 
@@ -403,13 +400,9 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             raise PermissionDenied("Choose a store assigned to your Store Keeper account.")
         store = assignment.store
 
-        expected_date = None
-        if expected_date_raw:
-            expected_date = parse_date(expected_date_raw)
-            if not expected_date:
-                raise ValidationError({"expected_date": "Enter a valid required date."})
-            if expected_date < timezone.localdate():
-                raise ValidationError({"expected_date": "The required date cannot be in the past."})
+        # Opening a requisition is timestamped by the server. A client must
+        # not be able to backdate or postdate the operational document.
+        expected_date = timezone.localdate()
 
         prepared_lines = []
         seen_items = set()
@@ -822,9 +815,18 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             raise ValidationError({"quantity": "Enter a valid procurement quantity."}) from error
         if not quantity.is_finite():
             raise ValidationError({"quantity": "Enter a valid finite procurement quantity."})
-        if quantity <= 0 or quantity > line.remaining_order_quantity:
+        previously_allocated = line.procurement_quantity
+        maximum_quantity = (
+            previously_allocated
+            if previously_allocated is not None
+            else line.remaining_order_quantity
+        )
+        if quantity <= 0 or quantity > maximum_quantity:
             raise ValidationError({
-                "quantity": f"Procurement quantity for {line.item} must be positive and cannot exceed {line.remaining_order_quantity}."
+                "quantity": (
+                    f"Procurement quantity for {line.item} must be positive and cannot exceed "
+                    f"{maximum_quantity}."
+                )
             })
         quote_unit = price.unit or line.item.base_unit
         conversion_factor = line.item.conversion_factor_for_unit(quote_unit)
@@ -940,8 +942,8 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
         try:
             orders = requisition.create_allocated_purchase_orders(
                 ordered_by=getattr(request.user, "employee_profile", None),
-                expected_date=request.data.get("expected_date") or None,
-                valid_until=request.data.get("valid_until") or None,
+                expected_date=None,
+                valid_until=None,
                 note=str(request.data.get("note") or ""),
                 created_by=request.user,
             )
@@ -967,8 +969,8 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
                     self._allocate_procurement_line(request, locked, allocation)
                 orders = locked.create_allocated_purchase_orders(
                     ordered_by=getattr(request.user, "employee_profile", None),
-                    expected_date=request.data.get("expected_date") or None,
-                    valid_until=request.data.get("valid_until") or None,
+                    expected_date=None,
+                    valid_until=None,
                     note=str(request.data.get("note") or ""),
                     created_by=request.user,
                 )
@@ -999,8 +1001,8 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
                 supplier=supplier,
                 ordered_by=ordered_by,
                 store=store,
-                expected_date=request.data.get("expected_date") or None,
-                valid_until=request.data.get("valid_until") or None,
+                expected_date=None,
+                valid_until=None,
                 note=request.data.get("note", ""),
                 created_by=request.user if request.user.is_authenticated else None,
             )
@@ -1039,12 +1041,20 @@ class RequisitionItemViewSet(CreatedByModelMixin, ModelViewSet):
             approved_quantity = Decimal(str(request.data.get("approved_quantity")))
         except Exception as error:
             raise ValidationError({"approved_quantity": "Enter a valid quantity."}) from error
-        if approved_quantity < Decimal("0.00") or approved_quantity > line.quantity:
+        current_quantity = (
+            line.approved_quantity
+            if line.approved_quantity is not None
+            else line.quantity
+        )
+        if approved_quantity < Decimal("0.00") or approved_quantity > current_quantity:
             raise ValidationError({
-                "approved_quantity": f"Quantity must be between 0 and the Store Keeper quantity of {line.quantity}."
+                "approved_quantity": (
+                    "Quantity must be between 0 and the currently approved "
+                    f"quantity of {current_quantity}."
+                )
             })
         reason = str(request.data.get("reason") or "").strip()
-        if approved_quantity < line.quantity and not reason:
+        if approved_quantity < current_quantity and not reason:
             raise ValidationError({"reason": "Enter the reason for reducing or rejecting this item."})
         with transaction.atomic():
             request_lines = list(
@@ -1075,7 +1085,7 @@ class RequisitionItemViewSet(CreatedByModelMixin, ModelViewSet):
                 procurement_unit=None,
                 procurement_quantity=None,
                 procurement_unit_cost=None,
-                procurement_note=reason if approved_quantity < locked.quantity else "",
+                procurement_note=reason if approved_quantity < current_quantity else "",
                 procurement_allocated_at=None,
                 procurement_allocated_by=None,
                 updated_at=now,
@@ -1087,7 +1097,7 @@ class RequisitionItemViewSet(CreatedByModelMixin, ModelViewSet):
                 metadata={
                     "line_id": str(locked.pk),
                     "item": str(locked.item),
-                    "previous_quantity": str(locked.approved_quantity if locked.approved_quantity is not None else locked.quantity),
+                    "previous_quantity": str(current_quantity),
                     "approved_quantity": str(approved_quantity),
                     "rejected": approved_quantity == Decimal("0.00"),
                 },
@@ -1283,7 +1293,9 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
         employee = self._require_receiving_clerk(request)
         supplier_invoice_no = str(request.data.get("supplier_invoice_no") or "").strip()
         delivery_note_no = str(request.data.get("delivery_note_no") or "").strip()
-        received_date = request.data.get("received_date") or timezone.localdate()
+        # Receipt time is captured by the server when the Receiving Clerk
+        # records the delivery; a browser cannot backdate or postdate a GRN.
+        received_date = timezone.localdate()
         payload_lines = request.data.get("lines") or []
         short_delivery_reason = str(request.data.get("short_delivery_reason") or "").strip()
 

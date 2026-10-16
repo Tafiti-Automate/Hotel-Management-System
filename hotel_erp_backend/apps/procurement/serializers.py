@@ -125,6 +125,7 @@ class PurchaseRequisitionSerializer(serializers.ModelSerializer):
         )
         read_only_fields = (
             "id", "requisition_number", "hotel", "source_store_requisition", "selected_supplier", "status",
+            "expected_date",
             "submitted_at", "approved_at", "rejected_at", "returned_at",
             "fulfilled_at", "cancelled_at", "closed_at", "created_at",
             "updated_at", "created_by",
@@ -529,6 +530,8 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "approved_at",
             "approved_by",
             "rejected_at",
+            "expected_date",
+            "valid_until",
             "sent_at",
             "sent_by",
             "sent_to_email",
@@ -613,10 +616,9 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         request = self.context.get("request")
-        if not can_view_commercial_data(request):
-            # Receiving may verify supplier and quantities, but never rates or
-            # financial totals. Store Keepers additionally have no supplier
-            # selection visibility.
+        if not (can_view_commercial_data(request) or has_role(request, "Receiving Clerk")):
+            # Receiving has view-only access to the LPO total and line amounts
+            # before it creates a GRN. Store Keepers remain non-commercial.
             for field in ("total_amount",):
                 data.pop(field, None)
             if has_role(request, "Store Keeper"):
@@ -717,7 +719,8 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        if not can_view_commercial_data(self.context.get("request")):
+        request = self.context.get("request")
+        if not (can_view_commercial_data(request) or has_role(request, "Receiving Clerk")):
             for field in (
                 "unit_cost", "line_total", "procurement_quantity",
                 "procurement_base_quantity", "finance_approved_quantity",
@@ -775,6 +778,7 @@ class GoodsReceiptNoteSerializer(serializers.ModelSerializer):
         )
         read_only_fields = (
             "id", "grn_number", "received_by", "status", "posted_at", "posted_by",
+            "received_date",
             "created_at", "updated_at", "created_by",
         )
 

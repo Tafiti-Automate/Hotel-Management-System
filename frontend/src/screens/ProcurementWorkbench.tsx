@@ -221,6 +221,11 @@ export default function ProcurementWorkbench() {
     app.consumeProcurementDraft()
   }, [app.procurementDraftId, app.consumeProcurementDraft])
   const scopedData = useMemo(() => {
+    // Finance and General Management are hotel-wide control roles. Their API
+    // response is already scoped by the server to the hotel; applying the
+    // browser's currently selected branch here made valid approval records
+    // disappear whenever they originated from another branch.
+    if (['financial manager', 'general manager'].includes(role)) return data
     if (!app.currentBranch) return data
     const selectedBranchId = id(
       app.data.branches.find((branch) => id(branch.name) === id(app.currentBranch))?.id
@@ -635,7 +640,6 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
   const [selectedReceiptId, setSelectedReceiptId] = useState('')
   const [invoiceNumber, setInvoiceNumber] = useState('')
   const [deliveryNoteNumber, setDeliveryNoteNumber] = useState('')
-  const [receivedDate, setReceivedDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [quantities, setQuantities] = useState<Record<string, string>>({})
   const [expiryDates, setExpiryDates] = useState<Record<string, string>>({})
   const [shortDeliveryOpen, setShortDeliveryOpen] = useState(false)
@@ -695,7 +699,7 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
     if (num(quantities[lineId]) <= 0) return false
     const article = app.data.items.find((item) => id(item.id) === id(line.item))
     const expiry = expiryDates[lineId] || ''
-    return (Boolean(article?.expiryTracking) && !expiry) || Boolean(expiry && expiry < receivedDate)
+    return (Boolean(article?.expiryTracking) && !expiry) || Boolean(expiry && expiry < new Date().toISOString().slice(0, 10))
   })
   const shortDeliveryLines = orderLines
     .map((line) => {
@@ -730,7 +734,6 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
     setSelectedReceiptId('')
     setInvoiceNumber('')
     setDeliveryNoteNumber('')
-    setReceivedDate(new Date().toISOString().slice(0, 10))
     setQuantities({})
     setExpiryDates({})
     setShortDeliveryOpen(false)
@@ -752,15 +755,17 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
         </div>
 
         <div style={{ padding: 20 }}>
-          <div className="receiving-document-fields" style={{ marginBottom: 14, padding: 12, border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface-2)', display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12 }}>
+          <div className="receiving-document-fields" style={{ marginBottom: 14, padding: 12, border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface-2)', display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 12 }}>
             <ReadOnlyValue label="Selected LPO" value={id(selectedOrder.lpo_number || selectedOrder.po_number)} />
             <ReadOnlyValue label="Supplier (set by the LPO)" value={supplier} />
+            <ReadOnlyValue label="LPO total" value={money(selectedOrder.total_amount)} />
+            <ReadOnlyValue label="Expected delivery" value={formatDateOnly(selectedOrder.expected_date) || '—'} />
           </div>
 
           <div className="receiving-document-fields" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 12, marginBottom: 18 }}>
             <Field label="2. Enter supplier invoice number *"><Input value={invoiceNumber} onChange={setInvoiceNumber} placeholder="Number printed on the supplier invoice" /></Field>
             <Field label="Delivery note number"><Input value={deliveryNoteNumber} onChange={setDeliveryNoteNumber} placeholder="Number on the delivery note" /></Field>
-            <Field label="Received date"><Input type="date" value={receivedDate} onChange={setReceivedDate} /></Field>
+            <ReadOnlyValue label="GRN receipt date" value="Set automatically when you generate the GRN" />
           </div>
 
           <div style={{ marginBottom: 8, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
@@ -768,32 +773,33 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
             <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>{orderLines.length} item{orderLines.length === 1 ? '' : 's'} on LPO</span>
           </div>
           <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-            <div className="receiving-line-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(240px,1.55fr) .7fr .9fr 1fr .55fr', gap: 12, padding: '10px 12px', background: 'var(--surface-2)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}>
-              <span>Article</span><span>LPO Qty Due</span><span>Receive Now</span><span>Expiry Date</span><span>UOM</span>
+            <div className="receiving-line-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(180px,1.35fr) .55fr .55fr .7fr .8fr .7fr .85fr .5fr', gap: 10, padding: '10px 12px', background: 'var(--surface-2)', color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}>
+              <span>Article</span><span>Ordered</span><span>Previously received</span><span>Outstanding</span><span>Receive now</span><span>Unit price</span><span>Line amount</span><span>UOM</span>
             </div>
             {orderLines.map((line) => {
               const lineId = id(line.id)
               const due = num(line.outstanding_quantity ?? line.approved_quantity ?? line.quantity)
+              const ordered = num(line.approved_quantity ?? line.quantity)
+              const previouslyReceived = num(line.previously_received_quantity)
               const entered = num(quantities[lineId])
               const invalid = entered > due
               const article = app.data.items.find((item) => id(item.id) === id(line.item))
               const expiryRequired = Boolean(article?.expiryTracking)
               const expiry = expiryDates[lineId] || ''
-              const invalidExpiry = Boolean(entered > 0 && ((expiryRequired && !expiry) || (expiry && expiry < receivedDate)))
-              return <div key={lineId} className="receiving-line-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(240px,1.55fr) .7fr .9fr 1fr .55fr', gap: 12, alignItems: 'center', padding: '12px', borderTop: '1px solid var(--border)', fontSize: 11.5 }}>
+              const invalidExpiry = Boolean(entered > 0 && ((expiryRequired && !expiry) || (expiry && expiry < new Date().toISOString().slice(0, 10))))
+              return <div key={lineId} className="receiving-line-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(180px,1.35fr) .55fr .55fr .7fr .8fr .7fr .85fr .5fr', gap: 10, alignItems: 'center', padding: '12px', borderTop: '1px solid var(--border)', fontSize: 11.5 }}>
                 <strong style={{ color: 'var(--text)' }}>{names.items.get(id(line.item)) || id(line.item)}</strong>
+                <span style={{ color: 'var(--text-muted)' }}>{ordered}</span>
+                <span style={{ color: 'var(--text-muted)' }}>{previouslyReceived}</span>
                 <span style={{ color: 'var(--text)', fontWeight: 800 }}>{due}</span>
                 <div>
                   <Input type="number" value={quantities[lineId] || ''} onChange={(value) => setQuantities((current) => ({ ...current, [lineId]: value }))} placeholder="0" />
                   {invalid && <div style={{ marginTop: 4, color: 'var(--bad)', fontSize: 9.5 }}>Cannot exceed the LPO balance of {due}</div>}
                 </div>
-                <div>
-                  {expiryRequired ? <>
-                    <Input type="date" value={expiry} onChange={(value) => setExpiryDates((current) => ({ ...current, [lineId]: value }))} />
-                    <div style={{ marginTop: 4, color: invalidExpiry ? 'var(--bad)' : 'var(--text-faint)', fontSize: 9.5 }}>{invalidExpiry ? (expiry ? 'Cannot be before received date' : 'Required for this Article') : 'Required for this Article'}</div>
-                  </> : <div style={{ minHeight: 38, display: 'flex', alignItems: 'center', gap: 6, padding: '0 10px', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface-2)', color: 'var(--text-faint)', fontSize: 10.5 }}><Icon name="event_busy" size={15} /><span>No expiry tracking</span></div>}
-                </div>
+                <span style={{ color: 'var(--text-muted)' }}>{money(line.unit_cost)}</span>
+                <span style={{ color: 'var(--text)', fontWeight: 750 }}>{money(line.line_total)}</span>
                 <span style={{ color: 'var(--text-muted)' }}>{names.units.get(id(line.unit)) || 'Unit'}</span>
+                {expiryRequired && <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'minmax(180px,1.35fr) minmax(0,1fr)', gap: 10, alignItems: 'center' }}><span style={{ color: 'var(--text-faint)', fontSize: 10.5 }}>Expiry-tracked Article</span><div><Input type="date" value={expiry} onChange={(value) => setExpiryDates((current) => ({ ...current, [lineId]: value }))} /><div style={{ marginTop: 4, color: invalidExpiry ? 'var(--bad)' : 'var(--text-faint)', fontSize: 9.5 }}>{invalidExpiry ? (expiry ? 'Cannot be before today' : 'Required for this Article') : 'Required for this Article'}</div></div></div>}
               </div>
             })}
           </div>
@@ -813,7 +819,6 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
                   () => runBackendAction('purchase-orders', id(selectedOrder.id), 'receive-delivery', {
                     supplier_invoice_no: invoiceNumber.trim(),
                     delivery_note_no: deliveryNoteNumber.trim(),
-                    received_date: receivedDate,
                     lines: positiveLines,
                   }).then((result) => {
                     clearSelection()
@@ -849,7 +854,6 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
             () => runBackendAction('purchase-orders', id(selectedOrder.id), 'receive-delivery', {
               supplier_invoice_no: invoiceNumber.trim(),
               delivery_note_no: deliveryNoteNumber.trim(),
-              received_date: receivedDate,
               lines: positiveLines,
               short_delivery_reason: shortDeliveryReason.trim(),
             }).then((result) => {
@@ -1311,7 +1315,13 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, items, ite
     if (factor <= 0) return num(orderLine.quantity)
     const requisitionLine = data.requisitionItems.find((row: Row) => id(row.id) === id(orderLine.requisition_item))
     const remainingBase = num(requisitionLine?.remaining_order_quantity ?? requisitionLine?.approved_base_quantity)
-    return Math.max(0, floorPurchaseQuantity(remainingBase / factor))
+    // The source requisition caps the original LPO, while the current draft
+    // quantity is the permanent ceiling after creation. This prevents a later
+    // draft edit from restoring a quantity Procurement already reduced.
+    return Math.min(
+      num(orderLine.quantity),
+      Math.max(0, floorPurchaseQuantity(remainingBase / factor)),
+    )
   }
   const draftQuantitiesValid = Boolean(lines.length) && lines.every((orderLine: Row) => {
     const quantity = draftQuantity(orderLine)

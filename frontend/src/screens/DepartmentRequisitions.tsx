@@ -141,8 +141,8 @@ export default function DepartmentRequisitions() {
     }
     setRequestDraft({
       purpose: selected.purpose || '',
-      required_date: selected.required_date || '',
       store: selected.store || '',
+      created_at: selected.created_at || '',
     })
     setLineDraft(emptyLine)
     if (key(selected.status) === 'pending_department_approval' && !ownSelected) {
@@ -227,7 +227,6 @@ export default function DepartmentRequisitions() {
     await perform(
       () => updateBackendRecord('store-requisitions', requestId, {
         purpose: id(requestDraft.purpose).trim(),
-        required_date: requestDraft.required_date || null,
         store: requestDraft.store || null,
       }),
       'Draft saved',
@@ -251,7 +250,6 @@ export default function DepartmentRequisitions() {
       async () => {
         await updateBackendRecord('store-requisitions', requestId, {
           purpose: id(requestDraft.purpose).trim(),
-          required_date: requestDraft.required_date || null,
           store: requestDraft.store || null,
         })
         return runBackendAction('store-requisitions', requestId, 'submit', {})
@@ -582,7 +580,7 @@ function DraftEditor({
         <div className="hod-section-heading"><div><strong>Request details</strong><span>Department and requester come from your account.</span></div></div>
         <div className="hod-form-grid">
           <label className="span-2"><span>Purpose / reason</span><textarea rows={3} value={id(requestDraft.purpose)} onChange={(event) => setRequestDraft({ ...requestDraft, purpose: event.target.value })} placeholder="What does the department need these Articles for?" /></label>
-          <label><span>Required date</span><input type="date" value={id(requestDraft.required_date)} onChange={(event) => setRequestDraft({ ...requestDraft, required_date: event.target.value })} /></label>
+          <div className="hod-readonly-date"><span>Request date</span><strong>{formatDate(requestDraft.created_at)} · set automatically</strong></div>
           <label><span>Issuing store</span><select value={id(requestDraft.store)} onChange={(event) => setRequestDraft({ ...requestDraft, store: event.target.value })}><option value="">Choose issuing store</option>{data.stores.map((store) => <option key={id(store.id)} value={id(store.id)}>{id(store.name)}{store.address ? ` · ${store.address}` : ''}</option>)}</select></label>
         </div>
       </section>
@@ -677,7 +675,7 @@ function RequestDetails({ request, lines, data }: { request: Row; lines: Row[]; 
       <section className="hod-detail-summary-grid">
         <Info label="Department" value={id(request.department_name) || 'Your department'} />
         <Info label="Issuing store" value={id(request.store_name) || '—'} />
-        <Info label="Required date" value={formatDate(request.required_date)} />
+        <Info label="Request date" value={formatDate(request.created_at)} />
         <Info label="Current stage" value={friendlyStatus(request.status)} />
       </section>
       {request.purpose && <section className="hod-purpose-card"><span>Purpose</span><p>{id(request.purpose)}</p></section>}

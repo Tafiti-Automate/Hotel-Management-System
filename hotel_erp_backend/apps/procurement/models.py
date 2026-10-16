@@ -158,6 +158,10 @@ class PurchaseRequisition(BaseModel):
         return f"{self.requisition_number or f'PR-{self.id}'} ({self.get_request_type_display()})"
 
     def save(self, *args, **kwargs):
+        # Requisition timestamps are recorded by the server at creation. Do
+        # not rewrite existing records; their historical dates remain evidence.
+        if self._state.adding:
+            self.expected_date = timezone.localdate()
         if not self.branch_id and self.requester_id:
             self.branch = self.requester.branch
         if not self.hotel_id and self.branch_id:
@@ -1903,6 +1907,17 @@ class PurchaseOrderItem(BaseModel):
             raise ValidationError(
                 "LPO lines can only be changed while the LPO is draft."
             )
+        # Once an LPO line exists, Procurement may only reduce it. Compare in
+        # base units so a unit-of-measure change cannot disguise an increase.
+        if not self._state.adding and self.purchase_order_id and self.purchase_order.editable:
+            previous = type(self).objects.only("base_quantity").get(pk=self.pk)
+            candidate_base = self.item.quantity_in_base_units(
+                self.quantity, self.unit
+            ).quantize(Decimal("0.01"))
+            if candidate_base > previous.base_quantity:
+                raise ValidationError(
+                    "LPO quantities can only be retained or reduced after the line is created."
+                )
         if not self.requisition_item_id and self.purchase_order_id and self.item_id:
             self.requisition_item = self.purchase_order.requisition.items.filter(
                 item=self.item

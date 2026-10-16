@@ -1230,6 +1230,10 @@ class StoreRequisition(BaseModel):
         return self.requisition_no or f"Store requisition {self.id}"
 
     def save(self, *args, **kwargs):
+        # Document dates are system timestamps. Keep existing historical dates
+        # intact, but do not accept a manually chosen date for a new request.
+        if self._state.adding:
+            self.required_date = timezone.localdate()
         if not self.requisition_no:
             from apps.procurement.models import ProcurementDocumentSequence
 

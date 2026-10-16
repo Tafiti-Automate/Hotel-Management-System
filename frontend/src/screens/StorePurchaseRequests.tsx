@@ -34,7 +34,6 @@ export default function StorePurchaseRequests() {
   const [error, setError] = useState('')
   const [store, setStore] = useState('')
   const [reason, setReason] = useState('')
-  const [expectedDate, setExpectedDate] = useState('')
   const [lines, setLines] = useState<LineDraft[]>([newLine()])
 
   const load = useCallback(async () => {
@@ -98,12 +97,10 @@ export default function StorePurchaseRequests() {
       const saved = await createBackendRecord('requisitions/store-purchase-requests', {
         store,
         reason: reason.trim(),
-        expected_date: expectedDate || null,
         lines: prepared.map((line) => ({ item: line.item, quantity: Number(line.quantity), note: line.note.trim() })),
       })
       app.showToast(`Purchase request ${id(saved.requisition_number)} sent to Procurement`)
       setReason('')
-      setExpectedDate('')
       setLines([newLine()])
       await load()
       app.refreshData()
@@ -163,9 +160,7 @@ export default function StorePurchaseRequests() {
                 {(payload.stores || []).map((entry) => <option key={id(entry.id)} value={id(entry.id)}>{id(entry.name)}{entry.branch_name ? ` · ${id(entry.branch_name)}` : ''}</option>)}
               </select>
             </Field>
-            <Field label="Required date">
-              <input type="date" value={expectedDate} min={new Date().toISOString().slice(0, 10)} onChange={(event) => setExpectedDate(event.target.value)} style={input} />
-            </Field>
+            <div style={{ ...input, display: 'grid', alignContent: 'center', gap: 3, minHeight: 40 }}><strong style={{ fontSize: 11 }}>Request date</strong><span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>Set automatically when you send</span></div>
           </div>
           <Field label="Reason for purchase">
             <textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Example: Replenish store stock before the next operating cycle" style={{ ...input, minHeight: 74, padding: '10px 11px', resize: 'vertical' }} />

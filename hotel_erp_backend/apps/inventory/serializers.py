@@ -756,6 +756,23 @@ class StoreRequisitionItemSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError({
                         "quantity_approved": f"Quantity cannot exceed the HOD-approved quantity ({hod_limit})."
                     })
+                if (
+                    self.instance.rejection_stage == "Store Keeper"
+                    and attrs["quantity_approved"] > Decimal("0.00")
+                ):
+                    raise serializers.ValidationError({
+                        "quantity_approved": "A Store Keeper-rejected item cannot be restored. Create a new request if the item is needed again."
+                    })
+                if (
+                    self.instance.quantity_approved > Decimal("0.00")
+                    and attrs["quantity_approved"] > self.instance.quantity_approved
+                ):
+                    raise serializers.ValidationError({
+                        "quantity_approved": (
+                            "Store Keeper can only retain or reduce the quantity already confirmed "
+                            f"({self.instance.quantity_approved})."
+                        )
+                    })
         elif requisition.status not in (
             StoreRequisitionStatus.DRAFT,
             StoreRequisitionStatus.REJECTED,
@@ -773,19 +790,6 @@ class StoreRequisitionItemSerializer(serializers.ModelSerializer):
                 {"item": "This Article is already on the store request. Edit the existing line instead."}
             )
         return attrs
-
-    def update(self, instance, validated_data):
-        # A positive Store Keeper quantity restores a line that was previously
-        # rejected at the Store Keeper stage. HOD rejections remain final for
-        # Stores because their approved limit is zero.
-        quantity = validated_data.get("quantity_approved")
-        if quantity is not None and quantity > Decimal("0.00") and instance.rejection_stage == "Store Keeper":
-            instance.rejection_stage = ""
-            instance.rejection_reason = ""
-            instance.rejected_at = None
-            instance.rejected_by = None
-        return super().update(instance, validated_data)
-
 
 class StoreRequisitionSerializer(serializers.ModelSerializer):
     store = serializers.PrimaryKeyRelatedField(
@@ -813,6 +817,7 @@ class StoreRequisitionSerializer(serializers.ModelSerializer):
         read_only_fields = (
             "id",
             "requisition_no",
+            "required_date",
             "status",
             "approved_by",
             "approved_at",
