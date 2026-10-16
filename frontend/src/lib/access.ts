@@ -44,11 +44,11 @@ const routePermissions: Record<string, string[]> = {
 const hrApps = new Set(['employees', 'departments', 'accounts'])
 
 const strictRoleRoutes: Record<string, Set<string>> = {
-  'department supervisor': new Set(['dashboard', 'detail']),
-  supervisor: new Set(['dashboard', 'detail']),
+  'department supervisor': new Set(['dashboard', 'detail', 'workflow-stores']),
+  supervisor: new Set(['dashboard', 'detail', 'workflow-stores']),
   'department head': new Set(['dashboard', 'detail', 'workflow-stores', 'reports', 'reportview']),
   'store keeper': new Set(['dashboard', 'detail', 'workflow-stores', 'stock-on-hand', 'store-purchase-requests', 'reports', 'reportview']),
-  'cost controller': new Set(['dashboard', 'detail', 'items', 'categories', 'uoms', 'itemUnits', 'suppliers', 'supplierItems', 'reports', 'reportview']),
+  'cost controller': new Set(['dashboard', 'detail', 'workflow-stores', 'items', 'categories', 'uoms', 'itemUnits', 'suppliers', 'supplierItems', 'reports', 'reportview']),
   'procurement manager': new Set(['dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
   'procurement officer': new Set(['dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
   'financial manager': new Set(['dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
@@ -111,7 +111,9 @@ export function canAccessRoute(user: AccessUser, route: string): boolean {
   if (strict && !strict.has(route)) return false
 
   const role = roleKey(user)
-  if (route === 'workflow-stores' && !['department head', 'store keeper'].includes(role)) return false
+  if (route === 'workflow-stores') {
+    return ['department supervisor', 'supervisor', 'department head', 'cost controller', 'store keeper'].includes(role)
+  }
   if (route === 'stock-on-hand' && role !== 'store keeper') return false
   if (route === 'store-purchase-requests' && role !== 'store keeper') return false
   if (route === 'storeRequisitions') return false
@@ -133,7 +135,7 @@ export function operationsLandingFor(user: AccessUser): { route: string; crumb: 
   const roleLanding: Record<string, { route: string; crumb: string }> = {
     'department supervisor': { route: 'dashboard', crumb: 'Department dashboard' },
     supervisor: { route: 'dashboard', crumb: 'Department dashboard' },
-    'department head': { route: 'dashboard', crumb: 'Department requisitions dashboard' },
+    'department head': { route: 'dashboard', crumb: 'Department approvals dashboard' },
     'store keeper': { route: 'dashboard', crumb: 'Store Keeper dashboard' },
     'cost controller': { route: 'dashboard', crumb: 'Cost Controller dashboard' },
     'procurement manager': { route: 'dashboard', crumb: 'Procurement dashboard' },

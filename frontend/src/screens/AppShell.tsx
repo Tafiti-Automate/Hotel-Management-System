@@ -18,6 +18,7 @@ const FinancialManagerLpoWorkspace = lazy(() => import('./FinancialManagerLpoWor
 const ReceivingClerkWorkspaceV2 = lazy(() => import('./ReceivingClerkWorkspaceV2'))
 const FinanceWorkbench = lazy(() => import('./FinanceWorkbench'))
 const InventoryWorkbench = lazy(() => import('./InventoryWorkbench'))
+const DepartmentSupplyWorkspace = lazy(() => import('./DepartmentSupplyWorkspace'))
 const StockOnHand = lazy(() => import('./StockOnHand'))
 const DepartmentRequisitions = lazy(() => import('./DepartmentRequisitions'))
 const StorePurchaseRequests = lazy(() => import('./StorePurchaseRequests'))
@@ -36,6 +37,14 @@ const listRoutes: string[] = [
   'supplierReturns', 'employees', 'departments', 'supplierItems',
 ]
 
+const departmentSupplyRoles = new Set([
+  'department supervisor',
+  'supervisor',
+  'department head',
+  'cost controller',
+  'store keeper',
+])
+
 export default function AppShell() {
   const app = useApp()
   const { route } = app
@@ -50,7 +59,11 @@ export default function AppShell() {
     : role === 'receiving clerk'
       ? <ReceivingClerkWorkspaceV2 />
       : <ProcurementWorkbench />
-  else if (route === 'workflow-stores') content = role === 'department head' ? <DepartmentRequisitions /> : <InventoryWorkbench />
+  else if (route === 'workflow-stores') content = departmentSupplyRoles.has(role)
+    ? <DepartmentSupplyWorkspace />
+    : role === 'department head'
+      ? <DepartmentRequisitions />
+      : <InventoryWorkbench />
   else if (route === 'stock-on-hand') content = <StockOnHand />
   else if (route === 'store-purchase-requests') content = <StorePurchaseRequests />
   else if (route === 'workflow-consume') content = <InventoryWorkbench />

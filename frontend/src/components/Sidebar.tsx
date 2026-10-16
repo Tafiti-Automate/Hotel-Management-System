@@ -8,10 +8,22 @@ interface NavItem { route: string; label: string }
 interface NavGroup { heading: string; items: NavItem[] }
 
 const workflowNav: Record<string, NavGroup[]> = {
+  'department supervisor': [
+    { heading: 'Workspace', items: [
+      { route: 'dashboard', label: 'Dashboard' },
+      { route: 'workflow-stores', label: 'Department requests' },
+    ] },
+  ],
+  supervisor: [
+    { heading: 'Workspace', items: [
+      { route: 'dashboard', label: 'Dashboard' },
+      { route: 'workflow-stores', label: 'Department requests' },
+    ] },
+  ],
   'department head': [
     { heading: 'Workspace', items: [
       { route: 'dashboard', label: 'Dashboard' },
-      { route: 'workflow-stores', label: 'Department requisitions' },
+      { route: 'workflow-stores', label: 'Department approvals' },
     ] },
     { heading: 'Control', items: [{ route: 'reports', label: 'Reports' }] },
   ],
@@ -25,7 +37,10 @@ const workflowNav: Record<string, NavGroup[]> = {
     { heading: 'Control', items: [{ route: 'reports', label: 'Reports' }] },
   ],
   'cost controller': [
-    { heading: 'Workspace', items: [{ route: 'dashboard', label: 'Dashboard' }] },
+    { heading: 'Workspace', items: [
+      { route: 'dashboard', label: 'Dashboard' },
+      { route: 'workflow-stores', label: 'Department request control' },
+    ] },
     { heading: 'Supplier & article setup', items: [
       { route: 'suppliers', label: 'Suppliers' },
       { route: 'supplierItems', label: 'Supplier quotations' },

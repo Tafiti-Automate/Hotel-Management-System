@@ -4,12 +4,14 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.routers import DefaultRouter
 
-from apps.inventory.hod_draft_api import StoreRequisitionViewSet
+from apps.inventory.department_request_v2 import (
+    StoreRequisitionItemViewSet,
+    StoreRequisitionViewSet,
+)
 from apps.inventory.serializers import StoreLocationSerializer
 from apps.inventory.transaction_controls import (
     InventoryBalanceViewSet,
     StoreLocationViewSet,
-    StoreRequisitionItemViewSet,
     operational_stores_for_user,
 )
 from apps.inventory.views import (
