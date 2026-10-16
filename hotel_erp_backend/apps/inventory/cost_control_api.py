@@ -189,7 +189,7 @@ def cost_control_approve(request, pk):
             status=StoreRequisitionStatus.SUBMITTED,
         ).update(
             status=StoreRequisitionStatus.APPROVED,
-            approved_by=approver,
+            approved_by_id=approver.pk,
             approved_at=now,
             approval_comments=str(request.data.get("comments") or ""),
             rejection_reason="",
