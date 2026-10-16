@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.routers import DefaultRouter
 
+from apps.inventory.cost_control_api import cost_control_approve
 from apps.inventory.department_request_v2 import (
     StoreRequisitionItemViewSet,
     StoreRequisitionViewSet,
@@ -74,6 +75,13 @@ router.register("stock-counts", StockCountViewSet, basename="stock-count")
 router.register("stock-count-items", StockCountItemViewSet, basename="stock-count-item")
 
 urlpatterns = [
+    # Keep this explicit route before the router so Cost Control approval uses
+    # the hardened production endpoint while preserving the public API URL.
+    path(
+        "store-requisitions/<str:pk>/cost-control-approve/",
+        cost_control_approve,
+        name="store-requisition-cost-control-approve",
+    ),
     path(
         "store-requisitions/store-options/",
         store_requisition_store_options,
