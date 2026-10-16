@@ -8,6 +8,7 @@ import './responsive.css'
 import './interface-refresh.css'
 import './erp-shell-polish.css'
 import './hotel-premium-2026.css'
+import './approved-hotel-gui.css'
 import App from './App'
 import { AppProvider } from './state/AppContext'
 

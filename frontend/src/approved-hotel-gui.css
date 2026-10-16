@@ -1,0 +1,739 @@
+/*
+ * Approved Hotel ERP GUI — desktop-first presentation layer.
+ * Imported after every legacy stylesheet so the approved visual system wins.
+ * Presentation only: no API, permissions, workflow or business-rule changes.
+ */
+
+.screen-app {
+  --approved-navy-950: #042748;
+  --approved-navy-900: #06355f;
+  --approved-navy-800: #0a467a;
+  --approved-blue: #1473f3;
+  --approved-blue-strong: #0864e8;
+  --approved-blue-soft: #eaf3ff;
+  --approved-canvas: #f4f8fd;
+  --approved-card: #ffffff;
+  --approved-border: #dce6f1;
+  --approved-border-soft: #e9eff6;
+  --approved-text: #102142;
+  --approved-muted: #60718d;
+  --approved-faint: #8b9ab0;
+  --approved-good: #12a568;
+  --approved-good-soft: #e8f8f1;
+  --approved-warning: #f29a2e;
+  --approved-warning-soft: #fff3e4;
+  --approved-danger: #ed4654;
+  --approved-danger-soft: #ffedf0;
+  --approved-purple: #7357ed;
+  --approved-purple-soft: #f1efff;
+  --approved-sidebar: 254px;
+  --approved-header: 64px;
+  --approved-radius: 12px;
+  --approved-shadow: 0 1px 2px rgba(13, 45, 79, .025), 0 8px 24px rgba(28, 69, 112, .045);
+  --approved-shadow-hover: 0 12px 32px rgba(25, 65, 108, .085);
+  background: var(--approved-canvas) !important;
+}
+
+/* ===== Application shell ===== */
+.screen-app .tafiti-sidebar {
+  width: var(--approved-sidebar) !important;
+  min-width: var(--approved-sidebar) !important;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(37, 132, 245, .22), transparent 250px),
+    linear-gradient(180deg, #073e70 0%, var(--approved-navy-900) 36%, var(--approved-navy-950) 100%) !important;
+  border-right: 1px solid rgba(255,255,255,.075) !important;
+  box-shadow: 10px 0 32px rgba(4, 32, 59, .08) !important;
+}
+.screen-app .tafiti-app-main {
+  margin-left: var(--approved-sidebar) !important;
+  width: calc(100% - var(--approved-sidebar)) !important;
+}
+.screen-app .tafiti-sidebar.is-collapsed {
+  width: 72px !important;
+  min-width: 72px !important;
+}
+.screen-app .tafiti-sidebar.is-collapsed ~ .tafiti-app-main,
+.screen-app .sidebar.is-collapsed + .tafiti-app-main {
+  margin-left: 72px !important;
+  width: calc(100% - 72px) !important;
+}
+.screen-app .tafiti-sidebar-brand {
+  min-height: 76px !important;
+  padding: 14px 16px !important;
+  border-bottom-color: rgba(255,255,255,.09) !important;
+}
+.screen-app .tafiti-sidebar-brand-mark {
+  width: 42px !important;
+  height: 42px !important;
+  border: 1px solid rgba(255,255,255,.38) !important;
+  border-radius: 11px !important;
+  background: rgba(255,255,255,.08) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.12) !important;
+}
+.screen-app .sidebar-brand-title {
+  font-size: 18px !important;
+  font-weight: 800 !important;
+  letter-spacing: -.025em !important;
+}
+.screen-app .sidebar-brand-subtitle {
+  max-width: 150px;
+  color: #a9c3df !important;
+  font-size: 9.5px !important;
+  line-height: 1.25 !important;
+}
+.screen-app .tafiti-sidebar-property {
+  margin: 12px 12px 3px !important;
+  background: rgba(255,255,255,.045) !important;
+  border-color: rgba(255,255,255,.085) !important;
+}
+.screen-app .tafiti-sidebar-nav {
+  padding: 11px 10px !important;
+}
+.screen-app .tafiti-sidebar-nav-group {
+  margin-bottom: 12px !important;
+}
+.screen-app .sidebar-nav-heading {
+  padding: 0 10px 5px !important;
+  color: #7698bc !important;
+  font-size: 8.5px !important;
+  letter-spacing: .11em !important;
+}
+.screen-app .tafiti-sidebar-nav-item {
+  min-height: 42px !important;
+  padding: 0 12px !important;
+  margin: 2px 0 !important;
+  gap: 11px !important;
+  border-radius: 8px !important;
+  color: #ccdaeb !important;
+}
+.screen-app .tafiti-sidebar-nav-item:hover {
+  color: #fff !important;
+  background: rgba(255,255,255,.07) !important;
+}
+.screen-app .tafiti-sidebar-nav-item.active {
+  color: #fff !important;
+  background: linear-gradient(135deg, #1680ff, #0867e7) !important;
+  box-shadow: 0 8px 20px rgba(0, 75, 177, .28), inset 0 1px 0 rgba(255,255,255,.22) !important;
+}
+.screen-app .tafiti-sidebar-nav-label {
+  font-size: 12.25px !important;
+  font-weight: 650 !important;
+}
+.screen-app .tafiti-sidebar-footer {
+  padding: 10px 12px !important;
+  border-top-color: rgba(255,255,255,.08) !important;
+}
+.screen-app .tafiti-sidebar-user {
+  border-radius: 10px !important;
+  background: rgba(255,255,255,.05) !important;
+}
+
+/* ===== Header: one clean desktop bar ===== */
+.screen-app .tafiti-app-header {
+  min-height: var(--approved-header) !important;
+  background: rgba(255,255,255,.965) !important;
+  border-bottom: 1px solid var(--approved-border-soft) !important;
+  box-shadow: 0 2px 14px rgba(29, 63, 98, .025) !important;
+  backdrop-filter: blur(16px) saturate(135%) !important;
+}
+.screen-app .tafiti-app-header-top {
+  height: var(--approved-header) !important;
+  min-height: var(--approved-header) !important;
+  padding: 0 24px !important;
+  gap: 18px !important;
+}
+.screen-app .tafiti-school-breadcrumb-bar {
+  display: none !important;
+}
+.screen-app .tafiti-school-search {
+  width: min(100%, 510px) !important;
+  height: 39px !important;
+  padding: 0 13px !important;
+  border: 1px solid #d7e3f0 !important;
+  border-radius: 10px !important;
+  background: #f8fbff !important;
+  box-shadow: inset 0 1px 1px rgba(28, 66, 104, .018) !important;
+}
+.screen-app .tafiti-school-search:hover,
+.screen-app .tafiti-school-search:focus-visible {
+  border-color: #b9cff0 !important;
+  background: #fff !important;
+}
+.screen-app .header-search-label {
+  color: #7f90a8 !important;
+  font-size: 11.5px !important;
+}
+.screen-app .tafiti-school-context-chip {
+  min-height: 38px !important;
+  padding: 0 14px !important;
+  color: #253b5c !important;
+  border-color: #d8e3ef !important;
+  background: #fff !important;
+  border-radius: 9px !important;
+  font-size: 10.5px !important;
+  font-weight: 760 !important;
+  box-shadow: 0 1px 5px rgba(24, 58, 96, .04) !important;
+}
+.screen-app .tafiti-school-icon-button,
+.screen-app .header-notification-trigger {
+  width: 38px !important;
+  height: 38px !important;
+  color: #36506f !important;
+  border-radius: 9px !important;
+}
+.screen-app .tafiti-school-icon-button:hover,
+.screen-app .header-notification-trigger:hover {
+  background: #f2f7fd !important;
+}
+.screen-app .tafiti-school-profile {
+  min-height: 48px !important;
+  padding: 4px 7px 4px 5px !important;
+  border-radius: 10px !important;
+}
+.screen-app .tafiti-school-profile:hover {
+  background: #f5f9fd !important;
+}
+.screen-app .tafiti-header-user-copy > span {
+  color: #172b4d !important;
+  font-size: 11.5px !important;
+  font-weight: 800 !important;
+}
+.screen-app .tafiti-header-user-copy small {
+  color: #7e8fa8 !important;
+  font-size: 9.5px !important;
+}
+
+/* ===== Workspace rhythm ===== */
+.screen-app .tafiti-app-content {
+  min-height: calc(100vh - var(--approved-header)) !important;
+  padding: 20px 24px 34px !important;
+  background:
+    radial-gradient(circle at 72% -30px, rgba(65, 145, 255, .06), transparent 420px),
+    var(--approved-canvas) !important;
+}
+.screen-app .tafiti-app-content > * {
+  max-width: 1580px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+.screen-app .tafiti-app-content h1 {
+  color: var(--approved-text) !important;
+  font-size: clamp(24px, 2vw, 30px) !important;
+  line-height: 1.08 !important;
+  font-weight: 850 !important;
+  letter-spacing: -.035em !important;
+}
+.screen-app .tafiti-app-content h2,
+.screen-app .tafiti-app-content h3 {
+  color: var(--approved-text) !important;
+}
+.screen-app .tafiti-app-content p {
+  color: var(--approved-muted) !important;
+}
+
+/* ===== Universal enterprise surfaces ===== */
+.screen-app .tafiti-app-content .panel,
+.screen-app .tafiti-app-content .card,
+.screen-app .tafiti-app-content .report-card,
+.screen-app .tafiti-app-content .table-card,
+.screen-app .tafiti-app-content .workspace-card,
+.screen-app .reference-dashboard-panel,
+.screen-app .ds-card,
+.screen-app .soh-panel,
+.screen-app .soh-kpi,
+.screen-app .procurement-queue-card,
+.screen-app .procurement-detail-panel,
+.screen-app .workbench-metrics > div,
+.screen-app .hod-dashboard-panel,
+.screen-app .hod-dashboard-side > section,
+.screen-app .hod-dashboard-kpis > * {
+  border: 1px solid var(--approved-border) !important;
+  border-radius: var(--approved-radius) !important;
+  background: var(--approved-card) !important;
+  box-shadow: var(--approved-shadow) !important;
+}
+.screen-app .tafiti-app-content button,
+.screen-app .tafiti-app-content input,
+.screen-app .tafiti-app-content select,
+.screen-app .tafiti-app-content textarea {
+  font-family: inherit !important;
+}
+.screen-app .tafiti-app-content input,
+.screen-app .tafiti-app-content select,
+.screen-app .tafiti-app-content textarea {
+  border-color: #d8e3ef !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+}
+.screen-app .tafiti-app-content input:focus,
+.screen-app .tafiti-app-content select:focus,
+.screen-app .tafiti-app-content textarea:focus {
+  border-color: #77acf7 !important;
+  box-shadow: 0 0 0 3px rgba(20,115,243,.10) !important;
+}
+.screen-app .erp-primary,
+.screen-app .ds-btn-primary,
+.screen-app button[style*="var(--accent)"],
+.screen-app button[style*="background: var(--accent)"] {
+  color: #fff !important;
+  border-color: transparent !important;
+  border-radius: 8px !important;
+  background: linear-gradient(135deg, #1880fb, #0867e7) !important;
+  box-shadow: 0 7px 16px rgba(8, 103, 231, .18) !important;
+}
+.screen-app .erp-primary:hover,
+.screen-app .ds-btn-primary:hover {
+  transform: translateY(-1px) !important;
+  filter: brightness(1.02) !important;
+}
+.screen-app thead th {
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
+  color: #667894 !important;
+  background: #f5f8fc !important;
+  border-bottom: 1px solid #dfe8f2 !important;
+  font-size: 9px !important;
+  font-weight: 820 !important;
+  letter-spacing: .035em !important;
+}
+.screen-app tbody td {
+  color: #30425e !important;
+  border-bottom-color: #e8eef5 !important;
+}
+.screen-app tbody tr:hover td {
+  background: #f8fbff !important;
+}
+.screen-app .status-chip,
+.screen-app .chip,
+.screen-app [class*="status-chip"] {
+  border-radius: 999px !important;
+  font-weight: 780 !important;
+}
+
+/* ===== Dashboard: executive, dense, useful ===== */
+.screen-app .reference-dashboard {
+  max-width: 1580px !important;
+}
+.screen-app .reference-dashboard-heading {
+  min-height: 66px !important;
+  margin-bottom: 14px !important;
+  padding: 0 !important;
+  align-items: flex-start !important;
+}
+.screen-app .reference-dashboard-heading h1 {
+  margin: 0 0 4px !important;
+}
+.screen-app .reference-dashboard-heading p {
+  margin: 0 !important;
+  font-size: 12px !important;
+}
+.screen-app .reference-dashboard-date {
+  min-height: 38px !important;
+  padding: 0 12px !important;
+  border: 1px solid #d7e3ef !important;
+  border-radius: 9px !important;
+  color: #405472 !important;
+  background: #fff !important;
+  box-shadow: var(--approved-shadow) !important;
+}
+.screen-app .task-card-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)) !important;
+  gap: 11px !important;
+  margin-bottom: 14px !important;
+}
+.screen-app .dashboard-task-card {
+  min-height: 96px !important;
+  padding: 14px !important;
+  display: grid !important;
+  grid-template-columns: 42px 1fr auto !important;
+  grid-template-rows: auto auto 1fr !important;
+  column-gap: 11px !important;
+  row-gap: 2px !important;
+  text-align: left !important;
+  border: 1px solid var(--approved-border) !important;
+  border-radius: 12px !important;
+  background: #fff !important;
+  box-shadow: var(--approved-shadow) !important;
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease !important;
+}
+.screen-app .dashboard-task-card:hover {
+  transform: translateY(-2px) !important;
+  border-color: #c5d8ef !important;
+  box-shadow: var(--approved-shadow-hover) !important;
+}
+.screen-app .dashboard-task-icon {
+  width: 42px !important;
+  height: 42px !important;
+  grid-row: 1 / span 3 !important;
+  display: grid !important;
+  place-items: center !important;
+  border-radius: 10px !important;
+  color: var(--approved-blue) !important;
+  background: #eaf3ff !important;
+}
+.screen-app .dashboard-task-card.tone-warning .dashboard-task-icon { color: #e38213 !important; background: #fff1df !important; }
+.screen-app .dashboard-task-card.tone-good .dashboard-task-icon { color: var(--approved-good) !important; background: var(--approved-good-soft) !important; }
+.screen-app .dashboard-task-card.tone-danger .dashboard-task-icon { color: var(--approved-danger) !important; background: var(--approved-danger-soft) !important; }
+.screen-app .dashboard-task-label {
+  color: #65758f !important;
+  font-size: 10px !important;
+  font-weight: 690 !important;
+}
+.screen-app .dashboard-task-count {
+  grid-column: 2 !important;
+  color: #0e2144 !important;
+  font-size: 23px !important;
+  line-height: 1 !important;
+  font-weight: 850 !important;
+}
+.screen-app .dashboard-task-hint {
+  grid-column: 2 / span 2 !important;
+  color: #8a9aaf !important;
+  font-size: 9.5px !important;
+}
+.screen-app .reference-dashboard-panels {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr) !important;
+  gap: 13px !important;
+  align-items: stretch !important;
+}
+.screen-app .reference-dashboard-panel {
+  min-height: 280px !important;
+  padding: 16px !important;
+  overflow: hidden !important;
+}
+.screen-app .reference-activity-panel {
+  grid-column: 1 / -1 !important;
+  min-height: 250px !important;
+}
+.screen-app .reference-panel-heading {
+  margin-bottom: 10px !important;
+  padding-bottom: 10px !important;
+  border-bottom: 1px solid #edf2f7 !important;
+}
+.screen-app .reference-panel-heading h2 {
+  margin: 0 !important;
+  font-size: 14px !important;
+  font-weight: 820 !important;
+}
+.screen-app .reference-panel-heading button {
+  color: var(--approved-blue) !important;
+  font-size: 9.5px !important;
+  font-weight: 760 !important;
+}
+.screen-app .dashboard-activity-row {
+  min-height: 51px !important;
+  border-bottom: 1px solid #edf2f7 !important;
+}
+.screen-app .reference-dashboard-footer {
+  margin-top: 13px !important;
+  min-height: 68px !important;
+  padding: 11px 14px !important;
+  border: 1px solid var(--approved-border) !important;
+  border-radius: 12px !important;
+  background: #fff !important;
+  box-shadow: var(--approved-shadow) !important;
+}
+
+/* ===== Department approvals / Stores master-detail ===== */
+.screen-app .ds-workspace {
+  max-width: 1580px !important;
+}
+.screen-app .ds-hero {
+  min-height: 72px !important;
+  margin-bottom: 12px !important;
+  padding-bottom: 13px !important;
+  border-bottom: 1px solid #e3eaf2 !important;
+}
+.screen-app .ds-hero-icon {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 10px !important;
+}
+.screen-app .ds-hero h1 {
+  margin: 2px 0 3px !important;
+  font-size: 27px !important;
+}
+.screen-app .ds-hero p {
+  font-size: 11.5px !important;
+}
+.screen-app .ds-tabs {
+  margin-bottom: 12px !important;
+  padding: 5px !important;
+  border: 1px solid var(--approved-border) !important;
+  border-radius: 10px !important;
+  background: #fff !important;
+  box-shadow: var(--approved-shadow) !important;
+}
+.screen-app .ds-master-detail {
+  display: grid !important;
+  grid-template-columns: minmax(330px, .68fr) minmax(620px, 1.32fr) !important;
+  gap: 13px !important;
+}
+.screen-app .ds-register,
+.screen-app .ds-detail {
+  min-height: 610px !important;
+}
+.screen-app .ds-section-head {
+  min-height: 62px !important;
+  padding: 12px 14px !important;
+}
+.screen-app .ds-request-row {
+  min-height: 62px !important;
+  padding: 10px 13px !important;
+}
+.screen-app .ds-request-row.active {
+  background: #edf5ff !important;
+  border-left-color: var(--approved-blue) !important;
+}
+.screen-app .ds-detail-head {
+  min-height: 80px !important;
+  padding: 14px 16px !important;
+}
+.screen-app .ds-detail-head h2 {
+  font-size: 19px !important;
+}
+.screen-app .ds-form-grid {
+  padding: 14px 16px !important;
+  gap: 10px !important;
+}
+.screen-app .ds-table-scroll {
+  border-color: #e0e8f1 !important;
+  border-radius: 9px !important;
+}
+.screen-app .ds-table th,
+.screen-app .ds-table td {
+  padding: 9px 10px !important;
+}
+.screen-app .ds-sticky-action,
+.screen-app .ds-approval-actions {
+  border-top-color: #e6edf5 !important;
+  background: #fbfdff !important;
+}
+
+/* ===== Procurement and receiving ===== */
+.screen-app .procurement-workbench,
+.screen-app .enterprise-workspace {
+  max-width: 1580px !important;
+}
+.screen-app .procurement-hero-card {
+  margin-bottom: 12px !important;
+  padding-bottom: 13px !important;
+}
+.screen-app .procurement-hero-card h1,
+.screen-app .workbench-hero h1 {
+  font-size: 27px !important;
+}
+.screen-app .procurement-queue-tabs {
+  margin-bottom: 12px !important;
+  padding: 5px !important;
+  border-color: var(--approved-border) !important;
+  border-radius: 10px !important;
+  box-shadow: var(--approved-shadow) !important;
+}
+.screen-app .procurement-queue-tab {
+  min-height: 52px !important;
+}
+.screen-app .procurement-queue-tab.is-active {
+  color: #155fc6 !important;
+  border-color: #9bc2f8 !important;
+  background: #eaf3ff !important;
+}
+.screen-app .workbench-metrics {
+  gap: 11px !important;
+  margin-bottom: 12px !important;
+}
+.screen-app .workbench-metrics > div {
+  min-height: 86px !important;
+}
+.screen-app .procurement-workbench-grid {
+  gap: 13px !important;
+}
+.screen-app .procurement-queue-card,
+.screen-app .procurement-detail-panel {
+  border-radius: 12px !important;
+}
+.screen-app .procurement-detail-panel {
+  padding: 14px !important;
+}
+.screen-app .procurement-queue-card th,
+.screen-app .procurement-queue-card td {
+  padding: 9px 10px !important;
+}
+.screen-app .receiving-detail-screen > section {
+  border-color: var(--approved-border) !important;
+  border-radius: 12px !important;
+  box-shadow: var(--approved-shadow) !important;
+}
+.screen-app .receiving-document-fields {
+  background: #f8fbff !important;
+  border-color: #dfe8f2 !important;
+}
+
+/* ===== Stock, inventory, suppliers, finance and reports ===== */
+.screen-app .soh-header,
+.screen-app .inventory-workbench > header,
+.screen-app .finance-workbench > header,
+.screen-app .supplier-management > header,
+.screen-app .reports-page > header {
+  margin-bottom: 13px !important;
+}
+.screen-app .soh-kpis,
+.screen-app .hod-dashboard-kpis,
+.screen-app .workbench-metrics {
+  gap: 11px !important;
+}
+.screen-app .soh-kpi {
+  min-height: 86px !important;
+  padding: 13px !important;
+}
+.screen-app .soh-toolbar {
+  border-color: var(--approved-border) !important;
+  background: #fff !important;
+  box-shadow: var(--approved-shadow) !important;
+}
+.screen-app .soh-table-wrap,
+.screen-app .table-scroll,
+.screen-app [class*="table-wrap"] {
+  scrollbar-color: #c7d5e5 transparent;
+}
+.screen-app .supplier-management,
+.screen-app .finance-workbench,
+.screen-app .inventory-workbench,
+.screen-app .reports-page,
+.screen-app .report-view-screen,
+.screen-app .list-view,
+.screen-app .article-management,
+.screen-app .catalogue-page,
+.screen-app .unit-management {
+  max-width: 1580px !important;
+}
+
+/* ===== Drawers / dialogs / notifications ===== */
+.screen-app .tafiti-profile-menu,
+.screen-app .notification-panel,
+.screen-app .drawer,
+.screen-app .form-drawer,
+.screen-app [role="dialog"] {
+  border: 1px solid var(--approved-border) !important;
+  border-radius: 12px !important;
+  background: #fff !important;
+  box-shadow: 0 24px 65px rgba(15, 45, 79, .17) !important;
+}
+.screen-app .notification-panel {
+  overflow: hidden !important;
+}
+
+/* ===== Dark appearance ===== */
+.mode-dark.screen-app {
+  --approved-canvas: #071421;
+  --approved-card: #0d1d2e;
+  --approved-border: #22364c;
+  --approved-border-soft: #192d42;
+  --approved-text: #e8eff8;
+  --approved-muted: #a6b5c9;
+  --approved-faint: #75879d;
+  background: var(--approved-canvas) !important;
+}
+.mode-dark.screen-app .tafiti-app-header,
+.mode-dark.screen-app .dashboard-task-card,
+.mode-dark.screen-app .reference-dashboard-panel,
+.mode-dark.screen-app .reference-dashboard-footer,
+.mode-dark.screen-app .ds-card,
+.mode-dark.screen-app .ds-tabs,
+.mode-dark.screen-app .soh-panel,
+.mode-dark.screen-app .soh-kpi,
+.mode-dark.screen-app .soh-toolbar,
+.mode-dark.screen-app .procurement-queue-tabs,
+.mode-dark.screen-app .procurement-queue-card,
+.mode-dark.screen-app .procurement-detail-panel,
+.mode-dark.screen-app .workbench-metrics > div,
+.mode-dark.screen-app .tafiti-app-content .panel,
+.mode-dark.screen-app .tafiti-app-content .card,
+.mode-dark.screen-app .tafiti-app-content .report-card,
+.mode-dark.screen-app .tafiti-app-content .table-card,
+.mode-dark.screen-app .tafiti-app-content .workspace-card {
+  color: var(--approved-text) !important;
+  border-color: var(--approved-border) !important;
+  background: var(--approved-card) !important;
+}
+.mode-dark.screen-app .tafiti-school-search,
+.mode-dark.screen-app .tafiti-school-context-chip,
+.mode-dark.screen-app .tafiti-app-content input,
+.mode-dark.screen-app .tafiti-app-content select,
+.mode-dark.screen-app .tafiti-app-content textarea {
+  color: #e4edf8 !important;
+  border-color: #2b4058 !important;
+  background: #102337 !important;
+}
+.mode-dark.screen-app .tafiti-app-content {
+  background: #071421 !important;
+}
+.mode-dark.screen-app .reference-panel-heading,
+.mode-dark.screen-app .dashboard-activity-row {
+  border-color: #1e3349 !important;
+}
+.mode-dark.screen-app thead th {
+  color: #9aadc4 !important;
+  border-color: #273b52 !important;
+  background: #102237 !important;
+}
+.mode-dark.screen-app tbody td {
+  color: #cbd7e6 !important;
+  border-color: #1e3146 !important;
+}
+.mode-dark.screen-app tbody tr:hover td {
+  background: #102135 !important;
+}
+.mode-dark.screen-app .dashboard-task-count,
+.mode-dark.screen-app .tafiti-app-content h1,
+.mode-dark.screen-app .tafiti-app-content h2,
+.mode-dark.screen-app .tafiti-app-content h3 {
+  color: #edf4fc !important;
+}
+
+/* ===== Laptop / tablet ===== */
+@media (max-width: 1360px) {
+  .screen-app { --approved-sidebar: 232px; }
+  .screen-app .tafiti-app-content { padding: 18px 18px 30px !important; }
+  .screen-app .task-card-grid { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)) !important; }
+  .screen-app .ds-master-detail { grid-template-columns: minmax(300px, .72fr) minmax(520px, 1.28fr) !important; }
+}
+
+@media (max-width: 1040px) {
+  .screen-app .tafiti-sidebar {
+    width: min(84vw, 304px) !important;
+    min-width: min(84vw, 304px) !important;
+    transform: translateX(-102%) !important;
+  }
+  .screen-app .tafiti-sidebar.mobile-open { transform: translateX(0) !important; }
+  .screen-app .tafiti-app-main {
+    margin-left: 0 !important;
+    width: 100% !important;
+  }
+  .screen-app .reference-dashboard-panels,
+  .screen-app .ds-master-detail,
+  .screen-app .procurement-workbench-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .screen-app .reference-activity-panel { grid-column: auto !important; }
+  .screen-app .tafiti-school-mobile-menu { display: grid !important; }
+}
+
+@media (max-width: 720px) {
+  .screen-app { --approved-header: 58px; }
+  .screen-app .tafiti-app-header-top { padding: 0 10px !important; gap: 7px !important; }
+  .screen-app .tafiti-app-content { padding: 13px 10px 24px !important; }
+  .screen-app .tafiti-school-search { width: 40px !important; padding: 0 !important; display: grid !important; place-items: center !important; }
+  .screen-app .header-search-label,
+  .screen-app .tafiti-school-search kbd,
+  .screen-app .tafiti-school-context-chip,
+  .screen-app .tafiti-header-user-copy { display: none !important; }
+  .screen-app .task-card-grid { display: flex !important; overflow-x: auto !important; scroll-snap-type: x mandatory !important; }
+  .screen-app .dashboard-task-card { min-width: 205px !important; scroll-snap-align: start !important; }
+  .screen-app .reference-dashboard-heading { min-height: auto !important; gap: 10px !important; }
+  .screen-app .reference-dashboard-date { display: none !important; }
+  .screen-app .ds-hero h1 { font-size: 22px !important; }
+  .screen-app .ds-form-grid { grid-template-columns: 1fr !important; }
+}
