@@ -1,0 +1,51 @@
+/* Premium operational shell — final presentation layer.
+   Keeps workflow/business behaviour untouched while tightening desktop and mobile density. */
+
+:root {
+  --erp-navy-950: #071b35;
+  --erp-navy-900: #0a2446;
+  --erp-navy-800: #0b2d5b;
+  --erp-blue-600: #2563eb;
+  --erp-blue-500: #3b82f6;
+  --erp-canvas: #f4f7fb;
+  --erp-line: #dce5f0;
+  --erp-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 7px 20px rgba(15, 23, 42, .045);
+}
+
+.tafiti-app-shell,.app-shell{background:var(--erp-canvas)!important}
+.tafiti-sidebar:not(.is-collapsed){width:224px!important;min-width:224px!important;flex:0 0 224px!important}
+.tafiti-sidebar.is-collapsed{width:58px!important;min-width:58px!important;flex:0 0 58px!important}
+.tafiti-sidebar{background:linear-gradient(180deg,var(--erp-navy-800) 0%,var(--erp-navy-900) 48%,var(--erp-navy-950) 100%)!important}
+.tafiti-sidebar-brand{min-height:66px!important;padding:12px 13px!important}
+.tafiti-sidebar-property{margin:9px 10px 12px!important}
+.tafiti-property-trigger{min-height:48px!important;padding:8px 10px!important;border-radius:8px!important}
+.tafiti-sidebar-nav{padding:4px 9px 12px!important}
+.tafiti-sidebar-nav-group{margin-bottom:14px!important}
+.tafiti-sidebar-nav-item{min-height:38px!important;padding:0 10px!important;border-radius:7px!important;gap:9px!important}
+.tafiti-sidebar-nav-label{font-size:12px!important}
+.tafiti-app-main,.app-main{min-width:0!important;background:var(--erp-canvas)!important}
+.tafiti-app-header-top{min-height:56px!important;height:56px!important;padding:0 16px!important}
+.tafiti-school-search{width:min(440px,42vw)!important;height:36px!important;border-radius:8px!important}
+.tafiti-school-breadcrumb-bar{height:36px!important;min-height:36px!important;padding:0 20px!important}
+.tafiti-app-content{min-width:0!important;background:var(--erp-canvas)!important}
+.screen{max-width:1400px!important;margin:0 auto!important;padding:16px 20px 30px!important}
+.enterprise-workspace,.inventory-workbench,.procurement-workbench,.finance-workbench,.role-workspace-page,.ds-workspace{max-width:1320px!important;margin-left:auto!important;margin-right:auto!important}
+.workbench-hero,.inventory-workbench-hero,.role-workspace-hero,.ds-hero{min-height:0!important;margin-bottom:12px!important;padding:14px 16px!important;border-radius:10px!important;box-shadow:var(--erp-shadow)!important}
+.inventory-workbench-hero-icon,.ds-hero-icon{width:38px!important;height:38px!important;flex-basis:38px!important;border-radius:9px!important}
+.inventory-workbench-hero h1,.ds-hero h1{font-size:20px!important;line-height:1.2!important}
+.inventory-workbench-hero-copy>div:last-child,.ds-hero p{font-size:11px!important}
+.inventory-workbench-navigation,.ds-tabs{margin-bottom:12px!important;border-radius:9px!important;box-shadow:none!important}
+.inventory-nav-group{padding:10px 12px!important}
+.inventory-nav-button,.ds-tabs button{min-height:34px!important;height:34px!important;border-radius:7px!important}
+.ds-card{border-color:var(--erp-line)!important;border-radius:10px!important;box-shadow:var(--erp-shadow)!important}
+.ds-detail{min-height:310px!important;padding:15px!important}.ds-register{min-height:310px!important}
+.ds-section-head{padding:12px 14px!important}.ds-section-head h2{font-size:14px!important}
+.ds-request-row{padding:11px 13px!important}.ds-form-grid{gap:8px!important;margin-bottom:11px!important}.ds-read{padding:8px 9px!important}
+.ds-table-scroll{margin-top:10px!important;border-radius:8px!important}.ds-table th{padding:8px 9px!important}.ds-table td{padding:9px!important}
+.ds-btn{min-height:34px!important;height:34px!important;padding:0 11px!important;border-radius:7px!important}
+.ds-sticky-action,.ds-ready-panel{margin-top:12px!important;padding:10px 11px!important}.ds-empty{min-height:150px!important;padding:20px!important}
+.inventory-workbench .empty-state,.role-workspace-page .empty-state,.enterprise-workspace .empty-state{min-height:150px!important;padding:24px!important}
+.ds-table-scroll,.table-scroll,.table-responsive{max-width:100%!important;overflow-x:auto!important;overscroll-behavior-inline:contain}
+@media(max-width:1100px){.tafiti-sidebar:not(.is-collapsed){width:210px!important;min-width:210px!important;flex-basis:210px!important}.screen{padding:14px 16px 26px!important}.ds-master-detail{grid-template-columns:minmax(250px,.72fr) minmax(0,1.45fr)!important;gap:10px!important}}
+@media(max-width:900px){.tafiti-app-header-top{height:54px!important;min-height:54px!important;padding:0 10px!important}.tafiti-school-search{width:min(58vw,360px)!important;height:36px!important}.tafiti-school-breadcrumb-bar{height:34px!important;min-height:34px!important;padding:0 12px!important}.screen{width:100%!important;max-width:none!important;padding:12px 12px 24px!important}.ds-master-detail{grid-template-columns:minmax(0,1fr)!important;gap:10px!important}.ds-register,.ds-detail{min-height:0!important}}
+@media(max-width:700px){.tafiti-school-search{flex:1 1 auto!important;width:auto!important;min-width:0!important}.tafiti-school-breadcrumb-bar{overflow-x:auto!important;white-space:nowrap!important}.ds-hero{padding:12px!important}.ds-hero h1{font-size:18px!important}.ds-form-grid{grid-template-columns:minmax(0,1fr)!important}.ds-detail{padding:12px!important}.ds-table{min-width:620px!important}.ds-store-strip{padding-bottom:3px}.ds-btn,.ds-tabs button{min-height:40px!important;height:40px!important}}

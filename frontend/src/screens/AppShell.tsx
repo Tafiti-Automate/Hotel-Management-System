@@ -40,9 +40,10 @@ export default function AppShell() {
   const app = useApp()
   const { route } = app
   const role = String(app.user.role || '').trim().toLowerCase()
+  const departmentSupplyRoute = departmentSupplyRoles.has(role) && (route === 'workflow-stores' || route === 'storeRequisitions')
 
   let content: ReactNode = null
-  if (!canAccessRoute(app.user, route)) content = <Dashboard />
+  if (!departmentSupplyRoute && !canAccessRoute(app.user, route)) content = <Dashboard />
   else if (route === 'dashboard') content = <Dashboard />
   else if (route === 'hr-dashboard') content = <HRDashboard />
   else if (route === 'workflow-procure') content = role === 'financial manager'
@@ -50,7 +51,8 @@ export default function AppShell() {
     : role === 'receiving clerk'
       ? <ReceivingClerkWorkspaceV2 />
       : <ProcurementWorkbench />
-  else if (route === 'workflow-stores') content = departmentSupplyRoles.has(role) ? <DepartmentSupplyWorkspace /> : <InventoryWorkbench />
+  else if (departmentSupplyRoute) content = <DepartmentSupplyWorkspace />
+  else if (route === 'workflow-stores') content = <InventoryWorkbench />
   else if (route === 'store-purchase-requests') content = <StorePurchaseRequests />
   else if (route === 'workflow-consume') content = <InventoryWorkbench />
   else if (route === 'categories') content = <InventoryCatalogue />
