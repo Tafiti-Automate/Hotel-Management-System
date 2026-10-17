@@ -26,7 +26,7 @@ const ArticleManagement = lazy(() => import('./ArticleManagement'))
 const AuditLog = lazy(() => import('./AuditLog'))
 const AccessManagement = lazy(() => import('./AccessManagement'))
 const SupplierManagement = lazy(() => import('./SupplierManagement'))
-const SupplierQuotationManagement = lazy(() => import('./SupplierQuotationManagement'))
+const SupplierQuotationOptionOne = lazy(() => import('./SupplierQuotationOptionOne'))
 const UnitManagement = lazy(() => import('./UnitManagement'))
 
 const listRoutes = new Set([
@@ -72,7 +72,7 @@ export default function AppShell() {
   else if (route === 'workflow-pay') content = <FinanceWorkbench />
   else if (route === 'workflow-configure') content = <WorkflowHub kind="configure" />
   else if (route === 'suppliers') content = <SupplierManagement />
-  else if (route === 'supplierItems') content = <SupplierQuotationManagement />
+  else if (route === 'supplierItems') content = <SupplierQuotationOptionOne />
   else if (listRoutes.has(route)) content = <ListView />
   else if (route === 'detail') content = <DetailView />
   else if (route === 'reports') content = <Reports />
