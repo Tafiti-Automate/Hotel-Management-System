@@ -9,9 +9,6 @@ interface IconProps {
   style?: CSSProperties
 }
 
-// These symbols were introduced after the original product icon subset was
-// bundled. Keep them in a tiny supplemental font so an unavailable ligature
-// can never spill its name into the UI.
 const SUPPLEMENTAL_ICONS = new Set([
   'alternate_email',
   'auto_awesome',
@@ -23,19 +20,25 @@ const SUPPLEMENTAL_ICONS = new Set([
   'upload',
 ])
 
-// The bundled primary symbol font is intentionally small. Alias newer symbol
-// names to equivalent glyphs that are known to exist in the bundled subset so
-// raw ligature text can never leak into the interface.
 const SAFE_ALIASES: Record<string, string> = {
   analytics: 'bar_chart',
   monitoring: 'bar_chart',
   visibility: 'description',
+  visibility_off: 'description',
   filter_alt: 'tune',
   filter_alt_off: 'tune',
   sync: 'refresh',
   search_off: 'search',
   assignment_turned_in: 'assignment',
   shopping_cart_checkout: 'shopping_cart',
+  right_panel_open: 'left_panel_open',
+  person: 'badge',
+  support_agent: 'info',
+  keyboard_capslock: 'info',
+  shield: 'verified_user',
+  verified: 'verified_user',
+  inventory: 'inventory_2',
+  waving_hand: 'badge',
 }
 
 /** Material Symbols Rounded glyph. */

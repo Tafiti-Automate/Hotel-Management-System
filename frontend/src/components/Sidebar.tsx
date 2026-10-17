@@ -1,348 +1,223 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useState } from 'react'
 import { useApp } from '../state/AppContext'
 import { Icon } from './Icon'
 import { Avatar } from './Avatar'
 import { canAccessRoute, canSwitchBranches, canSwitchModules } from '../lib/access'
 
-interface NavItem { route: string; label: string }
+interface NavItem { route: string; label: string; icon?: string }
 interface NavGroup { heading: string; items: NavItem[] }
 
-const workflowNav: Record<string, NavGroup[]> = {
+const roleNavigation: Record<string, NavGroup[]> = {
   'department supervisor': [
-    { heading: 'Workspace', items: [
-      { route: 'dashboard', label: 'Dashboard' },
-      { route: 'workflow-stores', label: 'Department requests' },
+    { heading: 'Department', items: [
+      { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
+      { route: 'workflow-stores', label: 'My requests', icon: 'assignment' },
     ] },
   ],
   supervisor: [
-    { heading: 'Workspace', items: [
-      { route: 'dashboard', label: 'Dashboard' },
-      { route: 'workflow-stores', label: 'Department requests' },
+    { heading: 'Department', items: [
+      { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
+      { route: 'workflow-stores', label: 'My requests', icon: 'assignment' },
     ] },
   ],
   'department head': [
-    { heading: 'Workspace', items: [
-      { route: 'dashboard', label: 'Dashboard' },
-      { route: 'workflow-stores', label: 'Department approvals' },
+    { heading: 'Department', items: [
+      { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
+      { route: 'workflow-stores', label: 'Approvals', icon: 'approval' },
     ] },
-    { heading: 'Control', items: [{ route: 'reports', label: 'Reports' }] },
+    { heading: 'Insights', items: [{ route: 'reports', label: 'Reports', icon: 'bar_chart' }] },
   ],
   'store keeper': [
-    { heading: 'Workspace', items: [
-      { route: 'dashboard', label: 'Dashboard' },
-      { route: 'workflow-stores', label: 'Store Keeper queue' },
-      { route: 'stock-on-hand', label: 'Stock on Hand' },
-      { route: 'store-purchase-requests', label: 'Purchase requests' },
+    { heading: 'Stores', items: [
+      { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
+      { route: 'workflow-stores', label: 'Issue queue', icon: 'inventory' },
+      { route: 'stock-on-hand', label: 'Stock on hand', icon: 'inventory_2' },
+      { route: 'store-purchase-requests', label: 'Purchase requests', icon: 'shopping_cart' },
     ] },
-    { heading: 'Control', items: [{ route: 'reports', label: 'Reports' }] },
+    { heading: 'Insights', items: [{ route: 'reports', label: 'Reports', icon: 'bar_chart' }] },
   ],
   'cost controller': [
-    { heading: 'Workspace', items: [
-      { route: 'dashboard', label: 'Dashboard' },
-      { route: 'workflow-stores', label: 'Department request control' },
+    { heading: 'Control desk', items: [
+      { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
+      { route: 'workflow-stores', label: 'Request control', icon: 'fact_check' },
     ] },
-    { heading: 'Supplier & article setup', items: [
-      { route: 'suppliers', label: 'Suppliers' },
-      { route: 'supplierItems', label: 'Supplier quotations' },
-      { route: 'categories', label: 'Item Category' },
-      { route: 'items', label: 'Articles / items' },
-      { route: 'uoms', label: 'Units & conversions' },
+    { heading: 'Master data', items: [
+      { route: 'suppliers', label: 'Suppliers', icon: 'local_shipping' },
+      { route: 'supplierItems', label: 'Supplier prices', icon: 'request_quote' },
+      { route: 'categories', label: 'Item categories', icon: 'category' },
+      { route: 'items', label: 'Articles', icon: 'inventory_2' },
+      { route: 'uoms', label: 'Units & conversions', icon: 'straighten' },
     ] },
-    { heading: 'Control', items: [{ route: 'reports', label: 'Reports' }] },
+    { heading: 'Insights', items: [{ route: 'reports', label: 'Reports', icon: 'bar_chart' }] },
   ],
   'procurement manager': [
-    { heading: 'Workspace', items: [
-      { route: 'dashboard', label: 'Dashboard' },
-      { route: 'workflow-procure', label: 'Procurement queue' },
+    { heading: 'Procurement', items: [
+      { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
+      { route: 'workflow-procure', label: 'Procurement workbench', icon: 'shopping_cart' },
     ] },
-    { heading: 'Control', items: [{ route: 'reports', label: 'Reports' }] },
+    { heading: 'Insights', items: [{ route: 'reports', label: 'Reports', icon: 'bar_chart' }] },
+  ],
+  'procurement officer': [
+    { heading: 'Procurement', items: [
+      { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
+      { route: 'workflow-procure', label: 'Procurement workbench', icon: 'shopping_cart' },
+    ] },
+    { heading: 'Insights', items: [{ route: 'reports', label: 'Reports', icon: 'bar_chart' }] },
   ],
   'financial manager': [
-    { heading: 'Workspace', items: [
-      { route: 'dashboard', label: 'Dashboard' },
-      { route: 'workflow-procure', label: 'LPO approvals' },
+    { heading: 'Approvals', items: [
+      { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
+      { route: 'workflow-procure', label: 'LPO approvals', icon: 'approval' },
     ] },
-    { heading: 'Control', items: [{ route: 'reports', label: 'Reports' }] },
+    { heading: 'Insights', items: [{ route: 'reports', label: 'Reports', icon: 'bar_chart' }] },
   ],
   'general manager': [
-    { heading: 'Workspace', items: [
-      { route: 'dashboard', label: 'Dashboard' },
-      { route: 'workflow-procure', label: 'Final LPO approvals' },
+    { heading: 'Management', items: [
+      { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
+      { route: 'workflow-procure', label: 'Final approvals', icon: 'verified' },
     ] },
-    { heading: 'Control', items: [{ route: 'reports', label: 'Reports' }] },
+    { heading: 'Insights', items: [{ route: 'reports', label: 'Reports', icon: 'bar_chart' }] },
   ],
   'receiving clerk': [
-    { heading: 'Workspace', items: [
-      { route: 'dashboard', label: 'Dashboard' },
-      { route: 'workflow-procure', label: 'Receiving & GRN' },
+    { heading: 'Receiving', items: [
+      { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
+      { route: 'workflow-procure', label: 'Receiving & GRN', icon: 'local_shipping' },
     ] },
-    { heading: 'Control', items: [{ route: 'reports', label: 'Reports' }] },
+    { heading: 'Insights', items: [{ route: 'reports', label: 'Reports', icon: 'bar_chart' }] },
   ],
 }
 
-const adminOperations: NavGroup[] = [
-  { heading: 'Workspace', items: [
-    { route: 'dashboard', label: 'Dashboard' },
-    { route: 'workflow-stores', label: 'Department & Stores workflow' },
-    { route: 'stock-on-hand', label: 'Stock on Hand' },
-    { route: 'workflow-procure', label: 'Procurement workflow' },
-    { route: 'workflow-pay', label: 'Finance' },
+const adminNavigation: NavGroup[] = [
+  { heading: 'Operations', items: [
+    { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
+    { route: 'workflow-stores', label: 'Stores workflow', icon: 'inventory' },
+    { route: 'stock-on-hand', label: 'Stock on hand', icon: 'inventory_2' },
+    { route: 'workflow-procure', label: 'Procurement', icon: 'shopping_cart' },
+    { route: 'workflow-pay', label: 'Finance', icon: 'payments' },
   ] },
   { heading: 'Master data', items: [
-    { route: 'suppliers', label: 'Suppliers' },
-    { route: 'supplierItems', label: 'Supplier quotations' },
-    { route: 'categories', label: 'Item Category' },
-    { route: 'items', label: 'Articles / items' },
-    { route: 'uoms', label: 'Units & conversions' },
-    { route: 'locations', label: 'Stores' },
+    { route: 'suppliers', label: 'Suppliers', icon: 'local_shipping' },
+    { route: 'supplierItems', label: 'Supplier prices', icon: 'request_quote' },
+    { route: 'categories', label: 'Item categories', icon: 'category' },
+    { route: 'items', label: 'Articles', icon: 'inventory_2' },
+    { route: 'uoms', label: 'Units & conversions', icon: 'straighten' },
+    { route: 'locations', label: 'Stores', icon: 'warehouse' },
   ] },
-  { heading: 'Control', items: [
-    { route: 'reports', label: 'Reports' },
-    { route: 'audit-log', label: 'Audit trail' },
-    { route: 'access-management', label: 'User access' },
-    { route: 'hotel-profile', label: 'Settings' },
+  { heading: 'Governance', items: [
+    { route: 'reports', label: 'Reports', icon: 'bar_chart' },
+    { route: 'audit-log', label: 'Audit trail', icon: 'history' },
+    { route: 'access-management', label: 'User access', icon: 'manage_accounts' },
+    { route: 'hotel-profile', label: 'Settings', icon: 'settings' },
   ] },
 ]
 
-const hrGroups: NavGroup[] = [
+const hrNavigation: NavGroup[] = [
   { heading: 'Human resources', items: [
-    { route: 'hr-dashboard', label: 'People dashboard' },
-    { route: 'employees', label: 'Employees' },
-    { route: 'departments', label: 'Departments' },
-    { route: 'access-management', label: 'User access' },
+    { route: 'hr-dashboard', label: 'People overview', icon: 'groups' },
+    { route: 'employees', label: 'Employees', icon: 'badge' },
+    { route: 'departments', label: 'Departments', icon: 'account_tree' },
+    { route: 'access-management', label: 'User access', icon: 'manage_accounts' },
   ] },
 ]
-
-const navIcons: Record<string, string> = {
-  dashboard: 'space_dashboard',
-  'hr-dashboard': 'groups',
-  'workflow-stores': 'assignment',
-  'stock-on-hand': 'inventory_2',
-  'store-purchase-requests': 'shopping_cart_checkout',
-  'workflow-procure': 'shopping_cart_checkout',
-  'workflow-pay': 'payments',
-  suppliers: 'local_shipping',
-  supplierItems: 'request_quote',
-  items: 'inventory_2',
-  categories: 'category',
-  uoms: 'straighten',
-  itemUnits: 'calculate',
-  locations: 'warehouse',
-  reports: 'bar_chart',
-  'audit-log': 'history',
-  'access-management': 'manage_accounts',
-  'hotel-profile': 'settings',
-  employees: 'badge',
-  departments: 'account_tree',
-}
 
 export default function Sidebar() {
   const app = useApp()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const role = String(app.user.role || '').trim().toLowerCase()
-  const isAdministrator = app.user.isSuperuser || role === 'system administrator'
-  const sourceGroups = app.activeModule === 'hr' ? hrGroups : (workflowNav[role] || adminOperations)
-  const groups = sourceGroups
+  const administrator = app.user.isSuperuser || role === 'system administrator'
+  const rawGroups = app.activeModule === 'hr' ? hrNavigation : (roleNavigation[role] || adminNavigation)
+  const groups = rawGroups
     .map((group) => ({ ...group, items: group.items.filter((item) => canAccessRoute(app.user, item.route)) }))
     .filter((group) => group.items.length)
 
-  const roleTitle = app.activeModule === 'hr' ? 'Human Resources' : app.user.role || 'Operations'
-  const contextLabel = role === 'store keeper'
-    ? (app.data.locations.length === 1 ? String(app.data.locations[0].name) : app.currentBranch || app.user.branchName)
-    : app.user.departmentName || app.currentBranch || app.user.branchName
   const branchLocked = !canSwitchBranches(app.user) && Boolean(app.user.branchId)
-  const branches = branchLocked ? app.data.branches.filter((branch) => String(branch.id) === app.user.branchId) : app.data.branches
-  const width = collapsed ? 58 : 195
+  const branchOptions = branchLocked
+    ? app.data.branches.filter((branch) => String(branch.id) === app.user.branchId)
+    : app.data.branches
+  const locationName = role === 'store keeper' && app.data.locations.length === 1
+    ? String(app.data.locations[0].name || '')
+    : ''
+  const contextName = locationName || app.user.departmentName || app.currentBranch || app.user.branchName || 'Current workspace'
+  const workspaceTitle = app.activeModule === 'hr' ? 'Human Resources' : 'Hotel Operations'
 
   useEffect(() => {
-    const openMobileNavigation = () => setMobileOpen(true)
-    window.addEventListener('tafiti-sidebar-open', openMobileNavigation)
-    return () => window.removeEventListener('tafiti-sidebar-open', openMobileNavigation)
+    const open = () => setMobileOpen(true)
+    window.addEventListener('tafiti-sidebar-open', open)
+    return () => window.removeEventListener('tafiti-sidebar-open', open)
   }, [])
 
-  const navStyle = (active: boolean): CSSProperties => ({
-    width: '100%',
-    display: 'flex',
-    alignItems: 'center',
-    border: 0,
-    background: 'transparent',
-    cursor: 'pointer',
-    font: 'inherit',
-    textAlign: 'left',
-    color: active ? 'var(--accent)' : 'inherit',
-  })
-
   return <>
-    {mobileOpen && (
-      <button
-        className="sidebar-mobile-backdrop"
-        aria-label="Close navigation"
-        onClick={() => setMobileOpen(false)}
-      />
-    )}
+    {mobileOpen && <button className="neo-sidebar-backdrop" aria-label="Close navigation" onClick={() => setMobileOpen(false)} />}
 
-    <aside
-      className={`sidebar tafiti-sidebar ${collapsed ? 'is-collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}
-      style={{ width }}
-    >
-      <div className="sidebar-brand tafiti-sidebar-brand">
-        <div className="sidebar-brand-mark tafiti-sidebar-brand-mark">
-          <Icon name="inventory_2" size={20} color="#fff" fill />
-        </div>
-
-        {!collapsed && (
-          <div className="tafiti-sidebar-brand-copy">
-            <div className="sidebar-brand-title">Hotel ERP</div>
-            <div className="sidebar-brand-subtitle">{roleTitle}</div>
-          </div>
-        )}
-
-        <button
-          className="sidebar-mobile-toggle tafiti-sidebar-mobile-toggle"
-          onClick={() => setMobileOpen((open) => !open)}
-          aria-label={mobileOpen ? 'Close navigation' : 'Open navigation'}
-          style={plainIcon}
-        >
-          <Icon name={mobileOpen ? 'close' : 'menu'} size={20} />
+    <aside className={`neo-sidebar ${collapsed ? 'is-collapsed' : ''} ${mobileOpen ? 'is-mobile-open' : ''}`}>
+      <div className="neo-sidebar-brand">
+        <span className="neo-brand-mark"><Icon name="hotel" size={21} color="#fff" fill /></span>
+        {!collapsed && <span className="neo-brand-copy"><strong>Hotel ERP</strong><small>{workspaceTitle}</small></span>}
+        <button className="neo-icon-button neo-sidebar-collapse" onClick={() => setCollapsed((value) => !value)} aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'} title={collapsed ? 'Expand navigation' : 'Collapse navigation'}>
+          <Icon name={collapsed ? 'right_panel_open' : 'left_panel_close'} size={18} />
         </button>
-
-        {!collapsed && (
-          <button
-            className="sidebar-desktop-collapse tafiti-sidebar-collapse"
-            onClick={() => setCollapsed(true)}
-            title="Collapse sidebar"
-            aria-label="Collapse sidebar"
-            style={plainIcon}
-          >
-            <Icon name="left_panel_close" size={16} />
-          </button>
-        )}
+        <button className="neo-icon-button neo-sidebar-mobile-close" onClick={() => setMobileOpen(false)} aria-label="Close navigation"><Icon name="close" size={19} /></button>
       </div>
 
-      {collapsed && (
+      {!collapsed && <div className="neo-context-wrap">
         <button
-          className="sidebar-desktop-collapse tafiti-sidebar-expand"
-          onClick={() => setCollapsed(false)}
-          title="Expand sidebar"
-          aria-label="Expand sidebar"
-          style={plainIcon}
+          type="button"
+          className="neo-context-card"
+          onClick={administrator && !branchLocked ? app.toggleBranch : undefined}
+          aria-expanded={app.branchOpen}
         >
-          <Icon name="left_panel_open" size={18} />
+          <span className="neo-context-icon"><Icon name={role === 'store keeper' ? 'warehouse' : app.activeModule === 'hr' ? 'groups' : 'business'} size={17} /></span>
+          <span className="neo-context-copy"><small>{role === 'store keeper' ? 'Store / property' : app.user.departmentName ? 'Department' : 'Property'}</small><strong>{contextName}</strong></span>
+          {administrator && !branchLocked && <Icon name="expand_more" size={16} />}
         </button>
-      )}
+        {app.branchOpen && <>
+          <button className="neo-popover-backdrop" aria-label="Close property selector" onClick={app.closePop} />
+          <div className="neo-branch-menu">
+            {branchOptions.map((branch) => <button key={String(branch.id)} onClick={() => app.selectBranch(String(branch.name))}>{String(branch.name)}</button>)}
+            {!branchOptions.length && <span>No properties available</span>}
+          </div>
+        </>}
+      </div>}
 
-      {!collapsed && (
-        <div className="sidebar-property tafiti-sidebar-property">
-          <button
-            onClick={branchLocked || !isAdministrator ? undefined : app.toggleBranch}
-            className="tafiti-property-trigger"
-            style={{ cursor: branchLocked || !isAdministrator ? 'default' : 'pointer' }}
-          >
-            <Icon name={role === 'store keeper' ? 'warehouse' : 'business'} size={16} />
-            <span className="tafiti-property-copy">
-              <span className="tafiti-property-label">
-                {role === 'store keeper' ? 'Store / property' : app.user.departmentName ? 'Department' : 'Property'}
-              </span>
-              <span className="tafiti-property-value">{contextLabel || 'Current property'}</span>
-            </span>
-            {isAdministrator && !branchLocked && <Icon name="unfold_more" size={15} />}
-          </button>
-
-          {app.branchOpen && <>
-            <div onClick={app.closePop} className="tafiti-popover-backdrop" />
-            <div className="tafiti-branch-menu">
-              {branches.map((branch) => (
-                <button
-                  key={branch.id}
-                  onClick={() => app.selectBranch(String(branch.name))}
-                  className="hover-surface2 tafiti-branch-option"
-                >
-                  {branch.name}
-                </button>
-              ))}
-            </div>
-          </>}
-        </div>
-      )}
-
-      <nav className="sidebar-nav tafiti-sidebar-nav">
-        {groups.map((group, groupIndex) => (
-          <div
-            key={group.heading}
-            className="sidebar-nav-group tafiti-sidebar-nav-group"
-            data-group-index={groupIndex}
-          >
-            {!collapsed && <div className="sidebar-nav-heading">{group.heading}</div>}
-
+      <nav className="neo-sidebar-nav" aria-label="Primary navigation">
+        {groups.map((group) => <section className="neo-nav-group" key={group.heading}>
+          {!collapsed && <div className="neo-nav-heading">{group.heading}</div>}
+          <div className="neo-nav-items">
             {group.items.map((item) => {
               const active = app.navActive === item.route || (item.route === 'uoms' && app.navActive === 'itemUnits')
-              return (
-                <button
-                  key={item.route}
-                  title={collapsed ? item.label : undefined}
-                  aria-label={collapsed ? item.label : undefined}
-                  aria-current={active ? 'page' : undefined}
-                  onClick={() => {
-                    app.navTo(item.route, item.label)
-                    setMobileOpen(false)
-                  }}
-                  className={`sidebar-nav-item tafiti-sidebar-nav-item ${active ? 'active' : 'hover-surface2'}`}
-                  style={navStyle(active)}
-                >
-                  <Icon name={navIcons[item.route] || 'chevron_right'} size={15} weight={300} />
-                  {!collapsed && <span className="tafiti-sidebar-nav-label">{item.label}</span>}
-                </button>
-              )
+              return <button
+                type="button"
+                key={item.route}
+                className={`neo-nav-item ${active ? 'is-active' : ''}`}
+                aria-current={active ? 'page' : undefined}
+                title={collapsed ? item.label : undefined}
+                onClick={() => {
+                  app.navTo(item.route, item.label)
+                  setMobileOpen(false)
+                }}
+              >
+                <span className="neo-nav-icon"><Icon name={item.icon || 'chevron_right'} size={18} /></span>
+                {!collapsed && <span>{item.label}</span>}
+                {!collapsed && active && <i aria-hidden="true" />}
+              </button>
             })}
           </div>
-        ))}
+        </section>)}
       </nav>
 
-      <div className="sidebar-footer tafiti-sidebar-footer">
-        {canSwitchModules(app.user) && (
-          <button
-            onClick={app.gotoModules}
-            title="Switch module"
-            className="hover-surface2 tafiti-module-switch"
-            style={{ ...navStyle(false), justifyContent: collapsed ? 'center' : undefined }}
-          >
-            <Icon name="apps" size={17} />
-            {!collapsed && <span>Switch module</span>}
-          </button>
-        )}
+      <div className="neo-sidebar-footer">
+        {canSwitchModules(app.user) && <button type="button" className="neo-module-switch" onClick={app.gotoModules} title="Switch workspace">
+          <Icon name="apps" size={18} />
+          {!collapsed && <span>Switch workspace</span>}
+        </button>}
 
-        {!collapsed && (
-          <div className="tafiti-sidebar-user">
-            <Avatar
-              className="sidebar-user-avatar"
-              src={app.user.photoUrl}
-              name={app.user.name}
-              size={30}
-              radius={7}
-            />
-            <div className="tafiti-sidebar-user-copy">
-              <div className="tafiti-sidebar-user-name">{app.user.name}</div>
-              <div className="tafiti-sidebar-user-role">{app.user.role}</div>
-            </div>
-            <button onClick={app.logout} title="Sign out" aria-label="Sign out" style={plainIcon}>
-              <Icon name="logout" size={15} />
-            </button>
-          </div>
-        )}
+        <div className={`neo-sidebar-user ${collapsed ? 'is-compact' : ''}`}>
+          <Avatar src={app.user.photoUrl} name={app.user.name} size={34} radius={10} />
+          {!collapsed && <span className="neo-sidebar-user-copy"><strong>{app.user.name}</strong><small>{app.user.role}</small></span>}
+          {!collapsed && <button className="neo-icon-button" onClick={app.logout} aria-label="Sign out" title="Sign out"><Icon name="logout" size={17} /></button>}
+        </div>
       </div>
     </aside>
   </>
-}
-
-const plainIcon: CSSProperties = {
-  width: 26,
-  height: 26,
-  border: 0,
-  borderRadius: 6,
-  background: 'transparent',
-  display: 'grid',
-  placeItems: 'center',
-  color: 'var(--text-faint)',
-  cursor: 'pointer',
 }

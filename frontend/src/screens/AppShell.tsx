@@ -2,7 +2,7 @@ import { lazy, Suspense, type ReactNode } from 'react'
 import { useApp } from '../state/AppContext'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
-import Dashboard from './Dashboard'
+import Dashboard from './DashboardV2'
 import { canAccessRoute } from '../lib/access'
 
 const ListView = lazy(() => import('./ListView'))
@@ -12,7 +12,6 @@ const ReportView = lazy(() => import('./ReportView'))
 const HotelProfile = lazy(() => import('./HotelProfile'))
 const WorkflowHub = lazy(() => import('./WorkflowHub'))
 const HRDashboard = lazy(() => import('./HRDashboard'))
-const DepartmentHeadDashboard = lazy(() => import('./DepartmentHeadDashboard'))
 const ProcurementWorkbench = lazy(() => import('./ProcurementWorkbench'))
 const FinancialManagerLpoWorkspace = lazy(() => import('./FinancialManagerLpoWorkspace'))
 const ReceivingClerkWorkspaceV2 = lazy(() => import('./ReceivingClerkWorkspaceV2'))
@@ -30,12 +29,12 @@ const SupplierManagement = lazy(() => import('./SupplierManagement'))
 const SupplierQuotationManagement = lazy(() => import('./SupplierQuotationManagement'))
 const UnitManagement = lazy(() => import('./UnitManagement'))
 
-const listRoutes: string[] = [
+const listRoutes = new Set([
   'items', 'locations', 'suppliers',
   'balances', 'ledgers', 'batches', 'requisitions', 'approvals', 'orders', 'grns',
   'reorderRules', 'storeRequisitions', 'stockIssues', 'storeReturns', 'inspections',
   'supplierReturns', 'employees', 'departments', 'supplierItems',
-]
+])
 
 const departmentSupplyRoles = new Set([
   'department supervisor',
@@ -47,12 +46,12 @@ const departmentSupplyRoles = new Set([
 
 export default function AppShell() {
   const app = useApp()
-  const { route } = app
   const role = String(app.user.role || '').trim().toLowerCase()
+  const { route } = app
 
   let content: ReactNode = null
-  if (!canAccessRoute(app.user, route)) content = role === 'department head' ? <DepartmentHeadDashboard /> : <Dashboard />
-  else if (route === 'dashboard') content = role === 'department head' ? <DepartmentHeadDashboard /> : <Dashboard />
+  if (!canAccessRoute(app.user, route)) content = <Dashboard />
+  else if (route === 'dashboard') content = <Dashboard />
   else if (route === 'hr-dashboard') content = <HRDashboard />
   else if (route === 'workflow-procure') content = role === 'financial manager'
     ? <FinancialManagerLpoWorkspace />
@@ -74,26 +73,30 @@ export default function AppShell() {
   else if (route === 'workflow-configure') content = <WorkflowHub kind="configure" />
   else if (route === 'suppliers') content = <SupplierManagement />
   else if (route === 'supplierItems') content = <SupplierQuotationManagement />
-  else if (listRoutes.includes(route)) content = <ListView />
+  else if (listRoutes.has(route)) content = <ListView />
   else if (route === 'detail') content = <DetailView />
   else if (route === 'reports') content = <Reports />
   else if (route === 'reportview') content = <ReportView />
   else if (route === 'hotel-profile') content = <HotelProfile />
   else if (route === 'audit-log') content = <AuditLog />
   else if (route === 'access-management') content = <AccessManagement />
+  else content = <Dashboard />
 
-  return <div className="app-shell tafiti-app-shell">
-    <span className="tafiti-shell-topline" aria-hidden="true" />
+  return <div className="neo-app-shell">
     <Sidebar />
-    <div className="app-main tafiti-app-main">
+    <div className="neo-app-main">
       <Header />
-      <main className={`app-content tafiti-app-content route-${route}`} data-route={route}>
-        <Suspense fallback={<RouteLoading />}>{content}</Suspense>
+      <main className={`neo-workspace route-${route}`} data-route={route}>
+        <Suspense fallback={<RouteSkeleton />}>{content}</Suspense>
       </main>
     </div>
   </div>
 }
 
-function RouteLoading() {
-  return <div className="route-loading" role="status" aria-live="polite"><span className="route-loading-spinner" aria-hidden="true" /><div><strong>Loading</strong><span>Preparing your workspace…</span></div></div>
+function RouteSkeleton() {
+  return <div className="neo-route-skeleton" role="status" aria-live="polite" aria-label="Loading workspace">
+    <div className="neo-skeleton-line is-title" />
+    <div className="neo-skeleton-kpis">{[0, 1, 2, 3].map((item) => <div key={item} />)}</div>
+    <div className="neo-skeleton-panel" />
+  </div>
 }

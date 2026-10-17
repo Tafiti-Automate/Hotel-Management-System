@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useApp } from '../state/AppContext'
 import { Icon } from './Icon'
 import { Avatar } from './Avatar'
@@ -20,15 +20,16 @@ export default function Header() {
   const [notifications, setNotifications] = useState<NotificationRecord[]>([])
   const [notificationsLoading, setNotificationsLoading] = useState(true)
   const [notificationsError, setNotificationsError] = useState('')
-  const storesManager = isStoresManager(app.user)
-  const departmentLabel = app.user.departmentName || app.user.role
-  const moduleName = storesManager ? 'Stores & Inventory' : app.activeModule === 'hr' ? 'Human Resources' : departmentLabel
-  const pageDescription = routeDescription(app.route, moduleName)
-  const notificationCount = notifications.filter((notification) => !notification.is_read).length
-  const branchLabel = app.currentBranch || app.user.branchName || 'Current property'
 
-  const loadNotifications = useCallback(async (showLoading = true) => {
-    if (showLoading) setNotificationsLoading(true)
+  const storesManager = isStoresManager(app.user)
+  const moduleName = storesManager ? 'Stores & Inventory' : app.activeModule === 'hr' ? 'Human Resources' : 'Hotel Operations'
+  const pageTitle = titleForRoute(app.route, app.crumb)
+  const pageDescription = descriptionForRoute(app.route, app.user.role)
+  const unread = notifications.filter((notification) => !notification.is_read).length
+  const propertyName = app.currentBranch || app.user.branchName || app.user.departmentName || 'Current property'
+
+  const loadNotifications = useCallback(async (withLoading = true) => {
+    if (withLoading) setNotificationsLoading(true)
     setNotificationsError('')
     try {
       setNotifications(await fetchNotifications())
@@ -46,21 +47,19 @@ export default function Header() {
   }, [loadNotifications])
 
   useEffect(() => {
-    if (!notificationsOpen) return
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setNotificationsOpen(false)
+    const onShortcut = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        setSearchOpen(true)
+      }
+      if (event.key === 'Escape') {
+        setProfileOpen(false)
+        setNotificationsOpen(false)
+      }
     }
-    window.addEventListener('keydown', closeOnEscape)
-    return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [notificationsOpen])
-
-  const openNotifications = () => {
-    setProfileOpen(false)
-    setNotificationsOpen((open) => {
-      if (!open) void loadNotifications(false)
-      return !open
-    })
-  }
+    window.addEventListener('keydown', onShortcut)
+    return () => window.removeEventListener('keydown', onShortcut)
+  }, [])
 
   const readNotification = async (notification: NotificationRecord) => {
     if (notification.is_read) return
@@ -73,7 +72,7 @@ export default function Header() {
     }
   }
 
-  const readAllNotifications = async () => {
+  const readAll = async () => {
     const previous = notifications
     setNotifications((rows) => rows.map((row) => ({ ...row, is_read: true })))
     try {
@@ -84,260 +83,141 @@ export default function Header() {
     }
   }
 
-  useEffect(() => {
-    const openSearch = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
-        event.preventDefault()
-        setSearchOpen(true)
-      }
-    }
-    window.addEventListener('keydown', openSearch)
-    return () => window.removeEventListener('keydown', openSearch)
-  }, [])
-
   const openMobileNavigation = () => window.dispatchEvent(new Event('tafiti-sidebar-open'))
 
-  return (
-    <header className="app-header tafiti-app-header tafiti-school-header">
-      <div className="app-header-top tafiti-app-header-top tafiti-school-header-top">
-        <div className="tafiti-header-left tafiti-school-header-left">
-          <button
-            type="button"
-            className="tafiti-school-mobile-menu"
-            onClick={openMobileNavigation}
-            aria-label="Open navigation"
-            title="Open navigation"
-          >
-            <Icon name="menu" size={17} />
-          </button>
-          <button
-            className="global-search-trigger tafiti-header-menu tafiti-school-search"
-            onClick={() => setSearchOpen(true)}
-            aria-label="Open global search"
-            title="Search anything (Ctrl K)"
-          >
-            <Icon name="search" size={15} />
-            <span className="header-search-label">Search records, requisitions, LPOs, suppliers…</span>
-            <kbd>Ctrl K</kbd>
-          </button>
+  return <>
+    <header className="neo-header">
+      <div className="neo-header-page">
+        <button className="neo-mobile-menu" type="button" onClick={openMobileNavigation} aria-label="Open navigation"><Icon name="menu" size={20} /></button>
+        <div className="neo-page-copy">
+          <div className="neo-breadcrumb"><span>{moduleName}</span><Icon name="chevron_right" size={12} /><strong>{pageTitle}</strong></div>
+          <div className="neo-page-title-row"><h1>{pageTitle}</h1><span>{pageDescription}</span></div>
         </div>
+      </div>
 
-        <div className="header-actions tafiti-header-actions tafiti-school-header-actions">
-          <span className="tafiti-school-context-chip">{branchLabel}</span>
-          <span className={`header-live-state ${app.apiStatus === 'live' ? 'is-live' : app.apiStatus === 'offline' ? 'is-offline' : ''}`}>
-            <i />
-            {app.apiStatus === 'live' ? 'Live' : app.apiStatus === 'loading' ? 'Syncing' : app.apiStatus === 'offline' ? 'Offline' : 'Connecting'}
-          </span>
-          <span className="header-role-chip">{app.user.isSuperuser ? 'Admin' : app.user.role}</span>
+      <button type="button" className="neo-search" onClick={() => setSearchOpen(true)} aria-label="Open global search">
+        <Icon name="search" size={18} />
+        <span>Search records, suppliers, LPOs…</span>
+        <kbd>Ctrl K</kbd>
+      </button>
 
-          <div className="tafiti-header-popover-anchor">
-            <button
-              onClick={openNotifications}
-              title="Notifications"
-              aria-label={`Notifications${notificationCount ? `, ${notificationCount} unread` : ''}`}
-              aria-expanded={notificationsOpen}
-              className="header-notification-trigger tafiti-school-icon-button"
-              style={iconAction}
-            >
-              <Icon name={notificationCount ? 'notifications_active' : 'notifications'} size={16} />
-              {notificationCount > 0 && (
-                <span className="tafiti-notification-badge">{notificationCount > 9 ? '9+' : notificationCount}</span>
-              )}
-            </button>
+      <div className="neo-header-actions">
+        <span className={`neo-sync-state is-${app.apiStatus}`} title={`API status: ${app.apiStatus}`}><i />{app.apiStatus === 'live' ? 'Live' : app.apiStatus === 'loading' ? 'Syncing' : app.apiStatus === 'offline' ? 'Offline' : 'Connecting'}</span>
+        <span className="neo-property-chip"><Icon name="business" size={15} />{propertyName}</span>
 
-            {notificationsOpen && <>
-              <div className="notification-backdrop" onClick={() => setNotificationsOpen(false)} />
-              <section className="notification-panel" aria-label="Notifications">
-                <header className="tafiti-notification-header">
-                  <div className="tafiti-notification-title">
-                    <div>Notifications</div>
-                    <span>{notificationCount ? `${notificationCount} unread` : 'You are all caught up'}</span>
-                  </div>
-                  <button onClick={() => void loadNotifications()} title="Refresh notifications" aria-label="Refresh notifications" style={smallIconAction}>
-                    <Icon name="refresh" size={17} />
-                  </button>
-                  <button onClick={() => setNotificationsOpen(false)} title="Close notifications" aria-label="Close notifications" style={smallIconAction}>
-                    <Icon name="close" size={17} />
-                  </button>
-                </header>
+        <div className="neo-popover-anchor">
+          <button type="button" className="neo-header-icon" onClick={() => {
+            setProfileOpen(false)
+            setNotificationsOpen((open) => {
+              if (!open) void loadNotifications(false)
+              return !open
+            })
+          }} aria-label={`Notifications${unread ? `, ${unread} unread` : ''}`} aria-expanded={notificationsOpen}>
+            <Icon name={unread ? 'notifications_active' : 'notifications'} size={19} />
+            {unread > 0 && <b>{unread > 9 ? '9+' : unread}</b>}
+          </button>
 
-                <div className="notification-list">
-                  {notificationsLoading && <NotificationState icon="progress_activity" text="Loading your notifications…" />}
-                  {!notificationsLoading && notificationsError && <NotificationState icon="error" text="Notifications could not be loaded." detail={notificationsError} action={() => void loadNotifications()} />}
-                  {!notificationsLoading && !notificationsError && notifications.length === 0 && <NotificationState icon="notifications_none" text="No notifications yet" detail="Workflow updates and assigned tasks will appear here." />}
-                  {!notificationsLoading && !notificationsError && notifications.map((notification) => (
-                    <button
-                      key={notification.id}
-                      onClick={() => void readNotification(notification)}
-                      className="notification-item"
-                      aria-label={`${notification.title}${notification.is_read ? '' : ', unread'}`}
-                    >
-                      <span className={`tafiti-notification-icon ${notification.is_read ? 'is-read' : ''}`}>
-                        <Icon name={notification.is_read ? 'notifications' : 'notification_important'} size={18} />
-                      </span>
-                      <span className="tafiti-notification-copy">
-                        <span className="tafiti-notification-row-title">
-                          <span className={notification.is_read ? 'is-read' : ''}>{notification.title}</span>
-                          {!notification.is_read && <i aria-hidden="true" />}
-                        </span>
-                        <span className="tafiti-notification-message">{notification.message}</span>
-                        <span className="tafiti-notification-time">{notificationTime(notification.created_at)}</span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-
-                {notifications.length > 0 && (
-                  <footer className="tafiti-notification-footer">
-                    <button onClick={() => void readAllNotifications()} disabled={!notificationCount}>Mark all as read</button>
-                  </footer>
-                )}
-              </section>
-            </>}
-          </div>
-
-          <div className="tafiti-header-popover-anchor">
-            <button
-              onClick={() => setProfileOpen((open) => !open)}
-              className="header-profile-trigger tafiti-header-profile-trigger tafiti-school-profile"
-            >
-              <Avatar className="header-avatar" src={app.user.photoUrl} name={app.user.name} size={32} radius={16} />
-              <span className="header-user-copy tafiti-header-user-copy">
-                <span>{app.user.name}</span>
-                <small>{departmentLabel}</small>
-              </span>
-              <Icon name="expand_more" size={13} />
-            </button>
-
-            {profileOpen && <>
-              <div onClick={() => setProfileOpen(false)} className="tafiti-popover-backdrop" />
-              <div className="tafiti-profile-menu">
-                <div className="tafiti-profile-summary">
-                  <strong>{app.user.name}</strong>
-                  <span>{app.user.role}</span>
-                </div>
-                <button onClick={app.toggleMode} style={menuAction}>
-                  <Icon name={app.mode === 'dark' ? 'light_mode' : 'dark_mode'} size={17} />
-                  {app.mode === 'dark' ? 'Light appearance' : 'Dark appearance'}
-                </button>
-                {canSwitchModules(app.user) && (
-                  <button onClick={app.gotoModules} style={menuAction}>
-                    <Icon name="apps" size={17} />
-                    Switch workspace
-                  </button>
-                )}
-                <button onClick={app.logout} style={{ ...menuAction, color: 'var(--bad)' }}>
-                  <Icon name="logout" size={17} />
-                  Sign out
-                </button>
+          {notificationsOpen && <>
+            <button className="neo-popover-backdrop" aria-label="Close notifications" onClick={() => setNotificationsOpen(false)} />
+            <section className="neo-notification-panel" aria-label="Notifications">
+              <header><div><strong>Notifications</strong><span>{unread ? `${unread} unread` : 'All caught up'}</span></div><button className="neo-icon-button" onClick={() => void loadNotifications()} aria-label="Refresh notifications"><Icon name="refresh" size={17} /></button></header>
+              <div className="neo-notification-list">
+                {notificationsLoading && <NotificationState icon="progress_activity" title="Loading notifications" />}
+                {!notificationsLoading && notificationsError && <NotificationState icon="error" title="Could not load notifications" detail={notificationsError} action={() => void loadNotifications()} />}
+                {!notificationsLoading && !notificationsError && notifications.length === 0 && <NotificationState icon="notifications_none" title="No notifications yet" detail="Workflow updates and assigned tasks will appear here." />}
+                {!notificationsLoading && !notificationsError && notifications.map((notification) => <button key={notification.id} className={`neo-notification-item ${notification.is_read ? 'is-read' : ''}`} onClick={() => void readNotification(notification)}>
+                  <span className="neo-notification-icon"><Icon name={notification.is_read ? 'notifications' : 'notification_important'} size={17} /></span>
+                  <span><strong>{notification.title}</strong><small>{notification.message}</small><time>{notificationTime(notification.created_at)}</time></span>
+                  {!notification.is_read && <i />}
+                </button>)}
               </div>
-            </>}
-          </div>
+              {notifications.length > 0 && <footer><button type="button" onClick={() => void readAll()} disabled={!unread}>Mark all as read</button></footer>}
+            </section>
+          </>}
+        </div>
+
+        <div className="neo-popover-anchor">
+          <button type="button" className="neo-profile-trigger" onClick={() => {
+            setNotificationsOpen(false)
+            setProfileOpen((open) => !open)
+          }} aria-expanded={profileOpen}>
+            <Avatar src={app.user.photoUrl} name={app.user.name} size={34} radius={10} />
+            <span><strong>{app.user.name}</strong><small>{app.user.role}</small></span>
+            <Icon name="expand_more" size={15} />
+          </button>
+          {profileOpen && <>
+            <button className="neo-popover-backdrop" aria-label="Close profile menu" onClick={() => setProfileOpen(false)} />
+            <div className="neo-profile-menu">
+              <div className="neo-profile-summary"><Avatar src={app.user.photoUrl} name={app.user.name} size={42} radius={12} /><span><strong>{app.user.name}</strong><small>{app.user.designation || app.user.role}</small></span></div>
+              <button type="button" onClick={app.toggleMode}><Icon name={app.mode === 'dark' ? 'light_mode' : 'dark_mode'} size={17} /><span>{app.mode === 'dark' ? 'Light appearance' : 'Dark appearance'}</span></button>
+              {canSwitchModules(app.user) && <button type="button" onClick={app.gotoModules}><Icon name="apps" size={17} /><span>Switch workspace</span></button>}
+              <button type="button" className="is-danger" onClick={app.logout}><Icon name="logout" size={17} /><span>Sign out</span></button>
+            </div>
+          </>}
         </div>
       </div>
-
-      <div className="tafiti-school-breadcrumb-bar">
-        <div className="tafiti-school-breadcrumb">
-          <button type="button" onClick={() => app.navTo('dashboard', 'Dashboard')}>Home</button>
-          <Icon name="chevron_right" size={11} />
-          <strong>{app.crumb || 'Dashboard'}</strong>
-          <span>{pageDescription}</span>
-        </div>
-      </div>
-
-      <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
     </header>
-  )
+
+    <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
+  </>
 }
 
-function routeDescription(route: string, moduleName: string) {
-  const descriptions: Record<string, string> = {
-    dashboard: 'System at a glance',
-    'hr-dashboard': 'People and workforce overview',
-    'workflow-stores': 'Requests, stock and store handoffs',
-    'store-purchase-requests': 'Purchase requests from Stores',
-    'workflow-procure': 'Purchasing and supplier workflow',
-    'workflow-pay': 'Supplier invoices and payments',
-    suppliers: 'Manage supplier accounts',
-    supplierItems: 'Prices, quotations and supplied articles',
-    categories: 'Catalogue groups and item structure',
-    items: 'Goods, services and stock articles',
-    uoms: 'Units and article conversions',
-    itemUnits: 'Units and article conversions',
-    locations: 'Stores and stock locations',
-    employees: 'Employee records and assignments',
-    departments: 'Teams and operational departments',
-    reports: 'Analytics and operational insights',
-    reportview: 'Detailed operational report',
-    'audit-log': 'System activity and accountability',
-    'access-management': 'Roles, permissions and user access',
-    'hotel-profile': 'System configuration',
+function titleForRoute(route: string, crumb: string) {
+  const titles: Record<string, string> = {
+    dashboard: 'Dashboard',
+    'hr-dashboard': 'People dashboard',
+    'workflow-stores': 'Stores workflow',
+    'stock-on-hand': 'Stock on hand',
+    'store-purchase-requests': 'Purchase requests',
+    'workflow-procure': 'Procurement workbench',
+    'workflow-pay': 'Finance workbench',
+    suppliers: 'Suppliers',
+    supplierItems: 'Supplier quotations',
+    categories: 'Item categories',
+    items: 'Articles',
+    uoms: 'Units & conversions',
+    itemUnits: 'Units & conversions',
+    locations: 'Stores',
+    employees: 'Employees',
+    departments: 'Departments',
+    reports: 'Reports',
+    reportview: 'Report details',
+    'audit-log': 'Audit trail',
+    'access-management': 'User access',
+    'hotel-profile': 'Settings',
   }
-  return descriptions[route] || moduleName
+  return titles[route] || crumb || 'Workspace'
 }
 
-function NotificationState({ icon, text, detail, action }: { icon: string; text: string; detail?: string; action?: () => void }) {
-  return (
-    <div className="tafiti-notification-state">
-      <div>
-        <span><Icon name={icon} size={21} /></span>
-        <strong>{text}</strong>
-        {detail && <p>{detail}</p>}
-        {action && <button onClick={action}>Try again</button>}
-      </div>
-    </div>
-  )
+function descriptionForRoute(route: string, role: string) {
+  const descriptions: Record<string, string> = {
+    dashboard: 'Live operational priorities and recent activity',
+    'hr-dashboard': 'People, departments and workforce activity',
+    'workflow-stores': 'Request, approval and issue control',
+    'stock-on-hand': 'Live quantities by store and article',
+    'store-purchase-requests': 'Shortage-driven purchasing requests',
+    'workflow-procure': 'Requisitions, sourcing, LPOs and receiving',
+    'workflow-pay': 'Invoices, matching and supplier payments',
+    suppliers: 'Supplier accounts and trading status',
+    supplierItems: 'Supplier pricing and quotation history',
+    categories: 'Catalogue structure and item classification',
+    items: 'Article master data and inventory setup',
+    uoms: 'Purchasing, base and issue unit conversions',
+    itemUnits: 'Purchasing, base and issue unit conversions',
+    reports: 'Operational and management reporting',
+    'audit-log': 'System activity and accountability',
+    'access-management': 'Roles, accounts and permissions',
+    'hotel-profile': 'Property and application configuration',
+  }
+  return descriptions[route] || role || 'Operations'
 }
 
-function notificationTime(value: string): string {
+function NotificationState({ icon, title, detail, action }: { icon: string; title: string; detail?: string; action?: () => void }) {
+  return <div className="neo-notification-state"><Icon name={icon} size={22} /><strong>{title}</strong>{detail && <span>{detail}</span>}{action && <button onClick={action}>Try again</button>}</div>
+}
+
+function notificationTime(value: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ''
-  return new Intl.DateTimeFormat('en-UG', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    timeZone: 'Africa/Kampala',
-  }).format(date)
-}
-
-const iconAction: CSSProperties = {
-  width: 36,
-  height: 36,
-  border: '1px solid var(--border)',
-  borderRadius: 9,
-  background: '#fff',
-  display: 'grid',
-  placeItems: 'center',
-  color: 'var(--text-muted)',
-  cursor: 'pointer',
-  position: 'relative',
-}
-
-const smallIconAction: CSSProperties = {
-  width: 30,
-  height: 30,
-  border: 0,
-  borderRadius: 7,
-  background: 'transparent',
-  display: 'grid',
-  placeItems: 'center',
-  color: 'var(--text-muted)',
-  cursor: 'pointer',
-}
-
-const menuAction: CSSProperties = {
-  width: '100%',
-  height: 36,
-  border: 0,
-  borderRadius: 7,
-  background: 'transparent',
-  display: 'flex',
-  alignItems: 'center',
-  gap: 9,
-  padding: '0 10px',
-  color: 'var(--text-muted)',
-  font: 'inherit',
-  fontSize: 12,
-  fontWeight: 650,
-  cursor: 'pointer',
-  textAlign: 'left',
+  return new Intl.DateTimeFormat('en-UG', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Kampala' }).format(date)
 }
