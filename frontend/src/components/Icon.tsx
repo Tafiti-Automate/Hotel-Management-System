@@ -38,6 +38,11 @@ const SAFE_ALIASES: Record<string, string> = {
   shield: 'verified_user',
   verified: 'verified_user',
   inventory: 'inventory_2',
+  // These two symbols are not present in the locally bundled font subset.
+  // Use equivalent available symbols so their ligature names never render as
+  // visible text in compact quotation cards.
+  folder: 'inventory_2',
+  event_available: 'schedule',
   waving_hand: 'badge',
 }
 
