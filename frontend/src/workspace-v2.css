@@ -179,6 +179,27 @@
 .screen-app .procurement-record-row { min-height: 58px !important; border-bottom: 1px solid #e7edf5 !important; }
 .screen-app .procurement-record-row:hover { background: #f8fbff !important; }
 
+/* Supplier allocation choices are selectable records, not primary actions.
+   Keep their supporting quantities, price, lead time, and state legible when
+   selected instead of inheriting the generic solid-primary button treatment. */
+.screen-app .supplier-allocation-line.is-active,
+.screen-app .supplier-quote-choice.is-selected {
+  color: var(--text) !important;
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border)) !important;
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface)) !important;
+  box-shadow: inset 3px 0 0 var(--accent) !important;
+}
+
+.screen-app .supplier-allocation-line.is-active > span:first-child > small,
+.screen-app .supplier-quote-choice.is-selected > span:first-child > small,
+.screen-app .supplier-quote-choice.is-selected > span:nth-child(3) {
+  color: var(--text-muted) !important;
+}
+
+.screen-app .supplier-allocation-line.is-active > span:nth-child(2) { color: var(--warn) !important; }
+.screen-app .supplier-allocation-line.is-active > .ic { color: var(--text-faint) !important; }
+.screen-app .supplier-quote-choice.is-selected > span:last-child { color: var(--accent) !important; }
+
 .screen-app .workbench-metrics { gap: 11px !important; }
 .screen-app .workbench-metrics > div {
   min-height: 86px !important;
