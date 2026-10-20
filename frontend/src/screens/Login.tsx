@@ -56,14 +56,12 @@ export default function Login() {
       </div>
 
       <div className="neo-auth-brand-copy">
-        <span className="neo-auth-kicker">Secure staff workspace</span>
-        <h1>Run hotel operations from one controlled workspace.</h1>
-        <p>Procurement, stores, inventory, finance and people operations — with role-based access and traceable approvals.</p>
-        <div className="neo-auth-feature-grid">
-          <span><Icon name="verified_user" size={18} /><strong>Role controlled</strong><small>Users see only their assigned work.</small></span>
-          <span><Icon name="history" size={18} /><strong>Audit ready</strong><small>Workflow decisions remain traceable.</small></span>
-          <span><Icon name="inventory_2" size={18} /><strong>Operational</strong><small>Stock and purchasing stay connected.</small></span>
-          <span><Icon name="bar_chart" size={18} /><strong>Visible</strong><small>Managers see live workload and status.</small></span>
+        <span className="neo-auth-kicker">Hotel operations system</span>
+        <h1>One workspace for every operational shift.</h1>
+        <p>Access your property’s stores, purchasing, finance and workflow controls from one governed system.</p>
+        <div className="neo-auth-access-note">
+          <Icon name="verified_user" size={18} />
+          <span><strong>Authorised staff access</strong><small>Your available tools are determined by your assigned role and property.</small></span>
         </div>
       </div>
 
@@ -74,7 +72,7 @@ export default function Login() {
       <div className="neo-auth-form-wrap">
         <header className="neo-auth-form-heading">
           <span className="neo-auth-mobile-logo"><Icon name="hotel" size={21} color="#fff" fill /></span>
-          <div><span>Welcome back</span><h2>Sign in to your workspace</h2><p>Use your staff username or employee ID.</p></div>
+          <div><span>Staff access</span><h2>Sign in</h2><p>Use your staff username or employee ID to continue.</p></div>
         </header>
 
         {authMessage && <div className="neo-auth-notice"><Icon name="info" size={18} /><span>{authMessage}</span></div>}

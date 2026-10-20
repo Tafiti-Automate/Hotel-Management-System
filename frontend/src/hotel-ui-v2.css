@@ -706,6 +706,328 @@ body { margin: 0; background: var(--neo-canvas); }
 .mode-dark .neo-skeleton-line, .mode-dark .neo-skeleton-kpis > div, .mode-dark .neo-skeleton-panel { background: linear-gradient(90deg,#102238 25%,#162b42 50%,#102238 75%); background-size: 220% 100%; }
 
 /* =========================================================
+   REPORTS AND AUTHENTICATION REFINEMENT
+   ========================================================= */
+/* The report catalogue intentionally lives in the active Hotel ERP system.
+   It previously depended on a retired stylesheet, leaving native button
+   styling and unstructured text visible in production. */
+.screen-app .neo-workspace .tafiti-report-center {
+  max-width: 1420px;
+  margin: 0 auto;
+  color: var(--neo-text);
+}
+.screen-app .neo-workspace .tafiti-report-center-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 4px 0 22px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid var(--neo-border-soft);
+}
+.screen-app .neo-workspace .tafiti-report-center-heading {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+}
+.screen-app .neo-workspace .tafiti-report-center-icon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #cfe0f5;
+  border-radius: 10px;
+  color: var(--neo-blue-700);
+  background: #edf5ff;
+}
+.screen-app .neo-workspace .tafiti-report-center-heading h1 {
+  margin: 0;
+  color: #142844;
+  font-size: clamp(26px, 2vw, 31px);
+  line-height: 1.1;
+  letter-spacing: -.035em;
+  font-weight: 760;
+}
+.screen-app .neo-workspace .tafiti-report-center-heading p {
+  max-width: 670px;
+  margin: 6px 0 0;
+  color: #66758a;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.screen-app .neo-workspace .tafiti-report-center-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 10px;
+  color: #8190a5;
+  font-size: 10px;
+  font-weight: 700;
+}
+.screen-app .neo-workspace .tafiti-report-center-meta i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #b3c0d0;
+}
+.screen-app .neo-workspace .tafiti-report-search {
+  position: relative;
+  width: min(350px, 32vw);
+  min-width: 260px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  padding: 0 11px;
+  border: 1px solid #d5e0ec;
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 34, 60, .02);
+}
+.screen-app .neo-workspace .tafiti-report-search:focus-within {
+  border-color: #82ace3;
+  box-shadow: 0 0 0 3px rgba(23, 105, 224, .10);
+}
+.screen-app .neo-workspace .tafiti-report-search > .ic { flex: none; color: #8a99ac; }
+.screen-app .neo-workspace .tafiti-report-search input {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  padding: 0 8px;
+  border: 0;
+  outline: 0;
+  color: #1b2a42;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+}
+.screen-app .neo-workspace .tafiti-report-search input::placeholder { color: #98a6b8; }
+.screen-app .neo-workspace .tafiti-report-search button {
+  width: 27px;
+  height: 27px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: #697a91;
+  background: transparent;
+  cursor: pointer;
+}
+.screen-app .neo-workspace .tafiti-report-search button:hover { color: #1c5db2; background: #f0f5fb; }
+.screen-app .neo-workspace .tafiti-report-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px;
+}
+.screen-app .neo-workspace .tafiti-report-group-card {
+  overflow: hidden;
+  border: 1px solid #dfe7f0;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: var(--neo-shadow);
+}
+.screen-app .neo-workspace .tafiti-report-group-header {
+  min-height: 94px;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 15px 16px;
+  border-bottom: 1px solid #e8eef5;
+  background: #fbfcfe;
+}
+.screen-app .neo-workspace .tafiti-report-group-icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  color: #2a69bc;
+  background: #edf5ff;
+}
+.screen-app .neo-workspace .tafiti-report-group-header > div { min-width: 0; }
+.screen-app .neo-workspace .tafiti-report-group-header h2 {
+  margin: 0;
+  color: #23344f;
+  font-size: 14px;
+  line-height: 1.25;
+  letter-spacing: -.012em;
+  font-weight: 760;
+}
+.screen-app .neo-workspace .tafiti-report-group-header p {
+  margin: 4px 0 0;
+  color: #748298;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.screen-app .neo-workspace .tafiti-report-group-count {
+  min-width: 25px;
+  height: 25px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #dce7f4;
+  border-radius: 50%;
+  color: #517197;
+  background: #f2f6fb;
+  font-size: 10px;
+  font-weight: 800;
+}
+.screen-app .neo-workspace .tafiti-report-group-list { display: block; }
+.screen-app .neo-workspace .tafiti-report-link {
+  width: 100%;
+  min-height: 74px;
+  display: grid;
+  grid-template-columns: 33px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 16px;
+  border: 0;
+  border-bottom: 1px solid #edf1f5;
+  color: inherit;
+  background: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background .14s ease;
+}
+.screen-app .neo-workspace .tafiti-report-link:last-child { border-bottom: 0; }
+.screen-app .neo-workspace .tafiti-report-link:hover { background: #f7faff; }
+.screen-app .neo-workspace .tafiti-report-link:focus-visible { outline: 2px solid #3a7cdb; outline-offset: -2px; }
+.screen-app .neo-workspace .tafiti-report-link-icon {
+  width: 33px;
+  height: 33px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #e3eaf3;
+  border-radius: 8px;
+  color: #667a94;
+  background: #f7f9fc;
+}
+.screen-app .neo-workspace .tafiti-report-link:hover .tafiti-report-link-icon { color: #2867bb; border-color: #d4e4f8; background: #edf5ff; }
+.screen-app .neo-workspace .tafiti-report-link-copy { min-width: 0; }
+.screen-app .neo-workspace .tafiti-report-link-copy strong {
+  display: block;
+  overflow: hidden;
+  color: #263750;
+  font-size: 12px;
+  line-height: 1.35;
+  font-weight: 740;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.screen-app .neo-workspace .tafiti-report-link-copy small {
+  display: -webkit-box;
+  margin-top: 3px;
+  overflow: hidden;
+  color: #78879a;
+  font-size: 10.5px;
+  line-height: 1.38;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.screen-app .neo-workspace .tafiti-report-link em { display: none; }
+.screen-app .neo-workspace .tafiti-report-link-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #55708f;
+  font-size: 10.5px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.screen-app .neo-workspace .tafiti-report-link:hover .tafiti-report-link-open { color: #1f62b7; }
+.screen-app .neo-workspace .tafiti-card-empty {
+  min-height: 260px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 7px;
+  border: 1px dashed #ccd8e6;
+  border-radius: 12px;
+  color: #6f7e91;
+  background: #fff;
+  text-align: center;
+}
+.screen-app .neo-workspace .tafiti-card-empty > span { color: #6b8cb6; }
+.screen-app .neo-workspace .tafiti-card-empty strong { color: #2b3c56; font-size: 13px; }
+.screen-app .neo-workspace .tafiti-card-empty p { margin: 0; font-size: 11px; }
+
+/* A deliberately quiet sign-in surface: hotel identity and access controls,
+   without decorative feature tiles or marketing-style visual effects. */
+.screen-login { background: #edf2f7 !important; }
+.neo-auth-page {
+  grid-template-columns: minmax(430px, 42%) minmax(520px, 58%);
+  background: #edf2f7;
+}
+.neo-auth-brand {
+  padding: 46px clamp(44px, 5vw, 84px);
+  background: #102e50;
+}
+.neo-auth-brand::after { display: none; }
+.neo-auth-logo, .neo-auth-mobile-logo {
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 10px;
+  background: #1e64b4;
+  box-shadow: none;
+}
+.neo-auth-brand-top strong { font-size: 17px; font-weight: 760; }
+.neo-auth-brand-top small { color: #a8bfd5; font-size: 10px; }
+.neo-auth-brand-copy { max-width: 500px; }
+.neo-auth-kicker { margin-bottom: 14px; color: #9fc0df; letter-spacing: .1em; }
+.neo-auth-brand-copy h1 { max-width: 470px; font-size: clamp(34px, 3.5vw, 48px); line-height: 1.08; font-weight: 740; letter-spacing: -.04em; }
+.neo-auth-brand-copy > p { max-width: 470px; margin-top: 17px; color: #c1d0df; font-size: 13px; line-height: 1.65; }
+.neo-auth-access-note {
+  max-width: 440px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 28px;
+  padding: 14px 0 0;
+  border-top: 1px solid rgba(218, 234, 249, .20);
+  color: #a9c8e8;
+}
+.neo-auth-access-note > span { display: grid; gap: 3px; }
+.neo-auth-access-note strong { color: #f3f8fd; font-size: 11px; font-weight: 720; }
+.neo-auth-access-note small { color: #aec2d6; font-size: 10px; line-height: 1.5; }
+.neo-auth-brand footer { color: #91aac2; }
+.neo-auth-form-panel { padding: 42px; background: #edf2f7; }
+.neo-auth-form-wrap {
+  width: min(100%, 454px);
+  padding: 38px 40px 30px;
+  border: 1px solid #dce5ef;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 14px 34px rgba(25, 53, 86, .08);
+}
+.neo-auth-form-heading { margin-bottom: 28px; }
+.neo-auth-form-heading > div > span { color: #52789f; font-size: 9.5px; letter-spacing: .1em; }
+.neo-auth-form-heading h2 { margin: 5px 0 6px; color: #18314f; font-size: 28px; font-weight: 750; }
+.neo-auth-form-heading p { color: #718197; font-size: 11.5px; }
+.neo-auth-form > label, .neo-auth-password-label label { color: #354962; font-size: 10.5px; font-weight: 720; }
+.neo-auth-input { height: 46px; border-radius: 8px; box-shadow: none; }
+.screen-login .neo-auth-input input {
+  color: #17243b !important;
+  background: transparent !important;
+}
+.screen-login .neo-auth-input input:-webkit-autofill,
+.screen-login .neo-auth-input input:-webkit-autofill:hover,
+.screen-login .neo-auth-input input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #17243b;
+  -webkit-box-shadow: 0 0 0 1000px #fff inset;
+  transition: background-color 9999s ease-out 0s;
+}
+.neo-auth-submit { height: 46px; border-radius: 8px; box-shadow: none; font-weight: 740; }
+.neo-auth-submit:hover:not(:disabled) { background: #155db4; }
+.neo-auth-security { margin-top: 20px; font-size: 9px; }
+
+/* =========================================================
    RESPONSIVE
    ========================================================= */
 @media (max-width: 1320px) {
@@ -717,6 +1039,11 @@ body { margin: 0; background: var(--neo-canvas); }
 }
 
 @media (max-width: 1040px) {
+  .neo-auth-page { grid-template-columns: minmax(360px, .88fr) minmax(0, 1.12fr); }
+  .neo-auth-brand { padding: 38px 34px; }
+  .neo-auth-form-panel { padding: 28px; }
+  .neo-auth-form-wrap { padding: 32px; }
+  .screen-app .neo-workspace .tafiti-report-groups { grid-template-columns: 1fr; }
   .neo-sidebar { width: min(86vw, 300px); transform: translateX(-102%); box-shadow: 20px 0 60px rgba(0,0,0,.26); }
   .neo-sidebar.is-collapsed { width: min(86vw, 300px); }
   .neo-sidebar.is-mobile-open { transform: translateX(0); }
@@ -742,9 +1069,17 @@ body { margin: 0; background: var(--neo-canvas); }
   .neo-auth-page { grid-template-columns: 1fr; }
   .neo-auth-brand { display: none; }
   .neo-auth-form-panel { min-height: 100vh; padding: 26px 18px; }
+  .neo-auth-form-wrap { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
   .neo-auth-mobile-logo { display: grid; }
   .neo-auth-form-heading { align-items: flex-start; }
   .neo-auth-form-heading h2 { font-size: 23px; }
+  .screen-app .neo-workspace .tafiti-report-center-header { align-items: stretch; flex-direction: column; padding-bottom: 18px; margin-bottom: 16px; }
+  .screen-app .neo-workspace .tafiti-report-search { width: 100%; min-width: 0; }
+  .screen-app .neo-workspace .tafiti-report-groups { gap: 12px; }
+  .screen-app .neo-workspace .tafiti-report-group-header { min-height: 82px; padding: 13px; }
+  .screen-app .neo-workspace .tafiti-report-link { min-height: 68px; padding: 11px 13px; }
+  .screen-app .neo-workspace .tafiti-report-link-open { font-size: 0; }
+  .screen-app .neo-workspace .tafiti-report-link-open .ic { font-size: 15px; }
   .neo-launchpad-header { height: 62px; padding: 0 14px; }
   .neo-launchpad-account > span:not(.neo-launchpad-context), .neo-launchpad-context { display: none; }
   .neo-launchpad-main { padding: 28px 14px 34px; }
