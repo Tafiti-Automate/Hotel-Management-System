@@ -90,7 +90,7 @@ export const cfg: Record<string, EntityConfig> = {
     ],
     fields: [
       { key: 'name', label: 'Group name', type: 'text', placeholder: 'e.g. Beverages or Soft Drinks' },
-      { key: 'code', label: 'Code', type: 'text' },
+      { key: 'code', label: 'Code', type: 'text', placeholder: 'Generated after saving', hint: 'Generated automatically from the group name.' },
       { key: 'parent', label: 'Major group (optional)', type: 'select', opts: 'categoryParents', hint: 'Leave blank to create a Major Group. Select a Major Group to create an Item Group beneath it.' },
       { key: 'description', label: 'Description', type: 'textarea' },
       { key: 'status', label: 'Status', type: 'select', opts: 'genStatus' },

@@ -142,6 +142,17 @@ def test_category_hierarchy_reports_descendant_items_and_prevents_cycles():
 
 
 @pytest.mark.django_db
+def test_category_codes_are_generated_by_the_server_and_ignore_client_input():
+    serializer = CategorySerializer(data={"name": "Vodka", "code": "MANUAL-CODE"})
+
+    assert serializer.is_valid(), serializer.errors
+    category = serializer.save()
+
+    assert category.code == "VOD"
+    assert CategorySerializer(category).data["code"] == "VOD"
+
+
+@pytest.mark.django_db
 def test_item_import_creates_major_group_item_group_and_article_atomically():
     user = get_user_model().objects.create_superuser(
         username="item-import-admin",

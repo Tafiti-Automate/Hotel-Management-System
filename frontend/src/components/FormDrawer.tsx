@@ -342,7 +342,7 @@ export default function FormDrawer() {
             const identityLocked = false
             const fieldLocked = baseUnitLocked && fd.key === 'uom'
             const dependencyLocked = f.entity === 'items' && fd.opts === 'itemGroups' && !values.majorGroup
-            const systemGenerated = f.entity === 'items' && fd.key === 'sku'
+            const systemGenerated = (f.entity === 'items' && fd.key === 'sku') || (f.entity === 'categories' && fd.key === 'code')
             const selectLocked = fieldLocked || dependencyLocked
             return (
               <div key={fd.key}>

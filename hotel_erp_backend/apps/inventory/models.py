@@ -93,10 +93,13 @@ class Category(BaseModel):
         return candidate
 
     def save(self, *args, **kwargs):
+        # Catalogue codes are system references, not user-entered values.
+        # Existing codes remain untouched, while every new Major Group or Item
+        # Group receives a unique code derived from its name.
         self.code = (
-            self.code.strip().upper()
-            if self.code
-            else self.next_code(self.name, exclude_id=self.pk)
+            self.next_code(self.name, exclude_id=self.pk)
+            if self._state.adding or not self.code
+            else self.code.strip().upper()
         )
         self.clean()
         super().save(*args, **kwargs)

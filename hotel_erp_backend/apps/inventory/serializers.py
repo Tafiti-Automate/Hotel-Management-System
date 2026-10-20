@@ -77,6 +77,7 @@ class CategorySerializer(serializers.ModelSerializer):
         )
         read_only_fields = (
             "id",
+            "code",
             "parent_name",
             "hierarchy_level",
             "group_type",
@@ -136,15 +137,6 @@ class CategorySerializer(serializers.ModelSerializer):
     def get_item_count(self, category):
         _, _, totals = self._category_stats()
         return totals.get(category.id, 0)
-
-    def validate_code(self, value):
-        code = value.strip().upper()
-        matching_codes = Category.objects.filter(code__iexact=code)
-        if self.instance:
-            matching_codes = matching_codes.exclude(pk=self.instance.pk)
-        if code and matching_codes.exists():
-            raise serializers.ValidationError("A category with this code already exists.")
-        return code
 
     def validate(self, attrs):
         attrs = super().validate(attrs)

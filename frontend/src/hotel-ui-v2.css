@@ -518,9 +518,12 @@ body { margin: 0; background: var(--neo-canvas); }
 .neo-workspace .ds-eyebrow { color: var(--neo-blue-600) !important; font-size: 7.5px !important; font-weight: 850 !important; letter-spacing: .08em !important; text-transform: uppercase !important; }
 .neo-workspace .ds-hero h1 { margin: 3px 0 3px !important; font-size: 23px !important; line-height: 1 !important; }
 .neo-workspace .ds-hero p { margin: 0 !important; color: #7d8a9d !important; font-size: 9.5px !important; }
+.neo-workspace .ds-hero-actions { margin-left: auto; display: flex; align-items: center; gap: 7px; }
 .neo-workspace .ds-refresh { margin-left: auto !important; }
 .neo-workspace .ds-btn { min-height: 35px !important; padding: 0 11px !important; border-radius: 8px !important; font-size: 9px !important; font-weight: 730 !important; }
 .neo-workspace .ds-btn-secondary { border: 1px solid #d8e1eb !important; color: #52647d !important; background: #fff !important; box-shadow: 0 1px 2px rgba(20,45,75,.025) !important; }
+.neo-workspace .ds-hero-actions .ds-refresh { margin-left: 0 !important; }
+.neo-workspace .ds-btn:disabled { cursor: not-allowed !important; opacity: .52 !important; }
 .neo-workspace .ds-btn-danger { border: 1px solid #efb3b9 !important; color: var(--neo-danger) !important; background: #fff !important; }
 .neo-workspace .ds-alert { margin-bottom: 11px !important; padding: 9px 11px !important; border: 1px solid #f2c1c6 !important; border-radius: 8px !important; color: #b23b46 !important; background: #fff1f2 !important; font-size: 9px !important; }
 .neo-workspace .ds-tabs { margin: 0 0 11px !important; padding: 4px !important; display: flex !important; gap: 3px !important; border: 1px solid var(--neo-border) !important; border-radius: 9px !important; background: #fff !important; box-shadow: var(--neo-shadow) !important; }
@@ -553,6 +556,10 @@ body { margin: 0; background: var(--neo-canvas); }
 .neo-workspace .ds-table td { padding: 9px !important; color: #41536e !important; font-size: 8.5px !important; }
 .neo-workspace .ds-table td strong { color: #2d405b !important; font-size: 9px !important; }
 .neo-workspace .ds-table td small { color: #929dad !important; font-size: 7.5px !important; }
+.neo-workspace .ds-selectable-row { cursor: pointer; outline: none; }
+.neo-workspace .ds-selectable-row.is-selected td { background: #eaf3ff !important; }
+.neo-workspace .ds-selectable-row.is-selected td:first-child { box-shadow: inset 3px 0 0 var(--neo-blue-600); }
+.neo-workspace .ds-selectable-row:focus-visible td { background: #f3f8ff !important; }
 .neo-workspace .ds-add-line { margin: 0 14px 13px !important; padding: 10px !important; border: 1px dashed #ccd9e8 !important; border-radius: 9px !important; background: #f9fbfd !important; }
 .neo-workspace .ds-sticky-action, .neo-workspace .ds-approval-actions { padding: 11px 14px !important; border-top: 1px solid #e8eef4 !important; background: #fbfcfe !important; }
 .neo-workspace .ds-sticky-action span { color: #7d8b9e !important; font-size: 8.5px !important; }
