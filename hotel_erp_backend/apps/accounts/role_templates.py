@@ -61,7 +61,7 @@ ROLE_SPECS = {
             "departments": ["department", "branch"],
             "employees": ["employee"],
             "inventory": [
-                "item", "storelocation", "storekeeperassignment", "unitofmeasure",
+                "category", "item", "itemunitprice", "storelocation", "storekeeperassignment", "unitofmeasure",
                 "inventorybalance", "storerequisition", "storerequisitionitem",
                 "inventorybatch", "stockledger",
             ],
