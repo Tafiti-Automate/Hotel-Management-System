@@ -173,8 +173,17 @@
 .screen-app .finance-workbench .workbench-grid,
 .screen-app .inventory-workbench .workbench-grid { gap: 14px !important; }
 
-.screen-app .procurement-queue-card,
-.screen-app .procurement-detail-panel { overflow: hidden !important; }
+.screen-app .procurement-queue-card { overflow: hidden !important; }
+
+/* The procurement action pane is intentionally height-limited and sticky.
+   It must retain its own vertical scroll area so supplier selections and LPO
+   fields below the fold are reachable. */
+.screen-app .procurement-detail-panel {
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
 
 .screen-app .procurement-record-row { min-height: 58px !important; border-bottom: 1px solid #e7edf5 !important; }
 .screen-app .procurement-record-row:hover { background: #f8fbff !important; }
