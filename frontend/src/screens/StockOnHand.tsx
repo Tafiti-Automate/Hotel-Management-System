@@ -39,7 +39,10 @@ export default function StockOnHand() {
   const [sortByStore, setSortByStore] = useState(false)
   const [useBaseUnits, setUseBaseUnits] = useState(true)
   const [evaluation, setEvaluation] = useState<'ave' | 'price' | 'epi' | 'exp'>('ave')
-  const [optionsOpen, setOptionsOpen] = useState(true)
+  // The frequently used filters are always available in the results toolbar.
+  // Keep the full control form available without making every visit begin in
+  // a dense configuration state.
+  const [optionsOpen, setOptionsOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selected, setSelected] = useState<Row | null>(null)
@@ -122,7 +125,7 @@ export default function StockOnHand() {
       if (stockState === 'zero' && num(row.quantity_in_stock) !== 0) return false
       if (stockState === 'below-minimum' && !Boolean(row.is_below_reorder)) return false
       if (!needle) return true
-      return [row.item_name, row.item_sku, row.category_name, row.store_name, row.base_unit_name]
+      return [row.item_name, row.item_sku, `${id(row.item_name)} · ${id(row.item_sku)}`, row.category_name, row.store_name, row.base_unit_name]
         .some((value) => id(value).toLowerCase().includes(needle))
     })
     return filtered.sort((left, right) => {
@@ -174,7 +177,7 @@ export default function StockOnHand() {
 
     <section className="soh-options" aria-label="Stock on Hand Control options">
       <button type="button" className="soh-options-title" onClick={() => setOptionsOpen((value) => !value)} aria-expanded={optionsOpen}>
-        <span><Icon name="tune" size={17} /><strong>Option: SOH Control</strong><small>Cost Center / Store, Article and stock position criteria</small></span>
+        <span><Icon name="tune" size={17} /><strong>Advanced stock controls</strong><small>Store, article, unit and valuation criteria</small></span>
         <Icon name={optionsOpen ? 'expand_less' : 'expand_more'} size={18} />
       </button>
       {optionsOpen && <div className="soh-option-grid">
@@ -202,7 +205,17 @@ export default function StockOnHand() {
       <div className="soh-toolbar">
         <div className="soh-search">
           <Icon name="search" size={17} />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Article, SKU, category or store…" />
+          <input
+            aria-label="Quickly find an article or SKU"
+            list="soh-article-suggestions"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Quick find an article or SKU…"
+          />
+          {query && <button className="soh-search-clear" type="button" aria-label="Clear article search" onClick={() => setQuery('')}><Icon name="close" size={15} /></button>}
+          <datalist id="soh-article-suggestions">
+            {articleOptions.map((article) => <option key={article.id} value={article.label} />)}
+          </datalist>
         </div>
         <select className="soh-store-select" value={storeId} onChange={(event) => setStoreId(event.target.value)}>
           <option value="">All stores</option>

@@ -38,6 +38,10 @@ const SAFE_ALIASES: Record<string, string> = {
   shield: 'verified_user',
   verified: 'verified_user',
   inventory: 'inventory_2',
+  // The subset includes the down chevron but omits `expand_less`. Reuse the
+  // available glyph and rotate it below so the ligature name never leaks into
+  // the interface as visible text.
+  expand_less: 'expand_more',
   // These two symbols are not present in the locally bundled font subset.
   // Use equivalent available symbols so their ligature names never render as
   // visible text in compact quotation cards.
@@ -49,6 +53,9 @@ const SAFE_ALIASES: Record<string, string> = {
 /** Material Symbols Rounded glyph. */
 export function Icon({ name, size = 20, color, fill, weight, style }: IconProps) {
   const safeName = SAFE_ALIASES[name] || name
+  const aliasStyle = name === 'expand_less' && safeName === 'expand_more'
+    ? { transform: 'rotate(180deg)' }
+    : null
   const fvs: string[] = []
   if (fill) fvs.push("'FILL' 1")
   if (weight) fvs.push(`'wght' ${weight}`)
@@ -60,6 +67,7 @@ export function Icon({ name, size = 20, color, fill, weight, style }: IconProps)
         fontSize: size,
         color,
         ...(fvs.length ? { fontVariationSettings: fvs.join(',') } : null),
+        ...aliasStyle,
         ...style,
       }}
     >
