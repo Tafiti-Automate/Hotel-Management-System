@@ -29,6 +29,9 @@ export default function StockOnHand() {
   const [stores, setStores] = useState<Row[]>([])
   const [storeId, setStoreId] = useState('')
   const [query, setQuery] = useState('')
+  const [category, setCategory] = useState('')
+  const [stockState, setStockState] = useState<'all' | 'positive' | 'zero' | 'below-minimum'>('all')
+  const [sortBy, setSortBy] = useState<'article' | 'store' | 'quantity' | 'value'>('article')
   const [lowOnly, setLowOnly] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -67,16 +70,30 @@ export default function StockOnHand() {
     return Array.from(unique.values())
   }, [balances, stores])
 
+  const categoryOptions = useMemo(() => Array.from(new Set(
+    balances.map((row) => id(row.category_name)).filter(Boolean),
+  )).sort((left, right) => left.localeCompare(right)), [balances])
+
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase()
-    return balances.filter((row) => {
+    const filtered = balances.filter((row) => {
       if (storeId && id(row.store) !== storeId) return false
-      if (lowOnly && !Boolean(row.is_below_reorder) && num(row.quantity_in_stock) > 0) return false
+      if (category && id(row.category_name) !== category) return false
+      if (lowOnly && !Boolean(row.is_below_reorder)) return false
+      if (stockState === 'positive' && num(row.quantity_in_stock) <= 0) return false
+      if (stockState === 'zero' && num(row.quantity_in_stock) !== 0) return false
+      if (stockState === 'below-minimum' && !Boolean(row.is_below_reorder)) return false
       if (!needle) return true
       return [row.item_name, row.item_sku, row.category_name, row.store_name, row.base_unit_name]
         .some((value) => id(value).toLowerCase().includes(needle))
     })
-  }, [balances, storeId, query, lowOnly])
+    return filtered.sort((left, right) => {
+      if (sortBy === 'quantity') return num(left.quantity_in_stock) - num(right.quantity_in_stock)
+      if (sortBy === 'value') return num(right.total_value) - num(left.total_value)
+      if (sortBy === 'store') return id(left.store_name).localeCompare(id(right.store_name)) || id(left.item_name).localeCompare(id(right.item_name))
+      return id(left.item_name).localeCompare(id(right.item_name)) || id(left.store_name).localeCompare(id(right.store_name))
+    })
+  }, [balances, storeId, category, query, lowOnly, stockState, sortBy])
 
   const inventoryValue = visible.reduce((total, row) => total + num(row.total_value), 0)
   const availableValue = visible.reduce((total, row) => total + num(row.available_value), 0)
@@ -91,7 +108,7 @@ export default function StockOnHand() {
         <div>
           <div className="soh-eyebrow">Inventory control</div>
           <h1>Stock on Hand</h1>
-          <p>Live posted inventory by store. GRN receipts appear here after inventory posting.</p>
+          <p>Live posted inventory by store. Filter the stock position the same way Stores controls Stock on Hand.</p>
         </div>
       </div>
       <button className="soh-refresh" type="button" onClick={() => void load()} disabled={loading}>
@@ -118,9 +135,25 @@ export default function StockOnHand() {
           <option value="">All stores</option>
           {storeOptions.map((store) => <option key={id(store.id)} value={id(store.id)}>{id(store.name)}</option>)}
         </select>
+        <select className="soh-store-select" aria-label="Filter by item group" value={category} onChange={(event) => setCategory(event.target.value)}>
+          <option value="">All item groups</option>
+          {categoryOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+        </select>
+        <select className="soh-store-select" aria-label="Filter by stock position" value={stockState} onChange={(event) => setStockState(event.target.value as typeof stockState)}>
+          <option value="all">All stock positions</option>
+          <option value="positive">SOH &gt; 0</option>
+          <option value="zero">SOH = 0</option>
+          <option value="below-minimum">SOH at / below minimum</option>
+        </select>
         <button className={`soh-filter ${lowOnly ? 'active' : ''}`} type="button" onClick={() => setLowOnly((value) => !value)}>
           <Icon name="warning" size={16} />Low stock only
         </button>
+        <select className="soh-store-select soh-sort-select" aria-label="Sort stock results" value={sortBy} onChange={(event) => setSortBy(event.target.value as typeof sortBy)}>
+          <option value="article">Sort: Article</option>
+          <option value="store">Sort: Store</option>
+          <option value="quantity">Sort: Lowest SOH</option>
+          <option value="value">Sort: Highest value</option>
+        </select>
       </div>
 
       <div className="soh-store-tabs" aria-label="Store filter">

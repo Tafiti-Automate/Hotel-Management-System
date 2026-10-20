@@ -8,7 +8,10 @@ from rest_framework.test import APIClient
 from apps.accounts.role_templates import sync_client_roles
 from apps.departments.models import Branch, Department
 from apps.employees.models import Employee
-from apps.inventory.models import Category, InventoryBalance, Item, StockIssue, StoreLocation, UnitOfMeasure
+from apps.inventory.models import (
+    Category, InventoryBalance, Item, StockCount, StockIssue, StockLedger,
+    StockTransfer, StoreKeeperAssignment, StoreLocation, UnitOfMeasure,
+)
 from apps.notifications.models import Notification
 from apps.procurement.models import PurchaseOrder, PurchaseOrderItem, PurchaseRequisition, RequisitionItem
 from apps.vendors.models import Supplier
@@ -36,6 +39,7 @@ def ctx(db):
     hu, he = employee("dept-hod", "Department Head", department, branch)
     cu, ce = employee("dept-cost", "Cost Controller", department, branch)
     ku, ke = employee("dept-keeper", "Store Keeper", department, branch)
+    StoreKeeperAssignment.objects.create(store=main, employee=ke)
     return locals()
 
 
@@ -99,3 +103,53 @@ def test_store_keeper_verifies_grn_before_soh_increases(ctx):
     posted = keeper.post(f"/api/v1/grns/{grn}/post-to-inventory/", {}, format="json")
     assert posted.status_code == 200 and posted.data["status"] == "posted"
     assert InventoryBalance.objects.get(item=ctx["item"], store=ctx["main"]).quantity_in_stock == before + Decimal("4.00")
+
+
+@pytest.mark.django_db
+def test_store_keeper_transfer_and_count_controls_are_assigned_store_scoped(ctx):
+    unassigned = StoreLocation.objects.create(branch=ctx["branch"], name="Unassigned Store Workflow")
+    visible_transfer = StockTransfer.objects.create(
+        from_store=ctx["main"], to_store=ctx["other"], requested_by=ctx["ke"],
+    )
+    hidden_transfer = StockTransfer.objects.create(
+        from_store=ctx["other"], to_store=unassigned, requested_by=ctx["ke"],
+    )
+    StockCount.objects.create(store=ctx["main"], conducted_by=ctx["ke"])
+    StockCount.objects.create(store=ctx["other"], conducted_by=ctx["ke"])
+    StockLedger.objects.create(item=ctx["item"], store=ctx["main"], quantity_in=Decimal("1.00"), reference_type="stock_count", reference_id=visible_transfer.pk)
+    StockLedger.objects.create(item=ctx["item"], store=ctx["other"], quantity_in=Decimal("1.00"), reference_type="stock_count", reference_id=hidden_transfer.pk)
+
+    keeper = APIClient(); keeper.force_authenticate(ctx["ku"])
+    transfers = keeper.get("/api/v1/stock-transfers/")
+    transfer_rows = transfers.data.get("results", transfers.data)
+    assert {row["id"] for row in transfer_rows} == {str(visible_transfer.pk)}
+    counts = keeper.get("/api/v1/stock-counts/")
+    count_rows = counts.data.get("results", counts.data)
+    assert {str(row["store"]) for row in count_rows} == {str(ctx["main"].pk)}
+    ledgers = keeper.get("/api/v1/stock-ledger/")
+    ledger_rows = ledgers.data.get("results", ledgers.data)
+    assert {str(row["store"]) for row in ledger_rows} == {str(ctx["main"].pk)}
+
+    blocked_transfer = keeper.post(
+        "/api/v1/stock-transfers/",
+        {"from_store": str(ctx["other"].pk), "to_store": str(ctx["main"].pk)},
+        format="json",
+    )
+    assert blocked_transfer.status_code == 403
+    created_transfer = keeper.post(
+        "/api/v1/stock-transfers/",
+        {"from_store": str(ctx["main"].pk), "to_store": str(ctx["other"].pk)},
+        format="json",
+    )
+    assert created_transfer.status_code == 201, created_transfer.data
+    assert str(created_transfer.data["requested_by"]) == str(ctx["ke"].pk)
+
+    blocked_count = keeper.post(
+        "/api/v1/stock-counts/", {"store": str(ctx["other"].pk), "conducted_by": str(ctx["ke"].pk)}, format="json",
+    )
+    assert blocked_count.status_code == 403
+    created_count = keeper.post(
+        "/api/v1/stock-counts/", {"store": str(ctx["main"].pk), "conducted_by": str(ctx["ke"].pk)}, format="json",
+    )
+    assert created_count.status_code == 201, created_count.data
+    assert str(created_count.data["conducted_by"]) == str(ctx["ke"].pk)

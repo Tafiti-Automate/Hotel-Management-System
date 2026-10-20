@@ -30,11 +30,18 @@ const roleNavigation: Record<string, NavGroup[]> = {
   'store keeper': [
     { heading: 'Stores', items: [
       { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
-      { route: 'workflow-stores', label: 'Issue queue', icon: 'inventory' },
-      { route: 'stock-on-hand', label: 'Stock on hand', icon: 'inventory_2' },
+      { route: 'workflow-stores', label: 'Issue requests', icon: 'inventory' },
+      { route: 'store-transfers', label: 'Transfers', icon: 'sync_alt' },
+      { route: 'stock-on-hand', label: 'Stock on Hand Control', icon: 'inventory_2' },
+      { route: 'locations', label: 'Stores & locations', icon: 'warehouse' },
+      { route: 'store-inventory', label: 'Manage inventory', icon: 'fact_check' },
       { route: 'store-purchase-requests', label: 'Purchase requests', icon: 'shopping_cart' },
     ] },
-    { heading: 'Insights', items: [{ route: 'reports', label: 'Reports', icon: 'bar_chart' }] },
+    { heading: 'Insights', items: [
+      { route: 'store-usage', label: 'Usage', icon: 'monitoring' },
+      { route: 'store-analysis', label: 'Stock analysis', icon: 'bar_chart' },
+      { route: 'reports', label: 'All reports', icon: 'description' },
+    ] },
   ],
   'cost controller': [
     { heading: 'Control desk', items: [

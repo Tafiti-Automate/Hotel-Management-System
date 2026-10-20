@@ -67,9 +67,9 @@ function isReadyForProcurement(request: Row, requestItems: Row[]): boolean {
   return everyLineDecided && carriesQuantity
 }
 
-export default function InventoryWorkbench() {
+export default function InventoryWorkbench({ initialTab }: { initialTab?: Tab } = {}) {
   const app = useApp()
-  const [tab, setTab] = useState<Tab>('requests')
+  const [tab, setTab] = useState<Tab>(initialTab || 'requests')
   const [data, setData] = useState(blank)
   const [form, setForm] = useState<Row>({})
   const [loading, setLoading] = useState(true)
@@ -94,6 +94,9 @@ export default function InventoryWorkbench() {
     catch (reason) { setError(errorMessage(reason)) } finally { setLoading(false) }
   }, [can])
   useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    if (initialTab) setTab(initialTab)
+  }, [initialTab])
   useEffect(() => { setForm({}); setError(''); setSelectedRecord(null) }, [tab])
   useEffect(() => {
     if (!app.inventoryDraftId) return
@@ -176,7 +179,7 @@ export default function InventoryWorkbench() {
   const isAdministrator = app.user.isSuperuser || role === 'system administrator'
   const isDepartmentHead = role === 'department head'
   const isStoresApprover = isAdministrator || role === 'store keeper'
-  const otherTabs = role === 'store keeper' || isDepartmentHead || role === 'requester' ? [] : tabs.filter(([key]) => !['requests', 'issues'].includes(key))
+  const otherTabs = isDepartmentHead || role === 'requester' ? [] : tabs.filter(([key]) => !['requests', 'issues'].includes(key))
   const requestRoleStage: SupplyTask = isStoresApprover ? 'stores' : isDepartmentHead ? 'department' : 'prepare'
   const supplyPathActive = supplyPathHint || (tab === 'issues' ? 'issue' : tab === 'requests' ? requestRoleStage : '')
   const readyForProcurementCount = scopedData.requests.filter(

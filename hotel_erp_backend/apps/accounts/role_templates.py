@@ -47,9 +47,15 @@ ROLE_SPECS = {
     },
     "Store Keeper": {
         # Store Keeper controls internal stock after HOD + Cost Control approval,
-        # prepares the transfer/issue voucher and verifies supplier GRNs before SOH posting.
+        # prepares the transfer/issue voucher, conducts assigned-store counts,
+        # and verifies supplier GRNs before SOH posting.  Queryset guards in the
+        # inventory API keep these records limited to the keeper's stores.
         "crud": {
-            "inventory": ["stockissue", "stockissueitem"],
+            "inventory": [
+                "stockissue", "stockissueitem",
+                "stocktransfer", "stocktransferitem",
+                "stockcount", "stockcountitem",
+            ],
         },
         "view": {
             "departments": ["department", "branch"],

@@ -19,6 +19,7 @@ const FinanceWorkbench = lazy(() => import('./FinanceWorkbench'))
 const InventoryWorkbench = lazy(() => import('./InventoryWorkbench'))
 const DepartmentSupplyWorkspace = lazy(() => import('./DepartmentSupplyWorkspace'))
 const StockOnHand = lazy(() => import('./StockOnHand'))
+const StoreAnalysis = lazy(() => import('./StoreAnalysis'))
 const DepartmentRequisitions = lazy(() => import('./DepartmentRequisitions'))
 const StorePurchaseRequests = lazy(() => import('./StorePurchaseRequests'))
 const InventoryCatalogue = lazy(() => import('./InventoryCatalogue'))
@@ -64,6 +65,10 @@ export default function AppShell() {
       ? <DepartmentRequisitions />
       : <InventoryWorkbench />
   else if (route === 'stock-on-hand') content = <StockOnHand />
+  else if (route === 'store-transfers') content = <InventoryWorkbench initialTab="transfers" />
+  else if (route === 'store-inventory') content = <InventoryWorkbench initialTab="counts" />
+  else if (route === 'store-analysis') content = <StoreAnalysis />
+  else if (route === 'store-usage') content = <StoreAnalysis focus="usage" />
   else if (route === 'store-purchase-requests') content = <StorePurchaseRequests />
   else if (route === 'workflow-consume') content = <InventoryWorkbench />
   else if (route === 'categories') content = <InventoryCatalogue />

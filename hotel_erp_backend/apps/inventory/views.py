@@ -593,6 +593,14 @@ class StockLedgerViewSet(ReadOnlyModelViewSet):
     search_fields = ("item__name", "item__sku", "store__name", "reference_id")
     ordering_fields = ("created_at", "quantity_in", "quantity_out")
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if has_role(self.request.user, "Store Keeper") and not has_role(
+            self.request.user, "System Administrator", "General Manager"
+        ):
+            return queryset.filter(store_id__in=assigned_store_ids(self.request.user))
+        return queryset
+
 
 class InventoryBatchViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = InventoryBatch.objects.select_related("item", "store", "purchase_order_item")
@@ -600,6 +608,14 @@ class InventoryBatchViewSet(CreatedByModelMixin, ModelViewSet):
     filterset_fields = ("item", "store", "expiry_date", "purchase_order_item")
     search_fields = ("item__name", "item__sku", "store__name")
     ordering_fields = ("expiry_date", "remaining_quantity", "unit_cost", "created_at")
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if has_role(self.request.user, "Store Keeper") and not has_role(
+            self.request.user, "System Administrator", "General Manager"
+        ):
+            return queryset.filter(store_id__in=assigned_store_ids(self.request.user))
+        return queryset
 
 
 class StockTransferViewSet(CreatedByModelMixin, ModelViewSet):
@@ -613,6 +629,48 @@ class StockTransferViewSet(CreatedByModelMixin, ModelViewSet):
     filterset_fields = ("from_store", "to_store", "status", "requested_by", "approved_by")
     search_fields = ("from_store__name", "to_store__name", "note")
     ordering_fields = ("status", "required_date", "created_at")
+
+    def _is_store_keeper(self):
+        return has_role(self.request.user, "Store Keeper") and not has_role(
+            self.request.user, "System Administrator", "General Manager"
+        )
+
+    def _assigned_store_ids(self):
+        return set(assigned_store_ids(self.request.user))
+
+    def _require_source_store_control(self, transfer):
+        if self._is_store_keeper() and transfer.from_store_id not in self._assigned_store_ids():
+            raise PermissionDenied("You can only prepare or dispatch transfers from a store assigned to you.")
+
+    def _require_destination_store_control(self, transfer):
+        if self._is_store_keeper() and transfer.to_store_id not in self._assigned_store_ids():
+            raise PermissionDenied("You can only receive transfers into a store assigned to you.")
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if self._is_store_keeper():
+            store_ids = assigned_store_ids(self.request.user)
+            return queryset.filter(Q(from_store_id__in=store_ids) | Q(to_store_id__in=store_ids)).distinct()
+        return queryset
+
+    def perform_create(self, serializer):
+        from_store = serializer.validated_data["from_store"]
+        if self._is_store_keeper() and from_store.pk not in self._assigned_store_ids():
+            raise PermissionDenied("Choose a source store assigned to your Store Keeper account.")
+        employee = getattr(self.request.user, "employee_profile", None)
+        if self._is_store_keeper() and not employee:
+            raise PermissionDenied("An active Store Keeper employee profile is required.")
+        serializer.save(
+            created_by=self.request.user if self.request.user.is_authenticated else None,
+            requested_by=employee or serializer.validated_data.get("requested_by"),
+        )
+
+    def perform_update(self, serializer):
+        self._require_source_store_control(serializer.instance)
+        from_store = serializer.validated_data.get("from_store", serializer.instance.from_store)
+        if self._is_store_keeper() and from_store.pk not in self._assigned_store_ids():
+            raise PermissionDenied("Choose a source store assigned to your Store Keeper account.")
+        serializer.save()
 
     @action(detail=True, methods=["post"], url_path="assign-store")
     def assign_store(self, request, pk=None):
@@ -638,6 +696,7 @@ class StockTransferViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
         transfer = self.get_object()
+        self._require_source_store_control(transfer)
         try:
             transfer.approve(approved_by=getattr(request.user, "employee_profile", None))
         except DjangoValidationError as error:
@@ -647,6 +706,7 @@ class StockTransferViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"], url_path="dispatch")
     def dispatch_transfer(self, request, pk=None):
         transfer = self.get_object()
+        self._require_source_store_control(transfer)
         try:
             transfer.dispatch(dispatched_by=getattr(request.user, "employee_profile", None))
         except DjangoValidationError as error:
@@ -656,6 +716,7 @@ class StockTransferViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"])
     def receive(self, request, pk=None):
         transfer = self.get_object()
+        self._require_destination_store_control(transfer)
         try:
             transfer.receive(received_by=getattr(request.user, "employee_profile", None))
         except DjangoValidationError as error:
@@ -665,6 +726,7 @@ class StockTransferViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"])
     def apply(self, request, pk=None):
         transfer = self.get_object()
+        self._require_source_store_control(transfer)
         try:
             transfer.apply_inventory_changes()
         except DjangoValidationError as error:
@@ -679,6 +741,36 @@ class StockTransferItemViewSet(CreatedByModelMixin, ModelViewSet):
     filterset_fields = ("stock_transfer", "item", "unit")
     search_fields = ("item__name", "item__sku")
     ordering_fields = ("quantity", "base_quantity", "created_at")
+
+    def _require_source_store_control(self, transfer):
+        if has_role(self.request.user, "Store Keeper") and not has_role(
+            self.request.user, "System Administrator", "General Manager"
+        ) and transfer.from_store_id not in set(assigned_store_ids(self.request.user)):
+            raise PermissionDenied("You can only edit transfer lines for a source store assigned to you.")
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if has_role(self.request.user, "Store Keeper") and not has_role(
+            self.request.user, "System Administrator", "General Manager"
+        ):
+            store_ids = assigned_store_ids(self.request.user)
+            return queryset.filter(
+                Q(stock_transfer__from_store_id__in=store_ids)
+                | Q(stock_transfer__to_store_id__in=store_ids)
+            ).distinct()
+        return queryset
+
+    def perform_create(self, serializer):
+        self._require_source_store_control(serializer.validated_data["stock_transfer"])
+        super().perform_create(serializer)
+
+    def perform_update(self, serializer):
+        self._require_source_store_control(serializer.instance.stock_transfer)
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self._require_source_store_control(instance.stock_transfer)
+        instance.delete()
 
 
 class StockAdjustmentViewSet(CreatedByModelMixin, ModelViewSet):
@@ -1180,6 +1272,29 @@ class StockCountViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("count_no", "store__name", "note")
     ordering_fields = ("count_no", "count_date", "status", "created_at")
 
+    def _is_store_keeper(self):
+        return has_role(self.request.user, "Store Keeper") and not has_role(
+            self.request.user, "System Administrator", "General Manager"
+        )
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if self._is_store_keeper():
+            return queryset.filter(store_id__in=assigned_store_ids(self.request.user))
+        return queryset
+
+    def perform_create(self, serializer):
+        store = serializer.validated_data["store"]
+        if self._is_store_keeper() and store.pk not in set(assigned_store_ids(self.request.user)):
+            raise PermissionDenied("Choose a store assigned to your Store Keeper account.")
+        employee = getattr(self.request.user, "employee_profile", None)
+        if self._is_store_keeper() and not employee:
+            raise PermissionDenied("An active Store Keeper employee profile is required.")
+        serializer.save(
+            created_by=self.request.user if self.request.user.is_authenticated else None,
+            conducted_by=employee or serializer.validated_data["conducted_by"],
+        )
+
     @action(detail=True, methods=["post"])
     def populate(self, request, pk=None):
         stock_count = self.get_object()
@@ -1250,6 +1365,14 @@ class StockCountItemViewSet(CreatedByModelMixin, ModelViewSet):
     filterset_fields = ("stock_count", "item")
     search_fields = ("stock_count__count_no", "item__name", "item__sku")
     ordering_fields = ("system_quantity", "physical_quantity", "created_at")
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if has_role(self.request.user, "Store Keeper") and not has_role(
+            self.request.user, "System Administrator", "General Manager"
+        ):
+            return queryset.filter(stock_count__store_id__in=assigned_store_ids(self.request.user))
+        return queryset
     @action(detail=True, methods=["post"])
     def submit(self, request, pk=None):
         adjustment = self.get_object()
