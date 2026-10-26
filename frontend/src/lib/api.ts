@@ -925,6 +925,12 @@ export type OperationalReportId =
   | 'dailyActivities' | 'pendingActions' | 'exceptions' | 'userActivity'
   | 'stockMovementControl' | 'approvalTrail' | 'directWorkspace'
   | 'supplierPriceChanges' | 'managementSummary'
+  | 'purchasePrices' | 'purchaseStatisticsItem' | 'reorderProposal' | 'purchaseStatisticsSupplier'
+  | 'purchaseReceivingDeviation' | 'abcAnalysis' | 'priceVariance' | 'receiptsJournal' | 'supplierInvoices'
+  | 'salesOverview' | 'salesStatistics' | 'salesTaxAnalysis' | 'salesActivity' | 'articlePotentialUsage'
+  | 'menuEngineering' | 'requirementsUsage' | 'costOfSalesLocation' | 'warehouseStatistics'
+  | 'costCenterComparison' | 'dailyFood' | 'groupAnalysis' | 'majorGroupLists' | 'fbResult'
+  | 'monthlyReport' | 'lastEstimate' | 'fbBudget'
 
 export interface OperationalReportFilters {
   branch?: string
@@ -963,6 +969,32 @@ const operationalReportPaths: Record<OperationalReportId, string> = {
   directWorkspace: 'reports/direct-workspace',
   supplierPriceChanges: 'reports/supplier-price-changes',
   managementSummary: 'reports/management-summary',
+  purchasePrices: 'reports/analysis/purchasePrices',
+  purchaseStatisticsItem: 'reports/analysis/purchaseStatisticsItem',
+  reorderProposal: 'reports/analysis/reorderProposal',
+  purchaseStatisticsSupplier: 'reports/analysis/purchaseStatisticsSupplier',
+  purchaseReceivingDeviation: 'reports/analysis/purchaseReceivingDeviation',
+  abcAnalysis: 'reports/analysis/abcAnalysis',
+  priceVariance: 'reports/analysis/priceVariance',
+  receiptsJournal: 'reports/analysis/receiptsJournal',
+  supplierInvoices: 'reports/analysis/supplierInvoices',
+  salesOverview: 'reports/analysis/salesOverview',
+  salesStatistics: 'reports/analysis/salesStatistics',
+  salesTaxAnalysis: 'reports/analysis/salesTaxAnalysis',
+  salesActivity: 'reports/analysis/salesActivity',
+  articlePotentialUsage: 'reports/analysis/articlePotentialUsage',
+  menuEngineering: 'reports/analysis/menuEngineering',
+  requirementsUsage: 'reports/analysis/requirementsUsage',
+  costOfSalesLocation: 'reports/analysis/costOfSalesLocation',
+  warehouseStatistics: 'reports/analysis/warehouseStatistics',
+  costCenterComparison: 'reports/analysis/costCenterComparison',
+  dailyFood: 'reports/analysis/dailyFood',
+  groupAnalysis: 'reports/analysis/groupAnalysis',
+  majorGroupLists: 'reports/analysis/majorGroupLists',
+  fbResult: 'reports/analysis/fbResult',
+  monthlyReport: 'reports/analysis/monthlyReport',
+  lastEstimate: 'reports/analysis/lastEstimate',
+  fbBudget: 'reports/analysis/fbBudget',
 }
 
 export function isOperationalReport(id: string): id is OperationalReportId {

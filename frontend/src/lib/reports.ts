@@ -13,6 +13,7 @@ export interface BuiltReport {
   rows: { cells: ReportCell[]; data?: ReportRecord }[]
   hasTotals: boolean
   totals: ReportCell[]
+  emptyDetail?: string
 }
 
 interface Label { t: string; a?: 'right' }
@@ -65,6 +66,28 @@ export function buildOperationalReport(
   payload: Record<string, unknown>,
 ): BuiltReport {
   const R: BuiltReport = { title: '', subtitle: '', grid: '', columns: [], rows: [], hasTotals: false, totals: [] }
+
+  // The Materials analysis catalogue describes its own export columns. Keeping
+  // that contract data-driven lets new operational reports use the same scoped
+  // report workspace without creating browser-only calculations.
+  const dynamicColumns = records(payload.columns)
+  if (dynamicColumns.length) {
+    R.title = text(payload.title, 'Operational report')
+    R.subtitle = text(payload.subtitle, 'Live operational records in your permitted scope')
+    R.emptyDetail = text(payload.notice, '')
+    R.grid = dynamicColumns.map(() => 'minmax(120px, 1fr)').join(' ')
+    R.columns = head(dynamicColumns.map((column) => ({ t: text(column.label, title(column.key)), a: column.kind === 'money' || column.kind === 'number' ? 'right' : undefined })))
+    R.rows = records(payload.results).map((row) => ({
+      data: row,
+      cells: dynamicColumns.map((column, index) => {
+        const kind = text(column.kind)
+        const value = row[text(column.key)]
+        const rendered = kind === 'money' ? money(number(value)) : text(value, '—')
+        return rcell(rendered, kind === 'money' || kind === 'number' ? 'right' : undefined, index === 0)
+      }),
+    }))
+    return R
+  }
 
   if (id === 'departmentRequests') {
     R.title = 'Department Request Register'; R.subtitle = 'Department stock requests and their current workflow position'

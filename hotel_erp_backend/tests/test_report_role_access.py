@@ -112,3 +112,17 @@ def test_receiving_clerk_cannot_open_supplier_price_control_report():
     response = client.get("/api/v1/reports/supplier-price-changes/")
 
     assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_materials_analysis_catalogue_enforces_its_own_report_role_access():
+    client = APIClient()
+    client.force_authenticate(user=make_role_user("Cost Controller"))
+
+    allowed = client.get("/api/v1/reports/analysis/purchasePrices/")
+    assert allowed.status_code == 200
+    assert allowed.data["title"] == "Article Purchase Prices"
+
+    client.force_authenticate(user=make_role_user("Department Head"))
+    denied = client.get("/api/v1/reports/analysis/purchasePrices/")
+    assert denied.status_code == 403

@@ -13,6 +13,7 @@ from apps.reports.views import (
     StockCardReportView,
     StockSummaryReportView,
     ControlReportView,
+    MaterialsAnalysisReportView,
 )
 
 
@@ -37,4 +38,5 @@ urlpatterns = [
     path("reports/direct-workspace/", ControlReportView.as_view(report_kind="direct_workspace"), name="report-direct-workspace"),
     path("reports/supplier-price-changes/", ControlReportView.as_view(report_kind="supplier_price_changes"), name="report-supplier-price-changes"),
     path("reports/management-summary/", ControlReportView.as_view(report_kind="management_summary"), name="report-management-summary"),
+    path("reports/analysis/<str:report_kind>/", MaterialsAnalysisReportView.as_view(), name="report-materials-analysis"),
 ]

@@ -66,24 +66,44 @@ export const roleReportIds: Record<string, string[]> = {
     'departmentRequests', 'storeIssues', 'valuation', 'lowstock', 'movement', 'aging',
     'consumption', 'stockMovementControl', 'goodsReceipts',
   ],
-  'cost controller': ['lowstock', 'procurement', 'supplierPriceChanges', 'supplier'],
+  'cost controller': [
+    'lowstock', 'procurement', 'supplierPriceChanges', 'supplier',
+    'purchasePrices', 'purchaseStatisticsItem', 'reorderProposal', 'purchaseStatisticsSupplier',
+    'purchaseReceivingDeviation', 'abcAnalysis', 'priceVariance', 'receiptsJournal',
+    'salesOverview', 'salesStatistics', 'salesActivity', 'articlePotentialUsage', 'menuEngineering',
+    'requirementsUsage', 'costOfSalesLocation', 'warehouseStatistics', 'costCenterComparison',
+    'dailyFood', 'groupAnalysis', 'majorGroupLists', 'monthlyReport', 'lastEstimate',
+  ],
   'procurement manager': [
     'purchaseRequisitions', 'procurement', 'purchaseOrders', 'goodsReceipts', 'pendingActions',
     'exceptions', 'approvalTrail', 'supplierPriceChanges', 'directWorkspace', 'supplier',
+    'purchasePrices', 'purchaseStatisticsItem', 'reorderProposal', 'purchaseStatisticsSupplier',
+    'purchaseReceivingDeviation', 'abcAnalysis', 'priceVariance', 'receiptsJournal', 'requirementsUsage', 'lastEstimate',
   ],
   'procurement officer': [
     'purchaseRequisitions', 'procurement', 'purchaseOrders', 'goodsReceipts', 'pendingActions',
     'exceptions', 'approvalTrail', 'supplierPriceChanges', 'directWorkspace', 'supplier',
+    'purchasePrices', 'purchaseStatisticsItem', 'reorderProposal', 'purchaseStatisticsSupplier',
+    'purchaseReceivingDeviation', 'abcAnalysis', 'priceVariance', 'receiptsJournal', 'requirementsUsage', 'lastEstimate',
   ],
   'financial manager': [
     'procurement', 'purchaseOrders', 'goodsReceipts', 'pendingActions', 'exceptions',
-    'approvalTrail', 'managementSummary',
+    'approvalTrail', 'managementSummary', 'purchasePrices', 'purchaseStatisticsItem',
+    'purchaseStatisticsSupplier', 'purchaseReceivingDeviation', 'receiptsJournal', 'supplierInvoices',
+    'salesOverview', 'salesStatistics', 'salesTaxAnalysis', 'salesActivity', 'articlePotentialUsage',
+    'menuEngineering', 'costOfSalesLocation', 'costCenterComparison', 'dailyFood', 'groupAnalysis',
+    'fbResult', 'monthlyReport', 'lastEstimate', 'fbBudget',
   ],
   'general manager': [
     'managementSummary', 'procurement', 'purchaseOrders', 'goodsReceipts', 'valuation',
-    'consumption', 'pendingActions', 'exceptions', 'approvalTrail',
+    'consumption', 'pendingActions', 'exceptions', 'approvalTrail', 'purchasePrices',
+    'purchaseStatisticsItem', 'reorderProposal', 'purchaseStatisticsSupplier', 'purchaseReceivingDeviation',
+    'abcAnalysis', 'priceVariance', 'receiptsJournal', 'supplierInvoices', 'salesOverview',
+    'salesStatistics', 'salesTaxAnalysis', 'salesActivity', 'articlePotentialUsage', 'menuEngineering',
+    'requirementsUsage', 'costOfSalesLocation', 'warehouseStatistics', 'costCenterComparison',
+    'dailyFood', 'groupAnalysis', 'majorGroupLists', 'fbResult', 'monthlyReport', 'lastEstimate', 'fbBudget',
   ],
-  'receiving clerk': ['purchaseOrders', 'goodsReceipts', 'pendingActions', 'exceptions', 'directWorkspace'],
+  'receiving clerk': ['purchaseOrders', 'goodsReceipts', 'pendingActions', 'exceptions', 'directWorkspace', 'receiptsJournal'],
 }
 
 export function reportIdsForUser(user: AccessUser): string[] {

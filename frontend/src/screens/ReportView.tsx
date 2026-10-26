@@ -115,13 +115,13 @@ export default function ReportView() {
   const visibleRows = report.rows.slice((page - 1) * pageSize, page * pageSize)
 
   const controlReport = ['dailyActivities', 'pendingActions', 'exceptions', 'userActivity', 'stockMovementControl', 'approvalTrail', 'directWorkspace', 'supplierPriceChanges', 'managementSummary'].includes(reportId)
-  const storeReports = ['departmentRequests', 'storeIssues', 'purchaseOrders', 'goodsReceipts', 'valuation', 'lowstock', 'movement', 'aging', 'consumption', 'stockMovementControl']
-  const categoryReports = ['valuation', 'lowstock', 'aging', 'consumption', 'stockMovementControl', 'supplierPriceChanges']
-  const dateReports = ['departmentRequests', 'storeIssues', 'purchaseRequisitions', 'purchaseOrders', 'goodsReceipts', 'movement', 'aging', 'procurement', 'consumption', 'dailyActivities', 'pendingActions', 'exceptions', 'userActivity', 'stockMovementControl', 'approvalTrail', 'directWorkspace', 'supplierPriceChanges']
-  const itemReports = ['movement', 'consumption', 'stockMovementControl', 'supplierPriceChanges']
+  const storeReports = ['departmentRequests', 'storeIssues', 'purchaseOrders', 'goodsReceipts', 'valuation', 'lowstock', 'movement', 'aging', 'consumption', 'stockMovementControl', 'reorderProposal', 'abcAnalysis', 'receiptsJournal', 'articlePotentialUsage', 'requirementsUsage', 'costOfSalesLocation', 'warehouseStatistics', 'costCenterComparison', 'majorGroupLists', 'salesOverview', 'salesStatistics', 'salesActivity', 'menuEngineering', 'dailyFood', 'groupAnalysis', 'fbResult', 'monthlyReport']
+  const categoryReports = ['valuation', 'lowstock', 'aging', 'consumption', 'stockMovementControl', 'supplierPriceChanges', 'purchasePrices', 'purchaseStatisticsItem', 'abcAnalysis', 'priceVariance', 'salesStatistics', 'articlePotentialUsage']
+  const dateReports = ['departmentRequests', 'storeIssues', 'purchaseRequisitions', 'purchaseOrders', 'goodsReceipts', 'movement', 'aging', 'procurement', 'consumption', 'dailyActivities', 'pendingActions', 'exceptions', 'userActivity', 'stockMovementControl', 'approvalTrail', 'directWorkspace', 'supplierPriceChanges', 'purchaseStatisticsItem', 'purchaseStatisticsSupplier', 'purchaseReceivingDeviation', 'receiptsJournal', 'supplierInvoices', 'salesOverview', 'salesStatistics', 'salesActivity', 'menuEngineering', 'costOfSalesLocation', 'costCenterComparison', 'dailyFood', 'groupAnalysis', 'fbResult', 'monthlyReport', 'lastEstimate']
+  const itemReports = ['movement', 'consumption', 'stockMovementControl', 'supplierPriceChanges', 'purchasePrices', 'purchaseStatisticsItem', 'reorderProposal', 'priceVariance', 'salesStatistics', 'articlePotentialUsage', 'menuEngineering']
   const departmentFilterReports = ['departmentRequests', 'storeIssues', 'purchaseRequisitions', 'purchaseOrders', 'goodsReceipts', 'dailyActivities', 'pendingActions', 'exceptions', 'userActivity', 'approvalTrail', 'directWorkspace']
   const employeeFilterReports = ['dailyActivities', 'userActivity', 'stockMovementControl', 'approvalTrail', 'supplierPriceChanges']
-  const supplierFilterReports = ['purchaseOrders', 'goodsReceipts', 'pendingActions', 'exceptions', 'directWorkspace', 'supplierPriceChanges']
+  const supplierFilterReports = ['purchaseOrders', 'goodsReceipts', 'pendingActions', 'exceptions', 'directWorkspace', 'supplierPriceChanges', 'purchasePrices', 'purchaseStatisticsItem', 'purchaseStatisticsSupplier', 'purchaseReceivingDeviation', 'receiptsJournal', 'supplierInvoices']
   const statusFilterReports = ['departmentRequests', 'purchaseRequisitions', 'purchaseOrders', 'goodsReceipts', 'dailyActivities', 'pendingActions', 'exceptions', 'userActivity', 'stockMovementControl', 'approvalTrail', 'directWorkspace', 'supplierPriceChanges']
   const documentFilterReports = ['dailyActivities', 'pendingActions', 'exceptions', 'userActivity', 'stockMovementControl', 'approvalTrail', 'directWorkspace', 'supplierPriceChanges']
   const supportsStore = storeReports.includes(reportId)
@@ -138,7 +138,7 @@ export default function ReportView() {
   const controlValues = (key: string) => Array.from(new Set(controlRows.map((row) => String(row[key] || '')).filter(Boolean))).sort()
   const activeFilterCount = [dateFrom, dateTo, store, category, item, department, employee, supplier, documentType, actionType, reportStatus, valueMin].filter(Boolean).length
   const needsItem = reportId === 'movement' && !item
-  const emptyMessage = needsItem ? 'Choose an Article to generate its stock card.' : liveError ? liveError : 'No records match the selected criteria.'
+  const emptyMessage = needsItem ? 'Choose an Article to generate its stock card.' : liveError ? liveError : report.emptyDetail || 'No records match the selected criteria.'
   const scope = reportScope(app.user.role, app.currentBranch)
   const generatedAt = new Date()
   const baseFilename = `${safeFilename(report.title)}-${dateStamp()}`
@@ -242,6 +242,7 @@ export default function ReportView() {
 
       {reportDefinition?.controlledDocument === 'lpo' && <ReportNotice icon="verified" title="Controlled LPO output" text="The register shows the controlled-copy position. Open an LPO to issue its controlled document; the first controlled output remains ORIGINAL COPY and later outputs remain COPY OF ORIGINAL." />}
       {reportDefinition?.controlledDocument === 'grn' && <ReportNotice icon="description" title="GRN source document" text="Receipt and posting remain separate states. Open the GRN source record for the approved document." />}
+      {report.emptyDetail && <ReportNotice icon="info" title="Reporting status" text={report.emptyDetail} />}
 
       <section className="report-filter-shell">
         <div className="report-filter-toolbar">
