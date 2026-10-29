@@ -19,6 +19,7 @@ import {
 } from '../lib/api'
 import type { AccentName, Density, Mode } from '../lib/theme'
 import { canAccessModule, canAccessRoute, canSwitchModules, canViewReport, operationsLandingFor } from '../lib/access'
+import { labelForRoute, pathForRoute, routeFromPath } from '../lib/navigation'
 
 export type Screen = 'login' | 'launchpad' | 'app'
 export type Tab = 'overview' | 'procurement' | 'inventory'
@@ -219,13 +220,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User>(initialUser)
   const hasSession = Boolean(getToken() && storedUser)
   const initialLanding = operationsLandingFor(initialUser)
-  const showInitialLaunchpad = hasSession && canSwitchModules(initialUser)
+  const requestedRoute = typeof window !== 'undefined' ? routeFromPath(window.location.pathname) : null
+  const initialRoute = hasSession && requestedRoute && canAccessRoute(initialUser, requestedRoute)
+    ? requestedRoute : initialLanding.route
+  const showInitialLaunchpad = hasSession && canSwitchModules(initialUser) && !requestedRoute
 
   const appearance = readAppearance()
   const [state, setState] = useState<AppState>({
     screen: hasSession ? (showInitialLaunchpad ? 'launchpad' : 'app') : 'login',
-    route: initialLanding.route,
-    navActive: initialLanding.route,
+    route: initialRoute,
+    navActive: initialRoute,
     tab: 'overview',
     mode: appearance.mode,
     accentName: appearance.accentName,
@@ -233,7 +237,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     branchOpen: false,
     settingsOpen: false,
     currentBranch: '',
-    crumb: initialLanding.crumb,
+    crumb: initialRoute === initialLanding.route ? initialLanding.crumb : labelForRoute(initialRoute),
     searchTerm: '',
     itemCategoryFilter: null,
     form: null,
@@ -244,7 +248,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     toast: null,
     workflowAlert: null,
     apiStatus: 'idle',
-    activeModule: 'operations',
+    activeModule: initialRoute === 'hr-dashboard' ? 'hr' : 'operations',
     apiMessage: null,
     authMessage: null,
     procurementDraftId: null,
@@ -252,6 +256,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
   })
 
   const patch = useCallback((p: Partial<AppState>) => setState((s) => ({ ...s, ...p })), [])
+
+  useEffect(() => {
+    if (state.screen !== 'app') return
+    const nextPath = pathForRoute(state.route)
+    if (!nextPath || window.location.pathname === nextPath) return
+    // Replace invalid routes, but retain valid screens in browser history.
+    const method = routeFromPath(window.location.pathname) ? 'pushState' : 'replaceState'
+    window.history[method]({}, '', nextPath)
+  }, [state.route, state.screen])
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const nextRoute = routeFromPath(window.location.pathname)
+      if (!nextRoute || !canAccessRoute(user, nextRoute)) return
+      setState((current) => ({
+        ...current, screen: 'app', route: nextRoute,
+        activeModule: nextRoute === 'hr-dashboard' ? 'hr' : current.activeModule,
+        navActive: nextRoute, crumb: labelForRoute(nextRoute),
+        searchTerm: '', itemCategoryFilter: null, detail: null,
+        form: null, confirm: null, reportId: null,
+      }))
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [user])
 
   const showToast = useCallback((msg: string) => {
     patch({ toast: msg, workflowAlert: null })
@@ -589,12 +618,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setUser(signedInUser)
       didInitialSync.current = false
       const landing = operationsLandingFor(signedInUser)
+      const requested = routeFromPath(window.location.pathname)
+      const destination = requested && canAccessRoute(signedInUser, requested) ? requested : landing.route
       patch({
-        screen: canSwitchModules(signedInUser) ? 'launchpad' : 'app',
-        activeModule: 'operations',
-        route: landing.route,
-        navActive: landing.route,
-        crumb: landing.crumb,
+        screen: canSwitchModules(signedInUser) && !requested ? 'launchpad' : 'app',
+        activeModule: destination === 'hr-dashboard' ? 'hr' : 'operations',
+        route: destination,
+        navActive: destination,
+        crumb: destination === landing.route ? landing.crumb : labelForRoute(destination),
         branchOpen: false,
         settingsOpen: false,
         toast: null,

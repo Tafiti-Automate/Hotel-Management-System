@@ -56,9 +56,9 @@ const entityEndpoints: Partial<Record<EntityKey, string>> = {
 }
 
 function apiRoot(): string {
-  const nextApiBase = process.env.NEXT_PUBLIC_API_BASE_URL
-  const viteApiBase = import.meta.env?.VITE_API_BASE_URL
-  return (nextApiBase || viteApiBase || '/api/v1').replace(/\/+$/, '')
+  // Next.js proxies relative API requests to Django via BACKEND_ORIGIN.
+  // Keep authentication on the same origin; do not ship a backend secret.
+  return (process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1').replace(/\/+$/, '')
 }
 
 // ---- Auth (DRF token) ----------------------------------------------------

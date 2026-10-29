@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useRef, type ReactNode } from 'react'
 import { useApp } from '../state/AppContext'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import WorkspaceErrorBoundary from '../components/WorkspaceErrorBoundary'
 import Dashboard from './DashboardV2'
 import { canAccessRoute } from '../lib/access'
 
@@ -99,7 +100,9 @@ export default function AppShell() {
     <div className="neo-app-main">
       <Header />
       <main ref={workspaceRef} id="main-workspace" tabIndex={-1} className={`neo-workspace route-${route}`} data-route={route}>
-        <Suspense fallback={<RouteSkeleton />}>{content}</Suspense>
+        <WorkspaceErrorBoundary key={route} onHome={() => app.navTo('dashboard', 'Overview')}>
+          <Suspense fallback={<RouteSkeleton />}>{content}</Suspense>
+        </WorkspaceErrorBoundary>
       </main>
     </div>
   </div>

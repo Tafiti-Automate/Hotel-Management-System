@@ -37,6 +37,23 @@ export default function DashboardV2() {
   const branch = app.currentBranch || app.user.branchName || 'Current property'
   const department = app.user.departmentName || 'All departments'
 
+  // A network failure must not be shown as a confirmed zero balance or zero tasks.
+  if (app.apiStatus !== 'live') {
+    const offline = app.apiStatus === 'offline'
+    return <div className="neo-dashboard">
+      <section className="neo-data-state" role="status" aria-live="polite">
+        <span><Icon name={offline ? 'cloud_off' : 'sync'} size={24} /></span>
+        <h2>{offline ? 'Operational data is unavailable' : 'Connecting to hotel records'}</h2>
+        <p>{offline
+          ? 'The dashboard cannot confirm current stock, orders or approval totals. Check the server connection and retry.'
+          : 'The latest accessible stock, purchasing and approval records are being retrieved.'}</p>
+        <button type="button" disabled={app.apiStatus === 'loading'} onClick={() => void app.refreshData()}>
+          <Icon name="refresh" size={16} /> Refresh records
+        </button>
+      </section>
+    </div>
+  }
+
   return <div className="neo-dashboard">
     <section className="neo-dashboard-intro">
       <div>
