@@ -1,6 +1,6 @@
 # Hotel Management System
 
-Django + DRF backend and React + Vite frontend for a hotel management ERP focused on
+Django + DRF backend and a Next.js App Router frontend for a hotel management ERP focused on
 procurement, inventory, approvals, vendors, finance, reports, notifications, and audit logs.
 
 The controlled operating model and implementation requirements for the connected procure-to-pay
@@ -15,9 +15,11 @@ For a screen-by-screen Uganda demo and operator walkthrough, see
 ```bash
 cd frontend
 npm install
-npm run dev      # start the dev server (Vite)
-npm run build    # type-check + production build
-npm run preview  # preview the production build
+npm run dev        # start Next.js on http://localhost:3000
+npm run typecheck  # strict TypeScript check
+npm test           # focused frontend safety tests
+npm run build      # tests + optimized production build
+npm run start      # serve the production build
 ```
 
 ## Run with the Django backend
@@ -33,7 +35,7 @@ python manage.py migrate
 python manage.py runserver 127.0.0.1:8000
 ```
 
-Start React in another terminal:
+Start Next.js in another terminal:
 
 ```bash
 cd frontend
@@ -41,18 +43,19 @@ npm install
 npm run dev
 ```
 
-The frontend calls `/api/v1/...`; Vite proxies `/api` to `http://127.0.0.1:8000`.
-Set `VITE_BACKEND_URL=http://host:port` if Django runs somewhere else, or set
-`VITE_API_BASE_URL` if the API path itself is different.
+The frontend calls `/api/v1/...`; Next.js proxies `/api` and `/media` to Django. Local development
+defaults to `http://127.0.0.1:8000`. Set `BACKEND_ORIGIN=http://host:port` when Django runs
+elsewhere. In production, `BACKEND_ORIGIN` is required. It is a server-side variable and must not
+contain `/api/v1`.
 
-The app starts on the **Login** screen — click **Sign in** (credentials are prefilled) to reach
-the module **Launchpad**, then open **Stock Management**.
+The app starts on the **Login** screen and uses the existing DRF token-authentication flow. Use a
+real account provisioned by Django; the frontend does not provide fallback business data.
 
 ## Railway deployment
 
-The frontend service can stay rooted at `/frontend`. In production the React app calls
-`/api/v1/...` by default, so it expects the Django backend to be reachable on the same domain
-under `/api/v1`.
+The frontend service can stay rooted at `/frontend`. Configure `BACKEND_ORIGIN` with the Django
+service origin so that the Next.js server can proxy same-origin `/api/v1/...` and `/media/...`
+requests without exposing a private backend variable in browser code.
 
 For the Django backend service, create/use a Railway service from the same repo with root directory
 `/hotel_erp_backend`. The backend root includes `railway.json` and `requirements.txt` for Railway.
@@ -117,12 +120,15 @@ demo accounts must sign in. The existing Django superuser remains available for 
 presentation. Adding `--reset` intentionally deletes existing application data for that hotel, so
 only use it after taking a database backup.
 
-If the backend gets a separate public URL instead of sharing the frontend domain, set this on the
-frontend service before building:
+Set this server-side variable on the frontend service before building and running it:
 
 ```text
-VITE_API_BASE_URL=https://<backend-domain>/api/v1
+BACKEND_ORIGIN=https://<backend-domain>
 ```
+
+`NEXT_PUBLIC_API_BASE_URL` is optional and should only be used when the browser intentionally calls
+a public API base directly. The recommended deployment keeps it unset and uses the same-origin
+proxy.
 
 ### Vercel backend migrations
 
@@ -156,13 +162,17 @@ schema changes are applied before the matching backend starts serving production
 
 ```
 frontend/
-  index.html
+  app/
+    layout.tsx            Root metadata and enterprise style layers
+    page.tsx              App Router entry point
+    workspace/[section]/  Refresh-safe workspace route
+    client-application.tsx Client boundary for the existing authenticated application
+  next.config.mjs         Django API and media proxy
   package.json
-  vite.config.ts
   src/
     App.tsx               Root: applies theme vars, routes between top-level screens
-    main.tsx              Entry point + AppProvider
     index.css             Global styles, fonts, icon helper, hover utilities
+    enterprise-redesign.css Final responsive enterprise presentation layer
     state/AppContext.tsx  All app state, routing and actions
     lib/
       api.ts              Backend API client + Django-to-frontend row mapper
@@ -183,7 +193,7 @@ hotel_erp_backend/
 
 - Data syncs from Django when the backend is available. Empty backend tables render as empty
   frontend tables, so the UI can be used to verify the live API connection.
-- In `core.settings.dev`, the API uses `AllowAny` so the prototype login can talk to Django
-  during local development. Production settings keep the stricter permission configuration.
+- The frontend hides actions the current role cannot use, while Django remains authoritative for
+  authentication, branch/store scope, permissions, state transitions, and stock posting.
 - Monetary values are stored in the prototype's base unit and rendered as UGX (`money()` in
   `lib/theme.ts`).
