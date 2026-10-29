@@ -210,7 +210,7 @@ function Receive({ order, lines, app, busy, act, back, receiptRecorded }: { orde
         </table>
       </div>
       {invalid && <div className="ds-alert" role="alert">Review receiving quantities: each value must be valid, non-negative and no greater than the outstanding quantity.</div>}
-      {short && <label className="ds-field">Reason for short delivery *<textarea value={reason} onChange={(event) => setReason(event.target.value)} /></label>
+      {short && <label className="ds-field">Reason for short delivery *<textarea value={reason} onChange={(event) => setReason(event.target.value)} /></label>}
       <div className="ds-sticky-action"><span>Receiving records the physical delivery. Store Keeper will verify the GRN before SOH increases.</span><ConfirmTransaction title="Confirm supplier delivery" description="Create a goods receipt note for the entered quantities. This records the physical delivery but does not post stock until Stores verifies the GRN." confirmLabel="Record delivery" className="ds-btn ds-btn-primary" disabled={busy || !invoice.trim() || !positive.length || invalid || (short && !reason.trim())} busy={busy} onConfirm={async () => {
         const receipt = await act(() => runBackendAction('purchase-orders', id(order.id), 'receive-delivery', { supplier_invoice_no: invoice, delivery_note_no: delivery, short_delivery_reason: short ? reason : '', lines: positive.map((line) => ({ purchase_order_item: id(line.id), quantity_received: n(values[id(line.id)]) })) }), 'GRN recorded · awaiting Store Keeper verification')
         const receiptId = id((receipt as Row | undefined)?.id)
