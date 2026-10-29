@@ -408,6 +408,8 @@ async function readList(path: string): Promise<ApiRecord[]> {
     url = nextUrl((body as ApiRecord).next)
   }
 
+  // Never silently report a partial inventory, supplier or finance dataset.
+  if (url) throw new Error(`GET ${path} exceeded the safe pagination limit (20 pages). Narrow the query or contact the administrator.`)
   return rows
 }
 

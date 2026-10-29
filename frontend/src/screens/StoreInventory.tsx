@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Icon } from '../components/Icon'
+import { validateCount } from '../features/shared/quantities'
 import { createBackendRecord, errorMessage, readBackendRecords, runBackendAction, updateBackendRecord } from '../lib/api'
 import type { Row } from '../lib/data'
 import { useApp } from '../state/AppContext'
@@ -145,10 +146,21 @@ export default function StoreInventory() {
       app.showToast('No counted quantities changed')
       return
     }
+    const invalid = changed.find((line) => validateCount(physical[id(line.id)] ?? ''))
+    if (invalid) {
+      app.showWorkflowAlert('Invalid counted quantity', `Review ${id(itemById.get(id(invalid.item))?.name || invalid.item_name || 'the selected item')}: ${validateCount(physical[id(invalid.id)] ?? '')}`, 'warning')
+      return
+    }
     await execute(
-      () => Promise.all(changed.map((line) => updateBackendRecord('stock-count-items', id(line.id), {
-        physical_quantity: number(physical[id(line.id)]),
-      }))),
+      async () => {
+        // Sequential writes stop immediately on failure rather than continuing
+        // to update unrelated stock-count lines in parallel.
+        for (const line of changed) {
+          await updateBackendRecord('stock-count-items', id(line.id), {
+            physical_quantity: number(physical[id(line.id)]),
+          })
+        }
+      },
       `${changed.length} counted receipt${changed.length === 1 ? '' : 's'} saved`,
     )
   }

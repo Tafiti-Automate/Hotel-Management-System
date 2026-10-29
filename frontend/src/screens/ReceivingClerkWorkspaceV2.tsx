@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Icon } from '../components/Icon'
+import ConfirmTransaction from '../components/ConfirmTransaction'
+import { validateQuantity } from '../features/shared/quantities'
 import { errorMessage, readBackendRecords, runBackendAction } from '../lib/api'
 import type { Row } from '../lib/data'
 import { money } from '../lib/theme'
@@ -183,7 +185,8 @@ function Receive({ order, lines, app, busy, act, back, receiptRecorded }: { orde
   const items = new Map<string, Row>((app.data.items as Row[]).map((item: Row) => [id(item.id), item]))
   const positive = lines.filter((line) => n(values[id(line.id)]) > 0)
   const short = lines.some((line) => n(values[id(line.id)]) < n(line.outstanding_quantity ?? line.approved_quantity))
-  const invalid = lines.some((line) => n(values[id(line.id)]) > n(line.outstanding_quantity ?? line.approved_quantity) || n(values[id(line.id)]) < 0)
+  const invalidLines = lines.filter((line) => validateQuantity(values[id(line.id)] ?? '', n(line.outstanding_quantity ?? line.approved_quantity)))
+  const invalid = invalidLines.length > 0
 
   return (
     <section className="ds-card ds-detail">
@@ -206,12 +209,13 @@ function Receive({ order, lines, app, busy, act, back, receiptRecorded }: { orde
           })}</tbody>
         </table>
       </div>
-      {short && <label className="ds-field">Reason for short delivery *<textarea value={reason} onChange={(event) => setReason(event.target.value)} /></label>}
-      <div className="ds-sticky-action"><span>Receiving records the physical delivery. Store Keeper will verify the GRN before SOH increases.</span><button type="button" className="ds-btn ds-btn-primary" disabled={busy || !invoice.trim() || !positive.length || invalid || (short && !reason.trim())} onClick={() => void (async () => {
+      {invalid && <div className="ds-alert" role="alert">Review receiving quantities: each value must be valid, non-negative and no greater than the outstanding quantity.</div>}
+      {short && <label className="ds-field">Reason for short delivery *<textarea value={reason} onChange={(event) => setReason(event.target.value)} /></label>
+      <div className="ds-sticky-action"><span>Receiving records the physical delivery. Store Keeper will verify the GRN before SOH increases.</span><ConfirmTransaction title="Confirm supplier delivery" description="Create a goods receipt note for the entered quantities. This records the physical delivery but does not post stock until Stores verifies the GRN." confirmLabel="Record delivery" className="ds-btn ds-btn-primary" disabled={busy || !invoice.trim() || !positive.length || invalid || (short && !reason.trim())} busy={busy} onConfirm={async () => {
         const receipt = await act(() => runBackendAction('purchase-orders', id(order.id), 'receive-delivery', { supplier_invoice_no: invoice, delivery_note_no: delivery, short_delivery_reason: short ? reason : '', lines: positive.map((line) => ({ purchase_order_item: id(line.id), quantity_received: n(values[id(line.id)]) })) }), 'GRN recorded · awaiting Store Keeper verification')
         const receiptId = id((receipt as Row | undefined)?.id)
         if (receiptId) receiptRecorded(receiptId)
-      })()}>Generate GRN</button></div>
+      }}>Generate GRN</ConfirmTransaction></div>
     </section>
   )
 }

@@ -45,3 +45,19 @@ npm run build
 Vercel: `Framework Preset=Next.js`, `Root Directory=frontend`, `Output Directory=automatic`. Set server-side `BACKEND_ORIGIN` to the trusted deployed Django origin. The browser calls relative `/api/v1/` paths.
 
 Do not use a CDN cache for authenticated API responses.
+
+## Second implementation batch (staged for validation)
+
+- Reuse transaction confirmation component in receiving, GRN inventory posting and LPO approval stages; Django remains responsible for authorisation and state transitions.
+- Validate upper/lower quantity limits for GRN receipts and HOD/Cost Controller approvals; require reasons for quantity reductions.
+- Validate physical stock-taking values before persistence and stop sequential patching on the first failed item. This is **not** an atomic batch transaction; an authoritative transactional bulk endpoint is still recommended.
+- Escape supplier/store data inserted into printable issue voucher HTML.
+- Add supplier pagination and accessible search; preserve the existing supplier API.
+- Fail explicitly when API list pagination exceeds the configured safety limit rather than silently truncating totals.
+- Remove obsolete Vite tooling, Vite-only environment settings and generated build files; Next.js remains the sole frontend entry point.
+- Add Node built-in tests for quantity validation and printable HTML escaping; run the tests as part of `npm run build`.
+
+### Validation boundaries
+- Vercel build and TypeScript results must be inspected after a single branch push.
+- Running frontend unit tests or passing a Next.js build does not prove live Django transaction correctness, user role isolation, email delivery, or inventory movements.
+- A full acceptance pass requires controlled test accounts for Department Supervisor, HOD, Cost Controller, Store Keeper, Procurement Manager, Financial Manager, General Manager and Receiving Clerk; use a test dataset, not real production stock.

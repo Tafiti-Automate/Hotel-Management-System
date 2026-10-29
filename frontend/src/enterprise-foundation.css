@@ -200,3 +200,49 @@
 @media (prefers-reduced-motion: reduce) {
   .application-root.screen-app .neo-nav-item { transition: none; }
 }
+
+/* Controlled workflow confirmations — above legacy drawer and sidebar layers. */
+.neo-transaction-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  background: rgba(4, 16, 37, .64);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+.neo-transaction-dialog {
+  width: min(100%, 440px);
+  padding: 28px;
+  border-radius: 16px;
+  background: var(--erp-surface, #fff);
+  color: var(--erp-text, #14243b);
+  box-shadow: 0 25px 80px rgba(0, 0, 0, .25);
+  border: 1px solid var(--erp-border, #dce5f0);
+}
+.neo-transaction-dialog h2 { margin: 0 0 8px; font-size: 21px; line-height: 1.3; }
+.neo-transaction-dialog p { color: var(--erp-text-muted, #5a6d84); margin: 0; line-height: 1.55; }
+.neo-transaction-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+.neo-transaction-actions button {
+  border: 1px solid var(--erp-border, #dce5f0);
+  background: var(--erp-surface, #fff);
+  color: var(--erp-text, #14243b);
+  border-radius: 9px;
+  padding: 10px 14px;
+  font-weight: 650;
+  min-height: 42px;
+}
+.neo-transaction-actions button:last-child {
+  background: #1e5bb5;
+  border-color: #1e5bb5;
+  color: #fff;
+}
+.neo-transaction-actions button:focus-visible { outline: 3px solid #6aaaff; outline-offset: 2px; }
+.supplier-pagination-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.supplier-page-controls { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.supplier-page-controls button { background: transparent; border: 1px solid var(--erp-border, #dce5f0); color: var(--erp-text, #14243b); border-radius: 7px; padding: 7px 10px; }
+.supplier-page-controls button:disabled { opacity: .4; cursor: not-allowed; }
+@media (max-width: 600px) {
+  .neo-transaction-dialog { padding: 22px 18px; }
+  .supplier-page-controls { margin-left: 0; width: 100%; justify-content: space-between; }
+}

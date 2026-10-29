@@ -114,6 +114,7 @@ export default function SupplierManagement() {
   const app = useApp()
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState('')
+  const [page, setPage] = useState(1)
   const [selectedId, setSelectedId] = useState('')
   const [drawerTab, setDrawerTab] = useState<DrawerTab>('overview')
   const suppliers = app.data.suppliers || []
@@ -153,6 +154,12 @@ export default function SupplierManagement() {
     const search = `${supplier.name} ${supplier.tinNumber} ${supplier.registrationNumber} ${supplier.contact} ${supplier.phone} ${supplier.email} ${supplier.paymentTerms} ${quoteNames}`.toLowerCase()
     return (!query || search.includes(query.toLowerCase())) && (!status || text(supplier.status).toLowerCase() === status)
   }), [query, quotesBySupplier, status, suppliers])
+
+  const pageSize = 25
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const visiblePage = Math.min(page, pageCount)
+  const pagedSuppliers = filtered.slice((visiblePage - 1) * pageSize, visiblePage * pageSize)
+  useEffect(() => { setPage(1) }, [query, status])
 
   const selected = suppliers.find((supplier) => text(supplier.id) === selectedId) || null
   const selectedPrices = selected ? (quotesBySupplier.get(text(selected.id)) || []) : []
@@ -212,7 +219,7 @@ export default function SupplierManagement() {
     <div className="supplier-filter-toolbar">
       <label className="supplier-search-field">
         <Icon name="search" size={18} color="var(--text-faint)" style={{ position: 'absolute', zIndex: 1, left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search supplier, TIN, contact or supplied article…" style={{ ...control, width: '100%', height: 42, paddingLeft: 38, paddingRight: query ? 40 : 12 }} />
+        <input aria-label="Search suppliers and quotations" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search supplier, TIN, contact or supplied article…"  style={{ ...control, width: '100%', height: 42, paddingLeft: 38, paddingRight: query ? 40 : 12 }} />
         {query && <button type="button" onClick={() => setQuery('')} aria-label="Clear supplier search" className="supplier-search-clear"><Icon name="close" size={17} /></button>}
       </label>
       <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Filter suppliers by status" style={{ ...control, height: 42, minWidth: 170 }}>
@@ -234,7 +241,7 @@ export default function SupplierManagement() {
             <span role="columnheader">Status</span>
           </div>
 
-          {filtered.map((supplier) => {
+          {pagedSuppliers.map((supplier) => {
             const supplierId = text(supplier.id)
             const activeItems = activeItemCountBySupplier.get(supplierId) || 0
             const terms = paymentTermsInfo(supplier.paymentTerms)
@@ -268,7 +275,16 @@ export default function SupplierManagement() {
           </div>}
         </div>
       </div>
-      <footer className="supplier-table-footer"><span>{filtered.length} shown</span><span>·</span><span>{suppliers.length} total suppliers</span></footer>
+      <footer className="supplier-table-footer supplier-pagination-footer">
+        <span>{filtered.length ? (visiblePage - 1) * pageSize + 1 : 0}–{Math.min(visiblePage * pageSize, filtered.length)} of {filtered.length} matching suppliers</span>
+        <span>·</span>
+        <span>{suppliers.length} total</span>
+        {pageCount > 1 && <nav aria-label="Supplier list pages" className="supplier-page-controls">
+          <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={visiblePage === 1}>Previous</button>
+          <span>Page {visiblePage} of {pageCount}</span>
+          <button type="button" onClick={() => setPage((current) => Math.min(pageCount, current + 1))} disabled={visiblePage === pageCount}>Next</button>
+        </nav>}
+      </footer>
     </section>
 
     {selected && <>

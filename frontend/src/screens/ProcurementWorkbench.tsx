@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Icon } from '../components/Icon'
+import ConfirmTransaction from '../components/ConfirmTransaction'
 import { HelpLabel } from '../components/HelpLabel'
 import LpoPreviewModal from '../components/LpoPreviewModal'
 import { WorkflowPath } from '../components/WorkflowPath'
@@ -876,7 +877,7 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
         <button type="button" onClick={() => setSelectedReceiptId('')} style={secondary}><Icon name="arrow_back" size={16} />Back to GRN History</button>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span style={{ padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface)', color: receiptPosted ? 'var(--good)' : 'var(--text-muted)', fontSize: 10.5, fontWeight: 800 }}>Status: {receiptPosted ? 'Posted' : 'Received'}</span>
-          {!receiptPosted && <button type="button" disabled={busy} onClick={() => void run(() => runBackendAction('grns', id(selectedReceipt.id), 'post-to-inventory'), 'GRN posted to inventory')} style={{ ...secondary, color: 'var(--good)', borderColor: 'var(--good)' }}><Icon name="inventory_2" size={17} />Post GRN</button>}
+          {!receiptPosted && <ConfirmTransaction title="Post this GRN to inventory?" description="Accepted quantities will be added to the receiving store. Ensure the physical delivery has been checked against this GRN." confirmLabel="Post GRN" disabled={busy} busy={busy} className="ds-btn ds-btn-primary" onConfirm={() => run(() => runBackendAction('grns', id(selectedReceipt.id), 'post-to-inventory'), 'GRN posted to inventory')}><Icon name="inventory_2" size={17} />Post GRN</ConfirmTransaction>}
           <button type="button" onClick={() => window.print()} style={{ ...secondary, color: 'var(--accent)', borderColor: 'var(--accent)' }}><Icon name="print" size={17} />Print GRN</button>
         </div>
       </div>
@@ -1399,7 +1400,7 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, items, ite
       {!canDecidePurchasing && <div style={{ padding: '10px 11px', borderRadius: 7, background: 'var(--warn-soft)', color: 'var(--warn)', fontSize: 11.3, fontWeight: 700 }}>Awaiting Purchasing Manager decision</div>}
       {canDecidePurchasing && <>
         {quantityReview('purchasing', 'Purchasing Manager')}
-        <Action tone="good" disabled={busy || !currentApproval || !approvalDecisionsValid('purchasing')} onClick={() => run(() => reviewAndApprove('purchasing'), 'Level 1 approved and sent to Financial Manager')}>Approve LPO</Action>
+        <ConfirmTransaction title="Confirm Level 1 LPO approval" description="Approve the reviewed LPO quantities and advance this purchase order to the next authorised workflow stage." confirmLabel="Confirm approval" className="ds-btn ds-btn-primary" disabled={busy || !currentApproval || !approvalDecisionsValid('purchasing')} busy={busy} onConfirm={() => run(() => reviewAndApprove('purchasing'), 'Level 1 approved and sent to Financial Manager')}>Approve LPO</ConfirmTransaction>
         {!form.showReject ? <Action tone="danger" disabled={busy} onClick={() => setForm({ ...form, showReject: true })}>Reject entire LPO</Action> : <><Field label="Rejection reason *"><Input value={form.approvalComments || ''} onChange={(v) => setForm({ ...form, approvalComments: v })} /></Field><Action tone="danger" disabled={busy || !id(form.approvalComments).trim()} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'reject', { comments: form.approvalComments }), 'LPO rejected')}>Confirm full rejection</Action></>}
       </>}
     </>}
@@ -1409,7 +1410,7 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, items, ite
       {!canDecideFinance && <div style={{ padding: '10px 11px', borderRadius: 7, background: 'var(--warn-soft)', color: 'var(--warn)', fontSize: 11.3, fontWeight: 700 }}>Awaiting Financial Manager decision</div>}
       {canDecideFinance && <>
         {quantityReview('finance', 'Financial Manager')}
-        <Action tone="good" disabled={busy || !currentApproval || !approvalDecisionsValid('finance')} onClick={() => run(() => reviewAndApprove('finance'), 'LPO approved and sent to General Manager')}>Approve LPO</Action>
+        <ConfirmTransaction title="Confirm Financial Manager LPO approval" description="Approve the reviewed LPO quantities and advance this purchase order to the next authorised workflow stage." confirmLabel="Confirm approval" className="ds-btn ds-btn-primary" disabled={busy || !currentApproval || !approvalDecisionsValid('finance')} busy={busy} onConfirm={() => run(() => reviewAndApprove('finance'), 'LPO approved and sent to General Manager')}>Approve LPO</ConfirmTransaction>
         {!form.showReject ? <Action tone="danger" disabled={busy} onClick={() => setForm({ ...form, showReject: true })}>Reject entire LPO</Action> : <><Field label="Rejection reason *"><Input value={form.approvalComments || ''} onChange={(v) => setForm({ ...form, approvalComments: v })} /></Field><Action tone="danger" disabled={busy || !id(form.approvalComments).trim()} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'reject', { comments: form.approvalComments }), 'LPO rejected')}>Confirm full rejection</Action></>}
       </>}
     </>}
@@ -1427,7 +1428,7 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, items, ite
       {!canDecideManagement && <div style={{ padding: '10px 11px', borderRadius: 7, background: 'var(--warn-soft)', color: 'var(--warn)', fontSize: 11.3, fontWeight: 700 }}>Awaiting General Manager decision</div>}
       {canDecideManagement && <>
         {quantityReview('management', 'General Manager')}
-        <Action tone="good" disabled={busy || !currentApproval || !approvalDecisionsValid('management')} onClick={() => run(async () => { const result = await reviewAndApprove('management'); setLpoQueue('history'); return result }, 'Final LPO approval recorded', (result: unknown) => ({ order: id((result as Row).id) }))}>Approve LPO</Action>
+        <ConfirmTransaction title="Confirm General Manager LPO approval" description="Approve the reviewed LPO quantities and advance this purchase order to the next authorised workflow stage." confirmLabel="Confirm approval" className="ds-btn ds-btn-primary" disabled={busy || !currentApproval || !approvalDecisionsValid('management')} busy={busy} onConfirm={() => run(async () => { const result = await reviewAndApprove('management'); setLpoQueue('history'); return result }, 'Final LPO approval recorded', (result: unknown) => ({ order: id((result as Row).id) }))}>Approve LPO</ConfirmTransaction>
         {!form.showReject ? <Action tone="danger" disabled={busy} onClick={() => setForm({ ...form, showReject: true })}>Reject entire LPO</Action> : <><Field label="Rejection reason *"><Input value={form.approvalComments || ''} onChange={(v) => setForm({ ...form, approvalComments: v })} /></Field><Action tone="danger" disabled={busy || !id(form.approvalComments).trim()} onClick={() => run(async () => { const result = await runBackendAction('purchase-orders', id(order.id), 'reject', { comments: form.approvalComments }); setLpoQueue('history'); return result }, 'LPO rejected', (result: unknown) => ({ order: id((result as Row).id) }))}>Confirm full rejection</Action></>}
       </>}
     </>}
@@ -1571,7 +1572,7 @@ function InspectionPanel({ data, form, setForm, busy, run, receiptLabel, names }
     <Two><Field label="Accepted (base stock units)"><Input type="number" value={form.accepted} onChange={(v) => setForm({ ...form, accepted: v })} /></Field><Field label="Rejected (base stock units)"><Input type="number" value={form.rejected} onChange={(v) => setForm({ ...form, rejected: v })} /></Field></Two>
     <Field label="Rejection reason"><Input value={form.reason} onChange={(v) => setForm({ ...form, reason: v })} /></Field>
     <Action disabled={busy || !form.inspection || !form.receiptLine} onClick={() => run(() => createBackendRecord('goods-inspection-items', { inspection: form.inspection, goods_receipt_item: form.receiptLine, quantity_received: num(form.received ?? receiptLine?.base_quantity), quantity_accepted: num(form.accepted), quantity_rejected: num(form.rejected), rejection_reason: form.reason || '' }), 'Inspection quantities recorded')}>Record decision</Action>
-    <Action tone="good" disabled={busy || !inspection?.goods_receipt} onClick={() => run(() => runBackendAction('grns', id(inspection.goods_receipt), 'post-to-inventory'), 'Accepted goods posted to inventory')}>Post accepted goods</Action>
+    <ConfirmTransaction title="Post inspected goods to inventory?" description="This action updates the receiving store with the accepted inspection quantities. Verify all article decisions before posting." confirmLabel="Post accepted goods" className="ds-btn ds-btn-primary" disabled={busy || !inspection?.goods_receipt} busy={busy} onConfirm={() => run(() => runBackendAction('grns', id(inspection.goods_receipt), 'post-to-inventory'), 'Accepted goods posted to inventory')}>Post accepted goods</ConfirmTransaction>
   </Panel>
 }
 
