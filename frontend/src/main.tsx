@@ -6,6 +6,7 @@ import './hotel-ui-v2.css'
 import './workspace-v2.css'
 import './quotation-option-one.css'
 import './dashboard-v2.css'
+import './enterprise-redesign.css'
 import App from './App'
 import { AppProvider } from './state/AppContext'
 

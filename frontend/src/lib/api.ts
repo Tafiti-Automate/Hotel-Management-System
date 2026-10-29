@@ -56,7 +56,9 @@ const entityEndpoints: Partial<Record<EntityKey, string>> = {
 }
 
 function apiRoot(): string {
-  return (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/+$/, '')
+  const nextApiBase = process.env.NEXT_PUBLIC_API_BASE_URL
+  const viteApiBase = import.meta.env?.VITE_API_BASE_URL
+  return (nextApiBase || viteApiBase || '/api/v1').replace(/\/+$/, '')
 }
 
 // ---- Auth (DRF token) ----------------------------------------------------

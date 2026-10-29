@@ -131,6 +131,7 @@ export default function Sidebar() {
   const app = useApp()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
   const role = String(app.user.role || '').trim().toLowerCase()
   const administrator = app.user.isSuperuser || role === 'system administrator'
   const rawGroups = app.activeModule === 'hr' ? hrNavigation : (roleNavigation[role] || adminNavigation)
@@ -147,6 +148,15 @@ export default function Sidebar() {
     : ''
   const contextName = locationName || app.user.departmentName || app.currentBranch || app.user.branchName || 'Current workspace'
   const workspaceTitle = app.activeModule === 'hr' ? 'Human Resources' : 'Hotel Operations'
+
+  const toggleGroup = (heading: string) => {
+    setCollapsedGroups((current) => {
+      const next = new Set(current)
+      if (next.has(heading)) next.delete(heading)
+      else next.add(heading)
+      return next
+    })
+  }
 
   useEffect(() => {
     const open = () => setMobileOpen(true)
@@ -172,7 +182,9 @@ export default function Sidebar() {
           type="button"
           className="neo-context-card"
           onClick={administrator && !branchLocked ? app.toggleBranch : undefined}
-          aria-expanded={app.branchOpen}
+          aria-expanded={administrator && !branchLocked ? app.branchOpen : undefined}
+          aria-haspopup={administrator && !branchLocked ? 'listbox' : undefined}
+          disabled={!administrator || branchLocked}
         >
           <span className="neo-context-icon"><Icon name={role === 'store keeper' ? 'warehouse' : app.activeModule === 'hr' ? 'groups' : 'business'} size={17} /></span>
           <span className="neo-context-copy"><small>{role === 'store keeper' ? 'Store / property' : app.user.departmentName ? 'Department' : 'Property'}</small><strong>{contextName}</strong></span>
@@ -188,29 +200,44 @@ export default function Sidebar() {
       </div>}
 
       <nav className="neo-sidebar-nav" aria-label="Primary navigation">
-        {groups.map((group) => <section className="neo-nav-group" key={group.heading}>
-          {!collapsed && <div className="neo-nav-heading">{group.heading}</div>}
-          <div className="neo-nav-items">
-            {group.items.map((item) => {
-              const active = app.navActive === item.route || (item.route === 'uoms' && app.navActive === 'itemUnits')
-              return <button
-                type="button"
-                key={item.route}
-                className={`neo-nav-item ${active ? 'is-active' : ''}`}
-                aria-current={active ? 'page' : undefined}
-                title={collapsed ? item.label : undefined}
-                onClick={() => {
-                  app.navTo(item.route, item.label)
-                  setMobileOpen(false)
-                }}
-              >
-                <span className="neo-nav-icon"><Icon name={item.icon || 'chevron_right'} size={18} /></span>
-                {!collapsed && <span>{item.label}</span>}
-                {!collapsed && active && <i aria-hidden="true" />}
-              </button>
-            })}
-          </div>
-        </section>)}
+        {groups.map((group) => {
+          const groupId = `navigation-${group.heading.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+          const groupCollapsed = collapsedGroups.has(group.heading)
+          return <section className={`neo-nav-group ${groupCollapsed ? 'is-collapsed' : ''}`} key={group.heading} aria-labelledby={`${groupId}-label`}>
+            {!collapsed && <button
+              id={`${groupId}-label`}
+              type="button"
+              className="neo-nav-heading"
+              onClick={() => toggleGroup(group.heading)}
+              aria-expanded={!groupCollapsed}
+              aria-controls={groupId}
+            >
+              <span>{group.heading}</span>
+              <Icon name={groupCollapsed ? 'chevron_right' : 'expand_more'} size={15} />
+            </button>}
+            <div className="neo-nav-items" id={groupId} hidden={!collapsed && groupCollapsed}>
+              {group.items.map((item) => {
+                const active = app.navActive === item.route || (item.route === 'uoms' && app.navActive === 'itemUnits')
+                return <button
+                  type="button"
+                  key={item.route}
+                  data-route={item.route}
+                  className={`neo-nav-item ${active ? 'is-active' : ''}`}
+                  aria-current={active ? 'page' : undefined}
+                  title={collapsed ? item.label : undefined}
+                  onClick={() => {
+                    app.navTo(item.route, item.label)
+                    setMobileOpen(false)
+                  }}
+                >
+                  <span className="neo-nav-icon"><Icon name={item.icon || 'chevron_right'} size={18} /></span>
+                  {!collapsed && <span>{item.label}</span>}
+                  {!collapsed && active && <i aria-hidden="true" />}
+                </button>
+              })}
+            </div>
+          </section>
+        })}
       </nav>
 
       <div className="neo-sidebar-footer">

@@ -1,4 +1,4 @@
-import { lazy, Suspense, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useRef, type ReactNode } from 'react'
 import { useApp } from '../state/AppContext'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
@@ -48,8 +48,13 @@ const departmentSupplyRoles = new Set([
 
 export default function AppShell() {
   const app = useApp()
+  const workspaceRef = useRef<HTMLElement>(null)
   const role = String(app.user.role || '').trim().toLowerCase()
   const { route } = app
+
+  useEffect(() => {
+    workspaceRef.current?.focus({ preventScroll: true })
+  }, [route])
 
   let content: ReactNode = null
   if (!canAccessRoute(app.user, route)) content = <Dashboard />
@@ -89,10 +94,11 @@ export default function AppShell() {
   else content = <Dashboard />
 
   return <div className="neo-app-shell">
+    <a className="neo-skip-link" href="#main-workspace">Skip to main workspace</a>
     <Sidebar />
     <div className="neo-app-main">
       <Header />
-      <main className={`neo-workspace route-${route}`} data-route={route}>
+      <main ref={workspaceRef} id="main-workspace" tabIndex={-1} className={`neo-workspace route-${route}`} data-route={route}>
         <Suspense fallback={<RouteSkeleton />}>{content}</Suspense>
       </main>
     </div>
