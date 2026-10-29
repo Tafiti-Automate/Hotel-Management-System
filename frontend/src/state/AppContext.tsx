@@ -140,7 +140,10 @@ function readAppearance(): { mode: Mode; accentName: AccentName; density: Densit
       density: saved.density === 'Compact' ? 'Compact' : 'Airy',
     }
   } catch {
-    return { mode: 'dark', accentName: 'Blue', density: 'Airy' }
+    // A light operational canvas is the safest default for long hotel shifts,
+    // printed-reference work and dense inventory tables. Existing users keep
+    // their saved preference and can still switch to dark appearance.
+    return { mode: 'light', accentName: 'Blue', density: 'Airy' }
   }
 }
 

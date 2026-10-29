@@ -622,7 +622,10 @@ export default function ProcurementWorkbench() {
 
 function Metric({ label, value, icon, tone = 'accent' }: { label: string; value: string; icon: string; tone?: 'accent' | 'good' | 'warn' }) {
   const color = tone === 'good' ? 'var(--good)' : tone === 'warn' ? 'var(--warn)' : 'var(--accent)'
-  return <div style={{ ...card, padding: '13px 15px', display: 'flex', alignItems: 'center', gap: 11 }}><span style={{ width: 34, height: 34, display: 'grid', placeItems: 'center', borderRadius: 7, color, background: tone === 'good' ? 'var(--good-soft)' : tone === 'warn' ? 'var(--warn-soft)' : 'var(--accent-soft)' }}><Icon name={icon} size={18} /></span><div><div style={{ color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase' }}>{label}</div><div style={{ marginTop: 3, color: 'var(--text)', fontSize: 15, fontWeight: 750 }}>{value}</div></div></div>
+  return <div className={`workbench-metric tone-${tone}`} style={{ ...card, padding: '13px 15px', display: 'flex', alignItems: 'center', gap: 11 }}>
+    <span className="workbench-metric-icon" style={{ width: 34, height: 34, display: 'grid', placeItems: 'center', borderRadius: 7, color, background: tone === 'good' ? 'var(--good-soft)' : tone === 'warn' ? 'var(--warn-soft)' : 'var(--accent-soft)' }}><Icon name={icon} size={18} /></span>
+    <div className="workbench-metric-copy"><small>{label}</small><strong>{value || '0'}</strong></div>
+  </div>
 }
 
 function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {

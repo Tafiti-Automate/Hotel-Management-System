@@ -21,6 +21,8 @@ const SUPPLEMENTAL_ICONS = new Set([
 ])
 
 const SAFE_ALIASES: Record<string, string> = {
+  group: 'groups',
+  shield_person: 'verified_user',
   analytics: 'bar_chart',
   monitoring: 'bar_chart',
   visibility: 'description',
