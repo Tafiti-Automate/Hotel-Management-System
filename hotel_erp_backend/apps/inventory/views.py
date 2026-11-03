@@ -142,7 +142,7 @@ def scope_store_requisitions(queryset, user):
             )
         ).distinct()
     # Only an explicitly assigned Requester may originate/track Department requests.
-    if has_role(user, "Requester"):
+    if has_role(user, "Department Supervisor"):
         return queryset.filter(requested_by=employee)
     # All other operational roles start from their own workflow document/stage.
     return queryset.none()
@@ -848,8 +848,8 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
         return scope_store_requisitions(super().get_queryset(), self.request.user)
 
     def perform_create(self, serializer):
-        if not has_role(self.request.user, "System Administrator", "Requester"):
-            raise PermissionDenied("Only an assigned Requester can create a Department request.")
+        if not has_role(self.request.user, "System Administrator", "Department Supervisor"):
+            raise PermissionDenied("Only an assigned Department Supervisor can create a Department request.")
         super().perform_create(serializer)
 
     def _enforce_requester_edit(self, requisition):
@@ -857,7 +857,7 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             return
         employee = getattr(self.request.user, "employee_profile", None)
         if (
-            has_role(self.request.user, "Requester")
+            has_role(self.request.user, "Department Supervisor")
             and employee
             and requisition.requested_by_id == employee.id
             and requisition.status in (
@@ -1101,7 +1101,7 @@ class StoreRequisitionItemViewSet(CreatedByModelMixin, ModelViewSet):
             return
         employee = getattr(self.request.user, "employee_profile", None)
         requester_edit = (
-            has_role(self.request.user, "Requester")
+            has_role(self.request.user, "Department Supervisor")
             and employee
             and requisition.requested_by_id == employee.id
             and requisition.status in (
