@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Icon } from '../components/Icon'
+import { findOpenStorePurchaseRequest } from '../features/shared/storePurchaseDuplicates'
 import { createBackendRecord, errorMessage, readBackendPayload, runBackendAction } from '../lib/api'
 import type { Row } from '../lib/data'
 import { useApp } from '../state/AppContext'
@@ -35,22 +36,27 @@ export default function StorePurchaseRequests() {
   const [store, setStore] = useState('')
   const [reason, setReason] = useState('')
   const [lines, setLines] = useState<LineDraft[]>([newLine()])
+  const [reviewRequestId, setReviewRequestId] = useState('')
+  const requestNodes = useRef(new Map<string, HTMLDivElement>())
 
   const load = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
       const result = await readBackendPayload('requisitions/store-purchase-requests')
-      setPayload({
+      const normalized = {
         requests: result.requests || [],
         lines: result.lines || [],
         stores: result.stores || [],
         balances: result.balances || [],
-      })
+      }
+      setPayload(normalized)
       const stores = result.stores || []
       setStore((current) => current || id(stores[0]?.id))
+      return normalized
     } catch (reason) {
       setError(errorMessage(reason))
+      return null
     } finally {
       setLoading(false)
     }
@@ -75,6 +81,28 @@ export default function StorePurchaseRequests() {
   const selectedItemIds = new Set(lines.map((line) => line.item).filter(Boolean))
   const openRequests = (payload.requests || []).filter((request) => !['fulfilled', 'cancelled', 'rejected', 'closed'].includes(id(request.status).toLowerCase()))
 
+  const reviewExistingRequest = (requestId: string) => {
+    setReviewRequestId(requestId)
+    window.setTimeout(() => {
+      const node = requestNodes.current.get(requestId)
+      node?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      node?.focus({ preventScroll: true })
+    }, 0)
+  }
+
+  const showDuplicateWarning = (request: Row, itemId: string) => {
+    const item = items.find((entry) => id(entry.id) === itemId)
+    const requestId = id(request.id)
+    const requestNumber = id(request.requisition_number) || requestId
+    const status = statusPresentation(id(request.status)).label
+    app.showWorkflowAlert(
+      'Purchase request already open',
+      `${id(item?.name) || 'This Article'} is already included on request ${requestNumber} for ${id(request.destination_store_name) || id(selectedStore?.name) || 'this store'}. Current status: ${status}. Complete or cancel that request before creating another.`,
+      'warning',
+      { label: 'Review existing request', onAction: () => reviewExistingRequest(requestId) },
+    )
+  }
+
   const updateLine = (key: string, patch: Partial<LineDraft>) => {
     setLines((current) => current.map((line) => line.key === key ? { ...line, ...patch } : line))
   }
@@ -89,6 +117,16 @@ export default function StorePurchaseRequests() {
     const prepared = lines.filter((line) => line.item && Number(line.quantity) > 0)
     if (!prepared.length || prepared.length !== lines.length) {
       app.showWorkflowAlert('Complete the item lines', 'Choose an Article and enter a quantity greater than zero on every line.', 'warning')
+      return
+    }
+    const duplicate = prepared
+      .map((line) => ({
+        itemId: line.item,
+        request: findOpenStorePurchaseRequest(payload.requests || [], payload.lines || [], store, line.item),
+      }))
+      .find((entry) => entry.request)
+    if (duplicate?.request) {
+      showDuplicateWarning(duplicate.request, duplicate.itemId)
       return
     }
     setBusy(true)
@@ -107,7 +145,22 @@ export default function StorePurchaseRequests() {
     } catch (reason) {
       const detail = errorMessage(reason)
       setError(detail)
-      app.showWorkflowAlert('Purchase request could not be created', detail, 'warning')
+      if (/already has an open Store Purchase Request/i.test(detail)) {
+        const refreshed = await load()
+        const refreshedDuplicate = prepared
+          .map((line) => ({
+            itemId: line.item,
+            request: findOpenStorePurchaseRequest(refreshed?.requests || [], refreshed?.lines || [], store, line.item),
+          }))
+          .find((entry) => entry.request)
+        if (refreshedDuplicate?.request) {
+          showDuplicateWarning(refreshedDuplicate.request, refreshedDuplicate.itemId)
+        } else {
+          app.showWorkflowAlert('Purchase request could not be created', detail, 'warning')
+        }
+      } else {
+        app.showWorkflowAlert('Purchase request could not be created', detail, 'warning')
+      }
     } finally {
       setBusy(false)
     }
@@ -207,7 +260,15 @@ export default function StorePurchaseRequests() {
         <div style={{ maxHeight: 610, overflowY: 'auto' }}>
           {(payload.requests || []).map((request) => {
             const status = statusPresentation(id(request.status))
-            return <div key={id(request.id)} style={{ padding: '13px 14px', borderBottom: '1px solid var(--border)' }}>
+            const requestId = id(request.id)
+            const reviewing = reviewRequestId === requestId
+            return <div
+              key={requestId}
+              ref={(node) => { if (node) requestNodes.current.set(requestId, node); else requestNodes.current.delete(requestId) }}
+              tabIndex={-1}
+              aria-current={reviewing ? 'true' : undefined}
+              style={{ padding: '13px 14px', borderBottom: '1px solid var(--border)', background: reviewing ? 'var(--accent-soft)' : 'transparent', boxShadow: reviewing ? 'inset 3px 0 0 var(--accent)' : 'none', outline: 'none', transition: 'background .18s ease, box-shadow .18s ease' }}
+            >
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ color: 'var(--text)', fontSize: 12.5, fontWeight: 750 }}>{id(request.requisition_number) || id(request.id)}</div>

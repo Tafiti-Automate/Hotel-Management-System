@@ -341,7 +341,7 @@ export async function login(username: string, password: string, remember = true)
 }
 
 export async function fetchCurrentUser(): Promise<AuthUser> {
-  const response = await fetch(`${apiRoot()}/auth/me/`, {
+  const response = await fetchWithTimeout(`${apiRoot()}/auth/me/`, {
     headers: { Accept: 'application/json', ...authHeaders() },
   })
   if (!response.ok) {

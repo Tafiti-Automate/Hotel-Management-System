@@ -33,7 +33,8 @@ interface FormTarget { entity: EntityKey; id: string | null; preset?: FormPreset
 interface ConfirmTarget { entity: EntityKey; id: string; name: string }
 interface DetailTarget { entity: EntityKey; id: string; from: string }
 type WorkflowAlertTone = 'failure' | 'warning'
-interface WorkflowAlert { title: string; message: string; tone: WorkflowAlertTone }
+interface WorkflowAlertAction { label: string; onAction: () => void }
+interface WorkflowAlert { title: string; message: string; tone: WorkflowAlertTone; action?: WorkflowAlertAction }
 interface ItemCategoryFilter { id: string; name: string }
 
 interface AppState {
@@ -114,7 +115,7 @@ export interface AppContextValue extends AppState {
   // toast
   showToast: (msg: string) => void
   closeToast: () => void
-  showWorkflowAlert: (title: string, message: string, tone?: WorkflowAlertTone) => void
+  showWorkflowAlert: (title: string, message: string, tone?: WorkflowAlertTone, action?: WorkflowAlertAction) => void
   closeWorkflowAlert: () => void
 }
 
@@ -291,8 +292,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     patch({ toast: msg, workflowAlert: null })
   }, [patch])
 
-  const showWorkflowAlert = useCallback((title: string, message: string, tone: WorkflowAlertTone = 'failure') => {
-    patch({ workflowAlert: { title, message, tone }, toast: null })
+  const showWorkflowAlert = useCallback((title: string, message: string, tone: WorkflowAlertTone = 'failure', action?: WorkflowAlertAction) => {
+    patch({ workflowAlert: { title, message, tone, action }, toast: null })
   }, [patch])
 
   const endSession = useCallback((authMessage: string | null = null) => {

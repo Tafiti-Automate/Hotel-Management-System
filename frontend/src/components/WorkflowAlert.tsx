@@ -19,5 +19,7 @@ export default function WorkflowAlert() {
     message={message || alert.message}
     details={details}
     onClose={app.closeWorkflowAlert}
+    actionLabel={alert.action?.label}
+    onAction={alert.action?.onAction}
   />
 }
