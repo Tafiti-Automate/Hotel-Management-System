@@ -38,6 +38,7 @@ ROLE_SPECS = {
             "procurement": ["procurementattachment"],
         },
         "view": {
+            "finance": ["supplierinvoice", "supplierinvoiceitem"],
             "departments": ["department", "branch"],
             "employees": ["employee"],
             "inventory": [
@@ -86,6 +87,9 @@ ROLE_SPECS = {
         },
     },
     "Financial Manager": {
+        "crud": {
+            "finance": ["supplierinvoice", "supplierinvoiceitem"],
+        },
         "change": {
             "approvals": ["purchaseorderapprovalworkflow"],
             "procurement": ["purchaseorder"],
