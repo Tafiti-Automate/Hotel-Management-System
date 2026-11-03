@@ -203,7 +203,10 @@ class StoreRequisitionViewSet(CreatedByModelMixin,ModelViewSet):
         issue=r.stock_issues.filter(inventory_changes_applied=False).order_by("-created_at").first(); created=False
         if not issue:
             with transaction.atomic():
-                lines=list(r.items.select_for_update().filter(quantity_approved__gt=0).select_related("item__base_unit")); prepared=[]
+                # Lock only requisition-item rows. Item.base_unit is nullable,
+                # and PostgreSQL rejects FOR UPDATE when that outer-joined
+                # relation is included in the locking query.
+                lines=list(r.items.select_for_update().filter(quantity_approved__gt=0).order_by("pk")); prepared=[]
                 for x in lines:
                     due=x.outstanding_quantity
                     if due<=0: continue

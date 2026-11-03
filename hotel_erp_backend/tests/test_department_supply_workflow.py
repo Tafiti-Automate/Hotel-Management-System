@@ -68,7 +68,7 @@ def test_department_request_is_reduction_only_and_reaches_stores(ctx, monkeypatc
     def reject_joined_row_locks(queryset, *fields):
         if queryset.query.select_for_update:
             raise AssertionError(
-                "Cost Control row locks must not join nullable related tables."
+                "Department-request row locks must not join nullable related tables."
             )
         return original_select_related(queryset, *fields)
 
@@ -78,16 +78,16 @@ def test_department_request_is_reduction_only_and_reaches_stores(ctx, monkeypatc
         lock_guard.setattr(QuerySet, "select_related", reject_joined_row_locks)
         assert cost.post(f"/api/v1/store-requisitions/{rid}/cost-control-approve/", {"items": [{"id": lid, "approved_quantity": "9.00"}]}, format="json").status_code == 400
         approved = cost.post(f"/api/v1/store-requisitions/{rid}/cost-control-approve/", {"items": [{"id": lid, "approved_quantity": "6.00", "reason": "Cost control"}]}, format="json")
-    assert approved.status_code == 200 and approved.data["status"] == "approved"
-    balance = InventoryBalance.objects.get(item=ctx["item"], store=ctx["main"])
-    assert balance.quantity_in_stock == Decimal("20.00") and balance.quantity_reserved == Decimal("6.00")
+        assert approved.status_code == 200 and approved.data["status"] == "approved"
+        balance = InventoryBalance.objects.get(item=ctx["item"], store=ctx["main"])
+        assert balance.quantity_in_stock == Decimal("20.00") and balance.quantity_reserved == Decimal("6.00")
 
-    keeper = APIClient(); keeper.force_authenticate(ctx["ku"])
-    transfer = keeper.post(f"/api/v1/store-requisitions/{rid}/prepare-transfer/", {}, format="json")
-    assert transfer.status_code == 200 and transfer.data["created"] is True
-    assert StockIssue.objects.get(pk=transfer.data["id"]).inventory_changes_applied is False
-    balance.refresh_from_db(); assert balance.quantity_in_stock == Decimal("20.00")
-    assert Notification.objects.filter(employee=ctx["he"], title__icontains="ready for pickup").exists()
+        keeper = APIClient(); keeper.force_authenticate(ctx["ku"])
+        transfer = keeper.post(f"/api/v1/store-requisitions/{rid}/prepare-transfer/", {}, format="json")
+        assert transfer.status_code == 200 and transfer.data["created"] is True
+        assert StockIssue.objects.get(pk=transfer.data["id"]).inventory_changes_applied is False
+        balance.refresh_from_db(); assert balance.quantity_in_stock == Decimal("20.00")
+        assert Notification.objects.filter(employee=ctx["he"], title__icontains="ready for pickup").exists()
 
 
 @pytest.mark.django_db
