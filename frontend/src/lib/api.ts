@@ -1,4 +1,5 @@
 import { itemStatus, type EntityKey, type Line, type Row } from './data'
+import { isTransportFailure, supplierQuotationMatches } from '../features/shared/mutationRecovery'
 
 type ApiRecord = Record<string, unknown>
 type ApiListResult = { rows: ApiRecord[]; error: string | null }
@@ -876,7 +877,7 @@ function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey
 async function sendJson(path: string, method: string, body?: Row): Promise<unknown> {
   const serializedBody = body ? JSON.stringify(body) : ''
   const request = async () => {
-    const response = await fetch(endpointUrl(path), {
+    const response = await fetchWithTimeout(endpointUrl(path), {
       method,
       headers: {
         Accept: 'application/json',
@@ -1561,7 +1562,32 @@ export async function saveBackendRecord(entity: EntityKey, id: string | null, va
       return await response.json() as Row
     })
   }
-  return (await sendJson(id ? `${endpoint}/${id}` : endpoint, id ? 'PATCH' : 'POST', payload)) as Row
+  const target = id ? `${endpoint}/${id}` : endpoint
+  const method = id ? 'PATCH' : 'POST'
+  try {
+    return (await sendJson(target, method, payload)) as Row
+  } catch (error) {
+    if (entity !== 'supplierItems' || id || !isTransportFailure(error)) throw error
+
+    // A browser/network interruption can lose the response after Django has
+    // committed the quotation. Reconcile first, then retry once only when the
+    // authoritative API confirms the exact record was not created.
+    try {
+      const supplier = encodeURIComponent(String(payload.supplier || ''))
+      const item = encodeURIComponent(String(payload.item || ''))
+      const candidates = await readList(`supplier-item-prices?supplier=${supplier}&item=${item}`)
+      const saved = candidates.find((candidate) => supplierQuotationMatches(payload, candidate))
+      if (saved) return saved as Row
+      return (await sendJson(target, method, payload)) as Row
+    } catch (recoveryError) {
+      if (isTransportFailure(recoveryError)) {
+        throw new Error(
+          'The hotel server could not be reached while saving the supplier quotation. Check your connection and try again.',
+        )
+      }
+      throw recoveryError
+    }
+  }
 }
 
 export async function deleteBackendRecord(entity: EntityKey, id: string): Promise<void> {

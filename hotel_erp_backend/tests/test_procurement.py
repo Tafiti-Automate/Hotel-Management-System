@@ -1651,6 +1651,56 @@ def test_only_cost_controller_can_update_supplier_catalogue_price():
 
 
 @pytest.mark.django_db
+def test_only_cost_controller_can_create_supplier_catalogue_price():
+    _employee, department, supplier, item = create_procurement_context()
+    cost_controller_group, _ = Group.objects.get_or_create(name="Cost Controller")
+    cost_controller_group.permissions.add(*Permission.objects.filter(
+        content_type__app_label="inventory",
+        codename__in=("view_supplieritemprice", "add_supplieritemprice"),
+    ))
+    cost_controller_user = get_user_model().objects.create_user(
+        username="supplier-price-create-cost-controller",
+        employee_code="PRICE-CREATE-CC",
+        password="test-pass-123",
+    )
+    cost_controller_user.groups.add(cost_controller_group)
+    Employee.objects.create(
+        user=cost_controller_user,
+        department=department,
+        designation="Cost Controller",
+    )
+    client = APIClient()
+    client.force_authenticate(cost_controller_user)
+
+    response = client.post(
+        "/api/v1/supplier-item-prices/",
+        {
+            "supplier": str(supplier.pk),
+            "item": str(item.pk),
+            "unit": str(item.base_unit_id),
+            "supplier_sku": "SUP-BOOK",
+            "unit_price": "2500.00",
+            "currency": "UGX",
+            "effective_from": "2026-11-03",
+            "minimum_order_quantity": "1.00",
+            "lead_time_days": 2,
+            "quotation_reference": "QUOTE-12",
+            "quotation_valid_until": "2026-12-03",
+            "is_active": True,
+        },
+        format="json",
+    )
+
+    assert response.status_code == 201, response.data
+    assert SupplierItemPrice.objects.filter(
+        supplier=supplier,
+        item=item,
+        unit_price=Decimal("2500.00"),
+        quotation_reference="QUOTE-12",
+    ).exists()
+
+
+@pytest.mark.django_db
 def test_receiving_clerk_workspace_keeps_grn_after_lpo_is_fully_received():
     employee, department, supplier, item = create_procurement_context()
     branch = Branch.objects.create(name="Completed GRN History Branch")
