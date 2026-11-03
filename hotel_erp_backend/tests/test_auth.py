@@ -1,11 +1,17 @@
+from datetime import timedelta
+
 import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
+from django.utils import timezone
 from django.core.files.base import ContentFile as SimpleContentFile
 from django.core.management import call_command
 from django.test import override_settings
+from rest_framework.authtoken.models import Token
+from rest_framework.exceptions import AuthenticationFailed
 from apps.departments.models import Branch, Department
 from apps.employees.models import Employee
+from core.authentication import ExpiringTokenAuthentication
 
 
 def link_employee(user, suffix):
@@ -72,6 +78,50 @@ def test_api_login_accepts_employee_code(client):
 
     assert response.status_code == 200
     assert response.json()["user"]["username"] == user.username
+
+
+@pytest.mark.django_db
+@override_settings(
+    CACHES={"default": {"BACKEND": "django.core.cache.backends.dummy.DummyCache"}},
+    AUTH_TOKEN_MAX_AGE_SECONDS=14400,
+    AUTH_TOKEN_IDLE_TIMEOUT_SECONDS=1800,
+)
+def test_dummy_cache_does_not_expire_an_active_token_at_idle_timeout():
+    user = get_user_model().objects.create_user(
+        username="cacheless-user",
+        employee_code="EMP-CACHELESS",
+        password="test-pass-123",
+    )
+    token = Token.objects.create(user=user)
+    Token.objects.filter(pk=token.pk).update(created=timezone.now() - timedelta(minutes=31))
+    token.refresh_from_db()
+
+    authenticated_user, authenticated_token = ExpiringTokenAuthentication().authenticate_credentials(token.key)
+
+    assert authenticated_user == user
+    assert authenticated_token == token
+
+
+@pytest.mark.django_db
+@override_settings(
+    CACHES={"default": {"BACKEND": "django.core.cache.backends.dummy.DummyCache"}},
+    AUTH_TOKEN_MAX_AGE_SECONDS=14400,
+    AUTH_TOKEN_IDLE_TIMEOUT_SECONDS=1800,
+)
+def test_dummy_cache_still_enforces_absolute_token_lifetime():
+    user = get_user_model().objects.create_user(
+        username="expired-cacheless-user",
+        employee_code="EMP-EXPIRED-CACHELESS",
+        password="test-pass-123",
+    )
+    token = Token.objects.create(user=user)
+    Token.objects.filter(pk=token.pk).update(created=timezone.now() - timedelta(hours=5))
+    token.refresh_from_db()
+
+    with pytest.raises(AuthenticationFailed, match="session has expired"):
+        ExpiringTokenAuthentication().authenticate_credentials(token.key)
+
+    assert not Token.objects.filter(pk=token.pk).exists()
 
 
 @pytest.mark.django_db

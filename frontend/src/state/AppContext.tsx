@@ -365,7 +365,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') checkDeadline()
+      if (document.visibilityState === 'visible') {
+        checkDeadline()
+        validateActiveSession()
+      }
     }
 
     const handleStorage = (event: StorageEvent) => {
@@ -377,7 +380,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    const validateActiveSession = () => {
+    function validateActiveSession() {
       const lastActivity = readLastActivity()
       if (
         sessionCheckInFlight
@@ -467,8 +470,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       patch({ apiStatus: 'live', apiMessage: operationalWarning || `Backend connected; ${rowsLoaded} accessible records loaded` })
     } catch (error) {
       const message = errorMessage(error)
-      if (/\b401\b|session is no longer valid/i.test(message)) {
-        endSession()
+      if (isUnauthorizedError(error) || /\b401\b|session is no longer valid/i.test(message)) {
+        endSession('Your session is no longer valid. Sign in again, then retry your last action.')
         return
       }
       dataRef.current = emptyData()
