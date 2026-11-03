@@ -167,3 +167,37 @@ def test_store_keeper_transfer_and_count_controls_are_assigned_store_scoped(ctx)
     )
     assert created_count.status_code == 201, created_count.data
     assert str(created_count.data["conducted_by"]) == str(ctx["ke"].pk)
+
+
+@pytest.mark.django_db
+def test_department_supervisor_can_access_own_draft_but_not_another_supervisors(ctx):
+    """Canonical Department Supervisor role must replace the retired Requester checks."""
+    owner = APIClient()
+    owner.force_authenticate(ctx["su"])
+    created = owner.post(
+        "/api/v1/store-requisitions/",
+        {"store": str(ctx["main"].pk), "purpose": "Housekeeping stock"},
+        format="json",
+    )
+    assert created.status_code == 201, created.data
+    rid = created.data["id"]
+    assert owner.get(f"/api/v1/store-requisitions/{rid}/").status_code == 200
+    assert owner.patch(
+        f"/api/v1/store-requisitions/{rid}/", {"purpose": "Updated housekeeping stock"}, format="json"
+    ).status_code == 200
+
+    other_user, _ = employee("other-supervisor", "Department Supervisor", ctx["department"], ctx["branch"])
+    other = APIClient()
+    other.force_authenticate(other_user)
+    assert other.get(f"/api/v1/store-requisitions/{rid}/").status_code == 404
+    assert other.patch(
+        f"/api/v1/store-requisitions/{rid}/", {"purpose": "Unauthorized change"}, format="json"
+    ).status_code == 404
+
+    cost = APIClient()
+    cost.force_authenticate(ctx["cu"])
+    assert cost.post(
+        "/api/v1/store-requisitions/",
+        {"store": str(ctx["main"].pk), "purpose": "Unauthorized cost controller request"},
+        format="json",
+    ).status_code == 403
