@@ -3,6 +3,7 @@ from decimal import Decimal
 import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.db.models import QuerySet
 from rest_framework.test import APIClient
 
 from apps.accounts.role_templates import sync_client_roles
@@ -44,7 +45,7 @@ def ctx(db):
 
 
 @pytest.mark.django_db
-def test_department_request_is_reduction_only_and_reaches_stores(ctx):
+def test_department_request_is_reduction_only_and_reaches_stores(ctx, monkeypatch):
     supervisor = APIClient(); supervisor.force_authenticate(ctx["su"])
     request = supervisor.post("/api/v1/store-requisitions/", {"store": str(ctx["main"].pk), "purpose": "Replace linen"}, format="json")
     assert request.status_code == 201, request.data
@@ -62,8 +63,21 @@ def test_department_request_is_reduction_only_and_reaches_stores(ctx):
     assert approved.status_code == 200 and approved.data["status"] == "submitted"
 
     cost = APIClient(); cost.force_authenticate(ctx["cu"])
-    assert cost.post(f"/api/v1/store-requisitions/{rid}/cost-control-approve/", {"items": [{"id": lid, "approved_quantity": "9.00"}]}, format="json").status_code == 400
-    approved = cost.post(f"/api/v1/store-requisitions/{rid}/cost-control-approve/", {"items": [{"id": lid, "approved_quantity": "6.00", "reason": "Cost control"}]}, format="json")
+    original_select_related = QuerySet.select_related
+
+    def reject_joined_row_locks(queryset, *fields):
+        if queryset.query.select_for_update:
+            raise AssertionError(
+                "Cost Control row locks must not join nullable related tables."
+            )
+        return original_select_related(queryset, *fields)
+
+    # SQLite accepts FOR UPDATE query shapes that PostgreSQL rejects. Guard the
+    # endpoint invariant directly so this production-only failure is covered.
+    with monkeypatch.context() as lock_guard:
+        lock_guard.setattr(QuerySet, "select_related", reject_joined_row_locks)
+        assert cost.post(f"/api/v1/store-requisitions/{rid}/cost-control-approve/", {"items": [{"id": lid, "approved_quantity": "9.00"}]}, format="json").status_code == 400
+        approved = cost.post(f"/api/v1/store-requisitions/{rid}/cost-control-approve/", {"items": [{"id": lid, "approved_quantity": "6.00", "reason": "Cost control"}]}, format="json")
     assert approved.status_code == 200 and approved.data["status"] == "approved"
     balance = InventoryBalance.objects.get(item=ctx["item"], store=ctx["main"])
     assert balance.quantity_in_stock == Decimal("20.00") and balance.quantity_reserved == Decimal("6.00")

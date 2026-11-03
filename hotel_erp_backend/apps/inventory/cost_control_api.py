@@ -76,21 +76,19 @@ def cost_control_approve(request, pk):
     now = timezone.now()
 
     with transaction.atomic():
-        locked = (
-            StoreRequisition.objects.select_for_update()
-            .select_related("store__branch__hotel", "department")
-            .get(pk=requisition.pk)
-        )
+        # Lock only the requisition row. ``store`` and ``branch.hotel`` are
+        # nullable relationships, so joining them into a SELECT ... FOR UPDATE
+        # makes PostgreSQL reject the query (the nullable side is an outer
+        # join). Related objects can be loaded separately when they are used.
+        locked = StoreRequisition.objects.select_for_update().get(pk=requisition.pk)
         if locked.status != StoreRequisitionStatus.SUBMITTED:
             raise ValidationError(
                 "Request is no longer awaiting Cost Control. Refresh the page."
             )
 
-        lines = list(
-            locked.items.select_for_update()
-            .select_related("item", "item__base_unit")
-            .order_by("pk")
-        )
+        # Keep the row lock scoped to requisition items as well. Item.base_unit
+        # is nullable and must not be part of the PostgreSQL FOR UPDATE query.
+        lines = list(locked.items.select_for_update().order_by("pk"))
         if not lines:
             raise ValidationError("The Department request has no Articles.")
 
