@@ -142,7 +142,7 @@ def scope_store_requisitions(queryset, user):
             )
         ).distinct()
     # Only an explicitly assigned Requester may originate/track Department requests.
-    if has_role(user, "Requester"):
+    if has_role(user, "Department Supervisor"):
         return queryset.filter(requested_by=employee)
     # All other operational roles start from their own workflow document/stage.
     return queryset.none()
@@ -630,6 +630,12 @@ class StockTransferViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("from_store__name", "to_store__name", "note")
     ordering_fields = ("status", "required_date", "created_at")
 
+    def _require_transfer_operator(self):
+        if not has_role(self.request.user, "System Administrator", "Store Keeper"):
+            raise PermissionDenied("Only an assigned Store Keeper can process stock transfers.")
+        if not has_role(self.request.user, "System Administrator") and not getattr(self.request.user, "employee_profile", None):
+            raise PermissionDenied("An employee profile is required for stock transfer operations.")
+
     def _is_store_keeper(self):
         return has_role(self.request.user, "Store Keeper") and not has_role(
             self.request.user, "System Administrator", "General Manager"
@@ -654,6 +660,7 @@ class StockTransferViewSet(CreatedByModelMixin, ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
+        self._require_transfer_operator()
         from_store = serializer.validated_data["from_store"]
         if self._is_store_keeper() and from_store.pk not in self._assigned_store_ids():
             raise PermissionDenied("Choose a source store assigned to your Store Keeper account.")
@@ -666,6 +673,7 @@ class StockTransferViewSet(CreatedByModelMixin, ModelViewSet):
         )
 
     def perform_update(self, serializer):
+        self._require_transfer_operator()
         self._require_source_store_control(serializer.instance)
         from_store = serializer.validated_data.get("from_store", serializer.instance.from_store)
         if self._is_store_keeper() and from_store.pk not in self._assigned_store_ids():
@@ -695,7 +703,11 @@ class StockTransferViewSet(CreatedByModelMixin, ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
+        self._require_transfer_operator()
         transfer = self.get_object()
+        employee = getattr(request.user, "employee_profile", None)
+        if employee and transfer.requested_by_id == employee.pk:
+            raise PermissionDenied("The transfer requester cannot approve their own transfer.")
         self._require_source_store_control(transfer)
         try:
             transfer.approve(approved_by=getattr(request.user, "employee_profile", None))
@@ -705,6 +717,7 @@ class StockTransferViewSet(CreatedByModelMixin, ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="dispatch")
     def dispatch_transfer(self, request, pk=None):
+        self._require_transfer_operator()
         transfer = self.get_object()
         self._require_source_store_control(transfer)
         try:
@@ -715,7 +728,11 @@ class StockTransferViewSet(CreatedByModelMixin, ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def receive(self, request, pk=None):
+        self._require_transfer_operator()
         transfer = self.get_object()
+        employee = getattr(request.user, "employee_profile", None)
+        if employee and transfer.dispatched_by_id == employee.pk:
+            raise PermissionDenied("The employee who dispatched the transfer cannot receive it.")
         self._require_destination_store_control(transfer)
         try:
             transfer.receive(received_by=getattr(request.user, "employee_profile", None))
@@ -725,14 +742,7 @@ class StockTransferViewSet(CreatedByModelMixin, ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def apply(self, request, pk=None):
-        transfer = self.get_object()
-        self._require_source_store_control(transfer)
-        try:
-            transfer.apply_inventory_changes()
-        except DjangoValidationError as error:
-            raise_drf_validation_error(error)
-        serializer = self.get_serializer(transfer)
-        return Response(serializer.data)
+        raise PermissionDenied("Use the separate approval, dispatch and destination receipt actions for stock transfers.")
 
 
 class StockTransferItemViewSet(CreatedByModelMixin, ModelViewSet):
@@ -848,8 +858,8 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
         return scope_store_requisitions(super().get_queryset(), self.request.user)
 
     def perform_create(self, serializer):
-        if not has_role(self.request.user, "System Administrator", "Requester"):
-            raise PermissionDenied("Only an assigned Requester can create a Department request.")
+        if not has_role(self.request.user, "System Administrator", "Department Supervisor"):
+            raise PermissionDenied("Only an assigned Department Supervisor can create a Department request.")
         super().perform_create(serializer)
 
     def _enforce_requester_edit(self, requisition):
@@ -857,7 +867,7 @@ class StoreRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             return
         employee = getattr(self.request.user, "employee_profile", None)
         if (
-            has_role(self.request.user, "Requester")
+            has_role(self.request.user, "Department Supervisor")
             and employee
             and requisition.requested_by_id == employee.id
             and requisition.status in (
@@ -1101,7 +1111,7 @@ class StoreRequisitionItemViewSet(CreatedByModelMixin, ModelViewSet):
             return
         employee = getattr(self.request.user, "employee_profile", None)
         requester_edit = (
-            has_role(self.request.user, "Requester")
+            has_role(self.request.user, "Department Supervisor")
             and employee
             and requisition.requested_by_id == employee.id
             and requisition.status in (

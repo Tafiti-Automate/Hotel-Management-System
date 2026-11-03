@@ -2181,6 +2181,11 @@ class SupplierReturnViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("return_no", "supplier__name", "goods_receipt__purchase_order__po_number", "reason")
     ordering_fields = ("return_no", "return_date", "status", "created_at")
 
+    def perform_destroy(self, instance):
+        if instance.inventory_changes_applied or instance.status != "draft":
+            raise ValidationError("A dispatched supplier return cannot be deleted.")
+        instance.delete()
+
     @action(detail=True, methods=["post"])
     def apply(self, request, pk=None):
         supplier_return = self.get_object()
@@ -2212,6 +2217,11 @@ class SupplierReturnItemViewSet(CreatedByModelMixin, ModelViewSet):
     filterset_fields = ("supplier_return", "item", "unit")
     search_fields = ("supplier_return__return_no", "item__name", "item__sku", "reason")
     ordering_fields = ("quantity", "base_quantity", "created_at")
+
+    def perform_destroy(self, instance):
+        if instance.supplier_return.inventory_changes_applied or instance.supplier_return.status != "draft":
+            raise ValidationError("A dispatched supplier return line cannot be deleted.")
+        instance.delete()
 
 
 class ProcurementAttachmentViewSet(CreatedByModelMixin, ModelViewSet):

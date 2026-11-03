@@ -1007,6 +1007,10 @@ class SupplierReturnItemSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         supplier_return = attrs.get("supplier_return") or getattr(self.instance, "supplier_return", None)
+        if self.instance and "supplier_return" in attrs and attrs["supplier_return"].pk != self.instance.supplier_return_id:
+            raise serializers.ValidationError({"supplier_return": "A return line cannot be moved to another return."})
+        if supplier_return and (supplier_return.inventory_changes_applied or supplier_return.status != "draft"):
+            raise serializers.ValidationError("Only draft supplier return lines can be changed.")
         item = attrs.get("item") or getattr(self.instance, "item", None)
         validate_configured_item_unit(
             item,
@@ -1034,6 +1038,8 @@ class SupplierReturnSerializer(serializers.ModelSerializer):
         )
 
     def validate(self, attrs):
+        if self.instance and (self.instance.inventory_changes_applied or self.instance.status != "draft"):
+            raise serializers.ValidationError("A dispatched supplier return is immutable.")
         supplier = attrs.get("supplier") or getattr(self.instance, "supplier", None)
         receipt = attrs.get("goods_receipt") or getattr(self.instance, "goods_receipt", None)
         if supplier and receipt and receipt.purchase_order.supplier_id != supplier.id:
