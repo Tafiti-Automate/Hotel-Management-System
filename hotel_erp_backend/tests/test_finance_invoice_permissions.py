@@ -32,3 +32,32 @@ def test_invoice_approval_requires_financial_manager_even_for_authenticated_user
     finance_client.force_authenticate(finance_user)
     # The missing record produces 404 only after the Financial Manager authorization gate passes.
     assert finance_client.post(url, {}, format="json").status_code == 404
+
+
+@pytest.mark.django_db
+def test_invoice_matching_rejects_cost_controller_and_allows_financial_manager():
+    sync_client_roles()
+    url = "/api/v1/supplier-invoices/00000000-0000-0000-0000-000000000001/match/"
+    for role, expected_status in (("Cost Controller", 403), ("Procurement Manager", 403), ("Financial Manager", 404)):
+        user = get_user_model().objects.create_user(
+            username=f"invoice-match-{role.lower().replace(' ', '-')}",
+            employee_code=f"MATCH-{role.upper().replace(' ', '-')}",
+            password="test-password",
+        )
+        user.groups.add(Group.objects.get(name=role))
+        client = APIClient()
+        client.force_authenticate(user)
+        assert client.post(url, {}, format="json").status_code == expected_status
+
+
+@pytest.mark.django_db
+def test_invoice_model_permissions_keep_cost_controller_read_only():
+    sync_client_roles()
+    cost = Group.objects.get(name="Cost Controller")
+    finance = Group.objects.get(name="Financial Manager")
+    assert cost.permissions.filter(codename="view_supplierinvoice", content_type__app_label="finance").exists()
+    assert not cost.permissions.filter(codename="change_supplierinvoice", content_type__app_label="finance").exists()
+    for action in ("view", "add", "change", "delete"):
+        assert finance.permissions.filter(
+            codename=f"{action}_supplierinvoice", content_type__app_label="finance"
+        ).exists()
