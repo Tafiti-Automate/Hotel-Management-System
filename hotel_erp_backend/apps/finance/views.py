@@ -1,9 +1,8 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
@@ -103,6 +102,11 @@ class SupplierInvoiceViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("invoice_number", "supplier__name", "purchase_order__po_number")
     ordering_fields = ("invoice_date", "due_date", "subtotal", "status", "created_at")
 
+    @staticmethod
+    def _require_invoice_manager(user):
+        if not (user.is_superuser or user.groups.filter(name__in=("Financial Manager", "System Administrator")).exists()):
+            raise PermissionDenied("Only the Financial Manager can manage supplier invoice matching and approval.")
+
     def perform_destroy(self, instance):
         if instance.status != SupplierInvoice.STATUS_DRAFT:
             raise ValidationError(
@@ -110,8 +114,9 @@ class SupplierInvoiceViewSet(CreatedByModelMixin, ModelViewSet):
             )
         instance.delete()
 
-    @action(detail=True, methods=["post"], url_path="match")
+    @action(detail=True, methods=["post"], url_path="match", permission_classes=[IsAuthenticated])
     def match_invoice(self, request, pk=None):
+        self._require_invoice_manager(request.user)
         with transaction.atomic():
             invoice = SupplierInvoice.objects.select_for_update().get(
                 pk=self.get_object().pk
@@ -122,8 +127,7 @@ class SupplierInvoiceViewSet(CreatedByModelMixin, ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="approve-for-payment", permission_classes=[IsAuthenticated])
     def approve_for_payment(self, request, pk=None):
-        if not (request.user.is_superuser or request.user.groups.filter(name__in=("Financial Manager", "System Administrator")).exists()):
-            raise PermissionDenied("Only the Financial Manager can approve a supplier invoice for payment.")
+        self._require_invoice_manager(request.user)
         invoice = self.get_object()
         try:
             invoice.approve_for_payment(approved_by=request.user)
