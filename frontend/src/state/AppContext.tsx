@@ -20,6 +20,7 @@ import {
 import type { AccentName, Density, Mode } from '../lib/theme'
 import { canAccessModule, canAccessRoute, canSwitchModules, canViewReport, operationsLandingFor } from '../lib/access'
 import { labelForRoute, pathForRoute, routeFromPath } from '../lib/navigation'
+import { isUnauthorizedError } from '../features/shared/httpError'
 
 export type Screen = 'login' | 'launchpad' | 'app'
 export type Tab = 'overview' | 'procurement' | 'inventory'
@@ -120,6 +121,7 @@ export interface AppContextValue extends AppState {
 const AppContext = createContext<AppContextValue | null>(null)
 const GUEST: User = { name: 'Guest', role: '—', designation: '', photoUrl: '', id: '', employeeId: '', employeeCode: '', branchId: '', branchName: '', departmentId: '', departmentName: '', isStaff: false, isSuperuser: false, permissions: [] }
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000
+const SESSION_CHECK_INTERVAL_MS = 5 * 60 * 1000
 const ACTIVITY_WRITE_INTERVAL_MS = 1000
 const LAST_ACTIVITY_KEY = 'hms_last_activity'
 const APPEARANCE_KEY = 'hms_appearance'
@@ -330,6 +332,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (state.screen === 'login' || !getToken()) return
 
     let idleTimer: ReturnType<typeof setTimeout> | undefined
+    let sessionCheckInFlight = false
     let lastActivityWrite = 0
 
     const expireSession = () => {
@@ -374,6 +377,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     }
 
+    const validateActiveSession = () => {
+      const lastActivity = readLastActivity()
+      if (
+        sessionCheckInFlight
+        || document.visibilityState !== 'visible'
+        || !lastActivity
+        || Date.now() - lastActivity >= IDLE_TIMEOUT_MS
+      ) return
+
+      sessionCheckInFlight = true
+      void fetchCurrentUser()
+        .catch((error) => {
+          if (isUnauthorizedError(error)) {
+            endSession('Your session is no longer valid. Sign in again, then retry your last action.')
+          }
+        })
+        .finally(() => { sessionCheckInFlight = false })
+    }
+
     if (!readLastActivity()) writeLastActivity(Date.now())
     checkDeadline()
 
@@ -383,9 +405,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })
     document.addEventListener('visibilitychange', handleVisibilityChange)
     window.addEventListener('storage', handleStorage)
+    const sessionCheckTimer = window.setInterval(validateActiveSession, SESSION_CHECK_INTERVAL_MS)
 
     return () => {
       clearTimeout(idleTimer)
+      window.clearInterval(sessionCheckTimer)
       activityEvents.forEach((eventName) => {
         window.removeEventListener(eventName, recordActivity)
       })
@@ -506,6 +530,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         showToast(target.id ? `${recordName} updated successfully` : `${recordName} created successfully`)
       })
       .catch((error) => {
+        if (isUnauthorizedError(error)) {
+          endSession('Your session is no longer valid. Sign in again, then retry your last action.')
+          return
+        }
         showWorkflowAlert(
           target.id ? `${recordName} update failed` : `${recordName} creation failed`,
           errorMessage(error),
@@ -517,7 +545,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       })
     saveFormRequest.current = request
     return request
-  }, [patch, refreshData, showToast, showWorkflowAlert, state.form, user])
+  }, [endSession, patch, refreshData, showToast, showWorkflowAlert, state.form, user])
 
   const doDelete = useCallback(() => {
     const target = state.confirm

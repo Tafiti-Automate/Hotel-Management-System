@@ -1,5 +1,6 @@
 import { itemStatus, type EntityKey, type Line, type Row } from './data'
 import { isTransportFailure, supplierQuotationMatches } from '../features/shared/mutationRecovery'
+import { ApiHttpError } from '../features/shared/httpError'
 
 type ApiRecord = Record<string, unknown>
 type ApiListResult = { rows: ApiRecord[]; error: string | null }
@@ -343,7 +344,14 @@ export async function fetchCurrentUser(): Promise<AuthUser> {
   const response = await fetch(`${apiRoot()}/auth/me/`, {
     headers: { Accept: 'application/json', ...authHeaders() },
   })
-  if (!response.ok) throw new Error(`Current session could not be verified (${response.status}).`)
+  if (!response.ok) {
+    let body: unknown = null
+    try { body = await response.json() } catch { /* non-JSON response */ }
+    throw new ApiHttpError(
+      apiErrorDetail(body, `Current session could not be verified (${response.status}).`),
+      response.status,
+    )
+  }
   const user = await response.json() as AuthUser
   let remember = true
   try { remember = Boolean(localStorage.getItem(TOKEN_KEY)) } catch { /* storage unavailable */ }
@@ -894,7 +902,10 @@ async function sendJson(path: string, method: string, body?: Row): Promise<unkno
       } catch {
         /* non-JSON response */
       }
-      throw new Error(apiErrorDetail(errorBody, `The operation could not be completed (${response.status}).`))
+      throw new ApiHttpError(
+        apiErrorDetail(errorBody, `The operation could not be completed (${response.status}).`),
+        response.status,
+      )
     }
 
     if (response.status === 204) return null

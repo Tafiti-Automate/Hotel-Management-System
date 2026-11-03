@@ -4,6 +4,7 @@ import { HelpLabel } from './HelpLabel'
 import { Icon } from './Icon'
 import { cfg, getOptions, type Row } from '../lib/data'
 import { normalizeUgandaPhone, UGANDA_PHONE_HINT } from '../lib/ugandaPhone'
+import { formWizardPages } from '../features/shared/formWizard'
 
 
 function SmallFolderGraphic({ open = false, color = "var(--accent)" }: { open?: boolean; color?: string }) {
@@ -145,10 +146,10 @@ export default function FormDrawer() {
     if (f.entity === 'categories' && !f.id && f.preset === 'majorGroup' && fd.key === 'parent') return false
     return true
   })
-  const wizard = visibleFields.length > 6 && f.entity !== 'items'
-  const pageSize = 4
-  const pageCount = wizard ? Math.ceil(visibleFields.length / pageSize) : 1
-  const pageFields = wizard ? visibleFields.slice(step * pageSize, (step + 1) * pageSize) : visibleFields
+  const wizardPages = formWizardPages(f.entity, visibleFields)
+  const wizard = wizardPages.length > 1
+  const pageCount = wizardPages.length
+  const pageFields = wizardPages[Math.min(step, pageCount - 1)]
   const title = f.id
     ? `Edit ${conf.singular || ''}`
     : f.preset === 'majorGroup'
