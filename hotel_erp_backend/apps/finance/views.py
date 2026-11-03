@@ -1,6 +1,7 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
@@ -120,6 +121,8 @@ class SupplierInvoiceViewSet(CreatedByModelMixin, ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="approve-for-payment")
     def approve_for_payment(self, request, pk=None):
+        if not (request.user.is_superuser or request.user.groups.filter(name__in=("Financial Manager", "System Administrator")).exists()):
+            raise PermissionDenied("Only the Financial Manager can approve a supplier invoice for payment.")
         invoice = self.get_object()
         try:
             invoice.approve_for_payment(approved_by=request.user)
