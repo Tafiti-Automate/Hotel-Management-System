@@ -302,7 +302,6 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             InventoryBalance,
             Item,
             StoreKeeperAssignment,
-            StoreLocation,
             SupplierItemPrice,
         )
         from apps.notifications.services import notify_roles
@@ -446,29 +445,6 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
             prepared_lines.append((item, quantity, reference_cost, str(payload.get("note") or "").strip()))
 
         with transaction.atomic():
-            # Serialize purchase-request creation per destination store so two
-            # browser sessions cannot create the same replenishment line at once.
-            StoreLocation.objects.select_for_update().get(pk=store.pk)
-            for item, quantity, reference_cost, note in prepared_lines:
-                duplicate = RequisitionItem.objects.filter(
-                    item=item,
-                    destination_store=store,
-                    requisition__procurement_source=ProcurementSource.STORE_PURCHASE,
-                    requisition__status__in=(
-                        PRStatus.APPROVED,
-                        PRStatus.PARTIALLY_ORDERED,
-                        PRStatus.ORDERED,
-                        PRStatus.PARTIALLY_RECEIVED,
-                    ),
-                ).exists()
-                if duplicate:
-                    raise ValidationError({
-                        "lines": (
-                            f"{item.name} already has an open Store Purchase Request for {store}. "
-                            "Complete or cancel that request before creating another."
-                        )
-                    })
-
             purchase = PurchaseRequisition.objects.create(
                 request_type=RequisitionType.HOTEL_PURCHASE,
                 procurement_source=ProcurementSource.STORE_PURCHASE,

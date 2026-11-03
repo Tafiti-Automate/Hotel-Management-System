@@ -9,8 +9,6 @@ interface FeedbackDialogProps {
   message: string
   details?: string[]
   onClose: () => void
-  actionLabel?: string
-  onAction?: () => void
 }
 
 const presentations: Record<FeedbackTone, {
@@ -47,7 +45,7 @@ const presentations: Record<FeedbackTone, {
   },
 }
 
-export default function FeedbackDialog({ tone, title, message, details = [], onClose, actionLabel, onAction }: FeedbackDialogProps) {
+export default function FeedbackDialog({ tone, title, message, details = [], onClose }: FeedbackDialogProps) {
   const buttonRef = useRef<HTMLButtonElement>(null)
   const view = presentations[tone]
 
@@ -113,10 +111,7 @@ export default function FeedbackDialog({ tone, title, message, details = [], onC
         className="feedback-action"
         ref={buttonRef}
         type="button"
-        onClick={() => {
-          onClose()
-          onAction?.()
-        }}
+        onClick={onClose}
         style={{
           width: '100%',
           height: 44,
@@ -133,7 +128,7 @@ export default function FeedbackDialog({ tone, title, message, details = [], onC
           letterSpacing: '.04em',
           textTransform: 'uppercase',
         }}
-      >{actionLabel || view.button}</button>
+      >{view.button}</button>
     </section>
   </>
 }

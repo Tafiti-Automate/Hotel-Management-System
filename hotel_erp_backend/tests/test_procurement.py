@@ -376,6 +376,52 @@ def test_store_keeper_can_read_only_assigned_store_lpo_without_commercial_data()
 
 
 @pytest.mark.django_db
+def test_store_keeper_can_repeat_open_purchase_request_for_same_item_and_store():
+    employee, _department, _supplier, item = create_procurement_context()
+    branch = Branch.objects.create(name="Repeat Request Branch")
+    employee.branch = branch
+    employee.save(update_fields=["branch", "updated_at"])
+    employee.user.groups.add(Group.objects.get_or_create(name="Store Keeper")[0])
+    store = StoreLocation.objects.create(branch=branch, name="Repeat Request Store")
+    StoreKeeperAssignment.objects.create(store=store, employee=employee)
+
+    client = APIClient()
+    client.force_authenticate(employee.user)
+    first = client.post(
+        "/api/v1/requisitions/store-purchase-requests/",
+        {
+            "store": str(store.pk),
+            "reason": "Initial replenishment requirement",
+            "lines": [{"item": str(item.pk), "quantity": "2"}],
+        },
+        format="json",
+    )
+    second = client.post(
+        "/api/v1/requisitions/store-purchase-requests/",
+        {
+            "store": str(store.pk),
+            "reason": "Additional requirement before the first request is complete",
+            "lines": [{"item": str(item.pk), "quantity": "3"}],
+        },
+        format="json",
+    )
+
+    assert first.status_code == 201, first.data
+    assert second.status_code == 201, second.data
+    requests = PurchaseRequisition.objects.filter(
+        requester=employee,
+        procurement_source="store_purchase",
+    )
+    assert requests.count() == 2
+    assert set(requests.values_list("status", flat=True)) == {PRStatus.APPROVED}
+    assert RequisitionItem.objects.filter(
+        requisition__in=requests,
+        item=item,
+        destination_store=store,
+    ).count() == 2
+
+
+@pytest.mark.django_db
 def test_requisition_readiness_explains_missing_prerequisites():
     employee, department, supplier, item = create_procurement_context()
     requisition = PurchaseRequisition.objects.create(
