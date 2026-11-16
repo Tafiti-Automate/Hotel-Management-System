@@ -1,4 +1,9 @@
+import csv
+import io
+from decimal import Decimal, InvalidOperation
+from django.db import transaction
 from django.core.exceptions import ValidationError as DjangoValidationError
+from apps.departments.models import Branch
 from django.db.models import Q
 from django.http import HttpResponse
 from rest_framework.decorators import action
@@ -11,6 +16,7 @@ from apps.materials_control.models import (
     CostCenterBudget,
     FiscalPeriod,
     GLExport,
+    GLAccountMapping,
     IntegrationConfig,
     OutletAssignment,
     POSImportBatch,
@@ -25,6 +31,7 @@ from apps.materials_control.serializers import (
     CostCenterBudgetSerializer,
     FiscalPeriodSerializer,
     GLExportSerializer,
+    GLAccountMappingSerializer,
     IntegrationConfigSerializer,
     OutletAssignmentSerializer,
     POSImportBatchSerializer,
@@ -74,6 +81,54 @@ def hotel_scope(queryset, user, branch_path):
     if employee.branch.hotel_id:
         return queryset.filter(**{f"{branch_path}__hotel_id": employee.branch.hotel_id})
     return queryset.filter(**{f"{branch_path}_id": employee.branch_id})
+
+
+def ensure_branch_scope(user, branch_id):
+    if user.is_superuser or has_role(user, "admin"):
+        return
+    employee = employee_for(user)
+    if not employee or not employee.branch_id or not branch_id:
+        raise PermissionDenied("An assigned property is required.")
+    target = Branch.objects.only("hotel_id").filter(pk=branch_id).first()
+    if target is None:
+        raise PermissionDenied("Unknown property.")
+    if employee.branch.hotel_id and target.hotel_id:
+        if employee.branch.hotel_id != target.hotel_id:
+            raise PermissionDenied("This record belongs to another hotel.")
+    elif employee.branch_id != target.pk:
+        raise PermissionDenied("This record belongs to another branch.")
+
+
+def department_outlet_ids(employee):
+    if not employee or not employee.department_id or not employee.branch_id:
+        return OutletAssignment.objects.none().values_list("outlet_id", flat=True)
+    return OutletAssignment.objects.filter(
+        employee__department_id=employee.department_id,
+        employee__branch_id=employee.branch_id,
+        is_active=True,
+    ).values_list("outlet_id", flat=True)
+
+
+def scoped_recipe_records(queryset, user, outlet_field):
+    queryset = hotel_scope(queryset, user, f"{outlet_field}__branch")
+    if user.is_superuser or has_role(user, "admin", "cost", "finance", "management"):
+        return queryset
+    employee = employee_for(user)
+    if has_role(user, "department"):
+        return queryset.filter(**{f"{outlet_field}_id__in": department_outlet_ids(employee)})
+    if has_role(user, "outlet") and employee:
+        ids = OutletAssignment.objects.filter(
+            employee=employee, is_active=True
+        ).values_list("outlet_id", flat=True)
+        return queryset.filter(**{f"{outlet_field}_id__in": ids})
+    return queryset.none()
+
+
+def require_recipe_outlet(user, outlet):
+    ensure_branch_scope(user, outlet.branch_id)
+    if has_role(user, "department") and not has_role(user, "cost"):
+        if outlet.pk not in department_outlet_ids(employee_for(user)):
+            raise PermissionDenied("This outlet is outside your department.")
 
 
 class OutletAssignmentViewSet(CreatedByModelMixin, ModelViewSet):
@@ -131,7 +186,7 @@ class WasteRecordViewSet(CreatedByModelMixin, ModelViewSet):
             outlet_ids = OutletAssignment.objects.filter(
                 employee=employee, is_active=True
             ).values_list("outlet_id", flat=True)
-            return queryset.filter(outlet_id__in=outlet_ids, reported_by=employee)
+            return queryset.filter(outlet_id__in=outlet_ids)
         return queryset.none()
 
     def perform_create(self, serializer):
@@ -192,7 +247,7 @@ class RecipeViewSet(CreatedByModelMixin, ModelViewSet):
     ordering_fields = ("name", "status", "published_at", "created_at")
 
     def get_queryset(self):
-        return hotel_scope(super().get_queryset(), self.request.user, "outlet__branch")
+        return scoped_recipe_records(super().get_queryset(), self.request.user, "outlet")
 
     def _require_recipe_editor(self):
         if not has_role(self.request.user, "department", "cost"):
@@ -200,10 +255,16 @@ class RecipeViewSet(CreatedByModelMixin, ModelViewSet):
 
     def perform_create(self, serializer):
         self._require_recipe_editor()
+        require_recipe_outlet(self.request.user, serializer.validated_data["outlet"])
         super().perform_create(serializer)
 
     def perform_update(self, serializer):
         self._require_recipe_editor()
+        if serializer.instance.status != Recipe.STATUS_DRAFT:
+            raise ValidationError("Published or archived recipes cannot be edited; create a new revision.")
+        require_recipe_outlet(self.request.user, serializer.validated_data.get(
+            "outlet", serializer.instance.outlet
+        ))
         serializer.save()
 
     def perform_destroy(self, instance):
@@ -240,7 +301,7 @@ class RecipeIngredientViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("recipe__name", "item__name", "item__sku")
 
     def get_queryset(self):
-        return hotel_scope(super().get_queryset(), self.request.user, "recipe__outlet__branch")
+        return scoped_recipe_records(super().get_queryset(), self.request.user, "recipe__outlet")
 
     def _require_editor(self):
         if not has_role(self.request.user, "department", "cost"):
@@ -248,14 +309,24 @@ class RecipeIngredientViewSet(CreatedByModelMixin, ModelViewSet):
 
     def perform_create(self, serializer):
         self._require_editor()
+        recipe = serializer.validated_data["recipe"]
+        if not scoped_recipe_records(Recipe.objects.filter(pk=recipe.pk),
+                                     self.request.user, "outlet").exists():
+            raise PermissionDenied("Recipe is outside your department/property.")
         super().perform_create(serializer)
 
     def perform_update(self, serializer):
         self._require_editor()
+        recipe = serializer.validated_data.get("recipe", serializer.instance.recipe)
+        if not scoped_recipe_records(Recipe.objects.filter(pk=recipe.pk),
+                                     self.request.user, "outlet").exists():
+            raise PermissionDenied("Recipe is outside your department/property.")
         serializer.save()
 
     def perform_destroy(self, instance):
         self._require_editor()
+        if instance.recipe.status != Recipe.STATUS_DRAFT:
+            raise ValidationError("Ingredients of published or archived recipes cannot be removed.")
         instance.delete()
 
 
@@ -274,10 +345,14 @@ class POSPLUMappingViewSet(CreatedByModelMixin, ModelViewSet):
 
     def perform_create(self, serializer):
         self._require_cost_control()
+        ensure_branch_scope(self.request.user, serializer.validated_data["outlet"].branch_id)
         super().perform_create(serializer)
 
     def perform_update(self, serializer):
         self._require_cost_control()
+        ensure_branch_scope(self.request.user, serializer.validated_data.get(
+            "outlet", serializer.instance.outlet
+        ).branch_id)
         serializer.save()
 
     def perform_destroy(self, instance):
@@ -303,6 +378,7 @@ class POSImportBatchViewSet(CreatedByModelMixin, ModelViewSet):
 
     def perform_create(self, serializer):
         self._require_cost_control()
+        ensure_branch_scope(self.request.user, serializer.validated_data["outlet"].branch_id)
         super().perform_create(serializer)
 
     @action(detail=True, methods=["post"], url_path="run-depletion")
@@ -314,6 +390,62 @@ class POSImportBatchViewSet(CreatedByModelMixin, ModelViewSet):
         except DjangoValidationError as error:
             raise_model_error(error)
         return Response(self.get_serializer(batch).data)
+
+    @action(detail=True, methods=["post"], url_path="import-csv")
+    def import_csv(self, request, pk=None):
+        self._require_cost_control()
+        batch = self.get_object()
+        csv_text = request.data.get("csv")
+        if not isinstance(csv_text, str) or not csv_text.strip():
+            raise ValidationError({"csv": "Provide a CSV document."})
+        if len(csv_text.encode("utf-8")) > 1_000_000:
+            raise ValidationError({"csv": "Maximum CSV size is 1 MB."})
+        reader = csv.DictReader(io.StringIO(csv_text.lstrip("\ufeff")))
+        required = {"external_plu", "external_reference", "quantity"}
+        if not reader.fieldnames or not required.issubset(reader.fieldnames):
+            raise ValidationError({"csv": "Required columns: external_plu,external_reference,quantity."})
+        imported, skipped = 0, 0
+        seen = set()
+        with transaction.atomic():
+            locked = POSImportBatch.objects.select_for_update().get(pk=batch.pk)
+            if locked.status == POSImportBatch.STATUS_PROCESSED:
+                raise ValidationError("A processed batch cannot receive sale lines.")
+            existing = {line.external_reference: line for line in locked.lines.all()}
+            for number, row in enumerate(reader, 2):
+                plu = (row.get("external_plu") or "").strip()
+                ref = (row.get("external_reference") or "").strip()
+                name = (row.get("external_name") or "").strip()
+                try:
+                    quantity = Decimal((row.get("quantity") or "").strip())
+                    sales = Decimal((row.get("net_sales") or "0").strip())
+                except (InvalidOperation, ValueError):
+                    raise ValidationError({"csv": f"Invalid numeric value at line {number}."})
+                if not plu or not ref or ref in seen:
+                    raise ValidationError({"csv": f"Blank or repeated PLU/reference at line {number}."})
+                seen.add(ref)
+                if not quantity.is_finite() or not sales.is_finite() or quantity <= 0 or sales < 0:
+                    raise ValidationError({"csv": f"Invalid quantity or sales at line {number}."})
+                previous = existing.get(ref)
+                if previous:
+                    if (previous.external_plu, previous.external_name,
+                        previous.quantity, previous.net_sales) != (plu, name, quantity, sales):
+                        raise ValidationError({"csv": f"Reference {ref} conflicts with an existing line."})
+                    skipped += 1
+                    continue
+                sale = POSSaleLine(
+                    batch=locked, external_plu=plu,
+                    external_name=name, external_reference=ref,
+                    quantity=quantity, net_sales=sales, created_by=request.user,
+                )
+                try:
+                    sale.full_clean()
+                except DjangoValidationError as error:
+                    raise_model_error(error)
+                sale.save()
+                imported += 1
+            if not seen:
+                raise ValidationError({"csv": "CSV contains no sale lines."})
+        return Response({"imported": imported, "skipped_existing": skipped})
 
 
 class POSSaleLineViewSet(CreatedByModelMixin, ModelViewSet):
@@ -333,12 +465,16 @@ class POSSaleLineViewSet(CreatedByModelMixin, ModelViewSet):
 
     def perform_create(self, serializer):
         self._require_cost_control()
+        ensure_branch_scope(self.request.user, serializer.validated_data["batch"].outlet.branch_id)
         super().perform_create(serializer)
 
     def perform_update(self, serializer):
         self._require_cost_control()
         if serializer.instance.inventory_changes_applied:
             raise ValidationError("A depleted POS line is immutable.")
+        ensure_branch_scope(self.request.user, serializer.validated_data.get(
+            "batch", serializer.instance.batch
+        ).outlet.branch_id)
         serializer.save()
 
     def perform_destroy(self, instance):
@@ -356,7 +492,13 @@ class CostCenterBudgetViewSet(CreatedByModelMixin, ModelViewSet):
     ordering_fields = ("period_month", "spending_cap", "department__name")
 
     def get_queryset(self):
-        return hotel_scope(super().get_queryset(), self.request.user, "branch")
+        scoped = hotel_scope(super().get_queryset(), self.request.user, "branch")
+        if has_role(self.request.user, "department") and not has_role(
+            self.request.user, "finance", "management", "admin"
+        ):
+            employee = employee_for(self.request.user)
+            return scoped.filter(department_id=employee.department_id) if employee else scoped.none()
+        return scoped
 
     def _require_finance(self):
         if not has_role(self.request.user, "finance"):
@@ -364,10 +506,14 @@ class CostCenterBudgetViewSet(CreatedByModelMixin, ModelViewSet):
 
     def perform_create(self, serializer):
         self._require_finance()
+        ensure_branch_scope(self.request.user, serializer.validated_data["branch"].pk)
         super().perform_create(serializer)
 
     def perform_update(self, serializer):
         self._require_finance()
+        ensure_branch_scope(self.request.user, serializer.validated_data.get(
+            "branch", serializer.instance.branch
+        ).pk)
         serializer.save()
 
     def perform_destroy(self, instance):
@@ -424,12 +570,16 @@ class FiscalPeriodViewSet(CreatedByModelMixin, ModelViewSet):
 
     def perform_create(self, serializer):
         self._require_finance()
+        ensure_branch_scope(self.request.user, serializer.validated_data["branch"].pk)
         super().perform_create(serializer)
 
     def perform_update(self, serializer):
         self._require_finance()
         if serializer.instance.status == FiscalPeriod.STATUS_CLOSED:
             raise ValidationError("Closed fiscal periods are immutable.")
+        ensure_branch_scope(self.request.user, serializer.validated_data.get(
+            "branch", serializer.instance.branch
+        ).pk)
         serializer.save()
 
     def perform_destroy(self, instance):
@@ -460,6 +610,31 @@ class FiscalPeriodViewSet(CreatedByModelMixin, ModelViewSet):
         except DjangoValidationError as error:
             raise_model_error(error)
         return Response(GLExportSerializer(export, context=self.get_serializer_context()).data)
+
+
+class GLAccountMappingViewSet(CreatedByModelMixin, ModelViewSet):
+    queryset = GLAccountMapping.objects.select_related("branch__hotel")
+    serializer_class = GLAccountMappingSerializer
+    filterset_fields = ("branch", "source_type", "is_active")
+
+    def get_queryset(self):
+        return hotel_scope(super().get_queryset(), self.request.user, "branch")
+
+    def _require_admin(self):
+        if not (self.request.user.is_superuser or has_role(self.request.user, "admin")):
+            raise PermissionDenied("Only IT can configure GL account mappings.")
+
+    def perform_create(self, serializer):
+        self._require_admin()
+        super().perform_create(serializer)
+
+    def perform_update(self, serializer):
+        self._require_admin()
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self._require_admin()
+        instance.delete()
 
 
 class GLExportViewSet(ReadOnlyModelViewSet):

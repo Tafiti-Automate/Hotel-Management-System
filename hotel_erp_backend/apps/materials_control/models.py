@@ -333,8 +333,8 @@ class RecipeIngredient(BaseModel):
         super().clean()
         if self.trim_percent >= Decimal("100"):
             raise ValidationError({"trim_percent": "Trim percentage must be below 100%."})
-        if self.recipe_id and self.recipe.status == Recipe.STATUS_ARCHIVED:
-            raise ValidationError("Archived recipes cannot be changed.")
+        if self.recipe_id and self.recipe.status != Recipe.STATUS_DRAFT:
+            raise ValidationError("Only draft recipes can be edited; publish a new revision.")
 
     def save(self, *args, **kwargs):
         self.base_quantity = self.item.quantity_in_base_units(
@@ -757,6 +757,7 @@ class FiscalPeriod(BaseModel):
     def pre_close_checklist(self):
         from apps.inventory.models import StockCount, StockTransfer
         from apps.procurement.models import GoodsReceiptNote
+        from apps.finance.models import SupplierInvoice
 
         open_grns = GoodsReceiptNote.objects.filter(
             purchase_order__requisition__branch=self.branch,
@@ -770,7 +771,20 @@ class FiscalPeriod(BaseModel):
             store__branch=self.branch,
             count_date__range=(self.start_date, self.end_date),
         ).exclude(status__in=(StockCountStatus.APPLIED, StockCountStatus.CANCELLED))
+        unresolved_invoices = SupplierInvoice.objects.filter(
+            purchase_order__requisition__branch=self.branch,
+            invoice_date__range=(self.start_date, self.end_date),
+            status__in=(SupplierInvoice.STATUS_DRAFT, SupplierInvoice.STATUS_EXCEPTION),
+        )
+        unresolved_pos = POSImportBatch.objects.filter(
+            outlet__branch=self.branch,
+            business_date__range=(self.start_date, self.end_date),
+        ).exclude(status=POSImportBatch.STATUS_PROCESSED)
         blockers = []
+        if unresolved_invoices.exists():
+            blockers.append(f"{unresolved_invoices.count()} supplier invoice(s) need matching or cancellation.")
+        if unresolved_pos.exists():
+            blockers.append(f"{unresolved_pos.count()} POS import(s) need depletion.")
         if open_grns.exists():
             blockers.append(f"{open_grns.count()} GRN(s) are not posted or cancelled.")
         if open_transfers.exists():
@@ -783,6 +797,8 @@ class FiscalPeriod(BaseModel):
             "open_grns": open_grns.count(),
             "open_transfers": open_transfers.count(),
             "open_stock_counts": open_counts.count(),
+            "unresolved_invoices": unresolved_invoices.count(),
+            "unresolved_pos_imports": unresolved_pos.count(),
         }
 
     def close(self, actor, note):
@@ -803,6 +819,42 @@ class FiscalPeriod(BaseModel):
 
     def __str__(self):
         return f"{self.branch} - {self.name}"
+
+
+class GLAccountMapping(BaseModel):
+    SOURCE_INVOICE = "supplier_invoice"
+    SOURCE_EXPENSE = "expense"
+    SOURCE_CHOICES = (
+        (SOURCE_INVOICE, "Supplier invoices"),
+        (SOURCE_EXPENSE, "Expenses"),
+    )
+
+    branch = models.ForeignKey(
+        "departments.Branch", on_delete=models.PROTECT, related_name="gl_account_mappings"
+    )
+    source_type = models.CharField(max_length=40, choices=SOURCE_CHOICES)
+    debit_account = models.CharField(max_length=50)
+    credit_account = models.CharField(max_length=50)
+    tax_account = models.CharField(
+        max_length=50, blank=True, help_text="Input VAT account for taxable supplier invoices."
+    )
+    is_active = models.BooleanField(default=True)
+
+    class Meta(BaseModel.Meta):
+        constraints = [
+            models.UniqueConstraint(
+                fields=("branch", "source_type"), name="unique_branch_gl_source_mapping"
+            )
+        ]
+        ordering = ("branch__name", "source_type")
+
+    def clean(self):
+        super().clean()
+        if self.debit_account and self.debit_account == self.credit_account:
+            raise ValidationError("Debit and credit accounts must be different.")
+
+    def __str__(self):
+        return f"{self.branch} - {self.get_source_type_display()}"
 
 
 class GLExport(BaseModel):
@@ -826,75 +878,98 @@ class GLExport(BaseModel):
     @classmethod
     def generate(cls, period, actor):
         from apps.finance.models import Expense, SupplierInvoice
-        from apps.inventory.models import StockLedger
 
         if period.status != FiscalPeriod.STATUS_CLOSED:
             raise ValidationError("Close the fiscal period before generating its GL export.")
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(
-            ["date", "source", "reference", "department", "description", "debit", "credit"]
-        )
-        rows = 0
+
+        postings = []
+        debit_total = Decimal("0.00")
+        credit_total = Decimal("0.00")
+        mappings = {
+            mapping.source_type: mapping
+            for mapping in GLAccountMapping.objects.filter(branch=period.branch, is_active=True)
+        }
+
+        def mapping_for(source):
+            mapping = mappings.get(source)
+            if mapping is None:
+                raise ValidationError(
+                    f"Configure an active GL account mapping for {source} in {period.branch}."
+                )
+            return mapping
+
+        def add_entry(date, source, ref, department, description, account, debit, credit):
+            nonlocal debit_total, credit_total
+            debit = Decimal(debit).quantize(Decimal("0.01"))
+            credit = Decimal(credit).quantize(Decimal("0.01"))
+            if (debit > 0) == (credit > 0):
+                raise ValidationError("Each GL journal entry needs exactly one positive side.")
+            postings.append((date, source, ref, department, description, account, debit, credit))
+            debit_total += debit
+            credit_total += credit
+
         invoices = SupplierInvoice.objects.filter(
             purchase_order__requisition__branch=period.branch,
             invoice_date__range=(period.start_date, period.end_date),
-        ).exclude(status__in=(SupplierInvoice.STATUS_DRAFT, SupplierInvoice.STATUS_CANCELLED))
-        for invoice in invoices.select_related("purchase_order__requisition__department"):
-            writer.writerow(
-                [
-                    invoice.invoice_date,
-                    "supplier_invoice",
-                    invoice.invoice_number,
-                    getattr(invoice.purchase_order.requisition.department, "name", ""),
-                    f"Supplier invoice {invoice.invoice_number}",
-                    invoice.total_amount,
-                    "0.00",
-                ]
-            )
-            rows += 1
+            status__in=(
+                SupplierInvoice.STATUS_MATCHED,
+                SupplierInvoice.STATUS_APPROVED,
+                SupplierInvoice.STATUS_PARTIALLY_PAID,
+                SupplierInvoice.STATUS_PAID,
+            ),
+        ).select_related("purchase_order__requisition__department")
+        for invoice in invoices:
+            amount = invoice.total_amount
+            if amount <= 0:
+                continue
+            mapping = mapping_for(GLAccountMapping.SOURCE_INVOICE)
+            department = getattr(invoice.purchase_order.requisition.department, "name", "")
+            ref = invoice.invoice_number
+            description = f"Supplier invoice {ref}"
+            if invoice.subtotal > 0:
+                add_entry(invoice.invoice_date, "supplier_invoice", ref, department,
+                          description, mapping.debit_account, invoice.subtotal, 0)
+            if invoice.tax_amount > 0:
+                if not mapping.tax_account:
+                    raise ValidationError("Configure an input VAT account for taxable supplier invoices.")
+                add_entry(invoice.invoice_date, "supplier_invoice", ref, department,
+                          "Input VAT " + ref, mapping.tax_account, invoice.tax_amount, 0)
+            add_entry(invoice.invoice_date, "supplier_invoice", ref, department,
+                      description, mapping.credit_account, 0, amount)
+
         expenses = Expense.objects.filter(
             store__branch=period.branch,
             date__range=(period.start_date, period.end_date),
-        )
-        for expense in expenses.select_related("category"):
-            writer.writerow(
-                [
-                    expense.date,
-                    "expense",
-                    expense.reference,
-                    "",
-                    expense.description or getattr(expense.category, "name", "Expense"),
-                    expense.amount,
-                    "0.00",
-                ]
-            )
-            rows += 1
-        ledgers = StockLedger.objects.filter(
-            store__branch=period.branch,
-            created_at__date__range=(period.start_date, period.end_date),
-        ).select_related("item")
-        for entry in ledgers:
-            writer.writerow(
-                [
-                    entry.created_at.date(),
-                    entry.reference_type,
-                    entry.reference_id,
-                    "",
-                    f"{entry.item} quantity in {entry.quantity_in} / out {entry.quantity_out}",
-                    "0.00",
-                    "0.00",
-                ]
-            )
-            rows += 1
+        ).select_related("category")
+        for expense in expenses:
+            if expense.amount <= 0:
+                continue
+            mapping = mapping_for(GLAccountMapping.SOURCE_EXPENSE)
+            ref = expense.reference or str(expense.pk)
+            description = expense.description or getattr(expense.category, "name", "Expense")
+            add_entry(expense.date, "expense", ref, "",
+                      description, mapping.debit_account, expense.amount, 0)
+            add_entry(expense.date, "expense", ref, "",
+                      description, mapping.credit_account, 0, expense.amount)
+
+        if debit_total != credit_total:
+            raise ValidationError("Unbalanced GL export cannot be generated.")
+
+        # No historical monetary valuation is held on StockLedger. Do not
+        # fabricate stock/COGS journal amounts using present-day unit prices.
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["date", "source", "reference", "department", "description",
+                         "account", "debit", "credit"])
+        writer.writerows(postings)
         payload = output.getvalue()
+        checksum = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+        existing = cls.objects.filter(period=period, checksum=checksum).first()
+        if existing:
+            return existing
         return cls.objects.create(
-            period=period,
-            generated_by=actor,
-            row_count=rows,
-            checksum=hashlib.sha256(payload.encode("utf-8")).hexdigest(),
-            payload=payload,
-            created_by=actor,
+            period=period, generated_by=actor, row_count=len(postings),
+            checksum=checksum, payload=payload, created_by=actor,
         )
 
     def __str__(self):

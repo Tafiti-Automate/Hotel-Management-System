@@ -5,6 +5,7 @@ from apps.materials_control.views import (
     CostCenterBudgetViewSet,
     FiscalPeriodViewSet,
     GLExportViewSet,
+    GLAccountMappingViewSet,
     IntegrationConfigViewSet,
     OutletAssignmentViewSet,
     POSImportBatchViewSet,
@@ -28,6 +29,7 @@ router.register("cost-center-budgets", CostCenterBudgetViewSet, basename="cost-c
 router.register("budget-overrides", BudgetOverrideViewSet, basename="budget-override")
 router.register("fiscal-periods", FiscalPeriodViewSet, basename="fiscal-period")
 router.register("gl-exports", GLExportViewSet, basename="gl-export")
+router.register("gl-account-mappings", GLAccountMappingViewSet, basename="gl-account-mapping")
 router.register("integration-configs", IntegrationConfigViewSet, basename="integration-config")
 
 urlpatterns = router.urls

@@ -5,6 +5,7 @@ from apps.materials_control.models import (
     CostCenterBudget,
     FiscalPeriod,
     GLExport,
+    GLAccountMapping,
     IntegrationConfig,
     OutletAssignment,
     POSImportBatch,
@@ -29,6 +30,7 @@ admin.site.register(
         BudgetOverride,
         FiscalPeriod,
         GLExport,
+        GLAccountMapping,
         IntegrationConfig,
     )
 )

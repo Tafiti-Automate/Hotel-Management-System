@@ -6,6 +6,7 @@ from apps.materials_control.models import (
     CostCenterBudget,
     FiscalPeriod,
     GLExport,
+    GLAccountMapping,
     IntegrationConfig,
     OutletAssignment,
     POSImportBatch,
@@ -224,6 +225,15 @@ class FiscalPeriodSerializer(CleanModelSerializer):
 
     def get_checklist(self, instance):
         return instance.pre_close_checklist()
+
+
+class GLAccountMappingSerializer(CleanModelSerializer):
+    branch_name = serializers.CharField(source="branch.name", read_only=True)
+
+    class Meta:
+        model = GLAccountMapping
+        fields = "__all__"
+        read_only_fields = ("id", "created_at", "updated_at", "created_by")
 
 
 class GLExportSerializer(serializers.ModelSerializer):

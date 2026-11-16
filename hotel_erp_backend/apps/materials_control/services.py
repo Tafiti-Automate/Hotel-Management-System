@@ -21,7 +21,7 @@ def enforce_requisition_budget(requisition):
     if projected <= budget.spending_cap:
         return None
     overage = (projected - budget.spending_cap).quantize(Decimal("0.01"))
-    override, _ = BudgetOverride.objects.update_or_create(
+    override, created = BudgetOverride.objects.get_or_create(
         requisition=requisition,
         defaults={
             "budget": budget,
@@ -31,6 +31,24 @@ def enforce_requisition_budget(requisition):
             "created_by": requisition.created_by,
         },
     )
+    if not created and (
+        override.budget_id != budget.pk
+        or override.requested_amount != requisition.estimated_total
+        or override.overage_amount != overage
+    ):
+        # An old decision cannot approve a higher amount or another budget.
+        override.budget = budget
+        override.requested_amount = requisition.estimated_total
+        override.overage_amount = overage
+        override.reason = requisition.reason
+        override.status = BudgetOverride.STATUS_PENDING
+        override.decided_by = None
+        override.decided_at = None
+        override.decision_note = ""
+        override.save(update_fields=(
+            "budget", "requested_amount", "overage_amount", "reason", "status",
+            "decided_by", "decided_at", "decision_note", "updated_at",
+        ))
     if override.status == BudgetOverride.STATUS_APPROVED:
         return override
     if override.status == BudgetOverride.STATUS_REJECTED:

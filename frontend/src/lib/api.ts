@@ -1636,6 +1636,27 @@ export async function uploadProcurementAttachment(
   return response.json() as Promise<Row>
 }
 
+export async function downloadGLExport(id: string): Promise<void> {
+  const response = await fetch(endpointUrl(`gl-exports/${encodeURIComponent(id)}/download`), {
+    headers: { Accept: 'text/csv', ...authHeaders() },
+  })
+  if (!response.ok) {
+    let body: unknown = null
+    try { body = await response.json() } catch { /* not JSON */ }
+    throw new Error(apiErrorDetail(body, `GL export download failed (${response.status}).`))
+  }
+  const objectUrl = URL.createObjectURL(await response.blob())
+  const disposition = response.headers.get('Content-Disposition') || ''
+  const filename = disposition.match(/filename="([^"]+)"/)?.[1] || `gl-export-${id}.csv`
+  const link = document.createElement('a')
+  link.href = objectUrl
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000)
+}
+
 export async function downloadProcurementAttachment(id: string, originalName: string): Promise<void> {
   const response = await fetch(endpointUrl(`procurement-attachments/${id}/download`), {
     headers: { Accept: '*/*', ...authHeaders() },

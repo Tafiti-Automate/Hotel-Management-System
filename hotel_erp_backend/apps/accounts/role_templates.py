@@ -19,7 +19,7 @@ ROLE_SPECS = {
             "employees": ["employee", "designation"],
             "inventory": ["category", "item", "itemunitprice", "storelocation", "unitofmeasure"],
             "organization": ["hotel"],
-            "materials_control": ["outletassignment", "integrationconfig"],
+            "materials_control": ["outletassignment", "integrationconfig", "glaccountmapping"],
         },
     },
     "Department Supervisor": {
@@ -126,7 +126,7 @@ ROLE_SPECS = {
             "procurement": ["purchaseorderitem", "purchaseorderactivity", "purchaserequisition", "requisitionitem"],
             "vendors": ["supplier"],
             "finance": ["supplierinvoice", "supplierinvoiceitem", "supplierpayment", "expense"],
-            "materials_control": ["glexport", "wasterecord", "recipe", "posimportbatch"],
+            "materials_control": ["glexport", "glaccountmapping", "wasterecord", "recipe", "posimportbatch"],
         },
     },
     "Accounts Payable Clerk": {
@@ -155,7 +155,7 @@ ROLE_SPECS = {
             "vendors": ["supplier"],
             "finance": ["supplierinvoice", "expense"],
             "materials_control": [
-                "costcenterbudget", "budgetoverride", "fiscalperiod", "glexport",
+                "costcenterbudget", "budgetoverride", "fiscalperiod", "glexport", "glaccountmapping",
                 "wasterecord", "recipe", "posimportbatch",
             ],
         },
