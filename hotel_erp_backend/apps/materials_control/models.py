@@ -755,7 +755,7 @@ class FiscalPeriod(BaseModel):
             raise ValidationError("Fiscal periods for one property cannot overlap.")
 
     def pre_close_checklist(self):
-        from apps.inventory.models import StockCount, StockTransfer
+        from apps.inventory.models import StockCount, StockTransfer, StockIssue
         from apps.procurement.models import GoodsReceiptNote
         from apps.finance.models import SupplierInvoice
 
@@ -767,6 +767,11 @@ class FiscalPeriod(BaseModel):
             from_store__branch=self.branch,
             created_at__date__range=(self.start_date, self.end_date),
         ).exclude(status__in=(StockTransferStatus.COMPLETED, StockTransferStatus.CANCELLED))
+        transit_issues = StockIssue.objects.filter(
+            store__branch=self.branch,
+            issue_date__lte=self.end_date,
+            fulfillment_status=StockIssue.STATUS_TRANSIT,
+        )
         open_counts = StockCount.objects.filter(
             store__branch=self.branch,
             count_date__range=(self.start_date, self.end_date),
@@ -789,6 +794,8 @@ class FiscalPeriod(BaseModel):
             blockers.append(f"{open_grns.count()} GRN(s) are not posted or cancelled.")
         if open_transfers.exists():
             blockers.append(f"{open_transfers.count()} stock transfer(s) are still open.")
+        if transit_issues.exists():
+            blockers.append(f"{transit_issues.count()} internal issue(s) remain in virtual transit.")
         if open_counts.exists():
             blockers.append(f"{open_counts.count()} stock count sheet(s) are still open.")
         return {
@@ -796,6 +803,7 @@ class FiscalPeriod(BaseModel):
             "blockers": blockers,
             "open_grns": open_grns.count(),
             "open_transfers": open_transfers.count(),
+            "open_issue_transits": transit_issues.count(),
             "open_stock_counts": open_counts.count(),
             "unresolved_invoices": unresolved_invoices.count(),
             "unresolved_pos_imports": unresolved_pos.count(),

@@ -1,5 +1,5 @@
 from datetime import timedelta
-from decimal import Decimal, ROUND_DOWN
+from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -2428,8 +2428,19 @@ class GoodsReceiptItem(BaseModel):
                 store=receipt_item.store,
                 defaults={"quantity_in_stock": Decimal("0.00")},
             )
-            balance.quantity_in_stock += post_quantity
-            balance.save(update_fields=["quantity_in_stock", "updated_at"])
+            # One WAC for each Article within its Store, updated under the stock row lock.
+            opening_qty = balance.quantity_in_stock
+            closing_qty = opening_qty + post_quantity
+            balance.weighted_average_cost = (
+                (
+                    opening_qty * balance.weighted_average_cost
+                    + post_quantity * receipt_item.base_unit_cost
+                ) / closing_qty
+            ).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+            balance.quantity_in_stock = closing_qty
+            balance.save(update_fields=[
+                "quantity_in_stock", "weighted_average_cost", "updated_at"
+            ])
 
             batch = InventoryBatch.objects.create(
                 item=receipt_item.item,
@@ -2453,7 +2464,7 @@ class GoodsReceiptItem(BaseModel):
                 item=receipt_item.item,
                 store=receipt_item.store,
                 quantity_in=post_quantity,
-                reference_type=LedgerReferenceType.GOODS_RECEIPT,
+                reference_type=LedgerReferenceType.GRN_RECEIPT,
                 reference_id=receipt_item.goods_receipt.id,
                 note=f"Received against {receipt_item.goods_receipt}",
                 created_by=receipt_item.created_by,

@@ -14,6 +14,8 @@ const routeItems = [
   ['approval-inbox', 'Approval inbox', 'approval'],
   ['new-store-request', 'New store request', 'assignment_add'],
   ['incoming-pickup', 'Confirm pickup', 'fact_check'],
+  ['grn-posting', 'GRN posting', 'move_to_inbox'],
+  ['transfer-dispatch', 'Transfer fulfillment', 'local_shipping'],
   ['recipes-production', 'Recipe costing', 'menu_book'],
   ['pos-control', 'POS reconciliation', 'point_of_sale'],
   ['finance-governance', 'Budgets & period close', 'account_balance'],

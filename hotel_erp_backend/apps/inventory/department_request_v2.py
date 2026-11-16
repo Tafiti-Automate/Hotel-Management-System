@@ -1,5 +1,6 @@
 """Department supply workflow: Supervisor -> HOD -> Cost Control -> Stores."""
 from decimal import Decimal, InvalidOperation
+from django.core.exceptions import ValidationError as DjangoValidationError
 
 from django.db import transaction
 from django.db.models import Q
@@ -10,7 +11,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from apps.inventory.models import InventoryBalance, Item, StockIssue, StockIssueItem, StoreLocation, StoreRequisition, StoreRequisitionItem, UnitOfMeasure
+from apps.inventory.models import InventoryBalance, Item, StockIssue, StockIssueItem, StoreLocation, StoreKeeperAssignment, StoreRequisition, StoreRequisitionItem, UnitOfMeasure
+from apps.inventory.stores_fulfillment import fulfill_requisition
 from apps.inventory.serializers import StoreRequisitionItemSerializer as BaseItemSerializer, StoreRequisitionSerializer
 from apps.inventory.views import has_role
 from apps.notifications.services import notify_employee, notify_roles
@@ -128,7 +130,7 @@ class StoreRequisitionViewSet(CreatedByModelMixin,ModelViewSet):
             })
             for x in balances
         ]
-        return Response({"requests":[self._request(x) for x in requests],"lines":[self._line(x) for x in lines],"stores":[{"id":str(x.pk),"name":x.name,"branch_name":str(x.branch or "")} for x in stores],"balances":balance_info,"items":[{"id":str(x.pk),"name":x.name,"sku":x.sku,"base_unit":str(x.base_unit_id or "")} for x in items],"units":[{"id":str(x.pk),"name":x.name,"abbreviation":x.abbreviation} for x in units],"issues":[{"id":str(x.pk),"issue_no":x.issue_no,"requisition":str(x.requisition_id),"store":str(x.store_id),"store_name":x.store.name,"issued_by_name":ename(x.issued_by),"issue_date":x.issue_date,"inventory_changes_applied":x.inventory_changes_applied,"received_by":str(x.received_by_id or ""),"received_by_name":x.received_by_name} for x in issues],"issueItems":[{"id":str(x.pk),"issue":str(x.issue_id),"item_name":x.item.name,"base_quantity":x.base_quantity,"unit_name":x.unit.abbreviation if x.unit_id else ""} for x in issue_items],"grns":grns,"grnItems":grn_items})
+        return Response({"requests":[self._request(x) for x in requests],"lines":[self._line(x) for x in lines],"stores":[{"id":str(x.pk),"name":x.name,"branch_name":str(x.branch or "")} for x in stores],"balances":balance_info,"items":[{"id":str(x.pk),"name":x.name,"sku":x.sku,"base_unit":str(x.base_unit_id or "")} for x in items],"units":[{"id":str(x.pk),"name":x.name,"abbreviation":x.abbreviation} for x in units],"issues":[{"id":str(x.pk),"issue_no":x.issue_no,"requisition":str(x.requisition_id),"store":str(x.store_id),"store_name":x.store.name,"issued_by_name":ename(x.issued_by),"issue_date":x.issue_date,"inventory_changes_applied":x.inventory_changes_applied,"received_by":str(x.received_by_id or ""),"received_by_name":x.received_by_name,"fulfillment_status":x.fulfillment_status,"dispatched_at":x.dispatched_at,"signed_at":x.signed_at} for x in issues],"issueItems":[{"id":str(x.pk),"issue":str(x.issue_id),"item_name":x.item.name,"base_quantity":x.base_quantity,"unit_name":x.unit.abbreviation if x.unit_id else ""} for x in issue_items],"grns":grns,"grnItems":grn_items})
     @staticmethod
     def _request(r): return {"id":str(r.pk),"requisition_no":r.requisition_no,"department":str(r.department_id),"department_name":r.department.name,"store":str(r.store_id or ""),"store_name":r.store.name if r.store_id else "","requested_by":str(r.requested_by_id),"requester_name":ename(r.requested_by),"status":r.status,"purpose":r.purpose,"required_date":r.required_date,"rejection_reason":r.rejection_reason,"department_approved_at":r.department_approved_at,"approved_at":r.approved_at,"created_at":r.created_at}
     @staticmethod
@@ -215,7 +217,12 @@ class StoreRequisitionViewSet(CreatedByModelMixin,ModelViewSet):
         return e
     def _keeper(self,r):
         e=emp(self.request.user)
-        if not(is_keeper(self.request.user) and e): raise PermissionDenied("Only the Store Keeper can prepare the transfer document.")
+        if not (is_keeper(self.request.user) and e and e.is_active):
+            raise PermissionDenied("Only an active Storekeeper can prepare transfer documents.")
+        if not StoreKeeperAssignment.objects.filter(
+            store_id=r.store_id, employee=e, is_active=True,
+        ).exists():
+            raise PermissionDenied("You must be assigned to the issuing store.")
         return e
     @staticmethod
     def _decisions(payload):
@@ -271,6 +278,105 @@ class StoreRequisitionViewSet(CreatedByModelMixin,ModelViewSet):
         r=self.get_object(); self._cost(r); why=str(request.data.get("reason") or "").strip()
         if not why: raise ValidationError({"reason":"Enter Cost Control rejection reason."})
         StoreRequisition.objects.filter(pk=r.pk,status=StoreRequisitionStatus.SUBMITTED).update(status=StoreRequisitionStatus.REJECTED,rejection_reason=why,updated_at=timezone.now()); r.refresh_from_db(); notify_employee(r.requested_by,title=f"{r.requisition_no} rejected by Cost Control",message=why,created_by=request.user); notify_roles(("Department Head",),title=f"{r.requisition_no} rejected by Cost Control",message=why,branch=r.requested_by.branch,department=r.department,created_by=request.user); return Response(self._request(r))
+    @action(detail=False, methods=["get"], url_path="fulfillment-queue")
+    def fulfillment_queue(self, request):
+        if not is_keeper(request.user):
+            raise PermissionDenied("Only a Storekeeper may see the dispatch console.")
+        employee = emp(request.user)
+        assigned = list(StoreKeeperAssignment.objects.filter(
+            employee=employee, is_active=True, store__is_active=True,
+        ).values_list("store_id", flat=True))
+        qs = StoreRequisition.objects.select_related("department", "store").filter(
+            store_id__in=assigned,
+            status__in=(
+                StoreRequisitionStatus.APPROVED,
+                StoreRequisitionStatus.PARTIALLY_ISSUED,
+            ),
+        ).order_by("created_at")
+        records = []
+        for req in qs:
+            active = req.stock_issues.filter(
+                fulfillment_status=StockIssue.STATUS_TRANSIT
+            ).first()
+            if active:
+                continue
+            lines = list(req.items.select_related("item__base_unit").order_by("item__name"))
+            balances = {
+                balance.item_id: balance
+                for balance in InventoryBalance.objects.filter(
+                    store=req.store, item_id__in=[line.item_id for line in lines]
+                )
+            }
+            details = []
+            for line in lines:
+                due = max(line.quantity_approved - line.quantity_issued, Decimal("0"))
+                if due <= 0:
+                    continue
+                balance = balances.get(line.item_id)
+                available = balance.quantity_in_stock if balance else Decimal("0")
+                details.append({
+                    "id": str(line.pk), "item": str(line.item_id),
+                    "article": line.item.name, "sku": line.item.sku,
+                    "unit": line.item.base_unit.abbreviation if line.item.base_unit_id else line.item.unit,
+                    "bin": balance.bin_location if balance else "",
+                    "requested": str(line.base_quantity_requested),
+                    "approved": str(line.quantity_approved),
+                    "outstanding": str(due),
+                    "physical_soh": str(available),
+                    "suggested_issue": str(min(available, due)),
+                })
+            if details:
+                details.sort(key=lambda x: (x["bin"] or "ZZZ", x["sku"]))
+                records.append({
+                    "id": str(req.pk), "reference": req.requisition_no,
+                    "department": str(req.department), "store": req.store.name,
+                    "status": req.status, "required_date": req.required_date,
+                    "lines": details,
+                })
+        return Response(records)
+
+    @action(detail=False, methods=["post"], url_path="dispatch-batch")
+    def dispatch_batch(self, request):
+        if not is_keeper(request.user):
+            raise PermissionDenied("Only Storekeepers can dispatch requisitions.")
+        batches = request.data.get("requests")
+        if not isinstance(batches, list) or not (1 <= len(batches) <= 25):
+            raise ValidationError({"requests": "Select between 1 and 25 approved requisitions."})
+        ids = [str(value.get("id")) for value in batches if isinstance(value, dict)]
+        if len(ids) != len(batches) or len(set(ids)) != len(ids):
+            raise ValidationError({"requests": "Each selected requisition must appear exactly once."})
+        results = []
+        try:
+            with transaction.atomic():
+                for record in sorted(batches, key=lambda value: str(value["id"])):
+                    issue = fulfill_requisition(
+                        record["id"], emp(request.user), request.user,
+                        quantities=record.get("quantities"),
+                    )
+                    results.append({
+                        "id": str(issue.pk), "issue_no": issue.issue_no,
+                        "requisition": str(issue.requisition_id),
+                        "status": issue.fulfillment_status,
+                    })
+        except DjangoValidationError as error:
+            raise ValidationError(getattr(error, "message_dict", None) or error.messages)
+        return Response(results, status=201)
+
+    @action(detail=True, methods=["post"], url_path="dispatch-transfer")
+    def dispatch_transfer(self, request, pk=None):
+        req = self.get_object()
+        try:
+            issue = fulfill_requisition(
+                req.pk, emp(request.user), request.user,
+                quantities=request.data.get("quantities"),
+            )
+        except DjangoValidationError as error:
+            raise ValidationError(getattr(error, "message_dict", None) or error.messages)
+        return Response({
+            "id": str(issue.pk), "issue_no": issue.issue_no,
+            "requisition": str(req.pk), "status": issue.fulfillment_status,
+        }, status=201)
+
     @action(detail=True,methods=["post"],url_path="prepare-transfer")
     def prepare_transfer(self,request,pk=None):
         r=self.get_object(); keeper=self._keeper(r)
@@ -289,7 +395,7 @@ class StoreRequisitionViewSet(CreatedByModelMixin,ModelViewSet):
                     if on_hand<due: raise ValidationError({"stock":f"{x.item}: {on_hand} on hand, {due} required."})
                     prepared.append((x,due))
                 if not prepared: raise ValidationError("No approved outstanding stock to prepare.")
-                issue=StockIssue.objects.create(requisition=r,store=r.store,issued_by=keeper,note=f"Transfer prepared for {r.department}; post only at physical handover.",created_by=request.user)
+                issue=StockIssue.objects.create(requisition=r,store=r.store,issued_by=keeper,fulfillment_status=StockIssue.STATUS_PACKED,note=f"Transfer packed for {r.department}; awaiting dispatch.",created_by=request.user)
                 for x,due in prepared: StockIssueItem.objects.create(issue=issue,requisition_item=x,item=x.item,unit=x.item.base_unit,quantity=due,created_by=request.user)
                 created=True
         if created:

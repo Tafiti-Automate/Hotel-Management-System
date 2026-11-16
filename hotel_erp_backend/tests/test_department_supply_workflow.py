@@ -1,4 +1,5 @@
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
+from calendar import monthrange
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -10,10 +11,14 @@ from apps.accounts.role_templates import sync_client_roles
 from apps.departments.models import Branch, Department
 from apps.employees.models import Employee
 from apps.inventory.models import (
-    Category, InventoryBalance, Item, StockCount, StockIssue, StockLedger,
+    Category, DepartmentConsumption, InventoryBalance, Item, StockCount,
+    StockIssue, StockLedger, StoreRequisition, StoreRequisitionItem,
     StockTransfer, StoreKeeperAssignment, StoreLocation, UnitOfMeasure,
 )
 from apps.notifications.models import Notification
+from apps.materials_control.models import FiscalPeriod
+from django.utils import timezone
+from core.constants.choices import LedgerReferenceType
 from apps.procurement.models import PurchaseOrder, PurchaseOrderItem, PurchaseRequisition, RequisitionItem
 from apps.vendors.models import Supplier
 from core.constants.choices import POStatus, PRStatus
@@ -93,6 +98,15 @@ def test_department_request_is_reduction_only_and_reaches_stores(ctx, monkeypatc
 @pytest.mark.django_db
 def test_store_keeper_verifies_grn_before_soh_increases(ctx):
     sync_client_roles()
+    today = timezone.localdate()
+    FiscalPeriod.objects.create(
+        branch=ctx["branch"], name="Receiving test month",
+        start_date=today.replace(day=1),
+        end_date=today.replace(day=monthrange(today.year, today.month)[1]),
+    )
+    balance = InventoryBalance.objects.get(item=ctx["item"], store=ctx["main"])
+    balance.weighted_average_cost = Decimal("3000.0000")
+    balance.save(update_fields=["weighted_average_cost", "updated_at"])
     receiving_user, receiving = employee("grn-receiver", "Receiving Clerk", ctx["department"], ctx["branch"])
     supplier = Supplier.objects.create(name="Workflow Vendor", email="wf@example.com", phone="+256700000001", address="Kampala", tin_number="TIN-WF", registration_number="REG-WF")
     requisition = PurchaseRequisition.objects.create(requester=ctx["se"], department=ctx["department"], branch=ctx["branch"], reason="Restock", status=PRStatus.APPROVED)
@@ -117,6 +131,18 @@ def test_store_keeper_verifies_grn_before_soh_increases(ctx):
     posted = keeper.post(f"/api/v1/grns/{grn}/post-to-inventory/", {}, format="json")
     assert posted.status_code == 200 and posted.data["status"] == "posted"
     assert InventoryBalance.objects.get(item=ctx["item"], store=ctx["main"]).quantity_in_stock == before + Decimal("4.00")
+    after = InventoryBalance.objects.get(item=ctx["item"], store=ctx["main"])
+    expected_wac = (
+        (before * Decimal("3000")) + (Decimal("4.00") * Decimal("1000"))
+    ) / (before + Decimal("4.00"))
+    assert after.weighted_average_cost == expected_wac.quantize(
+        Decimal("0.0001"), rounding=ROUND_HALF_UP
+    )
+    assert StockLedger.objects.filter(
+        reference_id=grn, reference_type=LedgerReferenceType.GRN_RECEIPT,
+        quantity_in=Decimal("4.00"),
+    ).count() == 1
+    assert keeper.post(f"/api/v1/grns/{grn}/post-to-inventory/", {}, format="json").status_code == 400
 
 
 @pytest.mark.django_db
@@ -167,3 +193,154 @@ def test_store_keeper_transfer_and_count_controls_are_assigned_store_scoped(ctx)
     )
     assert created_count.status_code == 201, created_count.data
     assert str(created_count.data["conducted_by"]) == str(ctx["ke"].pk)
+
+
+@pytest.mark.django_db
+def test_internal_dispatch_moves_stock_into_virtual_transit_until_pickup(ctx):
+    today = timezone.localdate()
+    FiscalPeriod.objects.create(
+        branch=ctx["branch"], name="Dispatch test month",
+        start_date=today.replace(day=1),
+        end_date=today.replace(day=monthrange(today.year, today.month)[1]),
+    )
+    req = StoreRequisition.objects.create(
+        requested_by=ctx["se"], department=ctx["department"],
+        store=ctx["main"], purpose="Linen for the shift", status="approved",
+    )
+    line = StoreRequisitionItem.objects.create(
+        requisition=req, item=ctx["item"], unit=ctx["unit"],
+        quantity_requested=Decimal("5.00"),
+        hod_approved_quantity=Decimal("5.00"),
+        quantity_approved=Decimal("5.00"),
+    )
+    source = InventoryBalance.objects.get(item=ctx["item"], store=ctx["main"])
+    source.weighted_average_cost = Decimal("1250.0000")
+    source.quantity_reserved = Decimal("5.00")
+    source.save(update_fields=["weighted_average_cost", "quantity_reserved", "updated_at"])
+
+    keeper = APIClient()
+    keeper.force_authenticate(ctx["ku"])
+    queue = keeper.get("/api/v1/store-requisitions/fulfillment-queue/")
+    assert queue.status_code == 200, queue.data
+    assert any(row["reference"] == req.requisition_no for row in queue.data)
+    dispatched = keeper.post(
+        "/api/v1/store-requisitions/dispatch-batch/",
+        {"requests": [{
+            "id": str(req.pk), "quantities": {str(line.pk): "3.00"},
+        }]}, format="json",
+    )
+    assert dispatched.status_code == 201, dispatched.data
+    issue = StockIssue.objects.get(pk=dispatched.data[0]["id"])
+    assert issue.fulfillment_status == "in_transit"
+    assert issue.inventory_changes_applied
+    source.refresh_from_db()
+    line.refresh_from_db()
+    assert source.quantity_in_stock == Decimal("17.00")
+    assert source.quantity_reserved == Decimal("2.00")
+    assert line.quantity_issued == Decimal("3.00")
+    assert InventoryBalance.objects.get(
+        item=ctx["item"], store=issue.transit_store
+    ).quantity_in_stock == Decimal("3.00")
+    assert not DepartmentConsumption.objects.filter(
+        stock_issue_item__issue=issue
+    ).exists()
+    assert StockLedger.objects.filter(
+        reference_id=issue.pk,
+        reference_type=LedgerReferenceType.TRANSIT_DISPATCH,
+    ).count() == 2
+    assert FiscalPeriod.objects.get(branch=ctx["branch"]).pre_close_checklist()[
+        "open_issue_transits"
+    ] == 1
+
+    # The requesting supervisor is the only person permitted to sign delivery.
+    supervisor = APIClient()
+    supervisor.force_authenticate(ctx["su"])
+    acknowledged = supervisor.post(
+        f"/api/v1/stock-issues/{issue.pk}/acknowledge/", {}, format="json",
+    )
+    assert acknowledged.status_code == 200, acknowledged.data
+    issue.refresh_from_db()
+    assert issue.fulfillment_status == "completed"
+    assert InventoryBalance.objects.get(
+        item=ctx["item"], store=issue.transit_store
+    ).quantity_in_stock == Decimal("0.00")
+    consumed = DepartmentConsumption.objects.get(stock_issue_item__issue=issue)
+    assert consumed.quantity == Decimal("3.00")
+    assert consumed.unit_cost == Decimal("1250.0000")
+    assert StockLedger.objects.filter(
+        reference_id=issue.pk, reference_type=LedgerReferenceType.TRANSIT_PICKUP,
+    ).count() == 1
+    assert FiscalPeriod.objects.get(branch=ctx["branch"]).pre_close_checklist()[
+        "open_issue_transits"
+    ] == 0
+    assert supervisor.post(
+        f"/api/v1/stock-issues/{issue.pk}/acknowledge/", {}, format="json",
+    ).status_code == 400
+
+
+@pytest.mark.django_db
+def test_multi_request_dispatch_rolls_back_when_any_request_is_short(ctx):
+    today = timezone.localdate()
+    FiscalPeriod.objects.create(
+        branch=ctx["branch"], name="Rollback test month",
+        start_date=today.replace(day=1),
+        end_date=today.replace(day=monthrange(today.year, today.month)[1]),
+    )
+    requests = []
+    for number in range(2):
+        req = StoreRequisition.objects.create(
+            requested_by=ctx["se"], department=ctx["department"],
+            store=ctx["main"], purpose=f"Request {number}", status="approved",
+        )
+        line = StoreRequisitionItem.objects.create(
+            requisition=req, item=ctx["item"], unit=ctx["unit"],
+            quantity_requested=Decimal("15.00"),
+            hod_approved_quantity=Decimal("15.00"),
+            quantity_approved=Decimal("15.00"),
+        )
+        requests.append({"id": str(req.pk), "quantities": {str(line.pk): "15.00"}})
+    keeper = APIClient()
+    keeper.force_authenticate(ctx["ku"])
+    response = keeper.post(
+        "/api/v1/store-requisitions/dispatch-batch/",
+        {"requests": requests}, format="json",
+    )
+    assert response.status_code == 400, response.data
+    assert StockIssue.objects.count() == 0
+    assert StockLedger.objects.filter(
+        reference_type=LedgerReferenceType.TRANSIT_DISPATCH,
+    ).count() == 0
+    assert InventoryBalance.objects.get(
+        item=ctx["item"], store=ctx["main"]
+    ).quantity_in_stock == Decimal("20.00")
+
+
+@pytest.mark.django_db
+def test_dispatch_refuses_unconfigured_or_closed_fiscal_period(ctx):
+    request = StoreRequisition.objects.create(
+        requested_by=ctx["se"], department=ctx["department"],
+        store=ctx["main"], purpose="Fiscal lock test", status="approved",
+    )
+    line = StoreRequisitionItem.objects.create(
+        requisition=request, item=ctx["item"], unit=ctx["unit"],
+        quantity_requested=Decimal("2.00"),
+        hod_approved_quantity=Decimal("2.00"),
+        quantity_approved=Decimal("2.00"),
+    )
+    keeper = APIClient()
+    keeper.force_authenticate(ctx["ku"])
+    path = f"/api/v1/store-requisitions/{request.pk}/dispatch-transfer/"
+    assert keeper.post(path, {
+        "quantities": {str(line.pk): "2.00"}
+    }, format="json").status_code == 400
+    today = timezone.localdate()
+    FiscalPeriod.objects.create(
+        branch=ctx["branch"], name="Closed month",
+        start_date=today.replace(day=1),
+        end_date=today.replace(day=monthrange(today.year, today.month)[1]),
+        status="closed",
+    )
+    assert keeper.post(path, {
+        "quantities": {str(line.pk): "2.00"}
+    }, format="json").status_code == 400
+    assert StockIssue.objects.count() == 0

@@ -38,6 +38,8 @@ const roleNavigation: Record<string, NavGroup[]> = {
   'store keeper': [
     { heading: 'Stores', items: [
       { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
+      { route: 'grn-posting', label: 'Post received GRNs', icon: 'move_to_inbox' },
+      { route: 'transfer-dispatch', label: 'Transfer fulfillment', icon: 'local_shipping' },
       { route: 'workflow-stores', label: 'Issue requests', icon: 'inventory' },
       { route: 'store-transfers', label: 'Transfers', icon: 'sync_alt' },
       { route: 'stock-on-hand', label: 'Stock on Hand Control', icon: 'inventory_2' },

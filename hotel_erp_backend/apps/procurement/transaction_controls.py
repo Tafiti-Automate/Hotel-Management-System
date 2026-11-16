@@ -16,6 +16,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.procurement.models import GoodsReceiptNote
+from apps.inventory.stores_fulfillment import post_grn_to_inventory
+from apps.inventory.models import StoreKeeperAssignment
+from apps.materials_control.models import FiscalPeriod
+from core.constants.choices import GoodsReceiptStatus
 from apps.procurement.serializers import RequisitionItemSerializer as BaseRequisitionItemSerializer
 from apps.procurement.views import (
     GoodsReceiptItemViewSet as BaseGoodsReceiptItemViewSet,
@@ -183,6 +187,36 @@ class GoodsReceiptNoteViewSet(BaseGoodsReceiptNoteViewSet):
             raise PermissionDenied("This GRN belongs to a store outside your hotel/property scope.")
         return employee
 
+    @action(detail=False, methods=["get"], url_path="unposted-queue")
+    def unposted_queue(self, request):
+        employee = getattr(request.user, "employee_profile", None)
+        if not user_has_role(request.user, "Store Keeper") or not employee or not employee.is_active:
+            raise PermissionDenied("Only assigned Storekeepers can view the GRN posting queue.")
+        assigned = list(StoreKeeperAssignment.objects.filter(
+            employee=employee, is_active=True, store__is_active=True,
+        ).values_list("store_id", flat=True))
+        receipts = self.get_queryset().filter(
+            status__in=(GoodsReceiptStatus.RECEIVED, GoodsReceiptStatus.INSPECTED),
+            items__store_id__in=assigned,
+        ).distinct().select_related(
+            "purchase_order__requisition__branch",
+            "purchase_order__supplier", "received_by__user",
+        ).order_by("received_date", "created_at")
+        output = []
+        for receipt in receipts:
+            if receipt.items.exclude(store__isnull=True).exclude(store_id__in=assigned).exists():
+                continue
+            payload = self._verification_payload(receipt)
+            period = FiscalPeriod.objects.filter(
+                branch_id=receipt.purchase_order.requisition.branch_id,
+                start_date__lte=receipt.received_date,
+                end_date__gte=receipt.received_date,
+            ).first()
+            payload["fiscal_period_status"] = period.status if period else "unconfigured"
+            payload["fiscal_period_name"] = period.name if period else "No fiscal period"
+            output.append(payload)
+        return Response(output)
+
     @action(detail=True, methods=["get"])
     def verification(self, request, pk=None):
         receipt = self.get_object()
@@ -197,9 +231,7 @@ class GoodsReceiptNoteViewSet(BaseGoodsReceiptNoteViewSet):
         try:
             with transaction.atomic():
                 locked = GoodsReceiptNote.objects.select_for_update().get(pk=receipt.pk)
-                locked.post_to_inventory(posted_by=keeper)
-                locked.refresh_from_db()
-                receipt = locked
+                receipt = post_grn_to_inventory(locked.pk, keeper)
         except Exception as error:
             if hasattr(error, "messages") or hasattr(error, "message_dict"):
                 raise_drf_validation_error(error)

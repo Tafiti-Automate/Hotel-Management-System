@@ -34,6 +34,8 @@ const UnitManagement = lazy(() => import('./UnitManagement'))
 const MaterialsControl = lazy(() => import('./MaterialsControl'))
 const InternalRequestBuilder = lazy(() => import('./OutletWorkflow').then((module) => ({ default: module.InternalRequestBuilder })))
 const IncomingPickup = lazy(() => import('./OutletWorkflow').then((module) => ({ default: module.IncomingPickup })))
+const GrnPostingConsole = lazy(() => import('./StorekeeperSprintOne').then((module) => ({ default: module.GrnPostingConsole })))
+const TransferDispatchConsole = lazy(() => import('./StorekeeperSprintOne').then((module) => ({ default: module.TransferDispatchConsole })))
 
 const listRoutes = new Set([
   'items', 'locations', 'suppliers',
@@ -86,6 +88,8 @@ export default function AppShell() {
   else if (route === 'items') content = <ArticleManagement />
   else if (route === 'uoms' || route === 'itemUnits') content = <UnitManagement />
   else if (route === 'workflow-pay') content = <FinanceWorkbench />
+  else if (route === 'grn-posting') content = <GrnPostingConsole />
+  else if (route === 'transfer-dispatch') content = <TransferDispatchConsole />
   else if (route === 'new-store-request') content = <InternalRequestBuilder />
   else if (route === 'incoming-pickup') content = <IncomingPickup />
   else if (route === 'approval-inbox') content = role === 'department head'

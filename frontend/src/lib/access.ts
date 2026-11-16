@@ -25,6 +25,8 @@ const routePermissions: Record<string, string[]> = {
   'workflow-stores': ['inventory.view_storerequisition', 'inventory.view_stocktransfer', 'inventory.view_stockcount'],
   'new-store-request': ['inventory.add_storerequisition'],
   'incoming-pickup': ['inventory.view_storerequisition'],
+  'grn-posting': ['procurement.view_goodsreceiptnote'],
+  'transfer-dispatch': ['inventory.view_storerequisition'],
   'approval-inbox': ['inventory.view_storerequisition', 'procurement.view_purchaseorder'],
   'store-purchase-requests': ['inventory.view_storekeeperassignment', 'inventory.view_item'],
   'workflow-consume': ['inventory.view_storerequisition', 'inventory.view_stockissue'],
@@ -60,7 +62,7 @@ const strictRoleRoutes: Record<string, Set<string>> = {
   'outlet supervisor': new Set(['dashboard', 'detail', 'workflow-stores', 'new-store-request', 'incoming-pickup', 'waste-control']),
   supervisor: new Set(['dashboard', 'detail', 'workflow-stores', 'new-store-request', 'incoming-pickup', 'waste-control']),
   'department head': new Set(['dashboard', 'detail', 'workflow-stores', 'approval-inbox', 'waste-control', 'recipes-production', 'reports', 'reportview']),
-  'store keeper': new Set(['dashboard', 'detail', 'workflow-stores', 'stock-on-hand', 'store-transfers', 'locations', 'store-inventory', 'store-analysis', 'store-usage', 'store-purchase-requests', 'reports', 'reportview']),
+  'store keeper': new Set(['dashboard', 'detail', 'workflow-stores', 'grn-posting', 'transfer-dispatch', 'stock-on-hand', 'store-transfers', 'locations', 'store-inventory', 'store-analysis', 'store-usage', 'store-purchase-requests', 'reports', 'reportview']),
   'cost controller': new Set(['dashboard', 'detail', 'workflow-stores', 'waste-control', 'recipes-production', 'pos-control', 'items', 'categories', 'uoms', 'itemUnits', 'suppliers', 'supplierItems', 'reports', 'reportview', 'menu-engineering']),
   'procurement manager': new Set(['dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
   'procurement officer': new Set(['dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
@@ -151,6 +153,9 @@ export function canAccessRoute(user: AccessUser, route: string): boolean {
   const role = roleKey(user)
   if (route === 'new-store-request' || route === 'incoming-pickup') {
     return ['department supervisor', 'outlet supervisor', 'supervisor'].includes(roleKey(user))
+  }
+  if (route === 'grn-posting' || route === 'transfer-dispatch') {
+    return roleKey(user) === 'store keeper'
   }
   if (route === 'menu-engineering') {
     return ['cost controller', 'financial manager', 'general manager'].includes(roleKey(user))

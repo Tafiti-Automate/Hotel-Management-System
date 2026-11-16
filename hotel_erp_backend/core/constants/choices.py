@@ -73,6 +73,9 @@ class POStatus(models.TextChoices):
 
 class LedgerReferenceType(models.TextChoices):
     GOODS_RECEIPT = "goods_receipt", "Goods Receipt"
+    GRN_RECEIPT = "grn_receipt", "GRN Receipt"
+    TRANSIT_DISPATCH = "transit_dispatch", "Transit Dispatch"
+    TRANSIT_PICKUP = "transit_pickup", "Transit Pickup"
     PURCHASE_ORDER = "purchase_order", "Purchase Order"
     STOCK_ADJUSTMENT = "stock_adjustment", "Stock Adjustment"
     STOCK_ISSUE = "stock_issue", "Stock Issue"

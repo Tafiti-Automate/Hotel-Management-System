@@ -1,5 +1,6 @@
 """Closed periods protect posted business dates across backend entry points."""
 from django.db.models.signals import pre_delete, pre_save
+from django.core.exceptions import ValidationError
 from django.dispatch import receiver
 from django.utils import timezone
 
@@ -217,3 +218,16 @@ def protect_store_requisition_item(sender, instance, **kwargs):
         request = instance.requisition
         check(request.requested_by.branch_id,
               request.created_at.date() if request.created_at else None)
+
+
+
+@receiver(pre_delete, sender=StockIssue)
+def prohibit_deleted_dispatched_issue(sender, instance, **kwargs):
+    if instance.inventory_changes_applied:
+        raise ValidationError("Dispatched Stock Issue vouchers are immutable.")
+
+
+@receiver(pre_delete, sender=StockIssueItem)
+def prohibit_deleted_dispatched_issue_item(sender, instance, **kwargs):
+    if instance.issue.inventory_changes_applied:
+        raise ValidationError("Dispatched Stock Issue lines are immutable.")

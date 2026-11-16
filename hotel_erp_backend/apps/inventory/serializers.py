@@ -385,6 +385,9 @@ class StoreKeeperAssignmentSerializer(serializers.ModelSerializer):
 
 
 class InventoryBalanceSerializer(serializers.ModelSerializer):
+    weighted_average_cost = serializers.DecimalField(
+        max_digits=15, decimal_places=4, read_only=True
+    )
     is_below_reorder = serializers.BooleanField(read_only=True)
     available_quantity = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     reserved_allocations = serializers.SerializerMethodField()
@@ -864,10 +867,18 @@ class StoreRequisitionSerializer(serializers.ModelSerializer):
 
 
 class StockIssueItemSerializer(serializers.ModelSerializer):
+    def validate(self, attrs):
+        if self.instance and self.instance.issue.inventory_changes_applied:
+            raise serializers.ValidationError("Dispatched issue quantities cannot be modified.")
+        return super().validate(attrs)
+
     class Meta:
         model = StockIssueItem
         fields = "__all__"
-        read_only_fields = ("id", "item", "base_quantity", "created_at", "updated_at", "created_by")
+        read_only_fields = (
+        "id", "item", "base_quantity", "dispatched_unit_cost",
+        "created_at", "updated_at", "created_by",
+    )
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
@@ -883,6 +894,13 @@ class StockIssueItemSerializer(serializers.ModelSerializer):
 
 
 class StockIssueSerializer(serializers.ModelSerializer):
+    def validate(self, attrs):
+        if self.instance and self.instance.inventory_changes_applied:
+            raise serializers.ValidationError(
+                "A dispatched issue cannot be edited. Use the signed pickup workflow."
+            )
+        return super().validate(attrs)
+
     class Meta:
         model = StockIssue
         fields = "__all__"
@@ -891,6 +909,12 @@ class StockIssueSerializer(serializers.ModelSerializer):
             "issue_no",
             "issue_date",
             "inventory_changes_applied",
+            "fulfillment_status",
+            "transit_store",
+            "dispatched_at",
+            "signed_at",
+            "received_by",
+            "received_by_name",
             "created_at",
             "updated_at",
             "created_by",

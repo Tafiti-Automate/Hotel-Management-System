@@ -436,6 +436,14 @@ class InventoryBalance(BaseModel):
         default=Decimal("0.00"),
         validators=[validate_non_negative_decimal],
     )
+    weighted_average_cost = models.DecimalField(
+        max_digits=15, decimal_places=4, default=Decimal("0.0000"),
+        validators=[validate_non_negative_decimal],
+    )
+    bin_location = models.CharField(
+        max_length=80, blank=True, default="",
+        help_text="Warehouse aisle / shelf / bin for picking order.",
+    )
     reorder_level = models.DecimalField(
         max_digits=12,
         decimal_places=2,
@@ -1881,6 +1889,24 @@ class StockIssue(BaseModel):
         related_name="received_stock_issues",
     )
     received_by_name = models.CharField(max_length=150, blank=True)
+    STATUS_PACKED = "packed"
+    STATUS_TRANSIT = "in_transit"
+    STATUS_COMPLETED = "completed"
+    FULFILLMENT_CHOICES = (
+        (STATUS_PACKED, "Packed"),
+        (STATUS_TRANSIT, "In transit"),
+        (STATUS_COMPLETED, "Completed"),
+    )
+    fulfillment_status = models.CharField(
+        max_length=20, choices=FULFILLMENT_CHOICES, blank=True, default="",
+        help_text="Separate physical transit state for a Stores issue voucher.",
+    )
+    dispatched_at = models.DateTimeField(null=True, blank=True)
+    signed_at = models.DateTimeField(null=True, blank=True)
+    transit_store = models.ForeignKey(
+        StoreLocation, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="outstanding_transit_issues",
+    )
     issue_date = models.DateField(auto_now_add=True)
     note = models.TextField(blank=True)
     inventory_changes_applied = models.BooleanField(default=False)
@@ -1890,6 +1916,11 @@ class StockIssue(BaseModel):
 
     def __str__(self):
         return self.issue_no or f"Stock issue {self.id}"
+
+    def delete(self, *args, **kwargs):
+        if self.inventory_changes_applied:
+            raise ValidationError("A dispatched stock issue cannot be deleted.")
+        return super().delete(*args, **kwargs)
 
     def save(self, *args, **kwargs):
         if not self.issue_no:
@@ -2070,6 +2101,10 @@ class StockIssueItem(BaseModel):
         decimal_places=2,
         default=Decimal("0.00"),
     )
+    dispatched_unit_cost = models.DecimalField(
+        max_digits=15, decimal_places=4, default=Decimal("0.0000"),
+        validators=[validate_non_negative_decimal],
+    )
 
     class Meta(BaseModel.Meta):
         constraints = [
@@ -2081,9 +2116,16 @@ class StockIssueItem(BaseModel):
         ordering = ("item__name",)
 
     def save(self, *args, **kwargs):
+        if not self._state.adding and self.issue.inventory_changes_applied:
+            raise ValidationError("Dispatched Stock Issue items are immutable.")
         self.item = self.requisition_item.item
         self.base_quantity = self.item.quantity_in_base_units(self.quantity, self.unit)
         super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.issue.inventory_changes_applied:
+            raise ValidationError("Dispatched Stock Issue items cannot be deleted.")
+        return super().delete(*args, **kwargs)
 
     def __str__(self):
         return f"{self.issue} - {self.item} x {self.base_quantity}"

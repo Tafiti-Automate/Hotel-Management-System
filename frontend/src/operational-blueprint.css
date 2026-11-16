@@ -64,3 +64,40 @@
 @media(max-width:1380px){.neo-cost-center-chip{display:none}}
 @media(max-width:1120px){.neo-fiscal-chip{display:none}}
 @media(max-width:700px){.neo-switch-property{max-width:124px;overflow:hidden}.neo-switch-property span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+
+/* Sprint 1 — Storekeeper dock-to-store and internal dispatch */
+.sk-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;margin:0 0 18px}
+.sk-kpis>div{background:var(--surface,#fff);border:1px solid var(--border,#dce2e1);border-radius:12px;padding:16px 19px;display:flex;flex-direction:column;gap:8px}
+.sk-kpis span{color:var(--muted,#63726b);font-size:.73rem;font-weight:640}
+.sk-kpis strong{font-size:1.65rem;line-height:1.1;font-variant-numeric:tabular-nums}
+.sk-grn{grid-template-columns:minmax(270px,345px) minmax(0,1fr)}
+.sk-queue{margin-top:15px;max-height:650px;overflow:auto}
+.sk-document-row{display:flex;align-items:center;justify-content:space-between;width:100%;gap:12px}
+.sk-grn-table{min-width:900px}
+.sk-grn-table td:first-child{width:auto}
+.sk-grn-table td:nth-child(2){min-width:115px}
+.sk-grn-table td strong,.sk-picking-grid td strong{display:block}
+.sk-grn-table td small,.sk-picking-grid td small{display:block;color:var(--muted,#697a6f);margin-top:4px}
+.sk-grn-meta{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;margin:4px 0 22px}
+.sk-grn-meta>span{background:var(--bg,#f8faf9);border-radius:8px;padding:12px 13px;display:flex;flex-direction:column;gap:6px}
+.sk-grn-meta small{color:var(--muted,#6f786f);font-size:.7rem}
+.sk-grn-meta strong{font-size:.85rem}
+.sk-variance{display:inline-flex;min-width:45px;justify-content:center;padding:5px 8px;font-weight:780;font-variant-numeric:tabular-nums;border-radius:6px}
+.sk-variance.exact{background:#e9f6ed;color:#24653f}
+.sk-variance.shortage{background:#fff1df;color:#89530a}
+.sk-variance.excess{background:#ffeae7;color:#a13329}
+.sk-batch-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:15px}
+.sk-batch-actions label,.sk-request-title label{display:flex;align-items:center;gap:10px;cursor:pointer}
+.sk-batch-actions label{font-size:.82rem;font-weight:680;margin-right:auto}
+.sk-batch-actions input,.sk-request-title input{accent-color:#265c47;inline-size:16px;block-size:16px}
+.sk-filter{max-width:320px}
+.sk-request{border:1px solid var(--border,#dfe6df);border-radius:11px;margin-bottom:10px;overflow:hidden}
+.sk-request-title{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 16px;background:var(--bg,#fafbfa)}
+.sk-request-title label span{display:flex;flex-direction:column;gap:4px}
+.sk-request-title small{color:var(--muted,#64748b);font-size:.73rem}
+.sk-request .bp-table-scroll{border-radius:0;border-left:0;border-right:0;border-bottom:0}
+.sk-picking-grid{min-width:850px}
+.sk-invalid-input{border-color:#b42318!important}
+.sk-picking-grid td small[role=alert]{color:#b42318;font-size:.7rem;margin-top:3px;display:block}
+@media(max-width:830px){.sk-grn{grid-template-columns:1fr}.sk-kpis{grid-template-columns:1fr 1fr}.sk-grn-meta{grid-template-columns:1fr}.sk-batch-actions{align-items:stretch}}
+@media(max-width:520px){.sk-kpis{grid-template-columns:1fr}.sk-filter{max-width:none}.sk-request-title{align-items:start}}

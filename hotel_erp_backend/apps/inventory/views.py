@@ -15,6 +15,7 @@ from rest_framework import status
 from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
 
 from apps.employees.models import Employee
+from apps.inventory.stores_fulfillment import complete_transit_pickup, fulfill_requisition
 from apps.inventory.models import (
     Category,
     DepartmentConsumption,
@@ -1188,13 +1189,13 @@ class StockIssueViewSet(CreatedByModelMixin, ModelViewSet):
     serializer_class = StockIssueSerializer
 
     def get_permissions(self):
-        if self.action == "acknowledge":
+        if self.action in ("acknowledge", "apply"):
             return [IsAuthenticated()]
         return super().get_permissions()
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        if has_role(self.request.user, "Department Supervisor", "Supervisor") and not self.request.user.is_superuser:
+        if has_role(self.request.user, "Department Supervisor", "Outlet Supervisor", "Supervisor") and not self.request.user.is_superuser:
             employee = getattr(self.request.user, "employee_profile", None)
             return queryset.filter(requisition__requested_by=employee) if employee else queryset.none()
         return queryset
@@ -1209,18 +1210,33 @@ class StockIssueViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"])
     def apply(self, request, pk=None):
         issue = self.get_object()
-        enforce_readiness(issue.posting_readiness())
+        if not has_role(request.user, "Store Keeper"):
+            raise PermissionDenied("Only an assigned Storekeeper can dispatch issue vouchers.")
+        if issue.inventory_changes_applied:
+            raise ValidationError("The issue has already been dispatched.")
+        quantities = {
+            str(line.requisition_item_id): str(line.base_quantity)
+            for line in issue.items.all()
+        }
+        quantities = {
+            str(line.pk): quantities.get(str(line.pk), "0")
+            for line in issue.requisition.items.all()
+            if line.quantity_approved > line.quantity_issued
+        }
         try:
-            issue.apply_inventory_changes()
+            dispatched = fulfill_requisition(
+                issue.requisition_id, request.user.employee_profile,
+                request.user, quantities=quantities,
+            )
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
-        return Response(self.get_serializer(issue).data)
+        return Response(self.get_serializer(dispatched).data)
 
     @action(detail=True, methods=["post"])
     def acknowledge(self, request, pk=None):
         """The assigned department requester signs only a posted issue, once."""
         employee = getattr(request.user, "employee_profile", None)
-        if not has_role(request.user, "Department Supervisor", "Supervisor"):
+        if not has_role(request.user, "Department Supervisor", "Outlet Supervisor", "Supervisor"):
             raise PermissionDenied("Only the requesting Outlet Supervisor may confirm pickup.")
         if not employee or not employee.is_active:
             raise PermissionDenied("An active assigned employee is required.")
@@ -1228,6 +1244,12 @@ class StockIssueViewSet(CreatedByModelMixin, ModelViewSet):
             issue = StockIssue.objects.select_for_update().select_related(
                 "requisition__requested_by"
             ).get(pk=self.get_object().pk)
+            if issue.fulfillment_status == StockIssue.STATUS_TRANSIT:
+                try:
+                    completed = complete_transit_pickup(issue.pk, employee, request.user)
+                except DjangoValidationError as error:
+                    raise_drf_validation_error(error)
+                return Response(self.get_serializer(completed).data)
             if issue.requisition.requested_by_id != employee.pk:
                 raise PermissionDenied("This handover belongs to another department requester.")
             if not issue.inventory_changes_applied:

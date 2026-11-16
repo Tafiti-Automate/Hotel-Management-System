@@ -175,9 +175,14 @@ function buildDashboard(role: string, data: any): DashboardView {
     const low = balances.filter((row: any) => Number(row.available ?? row.on_hand ?? 0) <= 0)
     return {
       eyebrow: 'Stores & inventory', title: 'Store Keeper desk', description: 'Issue approved requests, watch stock availability and hand shortages to Procurement.',
-      metrics: [metric('Ready to issue', approved.length, 'Approved requests in queue', 'inventory_2', 'blue', 'workflow-stores', 'Issue queue'), metric('Stock lines', balances.length, 'Balances in your accessible stores', 'warehouse', 'green', 'stock-on-hand', 'Stock on hand'), metric('Stock alerts', low.length, 'Zero or unavailable stock lines', 'warning', 'red', 'stock-on-hand', 'Stock on hand'), metric('Completed', completed.length, 'Issued requests', 'task_alt', 'purple', 'workflow-stores', 'Issue queue')],
-      activities: activity(storeRequests, 'workflow-stores', 'Issue queue', 'Request'), queueTitle: 'Stores issue queue', queueHint: 'Approved department requests that require physical preparation or handover.', queueRoute: 'workflow-stores', queueLabel: 'Issue queue',
-      quickLinks: [quick('Issue queue', 'Prepare approved requests', 'inventory', 'workflow-stores', 'Issue queue'), quick('Stock on hand', 'Check live availability', 'inventory_2', 'stock-on-hand', 'Stock on hand'), quick('Purchase requests', 'Review shortage handoffs', 'shopping_cart', 'store-purchase-requests', 'Purchase requests')],
+      metrics: [metric('Ready to issue', approved.length, 'Approved requests in queue', 'inventory_2', 'blue', 'transfer-dispatch', 'Transfer fulfillment'), metric('Stock lines', balances.length, 'Balances in your accessible stores', 'warehouse', 'green', 'stock-on-hand', 'Stock on hand'), metric('Stock alerts', low.length, 'Zero or unavailable stock lines', 'warning', 'red', 'stock-on-hand', 'Stock on hand'), metric('Completed', completed.length, 'Issued requests', 'task_alt', 'purple', 'workflow-stores', 'Issue queue')],
+      activities: activity(storeRequests, 'workflow-stores', 'Issue queue', 'Request'), queueTitle: 'Stores issue queue', queueHint: 'Approved department requests that require physical preparation or handover.', queueRoute: 'transfer-dispatch', queueLabel: 'Transfer fulfillment',
+      quickLinks: [
+        quick('GRN posting', 'Verify supplier deliveries', 'move_to_inbox', 'grn-posting', 'GRN posting'),
+        quick('Dispatch transfers', 'Pick and pack approved requests', 'local_shipping', 'transfer-dispatch', 'Transfer fulfillment'),
+        quick('Stock on hand', 'Check live availability', 'inventory_2', 'stock-on-hand', 'Stock on hand'),
+        quick('Purchase requests', 'Review shortage handoffs', 'shopping_cart', 'store-purchase-requests', 'Purchase requests'),
+      ],
       context: [{ label: 'Articles', value: String(items.length) }, { label: 'Stock records', value: String(balances.length) }],
     }
   }

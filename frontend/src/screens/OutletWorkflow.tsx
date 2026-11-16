@@ -190,7 +190,8 @@ export function IncomingPickup() {
   const [agreed, setAgreed] = useState(false)
   const candidate = data.issues.find((row) => sid(row.id) === selected)
   const items = candidate ? data.issueItems.filter((row) => sid(row.issue) === sid(candidate.id)) : []
-  const ready = candidate?.inventory_changes_applied === true && !candidate?.received_by
+  const ready = candidate?.fulfillment_status === 'in_transit'
+    || (candidate?.inventory_changes_applied === true && !candidate?.received_by && !candidate?.fulfillment_status)
   const acknowledge = async () => {
     if (!candidate || !ready || !agreed) return
     setBusy(true); setError('')
@@ -199,7 +200,7 @@ export function IncomingPickup() {
       await load()
       await app.refreshData()
       setAgreed(false)
-      app.showToast('Pickup acknowledged and signed against the posted Stores issue')
+      app.showToast('Pickup signed · virtual transit cleared and department issue recorded')
     } catch (cause) {
       const message = errorMessage(cause)
       setError(message)
@@ -223,7 +224,7 @@ export function IncomingPickup() {
       </section>
       <section className="bp-panel">
         {!candidate ? <div className="bp-empty">Select an issue voucher to check the item list.</div> : <>
-          <div className="bp-panel-title"><div><span className="bp-eyebrow">Issue voucher</span><h2>{sid(candidate.issue_no)}</h2><p>{sid(candidate.store_name)} · {sid(candidate.issue_date)}</p></div><span className={candidate.received_by ? 'bp-state done' : 'bp-state'}>{candidate.received_by ? 'Received' : candidate.inventory_changes_applied ? 'Posted by Stores' : 'Prepared'}</span></div>
+          <div className="bp-panel-title"><div><span className="bp-eyebrow">Issue voucher</span><h2>{sid(candidate.issue_no)}</h2><p>{sid(candidate.store_name)} · {sid(candidate.issue_date)}</p></div><span className={candidate.received_by ? 'bp-state done' : 'bp-state'}>{candidate.received_by ? 'Received' : candidate.fulfillment_status === 'in_transit' ? 'In transit · awaiting signature' : candidate.inventory_changes_applied ? 'Posted by Stores' : 'Prepared'}</span></div>
           <div className="bp-table-scroll"><table className="bp-grid"><thead><tr><th>Article</th><th>Issued quantity</th><th>Unit</th></tr></thead><tbody>
             {items.map((line) => <tr key={sid(line.id)}><td><strong>{sid(line.item_name)}</strong></td><td>{sid(line.base_quantity)}</td><td>{sid(line.unit_name)}</td></tr>)}
           </tbody></table></div>
