@@ -3,13 +3,20 @@ import { useApp } from '../state/AppContext'
 import { cfg, type EntityKey } from '../lib/data'
 import { canAccessRoute } from '../lib/access'
 import { Icon } from './Icon'
+import RecordDetailDrawer from './RecordDetailDrawer'
+import { fetchCommandDocument, searchGlobalCommands, type GlobalCommandHit } from '../lib/api'
 
 const routeItems = [
   ['dashboard', 'Dashboard', 'space_dashboard'],
   ['workflow-stores', 'Stores', 'warehouse'],
   ['workflow-procure', 'Procurement', 'shopping_cart_checkout'],
   ['workflow-pay', 'Finance', 'payments'],
-  ['approvals', 'Approval queue', 'approval'],
+  ['approval-inbox', 'Approval inbox', 'approval'],
+  ['new-store-request', 'New store request', 'assignment_add'],
+  ['incoming-pickup', 'Confirm pickup', 'fact_check'],
+  ['recipes-production', 'Recipe costing', 'menu_book'],
+  ['pos-control', 'POS reconciliation', 'point_of_sale'],
+  ['finance-governance', 'Budgets & period close', 'account_balance'],
   ['storeRequisitions', 'Store requisitions', 'assignment'],
   ['requisitions', 'Purchase requisitions', 'request_quote'],
   ['orders', 'Purchase orders', 'receipt_long'],
@@ -33,6 +40,12 @@ interface SearchRecord {
 export default function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const app = useApp()
   const [query, setQuery] = useState('')
+  const [remote, setRemote] = useState<GlobalCommandHit[]>([])
+  const [searching, setSearching] = useState(false)
+  const [selected, setSelected] = useState<{
+    hit: GlobalCommandHit
+    record: Record<string, unknown>
+  } | null>(null)
   const input = useRef<HTMLInputElement>(null)
   const resultButtons = useRef<Array<HTMLButtonElement | null>>([])
 
@@ -51,6 +64,27 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
   }, [open, onClose])
+
+  useEffect(() => {
+    const normalized = query.trim()
+    if (!open || normalized.length < 2) {
+      setRemote([])
+      setSearching(false)
+      return
+    }
+    let alive = true
+    setSearching(true)
+    const handle = window.setTimeout(() => {
+      void searchGlobalCommands(normalized).then((matches) => {
+        if (alive) setRemote(matches)
+      }).catch(() => {
+        if (alive) setRemote([])
+      }).finally(() => {
+        if (alive) setSearching(false)
+      })
+    }, 250)
+    return () => { alive = false; window.clearTimeout(handle) }
+  }, [query, open])
 
   const results = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -83,9 +117,9 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
     return { routes, records }
   }, [query, app.data, app.user])
 
-  if (!open) return null
+  if (!open && !selected) return null
 
-  const resultCount = results.routes.length + results.records.length
+  const resultCount = results.routes.length + results.records.length + remote.length
   const focusResult = (index: number) => {
     if (!resultCount) return
     resultButtons.current[(index + resultCount) % resultCount]?.focus()
@@ -94,6 +128,26 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
     app.navTo(route, label)
     onClose()
   }
+  const openDocument = (hit: GlobalCommandHit) => {
+    setSelected({
+      hit,
+      record: {
+        id: hit.id, reference: hit.reference, status: hit.status,
+        description: hit.subtitle, source: hit.title,
+      },
+    })
+    onClose()
+    void fetchCommandDocument(hit).then((record) => {
+      setSelected((current) => current?.hit.id === hit.id
+        ? { ...current, record }
+        : current)
+    }).catch((cause) => {
+      setSelected((current) => current?.hit.id === hit.id
+        ? { ...current, record: { ...current.record, detail: String(cause) } }
+        : current)
+    })
+  }
+
   const handleInputKey = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'ArrowDown') {
       event.preventDefault()
@@ -123,7 +177,8 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
     }
   }
 
-  return <div className="command-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+  return <>
+    {open && <div className="command-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
     <section className="command-palette" role="dialog" aria-modal="true" aria-label="Global search">
       <div className="command-input">
         <Icon name="search" size={21} />
@@ -132,7 +187,7 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={handleInputKey}
-          placeholder="Search pages, references, suppliers, employees…"
+          placeholder="Search PO, GRN, transfer, article or page…"
           aria-label="Search system"
         />
         <kbd>Esc</kbd>
@@ -175,7 +230,26 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
           })}
         </>}
 
-        {!results.routes.length && !results.records.length && <div className="command-empty">
+        {remote.length > 0 && <>
+          <div className="command-section-title">Live documents & articles</div>
+          {remote.map((hit, remoteIndex) => {
+            const index = results.routes.length + results.records.length + remoteIndex
+            return <button
+              ref={(node) => { resultButtons.current[index] = node }}
+              type="button"
+              key={hit.kind + '-' + hit.id}
+              className="command-result"
+              onKeyDown={(event) => handleResultKey(event, index)}
+              onClick={() => openDocument(hit)}
+            >
+              <span><Icon name={hit.kind === 'order' ? 'receipt_long' : hit.kind === 'grn' ? 'move_to_inbox' : hit.kind === 'transfer' ? 'sync_alt' : 'inventory_2'} size={18} /></span>
+              <div><b>{hit.reference || hit.title}</b><small>{hit.title} · {hit.subtitle}</small></div>
+              <Icon name="open_in_new" size={16} />
+            </button>
+          })}
+        </>}
+        {searching && <div className="command-section-title">Searching live records…</div>}
+        {!searching && !results.routes.length && !results.records.length && !remote.length && <div className="command-empty">
           <Icon name="search_off" size={25} />
           <b>No results found</b>
           <small>Try a reference, supplier, employee, article or page name.</small>
@@ -188,5 +262,12 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
         <span>Search respects your role permissions</span>
       </footer>
     </section>
-  </div>
+  </div>}
+    {selected && <RecordDetailDrawer
+      title={selected.hit.title}
+      subtitle={selected.hit.reference}
+      record={selected.record}
+      onClose={() => setSelected(null)}
+    />}
+  </>
 }

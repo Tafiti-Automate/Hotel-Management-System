@@ -918,6 +918,54 @@ async function sendJson(path: string, method: string, body?: Row): Promise<unkno
   return request()
 }
 
+export type GlobalCommandHit = {
+  kind: 'order' | 'grn' | 'transfer' | 'article'
+  id: string
+  reference: string
+  title: string
+  subtitle: string
+  status: string
+}
+
+export async function searchGlobalCommands(query: string): Promise<GlobalCommandHit[]> {
+  const response = await fetchWithTimeout(endpointUrl(
+    'global-command-search?q=' + encodeURIComponent(query),
+  ), { headers: { Accept: 'application/json', ...authHeaders() } })
+  if (!response.ok) throw new Error('Global search unavailable (' + response.status + ')')
+  const body = await response.json() as { results?: GlobalCommandHit[] }
+  return Array.isArray(body.results) ? body.results : []
+}
+
+export async function fetchCommandDocument(hit: GlobalCommandHit): Promise<Row> {
+  const path = {
+    order: 'purchase-orders', grn: 'grns', transfer: 'stock-transfers', article: 'items',
+  }[hit.kind]
+  const response = await fetchWithTimeout(endpointUrl(path + '/' + encodeURIComponent(hit.id)), {
+    headers: { Accept: 'application/json', ...authHeaders() },
+  })
+  if (!response.ok) throw new Error('Document unavailable (' + response.status + ')')
+  return response.json() as Promise<Row>
+}
+
+export interface FiscalPeriodContext {
+  id?: string
+  name: string
+  status: 'open' | 'closed' | 'unconfigured' | 'unavailable'
+  branch_id?: string
+  branch_name?: string
+  start_date?: string
+  end_date?: string
+}
+
+export async function fetchFiscalPeriodContext(branchId?: string): Promise<FiscalPeriodContext> {
+  const suffix = branchId ? '?branch_id=' + encodeURIComponent(branchId) : ''
+  const response = await fetchWithTimeout(endpointUrl('period-context' + suffix), {
+    headers: { Accept: 'application/json', ...authHeaders() },
+  })
+  if (!response.ok) throw new Error('Fiscal period context unavailable (' + response.status + ')')
+  return response.json() as Promise<FiscalPeriodContext>
+}
+
 export async function readBackendRecords(path: string): Promise<Row[]> {
   return (await readList(path)) as Row[]
 }

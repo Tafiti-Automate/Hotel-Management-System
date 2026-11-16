@@ -406,3 +406,99 @@ def test_published_recipe_ingredients_cannot_be_rewritten(materials_context):
     ingredient.quantity = Decimal("4.00")
     with pytest.raises(ValidationError, match="Only draft recipes"):
         ingredient.save()
+
+
+@pytest.mark.django_db
+def test_supervisor_can_create_multi_line_requisition_atomically(materials_context):
+    from apps.inventory.models import StoreRequisition
+    from rest_framework.test import APIClient
+
+    user, employee, department, branch, outlet, unit, item = materials_context
+    user.groups.add(Group.objects.get_or_create(name="Department Supervisor")[0])
+    client = APIClient()
+    client.force_authenticate(user=user)
+    response = client.post("/api/v1/store-requisitions/create-with-lines/", {
+        "store": str(outlet.pk), "purpose": "Breakfast shift",
+        "submit": True,
+        "lines": [{"item": str(item.pk), "unit": str(unit.pk), "quantity": "3.00"}],
+    }, format="json")
+    assert response.status_code == 201, response.data
+    requisition = StoreRequisition.objects.get(pk=response.data["id"])
+    assert requisition.requested_by == employee
+    assert requisition.department == department
+    assert requisition.status == "pending_department_approval"
+    assert requisition.items.count() == 1
+
+
+@pytest.mark.django_db
+def test_supervisor_workflow_masks_exact_stock_levels(materials_context):
+    from rest_framework.test import APIClient
+
+    user, employee, department, branch, outlet, unit, item = materials_context
+    user.groups.add(Group.objects.get_or_create(name="Department Supervisor")[0])
+    client = APIClient()
+    client.force_authenticate(user=user)
+    response = client.get("/api/v1/store-requisitions/workflow/")
+    assert response.status_code == 200, response.data
+    assert len(response.data["balances"]) == 1
+    balance = response.data["balances"][0]
+    assert balance["in_stock"] is True
+    for forbidden in ("quantity_in_stock", "on_hand", "available", "reserved", "unit_cost"):
+        assert forbidden not in balance
+
+
+@pytest.mark.django_db
+def test_pickup_confirmation_requires_posted_issue_and_allows_only_one_signature(materials_context):
+    from apps.inventory.models import StockIssue, StoreRequisition
+    from rest_framework.test import APIClient
+
+    user, employee, department, branch, outlet, unit, item = materials_context
+    user.groups.add(Group.objects.get_or_create(name="Department Supervisor")[0])
+    requisition = StoreRequisition.objects.create(
+        requested_by=employee, department=department,
+        store=outlet, purpose="Shift issue", status="approved",
+    )
+    issue = StockIssue.objects.create(
+        requisition=requisition, store=outlet, issued_by=employee,
+        inventory_changes_applied=True,
+    )
+    client = APIClient()
+    client.force_authenticate(user=user)
+    url = f"/api/v1/stock-issues/{issue.pk}/acknowledge/"
+    first = client.post(url, {}, format="json")
+    assert first.status_code == 200, first.data
+    issue.refresh_from_db()
+    assert issue.received_by == employee
+    second = client.post(url, {}, format="json")
+    assert second.status_code == 400
+
+
+@pytest.mark.django_db
+def test_period_context_is_readable_without_finance_permissions(materials_context):
+    from rest_framework.test import APIClient
+
+    user, employee, department, branch, outlet, unit, item = materials_context
+    user.groups.add(Group.objects.get_or_create(name="Department Supervisor")[0])
+    client = APIClient()
+    client.force_authenticate(user=user)
+    response = client.get("/api/v1/period-context/")
+    assert response.status_code == 200, response.data
+    assert response.data["branch_id"] == str(branch.pk)
+    assert response.data["status"] == "unconfigured"
+
+
+@pytest.mark.django_db
+def test_global_command_search_uses_authorized_article_catalogue(materials_context):
+    from rest_framework.test import APIClient
+
+    user, employee, department, branch, outlet, unit, item = materials_context
+    call_command("setup_hotel_roles", verbosity=0)
+    user.groups.add(Group.objects.get(name="Department Supervisor"))
+    client = APIClient()
+    client.force_authenticate(user=user)
+    response = client.get("/api/v1/global-command-search/?q=MAT-WINE")
+    assert response.status_code == 200, response.data
+    matches = response.data["results"]
+    assert any(row["kind"] == "article" and row["id"] == str(item.pk) for row in matches)
+    assert all(row["kind"] not in ("order", "grn", "transfer") for row in matches)
+    assert all("unit_cost" not in row for row in matches)

@@ -2,6 +2,7 @@ import csv
 import io
 from decimal import Decimal, InvalidOperation
 from django.db import transaction
+from django.utils import timezone
 from django.core.exceptions import ValidationError as DjangoValidationError
 from apps.departments.models import Branch
 from django.db.models import Q
@@ -10,6 +11,9 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
+from apps.departments.models import Branch
 
 from apps.materials_control.models import (
     BudgetOverride,
@@ -129,6 +133,125 @@ def require_recipe_outlet(user, outlet):
     if has_role(user, "department") and not has_role(user, "cost"):
         if outlet.pk not in department_outlet_ids(employee_for(user)):
             raise PermissionDenied("This outlet is outside your department.")
+
+
+class GlobalCommandSearchView(APIView):
+    """Permission-filtered, property-scoped document search for the command bar."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from apps.inventory.models import Item, StockTransfer
+        from apps.procurement.models import PurchaseOrder, GoodsReceiptNote
+
+        query = str(request.query_params.get("q") or "").strip()[:80]
+        if len(query) < 2:
+            return Response({"results": []})
+        user = request.user
+        employee = employee_for(user)
+        unrestricted = user.is_superuser or has_role(user, "admin")
+        if not unrestricted and (not employee or not employee.is_active or not employee.branch_id):
+            return Response({"results": []})
+
+        def scoped(queryset, branch_path):
+            if unrestricted:
+                return queryset
+            if has_role(user, "finance", "management") and employee.branch.hotel_id:
+                return queryset.filter(**{f"{branch_path}__hotel_id": employee.branch.hotel_id})
+            return queryset.filter(**{f"{branch_path}_id": employee.branch_id})
+
+        results = []
+        if user.has_perm("procurement.view_purchaseorder"):
+            orders = scoped(
+                PurchaseOrder.objects.select_related("supplier", "requisition__branch"),
+                "requisition__branch",
+            ).filter(
+                Q(lpo_number__icontains=query) | Q(po_number__icontains=query)
+                | Q(supplier__name__icontains=query)
+            ).order_by("-created_at")[:6]
+            results.extend({
+                "kind": "order", "id": str(order.pk),
+                "reference": order.lpo_number or order.po_number,
+                "title": "Purchase order", "subtitle": str(order.supplier),
+                "status": order.status,
+            } for order in orders)
+        if user.has_perm("procurement.view_goodsreceiptnote"):
+            receipts = scoped(
+                GoodsReceiptNote.objects.select_related("purchase_order__supplier", "purchase_order__requisition__branch"),
+                "purchase_order__requisition__branch",
+            ).filter(
+                Q(grn_number__icontains=query)
+                | Q(purchase_order__lpo_number__icontains=query)
+            ).order_by("-created_at")[:6]
+            results.extend({
+                "kind": "grn", "id": str(receipt.pk),
+                "reference": receipt.grn_number,
+                "title": "Goods receipt", "subtitle": str(receipt.purchase_order.supplier),
+                "status": receipt.status,
+            } for receipt in receipts)
+        if user.has_perm("inventory.view_stocktransfer"):
+            transfers = scoped(
+                StockTransfer.objects.select_related("from_store", "to_store"),
+                "from_store__branch",
+            ).filter(
+                Q(from_store__name__icontains=query)
+                | Q(to_store__name__icontains=query)
+                | Q(note__icontains=query)
+            ).order_by("-created_at")
+            if has_role(user, "Store Keeper") and not unrestricted:
+                transfers = transfers.filter(
+                    from_store__keeper_assignments__employee=employee,
+                    from_store__keeper_assignments__is_active=True,
+                )
+            results.extend({
+                "kind": "transfer", "id": str(transfer.pk),
+                "reference": "Transfer " + str(transfer.pk)[:8],
+                "title": "Stock transfer",
+                "subtitle": f"{transfer.from_store} → {transfer.to_store}",
+                "status": transfer.status,
+            } for transfer in transfers[:6])
+        if user.has_perm("inventory.view_item"):
+            articles = Item.objects.filter(is_active=True).filter(
+                Q(name__icontains=query) | Q(sku__icontains=query)
+            ).order_by("name")[:6]
+            results.extend({
+                "kind": "article", "id": str(article.pk),
+                "reference": article.sku,
+                "title": article.name, "subtitle": "Article catalogue",
+                "status": "",
+            } for article in articles)
+        return Response({"results": results})
+
+
+class PeriodContextView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        employee = employee_for(request.user)
+        branch_id = request.query_params.get("branch_id")
+        if branch_id and (request.user.is_superuser or has_role(request.user, "admin", "finance", "management")):
+            branch = Branch.objects.filter(pk=branch_id).first()
+            if not branch:
+                raise PermissionDenied("Unknown property.")
+            if not request.user.is_superuser and not has_role(request.user, "admin"):
+                ensure_branch_scope(request.user, branch.pk)
+        elif employee and employee.is_active and employee.branch_id:
+            branch = employee.branch
+        else:
+            return Response({"status": "unavailable", "name": "No assigned property"})
+        period = FiscalPeriod.objects.filter(
+            branch=branch, start_date__lte=timezone.localdate(),
+            end_date__gte=timezone.localdate(),
+        ).order_by("-start_date").first()
+        if not period:
+            return Response({
+                "status": "unconfigured", "name": "Period not configured",
+                "branch_id": str(branch.pk), "branch_name": branch.name,
+            })
+        return Response({
+            "id": str(period.pk), "name": period.name, "status": period.status,
+            "start_date": period.start_date, "end_date": period.end_date,
+            "branch_id": str(branch.pk), "branch_name": branch.name,
+        })
 
 
 class OutletAssignmentViewSet(CreatedByModelMixin, ModelViewSet):

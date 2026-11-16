@@ -616,11 +616,9 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         request = self.context.get("request")
-        if not (can_view_commercial_data(request) or has_role(request, "Receiving Clerk")):
-            # Receiving has view-only access to the LPO total and line amounts
-            # before it creates a GRN. Store Keepers remain non-commercial.
-            for field in ("total_amount",):
-                data.pop(field, None)
+        if not can_view_commercial_data(request):
+            # Loading-bay users must not see the commercial order value.
+            data.pop("total_amount", None)
             if has_role(request, "Store Keeper"):
                 for field in (
                     "supplier", "supplier_email", "sent_to_email", "lead_time_days", "delivery_due_date"
@@ -720,11 +718,28 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         request = self.context.get("request")
-        if not (can_view_commercial_data(request) or has_role(request, "Receiving Clerk")):
+        if not can_view_commercial_data(request):
             for field in (
                 "unit_cost", "line_total", "procurement_quantity",
                 "procurement_base_quantity", "finance_approved_quantity",
                 "finance_approved_base_quantity", "finance_reduction_reason",
+            ):
+                data.pop(field, None)
+        if has_role(request, "Receiving Clerk") and not can_view_commercial_data(request):
+            # A blind receiver can identify which PO lines remain open, but may
+            # not fetch the ordered, approved or still-outstanding numbers.
+            data["has_outstanding"] = (
+                (instance.approved_quantity or Decimal("0.00"))
+                > Decimal(self.get_previously_received_quantity(instance))
+            )
+            for field in (
+                "quantity", "base_quantity", "approved_quantity", "approved_base_quantity",
+                "previously_received_quantity", "outstanding_quantity",
+                "purchasing_approved_quantity", "purchasing_approved_base_quantity",
+                "management_approved_quantity", "management_approved_base_quantity",
+                "finance_approved_quantity", "finance_approved_base_quantity",
+                "procurement_base_quantity", "procurement_quantity",
+                "unit_cost", "line_total",
             ):
                 data.pop(field, None)
         return data
@@ -869,6 +884,14 @@ class GoodsReceiptItemSerializer(serializers.ModelSerializer):
 
     def get_rejected_quantity(self, instance):
         return self._inspection_quantity(instance, "quantity_rejected")
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        if has_role(request, "Receiving Clerk") and not can_view_commercial_data(request):
+            data.pop("ordered_quantity", None)
+            data.pop("unit_cost", None)
+        return data
 
     def validate(self, attrs):
         receipt = attrs.get("goods_receipt") or getattr(self.instance, "goods_receipt", None)

@@ -40,7 +40,7 @@ function inputDate(value: Date) {
 
 function dateStamp() { return inputDate(new Date()) }
 
-export default function ReportView() {
+export default function ReportView({ selectedReportId }: { selectedReportId?: string } = {}) {
   const app = useApp()
   const [store, setStore] = useState('')
   const [category, setCategory] = useState('')
@@ -62,8 +62,8 @@ export default function ReportView() {
   const [liveError, setLiveError] = useState('')
   const [selectedReportRow, setSelectedReportRow] = useState<Record<string, unknown> | null>(null)
 
-  const reportId = app.reportId || 'valuation'
-  const authorized = Boolean(app.reportId && canViewReport(app.user, reportId))
+  const reportId = selectedReportId || app.reportId || 'valuation'
+  const authorized = Boolean((selectedReportId || app.reportId) && canViewReport(app.user, reportId))
   const reportDefinition = reports.find((entry) => entry.id === reportId)
   const operationalReportId = isOperationalReport(reportId) ? reportId : null
   const live = Boolean(operationalReportId)

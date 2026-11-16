@@ -9,6 +9,7 @@ import '../src/dashboard-v2.css'
 import '../src/enterprise-redesign.css'
 import '../src/enterprise-foundation.css'
 import '../src/materials-control.css'
+import '../src/operational-blueprint.css'
 
 export const metadata: Metadata = {
   title: 'Hotel ERP',

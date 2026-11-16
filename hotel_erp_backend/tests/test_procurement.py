@@ -1441,13 +1441,15 @@ def test_receiving_clerk_workspace_shows_only_ready_branch_lpos_without_prices()
 
     assert response.status_code == 200, response.data
     assert [row["id"] for row in response.data["orders"]] == [str(ready.pk)]
-    assert response.data["orders"][0]["total_amount"] == "8000.00"
-    assert response.data["orderItems"][0]["unit_cost"] == "4000.00"
-    assert response.data["orderItems"][0]["outstanding_quantity"] == "2.00"
+    assert "total_amount" not in response.data["orders"][0]
+    assert "unit_cost" not in response.data["orderItems"][0]
+    assert "outstanding_quantity" not in response.data["orderItems"][0]
+    assert "approved_quantity" not in response.data["orderItems"][0]
+    assert response.data["orderItems"][0]["has_outstanding"] is True
 
 
 @pytest.mark.django_db
-def test_receiving_clerk_can_generate_grn_then_post_it_to_inventory():
+def test_receiving_clerk_records_grn_but_cannot_post_store_inventory():
     employee, department, supplier, item = create_procurement_context()
     branch = Branch.objects.create(name="Direct GRN Branch")
     store = StoreLocation.objects.create(branch=branch, name="Main Store")
@@ -1549,13 +1551,11 @@ def test_receiving_clerk_can_generate_grn_then_post_it_to_inventory():
         format="json",
     )
 
-    assert posted.status_code == 200, posted.data
+    # Receiving books physical delivery; a separate Storekeeper must post SOH.
+    assert posted.status_code == 403, posted.data
     receipt.refresh_from_db()
-    order.refresh_from_db()
-    assert receipt.status == "posted"
-    assert order.status == POStatus.PARTIALLY_RECEIVED
-    assert InventoryBalance.objects.get(item=item, store=store).quantity_in_stock == Decimal("1.00")
-    assert InventoryBatch.objects.get(item=item, store=store).expiry_date == expiry_date
+    assert receipt.status == "received"
+    assert not InventoryBalance.objects.filter(item=item, store=store).exists()
 
 
 @pytest.mark.django_db
@@ -1814,7 +1814,7 @@ def test_receiving_clerk_workspace_keeps_grn_after_lpo_is_fully_received():
         format="json",
     )
 
-    assert posted.status_code == 200, posted.data
+    assert posted.status_code == 403, posted.data
     order.refresh_from_db()
     assert order.status == POStatus.RECEIVED
 
@@ -2251,3 +2251,59 @@ def test_supplier_pack_quote_keeps_lpo_quantity_in_article_base_uom():
     assert lpo_line.unit_id == ream.id
     assert lpo_line.unit_cost == Decimal("19500.00")
     assert lpo_line.line_total == Decimal("19500.0000")
+
+
+@pytest.mark.django_db
+def test_receiving_rejections_are_stored_in_inspection_without_inventory_posting():
+    employee, department, supplier, item = create_procurement_context()
+    branch = Branch.objects.create(name="Blind Receiving Inspection")
+    store = StoreLocation.objects.create(branch=branch, name="Blind Receiving Store")
+    employee.branch = branch
+    employee.save(update_fields=("branch", "updated_at"))
+    receiving, _ = Group.objects.get_or_create(name="Receiving Clerk")
+    receiving.permissions.add(Permission.objects.get(codename="view_goodsreceiptnote"))
+    employee.user.groups.add(receiving)
+
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee, department=department, branch=branch,
+        reason="Blind receiving rejection test", status=PRStatus.APPROVED,
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition, item=item, quantity=Decimal("2.00"),
+        approved_quantity=Decimal("2.00"), destination_store=store,
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition, supplier=supplier, ordered_by=employee, store=store,
+    )
+    line = PurchaseOrderItem.objects.create(
+        purchase_order=order, item=item, unit=item.base_unit,
+        quantity=Decimal("2.00"), unit_cost=Decimal("5000.00"),
+    )
+    authorize_order_for_test(order)
+    order.issue(sent_by=employee, sent_to_email=supplier.email)
+
+    client = APIClient()
+    client.force_authenticate(employee.user)
+    response = client.post(
+        f"/api/v1/purchase-orders/{order.pk}/receive-delivery/",
+        {
+            "supplier_invoice_no": "INV-BLIND-INSPECT",
+            "short_delivery_reason": "One unit rejected on quality inspection.",
+            "lines": [{
+                "purchase_order_item": str(line.pk),
+                "quantity_received": "2.00",
+                "quantity_rejected": "1.00",
+                "rejection_reason": "Broken packaging",
+            }],
+        },
+        format="json",
+    )
+    assert response.status_code == 201, response.data
+    from apps.procurement.models import GoodsReceiptNote
+    receipt = GoodsReceiptNote.objects.get(pk=response.data["id"])
+    inspection_line = receipt.inspection.items.get(goods_receipt_item__purchase_order_item=line)
+    assert inspection_line.quantity_received == Decimal("2.00")
+    assert inspection_line.quantity_rejected == Decimal("1.00")
+    assert inspection_line.quantity_accepted == Decimal("1.00")
+    assert receipt.status == GoodsReceiptStatus.RECEIVED
+    assert not receipt.items.filter(inventory_changes_applied=True).exists()

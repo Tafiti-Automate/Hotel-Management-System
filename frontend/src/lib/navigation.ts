@@ -8,6 +8,7 @@ export const workspaceRoutes = [
   'workflow-pay', 'workflow-consume', 'workflow-configure',
   'waste-control', 'recipes-production', 'pos-control',
   'finance-governance', 'integration-control',
+  'new-store-request', 'incoming-pickup', 'approval-inbox', 'menu-engineering',
   'stock-on-hand', 'store-transfers', 'store-inventory',
   'store-analysis', 'store-usage', 'store-purchase-requests',
   'items', 'categories', 'uoms', 'itemUnits', 'locations',
@@ -23,20 +24,81 @@ export type WorkspaceRoute = (typeof workspaceRoutes)[number]
 
 const registeredRoutes = new Set<string>(workspaceRoutes)
 
+/**
+ * Semantic, bookmarkable Next.js URLs with backward compatibility for the
+ * existing /workspace/:section paths.
+ */
+const semanticPaths: Partial<Record<WorkspaceRoute, string>> = {
+  dashboard: '/dashboard',
+  'workflow-stores': '/transfers/requisitions',
+  'new-store-request': '/transfers/requisitions/new',
+  'incoming-pickup': '/transfers/incoming',
+  'approval-inbox': '/approvals',
+  'store-transfers': '/transfers/manage',
+  'stock-on-hand': '/inventory/stock-on-hand',
+  'store-inventory': '/stocktake/control',
+  'store-purchase-requests': '/inventory/reorder',
+  'waste-control': '/adjustments/waste',
+  'recipes-production': '/recipes',
+  'pos-control': '/pos/reconciliation',
+  'workflow-procure': '/purchasing/workbench',
+  'workflow-pay': '/finance/invoice-matching',
+  'finance-governance': '/finance/period-close',
+  'integration-control': '/admin/integrations',
+  supplierItems: '/purchasing/quotes',
+  suppliers: '/vendors',
+  orders: '/purchasing/orders',
+  grns: '/receiving/grns',
+  supplierReturns: '/receiving/returns',
+  reports: '/reports',
+  'menu-engineering': '/reports/menu-engineering',
+  items: '/admin/articles',
+  categories: '/admin/article-groups',
+  uoms: '/admin/units',
+  itemUnits: '/admin/unit-conversions',
+  locations: '/admin/stores',
+  'access-management': '/admin/users',
+  'audit-log': '/admin/audit',
+  'hotel-profile': '/admin/property',
+  'workflow-configure': '/admin/workflow',
+}
+const semanticLookup = new Map(
+  Object.entries(semanticPaths).map(([route, path]) => [path, route as WorkspaceRoute]),
+)
+const routeAliases: Record<string, WorkspaceRoute> = {
+  '/adjustments/waste/new': 'waste-control',
+  '/finance/budgets': 'finance-governance',
+  '/purchasing/requisitions/new': 'workflow-procure',
+  '/receiving/returns/new': 'supplierReturns',
+  '/purchasing/requisitions': 'workflow-procure',
+  '/admin/roles': 'access-management',
+}
+
 export function routeFromPath(pathname: string): WorkspaceRoute | null {
-  const match = /^\/workspace\/([A-Za-z0-9-]+)\/?$/.exec(pathname)
-  if (!match) return null
-  const route = match[1]
-  return registeredRoutes.has(route) ? route as WorkspaceRoute : null
+  const normalized = pathname.replace(/\/+$/, '') || '/'
+  const legacy = /^\/workspace\/([A-Za-z0-9-]+)$/.exec(normalized)
+  if (legacy) return registeredRoutes.has(legacy[1]) ? legacy[1] as WorkspaceRoute : null
+  const exact = semanticLookup.get(normalized) || routeAliases[normalized]
+  if (exact) return exact
+  if (/^\/purchasing\/orders\/[^/]+$/.test(normalized)) return 'workflow-procure'
+  if (/^\/receiving\/po\/[^/]+$/.test(normalized)) return 'workflow-procure'
+  if (/^\/recipes\/[^/]+$/.test(normalized)) return 'recipes-production'
+  if (/^\/stocktake\/[^/]+$/.test(normalized)) return 'store-inventory'
+  return null
 }
 
 export function pathForRoute(route: string): string | null {
-  return registeredRoutes.has(route) ? `/workspace/${route}` : null
+  if (!registeredRoutes.has(route)) return null
+  return semanticPaths[route as WorkspaceRoute] || `/workspace/${route}`
 }
 
 export function labelForRoute(route: string): string {
   const special: Record<string, string> = {
     dashboard: 'Overview',
+    'new-store-request': 'New internal requisition',
+    'incoming-pickup': 'Confirm pickup',
+    'approval-inbox': 'Approval inbox',
+    'menu-engineering': 'Menu sales analysis',
     'hr-dashboard': 'People overview',
     'workflow-stores': 'Stores workflow',
     'workflow-procure': 'Procurement',

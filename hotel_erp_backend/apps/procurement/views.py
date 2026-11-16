@@ -1312,6 +1312,17 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                         quantity = Decimal(str(entry.get("quantity_received") or "0"))
                     except Exception as error:
                         raise ValidationError({"lines": "Received quantities must be valid numbers."}) from error
+                    if not quantity.is_finite() or quantity < Decimal("0.00"):
+                        raise ValidationError({"lines": "Counted quantities must be finite and non-negative."})
+                    try:
+                        rejected = Decimal(str(entry.get("quantity_rejected") or "0"))
+                    except Exception as error:
+                        raise ValidationError({"lines": "Rejected quantities must be valid numbers."}) from error
+                    rejection_reason = str(entry.get("rejection_reason") or "").strip()
+                    if not rejected.is_finite() or rejected < 0 or rejected > quantity:
+                        raise ValidationError({"lines": "Rejected quantity cannot exceed counted quantity."})
+                    if rejected and not rejection_reason:
+                        raise ValidationError({"lines": "Enter a reason for every rejected quantity."})
                     if quantity <= Decimal("0.00"):
                         continue
                     normalized.append((
@@ -1320,6 +1331,8 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                         entry.get("expiry_date") or None,
                         str(entry.get("batch_number") or "").strip(),
                         entry.get("delivery_temperature"),
+                        rejected,
+                        rejection_reason,
                     ))
 
                 if not normalized:
@@ -1363,7 +1376,7 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                 receipt.save()
 
                 receipt_items = []
-                for order_line, quantity, expiry_date, batch_number, delivery_temperature in normalized:
+                for order_line, quantity, expiry_date, batch_number, delivery_temperature, rejected, rejection_reason in normalized:
                     receipt_item = GoodsReceiptItem(
                         goods_receipt=receipt,
                         purchase_order_item=order_line,
@@ -1374,7 +1387,7 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                         created_by=request.user if request.user.is_authenticated else None,
                     )
                     receipt_item.save()
-                    receipt_items.append(receipt_item)
+                    receipt_items.append((receipt_item, rejected, rejection_reason, order_line))
 
                 inspection = GoodsInspection.objects.create(
                     goods_receipt=receipt,
@@ -1389,14 +1402,15 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                     ),
                     created_by=request.user if request.user.is_authenticated else None,
                 )
-                for receipt_item in receipt_items:
+                for receipt_item, rejected, rejection_reason, order_line in receipt_items:
+                    rejected_base = (rejected * order_line.conversion_factor).quantize(Decimal("0.01"))
                     GoodsInspectionItem.objects.create(
                         inspection=inspection,
                         goods_receipt_item=receipt_item,
                         quantity_received=receipt_item.base_quantity,
-                        quantity_accepted=receipt_item.base_quantity,
-                        quantity_rejected=Decimal("0.00"),
-                        rejection_reason="",
+                        quantity_accepted=receipt_item.base_quantity - rejected_base,
+                        quantity_rejected=rejected_base,
+                        rejection_reason=rejection_reason,
                         created_by=request.user if request.user.is_authenticated else None,
                     )
 

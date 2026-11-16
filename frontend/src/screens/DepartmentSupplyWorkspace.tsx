@@ -15,7 +15,7 @@ const when=(v:unknown)=>{const d=new Date(id(v));return !id(v)||Number.isNaN(d.g
 const label=(s:unknown)=>({draft:'Draft',pending_department_approval:'Awaiting HOD',submitted:'Awaiting Cost Control',approved:'Approved · Stores',rejected:'Rejected',partially_issued:'Partially issued',issued:'Issued'}[id(s)]||id(s).replace(/_/g,' '))
 
 export default function DepartmentSupplyWorkspace(){
- const app=useApp(),role=id(app.user.role).toLowerCase(),supervisor=['department supervisor','supervisor'].includes(role),hod=role==='department head',cost=role==='cost controller',keeper=role==='store keeper'
+ const app=useApp(),role=id(app.user.role).toLowerCase(),supervisor=['department supervisor','outlet supervisor','supervisor'].includes(role),hod=role==='department head',cost=role==='cost controller',keeper=role==='store keeper'
  const[data,setData]=useState<Payload>(blank),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[selected,setSelected]=useState(''),[tab,setTab]=useState<'overview'|'issue'|'manage'|'grn'>('overview'),[store,setStore]=useState('')
  const load=useCallback(async()=>{setLoading(true);setError('');try{const p=await readBackendPayload('store-requisitions/workflow');setData({...blank,...p} as Payload);if(!store&&p.stores?.[0])setStore(id(p.stores[0].id))}catch(e){const m=errorMessage(e);setError(m);app.showWorkflowAlert('Department workflow unavailable',m)}finally{setLoading(false)}},[app.showWorkflowAlert,store])
  useEffect(()=>{void load()},[load])

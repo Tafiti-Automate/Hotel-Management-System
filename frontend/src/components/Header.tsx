@@ -3,10 +3,12 @@ import { useApp } from '../state/AppContext'
 import { Icon } from './Icon'
 import { Avatar } from './Avatar'
 import CommandPalette from './CommandPalette'
-import { canSwitchModules, isStoresManager } from '../lib/access'
+import { canSwitchBranches, canSwitchModules, isStoresManager } from '../lib/access'
 import {
   errorMessage,
   fetchNotifications,
+  fetchFiscalPeriodContext,
+  type FiscalPeriodContext,
   markAllNotificationsRead,
   markNotificationRead,
   type NotificationRecord,
@@ -20,6 +22,9 @@ export default function Header() {
   const [notifications, setNotifications] = useState<NotificationRecord[]>([])
   const [notificationsLoading, setNotificationsLoading] = useState(true)
   const [notificationsError, setNotificationsError] = useState('')
+  const [propertyMenuOpen, setPropertyMenuOpen] = useState(false)
+  const [period, setPeriod] = useState<FiscalPeriodContext | null>(null)
+  const [periodError, setPeriodError] = useState(false)
 
   const storesManager = isStoresManager(app.user)
   const moduleName = storesManager ? 'Stores & Inventory' : app.activeModule === 'hr' ? 'Human Resources' : 'Hotel Operations'
@@ -27,6 +32,18 @@ export default function Header() {
   const pageDescription = descriptionForRoute(app.route, app.user.role)
   const unread = notifications.filter((notification) => !notification.is_read).length
   const propertyName = app.currentBranch || app.user.branchName || app.user.departmentName || 'Current property'
+  const propertyOption = app.data.branches.find((branch) => String(branch.name) === app.currentBranch)
+  const selectedBranchId = String(propertyOption?.id || app.user.branchId || '')
+  const canSelectProperty = canSwitchBranches(app.user) && app.data.branches.length > 1
+  const contextName = (
+    String(app.user.role).toLowerCase() === 'store keeper' && app.data.locations.length === 1
+      ? String(app.data.locations[0].name)
+      : app.user.departmentName || 'Property scope'
+  )
+  const periodLabel = period?.status === 'open' || period?.status === 'closed'
+    ? period.name + ' · ' + (period.status === 'open' ? 'Open' : 'Closed')
+    : period?.status === 'unconfigured' ? 'Period not configured'
+    : periodError ? 'Period unavailable' : 'Checking period…'
 
   const loadNotifications = useCallback(async (withLoading = true) => {
     if (withLoading) setNotificationsLoading(true)
@@ -39,6 +56,16 @@ export default function Header() {
       setNotificationsLoading(false)
     }
   }, [app.user.id])
+
+  useEffect(() => {
+    if (app.apiStatus !== 'live') return
+    let active = true
+    setPeriodError(false)
+    void fetchFiscalPeriodContext(selectedBranchId)
+      .then((value) => { if (active) setPeriod(value) })
+      .catch(() => { if (active) { setPeriod(null); setPeriodError(true) } })
+    return () => { active = false }
+  }, [app.apiStatus, selectedBranchId])
 
   useEffect(() => {
     void loadNotifications()
@@ -103,7 +130,19 @@ export default function Header() {
 
       <div className="neo-header-actions">
         <span className={`neo-sync-state is-${app.apiStatus}`} title={`API status: ${app.apiStatus}`}><i />{app.apiStatus === 'live' ? 'Live' : app.apiStatus === 'loading' ? 'Syncing' : app.apiStatus === 'offline' ? 'Offline' : 'Connecting'}</span>
-        <span className="neo-property-chip"><Icon name="business" size={15} />{propertyName}</span>
+        <div className="neo-popover-anchor">
+          <button type="button" className="neo-property-chip neo-switch-property" disabled={!canSelectProperty} aria-label="Active property" aria-haspopup={canSelectProperty ? 'listbox' : undefined} aria-expanded={canSelectProperty ? propertyMenuOpen : undefined} onClick={() => setPropertyMenuOpen((open) => !open)}>
+            <Icon name="business" size={15} /><span>{propertyName}</span>{canSelectProperty && <Icon name="expand_more" size={14} />}
+          </button>
+          {propertyMenuOpen && <>
+            <button type="button" className="neo-popover-backdrop" aria-label="Close property selector" onClick={() => setPropertyMenuOpen(false)} />
+            <div className="neo-context-dropdown" role="listbox" aria-label="Select property">
+              {app.data.branches.map((branch) => <button type="button" role="option" aria-selected={String(branch.name) === app.currentBranch} key={String(branch.id)} onClick={() => { app.selectBranch(String(branch.name)); setPropertyMenuOpen(false) }}>{String(branch.name)}</button>)}
+            </div>
+          </>}
+        </div>
+        <span className="neo-cost-center-chip" title="Active department / cost center"><Icon name="account_tree" size={14} />{contextName}</span>
+        <span className={'neo-fiscal-chip' + (period?.status === 'closed' ? ' is-closed' : '')} title="Current fiscal period"><Icon name="calendar_month" size={14} />{periodLabel}</span>
 
         <div className="neo-popover-anchor">
           <button type="button" className="neo-header-icon" onClick={() => {

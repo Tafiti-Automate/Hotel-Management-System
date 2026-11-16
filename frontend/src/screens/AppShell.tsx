@@ -32,6 +32,8 @@ const SupplierManagement = lazy(() => import('./SupplierManagement'))
 const SupplierQuotationOptionOne = lazy(() => import('./SupplierQuotationOptionOne'))
 const UnitManagement = lazy(() => import('./UnitManagement'))
 const MaterialsControl = lazy(() => import('./MaterialsControl'))
+const InternalRequestBuilder = lazy(() => import('./OutletWorkflow').then((module) => ({ default: module.InternalRequestBuilder })))
+const IncomingPickup = lazy(() => import('./OutletWorkflow').then((module) => ({ default: module.IncomingPickup })))
 
 const listRoutes = new Set([
   'items', 'locations', 'suppliers',
@@ -42,6 +44,7 @@ const listRoutes = new Set([
 
 const departmentSupplyRoles = new Set([
   'department supervisor',
+  'outlet supervisor',
   'supervisor',
   'department head',
   'cost controller',
@@ -83,6 +86,11 @@ export default function AppShell() {
   else if (route === 'items') content = <ArticleManagement />
   else if (route === 'uoms' || route === 'itemUnits') content = <UnitManagement />
   else if (route === 'workflow-pay') content = <FinanceWorkbench />
+  else if (route === 'new-store-request') content = <InternalRequestBuilder />
+  else if (route === 'incoming-pickup') content = <IncomingPickup />
+  else if (route === 'approval-inbox') content = role === 'department head'
+    ? <DepartmentSupplyWorkspace />
+    : role === 'financial manager' ? <FinancialManagerLpoWorkspace /> : <ProcurementWorkbench />
   else if (route === 'waste-control') content = <MaterialsControl section="waste" />
   else if (route === 'recipes-production') content = <MaterialsControl section="recipes" />
   else if (route === 'pos-control') content = <MaterialsControl section="pos" />
@@ -94,6 +102,7 @@ export default function AppShell() {
   else if (listRoutes.has(route)) content = <ListView />
   else if (route === 'detail') content = <DetailView />
   else if (route === 'reports') content = <Reports />
+  else if (route === 'menu-engineering') content = <ReportView selectedReportId="menuEngineering" />
   else if (route === 'reportview') content = <ReportView />
   else if (route === 'hotel-profile') content = <HotelProfile />
   else if (route === 'audit-log') content = <AuditLog />

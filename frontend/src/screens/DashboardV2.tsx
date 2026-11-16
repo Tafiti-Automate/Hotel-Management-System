@@ -138,7 +138,7 @@ function buildDashboard(role: string, data: any): DashboardView {
   const metric = (label: string, value: string | number, hint: string, icon: string, tone: Tone, route: string, routeLabel: string): Metric => ({ label, value: String(value), hint, icon, tone, route, routeLabel })
   const quick = (label: string, hint: string, icon: string, route: string, routeLabel = label): QuickLink => ({ label, hint, icon, route, routeLabel })
 
-  if (['department_supervisor', 'supervisor', 'department_employee', 'requester'].includes(role)) {
+  if (['department_supervisor', 'outlet_supervisor', 'supervisor', 'department_employee', 'requester'].includes(role)) {
     const drafts = storeRequests.filter((row: any) => key(row.statusCode || row.status) === 'draft')
     const pending = storeRequests.filter((row: any) => key(row.statusCode || row.status) === 'pending_department_approval')
     const active = storeRequests.filter((row: any) => ['submitted','approved','partially_approved','partially_issued'].includes(key(row.statusCode || row.status)))
@@ -147,7 +147,11 @@ function buildDashboard(role: string, data: any): DashboardView {
       eyebrow: 'Department workspace', title: 'My requisitions', description: 'Create requests, follow approvals and see what Stores has issued.',
       metrics: [metric('Drafts', drafts.length, 'Continue before submission', 'edit_note', 'blue', 'workflow-stores', 'My requests'), metric('Pending HOD', pending.length, 'Waiting for department approval', 'approval', 'amber', 'workflow-stores', 'My requests'), metric('In progress', active.length, 'With control or Stores', 'schedule', 'purple', 'workflow-stores', 'My requests'), metric('Completed', done.length, 'Issued or completed', 'task_alt', 'green', 'workflow-stores', 'My requests')],
       activities: activity(storeRequests, 'workflow-stores', 'My requests', 'Request'), queueTitle: 'Recent requests', queueHint: 'Your latest department requisitions and their current stage.', queueRoute: 'workflow-stores', queueLabel: 'My requests',
-      quickLinks: [quick('Department requests', 'Create or continue a request', 'assignment_add', 'workflow-stores', 'My requests'), quick('Waste log', 'Record outlet waste at source', 'delete_sweep', 'waste-control', 'Waste control')],
+      quickLinks: [
+        quick('New store request', 'Enter an internal requisition', 'assignment_add', 'new-store-request', 'New internal requisition'),
+        quick('Confirm pickup', 'Sign for posted stock', 'fact_check', 'incoming-pickup', 'Incoming transfers'),
+        quick('Waste log', 'Record outlet waste at source', 'delete_sweep', 'waste-control', 'Waste control'),
+      ],
       context: [{ label: 'Total requests', value: String(storeRequests.length) }],
     }
   }

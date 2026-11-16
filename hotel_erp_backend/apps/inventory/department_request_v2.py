@@ -17,7 +17,7 @@ from apps.notifications.services import notify_employee, notify_roles
 from core.constants.choices import GoodsReceiptStatus, StoreRequisitionStatus
 from core.mixins.viewsets import CreatedByModelMixin
 
-SUPERVISOR_ROLES=("Department Supervisor","Supervisor")
+SUPERVISOR_ROLES=("Department Supervisor","Outlet Supervisor","Supervisor")
 def emp(user): return getattr(user,"employee_profile",None)
 def is_supervisor(user): return has_role(user,*SUPERVISOR_ROLES)
 def is_hod(user): return has_role(user,"Department Head")
@@ -115,12 +115,87 @@ class StoreRequisitionViewSet(CreatedByModelMixin,ModelViewSet):
             for x in GoodsReceiptItem.objects.filter(goods_receipt_id__in=[g.pk for g in rs]).select_related("item","store","purchase_order_item__unit").prefetch_related("inspection_items"):
                 ol=x.purchase_order_item; previous=sum((z.committed_purchase_quantity for z in ol.receipt_items.exclude(pk=x.pk).exclude(goods_receipt__status=GoodsReceiptStatus.CANCELLED)),Decimal("0")); ordered=ol.approved_quantity or Decimal("0"); due=max(ordered-previous,Decimal("0")); ins=x.inspection_items.first(); accepted_base=ins.quantity_accepted if ins else x.base_quantity; factor=ol.conversion_factor or Decimal("1"); accepted=accepted_base/factor
                 grn_items.append({"id":str(x.pk),"goods_receipt":str(x.goods_receipt_id),"item":str(x.item_id),"item_name":x.item.name,"store":str(x.store_id or ""),"store_name":str(x.store or ""),"ordered_quantity":ordered,"received_quantity":x.quantity_received,"accepted_quantity":accepted,"matches_lpo_limit":x.quantity_received<=due})
-        return Response({"requests":[self._request(x) for x in requests],"lines":[self._line(x) for x in lines],"stores":[{"id":str(x.pk),"name":x.name,"branch_name":str(x.branch or "")} for x in stores],"balances":[{"id":str(x.pk),"store":str(x.store_id),"item":str(x.item_id),"item_name":x.item.name,"sku":x.item.sku,"on_hand":x.quantity_in_stock,"reserved":x.quantity_reserved,"available":x.available_quantity,"unit":(x.item.base_unit.abbreviation if x.item.base_unit_id else x.item.unit)} for x in balances],"items":[{"id":str(x.pk),"name":x.name,"sku":x.sku,"base_unit":str(x.base_unit_id or "")} for x in items],"units":[{"id":str(x.pk),"name":x.name,"abbreviation":x.abbreviation} for x in units],"issues":[{"id":str(x.pk),"issue_no":x.issue_no,"requisition":str(x.requisition_id),"store":str(x.store_id),"store_name":x.store.name,"issued_by_name":ename(x.issued_by),"issue_date":x.issue_date,"inventory_changes_applied":x.inventory_changes_applied} for x in issues],"issueItems":[{"id":str(x.pk),"issue":str(x.issue_id),"item_name":x.item.name,"base_quantity":x.base_quantity,"unit_name":x.unit.abbreviation if x.unit_id else ""} for x in issue_items],"grns":grns,"grnItems":grn_items})
+        balance_info = [
+            ({
+                "id": str(x.pk), "store": str(x.store_id), "item": str(x.item_id),
+                "in_stock": x.available_quantity > 0,
+            } if is_supervisor(request.user) else {
+                "id": str(x.pk), "store": str(x.store_id), "item": str(x.item_id),
+                "item_name": x.item.name, "sku": x.item.sku,
+                "on_hand": x.quantity_in_stock, "reserved": x.quantity_reserved,
+                "available": x.available_quantity,
+                "unit": x.item.base_unit.abbreviation if x.item.base_unit_id else x.item.unit,
+            })
+            for x in balances
+        ]
+        return Response({"requests":[self._request(x) for x in requests],"lines":[self._line(x) for x in lines],"stores":[{"id":str(x.pk),"name":x.name,"branch_name":str(x.branch or "")} for x in stores],"balances":balance_info,"items":[{"id":str(x.pk),"name":x.name,"sku":x.sku,"base_unit":str(x.base_unit_id or "")} for x in items],"units":[{"id":str(x.pk),"name":x.name,"abbreviation":x.abbreviation} for x in units],"issues":[{"id":str(x.pk),"issue_no":x.issue_no,"requisition":str(x.requisition_id),"store":str(x.store_id),"store_name":x.store.name,"issued_by_name":ename(x.issued_by),"issue_date":x.issue_date,"inventory_changes_applied":x.inventory_changes_applied,"received_by":str(x.received_by_id or ""),"received_by_name":x.received_by_name} for x in issues],"issueItems":[{"id":str(x.pk),"issue":str(x.issue_id),"item_name":x.item.name,"base_quantity":x.base_quantity,"unit_name":x.unit.abbreviation if x.unit_id else ""} for x in issue_items],"grns":grns,"grnItems":grn_items})
     @staticmethod
     def _request(r): return {"id":str(r.pk),"requisition_no":r.requisition_no,"department":str(r.department_id),"department_name":r.department.name,"store":str(r.store_id or ""),"store_name":r.store.name if r.store_id else "","requested_by":str(r.requested_by_id),"requester_name":ename(r.requested_by),"status":r.status,"purpose":r.purpose,"required_date":r.required_date,"rejection_reason":r.rejection_reason,"department_approved_at":r.department_approved_at,"approved_at":r.approved_at,"created_at":r.created_at}
     @staticmethod
     def _line(x):
         base=x.item.base_unit; return {"id":str(x.pk),"requisition":str(x.requisition_id),"item":str(x.item_id),"item_name":x.item.name,"sku":x.item.sku,"unit":str(x.unit_id or x.item.base_unit_id or ""),"unit_name":(x.unit.abbreviation or x.unit.name) if x.unit_id else ((base.abbreviation or base.name) if base else x.item.unit),"base_unit_name":(base.abbreviation or base.name) if base else x.item.unit,"quantity_requested":x.quantity_requested,"base_quantity_requested":x.base_quantity_requested,"hod_approved_quantity":x.hod_approved_quantity,"quantity_approved":x.quantity_approved,"quantity_issued":x.quantity_issued}
+
+    @action(detail=False, methods=["post"], url_path="create-with-lines")
+    def create_with_lines(self, request):
+        """Create a complete supervisor draft atomically; no partially saved lines."""
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        if not is_supervisor(request.user):
+            raise PermissionDenied("Only a Department Supervisor can create a request.")
+        employee = emp(request.user)
+        if not employee or not employee.is_active or not employee.department_id or not employee.branch_id:
+            raise PermissionDenied("An active supervisor with a department and property is required.")
+        store = StoreLocation.objects.filter(
+            pk=request.data.get("store"), branch_id=employee.branch_id, is_active=True
+        ).first()
+        if not store:
+            raise ValidationError({"store": "Choose an active issuing store in your property."})
+        lines = request.data.get("lines")
+        if not isinstance(lines, list) or not (1 <= len(lines) <= 100):
+            raise ValidationError({"lines": "Enter between 1 and 100 Article lines."})
+        prepared = []
+        seen = set()
+        for index, line in enumerate(lines, start=1):
+            if not isinstance(line, dict):
+                raise ValidationError({"lines": f"Invalid Article line {index}."})
+            item = Item.objects.filter(pk=line.get("item"), is_active=True).first()
+            if not item:
+                raise ValidationError({"lines": f"Select a valid Article on line {index}."})
+            unit = UnitOfMeasure.objects.filter(pk=line.get("unit"), is_active=True).first() if line.get("unit") else item.base_unit
+            if line.get("unit") and not unit:
+                raise ValidationError({"lines": f"Select a valid unit on line {index}."})
+            try:
+                quantity = Decimal(str(line.get("quantity", "")))
+            except (InvalidOperation, TypeError, ValueError):
+                raise ValidationError({"lines": f"Invalid quantity on line {index}."})
+            if not quantity.is_finite() or quantity <= 0:
+                raise ValidationError({"lines": f"Quantity must be positive on line {index}."})
+            signature = (item.pk, unit.pk if unit else None)
+            if signature in seen:
+                raise ValidationError({"lines": f"Duplicate Article/UOM on line {index}."})
+            seen.add(signature)
+            prepared.append((item, unit, quantity, str(line.get("remarks") or "")[:255]))
+        try:
+            with transaction.atomic():
+                draft = StoreRequisition.objects.create(
+                    department=employee.department, requested_by=employee,
+                    store=store, purpose=str(request.data.get("purpose") or "").strip(),
+                    created_by=request.user,
+                )
+                for item, unit, quantity, remarks in prepared:
+                    detail = StoreRequisitionItem(
+                        requisition=draft, item=item, unit=unit,
+                        quantity_requested=quantity, remarks=remarks,
+                        created_by=request.user,
+                    )
+                    detail.full_clean()
+                    detail.save()
+                if request.data.get("submit") is True:
+                    draft.submit(actor=request.user)
+        except DjangoValidationError as error:
+            raise ValidationError(getattr(error, "message_dict", None) or error.messages)
+        draft.refresh_from_db()
+        return Response(self._request(draft), status=201)
 
     @action(detail=True,methods=["post"])
     def submit(self,request,pk=None):

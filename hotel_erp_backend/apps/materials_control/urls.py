@@ -1,7 +1,10 @@
+from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from apps.materials_control.views import (
     BudgetOverrideViewSet,
+    PeriodContextView,
+    GlobalCommandSearchView,
     CostCenterBudgetViewSet,
     FiscalPeriodViewSet,
     GLExportViewSet,
@@ -32,5 +35,8 @@ router.register("gl-exports", GLExportViewSet, basename="gl-export")
 router.register("gl-account-mappings", GLAccountMappingViewSet, basename="gl-account-mapping")
 router.register("integration-configs", IntegrationConfigViewSet, basename="integration-config")
 
-urlpatterns = router.urls
+urlpatterns = [
+    path("period-context/", PeriodContextView.as_view(), name="materials-period-context"),
+    path("global-command-search/", GlobalCommandSearchView.as_view(), name="global-command-search"),
+] + router.urls
 

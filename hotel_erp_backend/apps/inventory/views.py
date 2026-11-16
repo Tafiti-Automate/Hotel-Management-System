@@ -1182,8 +1182,22 @@ class StoreRequisitionItemViewSet(CreatedByModelMixin, ModelViewSet):
 
 
 class StockIssueViewSet(CreatedByModelMixin, ModelViewSet):
-    queryset = StockIssue.objects.select_related("requisition", "store", "issued_by", "received_by")
+    queryset = StockIssue.objects.select_related(
+        "requisition", "requisition__requested_by", "store", "issued_by", "received_by"
+    )
     serializer_class = StockIssueSerializer
+
+    def get_permissions(self):
+        if self.action == "acknowledge":
+            return [IsAuthenticated()]
+        return super().get_permissions()
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if has_role(self.request.user, "Department Supervisor", "Supervisor") and not self.request.user.is_superuser:
+            employee = getattr(self.request.user, "employee_profile", None)
+            return queryset.filter(requisition__requested_by=employee) if employee else queryset.none()
+        return queryset
     filterset_fields = ("requisition", "store", "issued_by", "received_by", "inventory_changes_applied")
     search_fields = ("issue_no", "requisition__requisition_no", "store__name", "received_by_name")
     ordering_fields = ("issue_no", "issue_date", "created_at")
@@ -1204,21 +1218,25 @@ class StockIssueViewSet(CreatedByModelMixin, ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def acknowledge(self, request, pk=None):
-        issue = self.get_object()
-        if not issue.inventory_changes_applied:
-            raise ValidationError("Stock must be issued before the department can acknowledge receipt.")
-        received_by = None
-        if request.data.get("received_by"):
-            try:
-                received_by = Employee.objects.get(pk=request.data["received_by"])
-            except Employee.DoesNotExist:
-                raise ValidationError({"received_by": "Selected employee was not found."})
-        received_by_name = request.data.get("received_by_name", "").strip()
-        if not received_by and not received_by_name:
-            raise ValidationError("Select the receiving employee or enter the receiver's name.")
-        issue.received_by = received_by
-        issue.received_by_name = received_by_name or str(received_by)
-        issue.save(update_fields=("received_by", "received_by_name", "updated_at"))
+        """The assigned department requester signs only a posted issue, once."""
+        employee = getattr(request.user, "employee_profile", None)
+        if not has_role(request.user, "Department Supervisor", "Supervisor"):
+            raise PermissionDenied("Only the requesting Outlet Supervisor may confirm pickup.")
+        if not employee or not employee.is_active:
+            raise PermissionDenied("An active assigned employee is required.")
+        with transaction.atomic():
+            issue = StockIssue.objects.select_for_update().select_related(
+                "requisition__requested_by"
+            ).get(pk=self.get_object().pk)
+            if issue.requisition.requested_by_id != employee.pk:
+                raise PermissionDenied("This handover belongs to another department requester.")
+            if not issue.inventory_changes_applied:
+                raise ValidationError("Stores must post the issue before department pickup confirmation.")
+            if issue.received_by_id or issue.received_by_name:
+                raise ValidationError("Pickup has already been signed and cannot be acknowledged twice.")
+            issue.received_by = employee
+            issue.received_by_name = employee.user.get_full_name() or employee.user.username
+            issue.save(update_fields=("received_by", "received_by_name", "updated_at"))
         return Response(self.get_serializer(issue).data)
 
 

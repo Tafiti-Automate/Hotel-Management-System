@@ -266,7 +266,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (state.screen !== 'app') return
     const nextPath = pathForRoute(state.route)
     if (!nextPath || window.location.pathname === nextPath) return
-    // Replace invalid routes, but retain valid screens in browser history.
+    // A semantic deep link can refer to a specific document. Preserve it
+    // until the user changes workspaces instead of replacing it on mount.
+    if (routeFromPath(window.location.pathname) === state.route) return
     const method = routeFromPath(window.location.pathname) ? 'pushState' : 'replaceState'
     window.history[method]({}, '', nextPath)
   }, [state.route, state.screen])

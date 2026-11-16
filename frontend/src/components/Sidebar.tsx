@@ -11,21 +11,25 @@ const roleNavigation: Record<string, NavGroup[]> = {
   'department supervisor': [
     { heading: 'Department', items: [
       { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
+      { route: 'new-store-request', label: 'New store request', icon: 'add_circle' },
       { route: 'workflow-stores', label: 'My requests', icon: 'assignment' },
+      { route: 'incoming-pickup', label: 'Confirm pickup', icon: 'fact_check' },
       { route: 'waste-control', label: 'Waste log', icon: 'delete_sweep' },
     ] },
   ],
   supervisor: [
     { heading: 'Department', items: [
       { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
+      { route: 'new-store-request', label: 'New store request', icon: 'add_circle' },
       { route: 'workflow-stores', label: 'My requests', icon: 'assignment' },
+      { route: 'incoming-pickup', label: 'Confirm pickup', icon: 'fact_check' },
       { route: 'waste-control', label: 'Waste log', icon: 'delete_sweep' },
     ] },
   ],
   'department head': [
     { heading: 'Department', items: [
       { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
-      { route: 'workflow-stores', label: 'Approvals', icon: 'approval' },
+      { route: 'approval-inbox', label: 'Approval inbox', icon: 'approval' },
       { route: 'waste-control', label: 'Waste review', icon: 'delete_sweep' },
       { route: 'recipes-production', label: 'Recipe costing', icon: 'menu_book' },
     ] },
@@ -54,6 +58,7 @@ const roleNavigation: Record<string, NavGroup[]> = {
       { route: 'waste-control', label: 'Waste audit', icon: 'delete_sweep' },
       { route: 'recipes-production', label: 'Recipe costing', icon: 'menu_book' },
       { route: 'pos-control', label: 'POS depletion', icon: 'point_of_sale' },
+      { route: 'menu-engineering', label: 'Menu sales analysis', icon: 'scatter_plot' },
     ] },
     { heading: 'Master data', items: [
       { route: 'suppliers', label: 'Suppliers', icon: 'local_shipping' },
@@ -81,7 +86,8 @@ const roleNavigation: Record<string, NavGroup[]> = {
   'financial manager': [
     { heading: 'Approvals', items: [
       { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
-      { route: 'workflow-procure', label: 'LPO approvals', icon: 'approval' },
+      { route: 'approval-inbox', label: 'Approval inbox', icon: 'approval' },
+      { route: 'workflow-procure', label: 'LPO workbench', icon: 'receipt_long' },
       { route: 'workflow-pay', label: 'Invoices & payments', icon: 'payments' },
       { route: 'finance-governance', label: 'Budgets & period close', icon: 'account_balance' },
     ] },
@@ -97,7 +103,7 @@ const roleNavigation: Record<string, NavGroup[]> = {
   'general manager': [
     { heading: 'Management', items: [
       { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
-      { route: 'workflow-procure', label: 'Final approvals', icon: 'verified' },
+      { route: 'approval-inbox', label: 'Final approvals', icon: 'verified' },
     ] },
     { heading: 'Insights', items: [{ route: 'reports', label: 'Reports', icon: 'bar_chart' }] },
   ],
@@ -109,6 +115,9 @@ const roleNavigation: Record<string, NavGroup[]> = {
     { heading: 'Insights', items: [{ route: 'reports', label: 'Reports', icon: 'bar_chart' }] },
   ],
 }
+
+// Legacy outlet title resolves to the same narrow operational menu.
+roleNavigation['outlet supervisor'] = roleNavigation['department supervisor']
 
 const adminNavigation: NavGroup[] = [
   { heading: 'Operations', items: [
