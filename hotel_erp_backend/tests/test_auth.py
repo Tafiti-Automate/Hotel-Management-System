@@ -175,11 +175,13 @@ def test_setup_hotel_roles_creates_operational_groups():
 
     assert set(Group.objects.values_list("name", flat=True)) == {
         "System Administrator",
+        "Department Supervisor",
         "Department Head",
         "Cost Controller",
         "Store Keeper",
         "Receiving Clerk",
         "Financial Manager",
+        "Accounts Payable Clerk",
         "Procurement Manager",
         "General Manager",
     }
@@ -187,19 +189,22 @@ def test_setup_hotel_roles_creates_operational_groups():
 
     store_keeper = Group.objects.get(name="Store Keeper")
     department_head = Group.objects.get(name="Department Head")
+    department_supervisor = Group.objects.get(name="Department Supervisor")
     financial_manager = Group.objects.get(name="Financial Manager")
     receiving_clerk = Group.objects.get(name="Receiving Clerk")
     procurement_manager = Group.objects.get(name="Procurement Manager")
+    accounts_payable = Group.objects.get(name="Accounts Payable Clerk")
 
     assert store_keeper.permissions.filter(codename="change_storerequisition").exists()
     assert not store_keeper.permissions.filter(codename="add_storerequisition").exists()
     assert store_keeper.permissions.filter(codename="change_storerequisitionitem").exists()
 
-    # Department Head is now the Department requisition originator.
-    assert department_head.permissions.filter(codename="add_storerequisition").exists()
-    assert department_head.permissions.filter(codename="add_storerequisitionitem").exists()
-    assert department_head.permissions.filter(codename="change_storerequisition").exists()
-    assert department_head.permissions.filter(codename="change_storerequisitionitem").exists()
+    # Supervisors originate requests; Department Heads review them in the
+    # role-gated workflow without receiving draft-edit permissions.
+    assert department_supervisor.permissions.filter(codename="add_storerequisition").exists()
+    assert department_supervisor.permissions.filter(codename="change_storerequisitionitem").exists()
+    assert not department_head.permissions.filter(codename="add_storerequisition").exists()
+    assert not department_head.permissions.filter(codename="change_storerequisitionitem").exists()
     assert department_head.permissions.filter(codename="view_category").exists()
     assert department_head.permissions.filter(codename="view_storelocation").exists()
     assert not department_head.permissions.filter(codename="view_inventorybalance").exists()
@@ -210,6 +215,8 @@ def test_setup_hotel_roles_creates_operational_groups():
     assert procurement_manager.permissions.filter(codename="change_purchaseorder").exists()
     assert not procurement_manager.permissions.filter(codename="change_goodsreceiptnote").exists()
     assert not procurement_manager.permissions.filter(codename="view_supplierinvoice").exists()
+    assert accounts_payable.permissions.filter(codename="add_supplierinvoice").exists()
+    assert accounts_payable.permissions.filter(codename="change_supplierpayment").exists()
 
 
 @pytest.mark.django_db

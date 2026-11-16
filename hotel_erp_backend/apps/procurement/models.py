@@ -213,6 +213,9 @@ class PurchaseRequisition(BaseModel):
         self.full_clean()
         if not self.items.exists():
             raise ValidationError("A requisition must include at least one item before submission.")
+        from apps.materials_control.services import enforce_requisition_budget
+
+        enforce_requisition_budget(self)
         if self.status in (PRStatus.REJECTED, PRStatus.RETURNED):
             self.approval_workflow.update(
                 status="pending",
@@ -2248,7 +2251,15 @@ class GoodsReceiptItem(BaseModel):
         decimal_places=2,
         validators=[validate_positive_decimal],
     )
+    batch_number = models.CharField(max_length=100, blank=True)
     expiry_date = models.DateField(null=True, blank=True)
+    delivery_temperature = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Temperature in degrees Celsius at the loading bay.",
+    )
     inventory_changes_applied = models.BooleanField(default=False)
 
     class Meta(BaseModel.Meta):
@@ -2324,6 +2335,10 @@ class GoodsReceiptItem(BaseModel):
         if self.item_id and self.item.expiry_tracking and not self.expiry_date:
             raise ValidationError({
                 "expiry_date": "Enter the expiry date for this expiry-tracked Article."
+            })
+        if self.item_id and self.item.batch_tracking and not self.batch_number.strip():
+            raise ValidationError({
+                "batch_number": "Enter the supplier batch or lot number for this tracked Article."
             })
         if (
             self.expiry_date
@@ -2422,7 +2437,9 @@ class GoodsReceiptItem(BaseModel):
                 quantity=post_quantity,
                 remaining_quantity=post_quantity,
                 unit_cost=receipt_item.base_unit_cost,
+                batch_number=receipt_item.batch_number,
                 expiry_date=receipt_item.expiry_date,
+                delivery_temperature=receipt_item.delivery_temperature,
                 purchase_order_item=receipt_item.purchase_order_item,
                 created_by=receipt_item.created_by,
             )

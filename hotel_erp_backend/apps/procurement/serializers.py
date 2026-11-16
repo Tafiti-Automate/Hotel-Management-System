@@ -882,9 +882,20 @@ class GoodsReceiptItemSerializer(serializers.ModelSerializer):
                 {"purchase_order_item": "This LPO line does not belong to the selected goods receipt."}
             )
         expiry_date = attrs.get("expiry_date", getattr(self.instance, "expiry_date", None))
+        batch_number = str(
+            attrs.get("batch_number", getattr(self.instance, "batch_number", "")) or ""
+        ).strip()
+        delivery_temperature = attrs.get(
+            "delivery_temperature",
+            getattr(self.instance, "delivery_temperature", None),
+        )
         if order_line and order_line.item.expiry_tracking and not expiry_date:
             raise serializers.ValidationError(
                 {"expiry_date": "Enter the expiry date for this expiry-tracked Article."}
+            )
+        if order_line and order_line.item.batch_tracking and not batch_number:
+            raise serializers.ValidationError(
+                {"batch_number": "Enter the supplier batch or lot number for this tracked Article."}
             )
         if receipt and expiry_date and expiry_date < receipt.received_date:
             raise serializers.ValidationError(

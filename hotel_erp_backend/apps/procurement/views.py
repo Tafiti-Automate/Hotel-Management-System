@@ -1245,12 +1245,14 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
         return Response(self.get_serializer(history, many=True).data)
 
     def _require_procurement_manager(self, request):
-        if not user_has_role(request.user, "System Administrator", "Procurement Manager", "Procurement Officer"):
+        if user_has_role(request.user, "System Administrator"):
+            raise PermissionDenied("System Administrators cannot approve, issue, or amend purchase orders.")
+        if not user_has_role(request.user, "Procurement Manager", "Procurement Officer"):
             raise PermissionDenied("Only Procurement can perform this LPO action.")
 
     def _require_receiving_clerk(self, request):
         if user_has_role(request.user, "System Administrator"):
-            return getattr(request.user, "employee_profile", None)
+            raise PermissionDenied("System Administrators cannot book supplier deliveries or GRNs.")
         if not user_has_role(request.user, *RECEIVING_ROLES):
             raise PermissionDenied("Only the Receiving Clerk can receive supplier deliveries.")
         employee = getattr(request.user, "employee_profile", None)
@@ -1312,12 +1314,18 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                         raise ValidationError({"lines": "Received quantities must be valid numbers."}) from error
                     if quantity <= Decimal("0.00"):
                         continue
-                    normalized.append((line, quantity, entry.get("expiry_date") or None))
+                    normalized.append((
+                        line,
+                        quantity,
+                        entry.get("expiry_date") or None,
+                        str(entry.get("batch_number") or "").strip(),
+                        entry.get("delivery_temperature"),
+                    ))
 
                 if not normalized:
                     raise ValidationError({"lines": "Enter a received quantity greater than zero."})
 
-                incoming_by_line = {str(line.pk): quantity for line, quantity, _ in normalized}
+                incoming_by_line = {str(line.pk): quantity for line, quantity, *_ in normalized}
                 short_lines = []
                 for line in order_lines.values():
                     already_received = sum(
@@ -1355,12 +1363,14 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                 receipt.save()
 
                 receipt_items = []
-                for order_line, quantity, expiry_date in normalized:
+                for order_line, quantity, expiry_date, batch_number, delivery_temperature in normalized:
                     receipt_item = GoodsReceiptItem(
                         goods_receipt=receipt,
                         purchase_order_item=order_line,
                         quantity_received=quantity,
                         expiry_date=expiry_date,
+                        batch_number=batch_number,
+                        delivery_temperature=delivery_temperature,
                         created_by=request.user if request.user.is_authenticated else None,
                     )
                     receipt_item.save()
@@ -1968,7 +1978,7 @@ class GoodsReceiptNoteViewSet(CreatedByModelMixin, ModelViewSet):
 
     def _require_receiving_clerk(self, request, receipt=None):
         if user_has_role(request.user, "System Administrator"):
-            return
+            raise PermissionDenied("System Administrators cannot create, post, or cancel GRNs.")
         employee = getattr(request.user, "employee_profile", None)
         if not user_has_role(request.user, *RECEIVING_ROLES):
             raise PermissionDenied("Only the Receiving Clerk can create or post a GRN.")
@@ -2037,7 +2047,7 @@ class GoodsReceiptItemViewSet(CreatedByModelMixin, ModelViewSet):
     def _require_receiving_clerk(self, receipt):
         user = self.request.user
         if user_has_role(user, "System Administrator"):
-            return
+            raise PermissionDenied("System Administrators cannot alter delivered GRN quantities.")
         employee = getattr(user, "employee_profile", None)
         if not user_has_role(user, *RECEIVING_ROLES) or receipt.received_by_id != getattr(employee, "id", None):
             raise PermissionDenied("Only the Receiving Clerk who opened this GRN can enter delivered quantities.")
@@ -2105,7 +2115,7 @@ class GoodsInspectionViewSet(CreatedByModelMixin, ModelViewSet):
     def _require_receiving_clerk(self, receipt):
         user = self.request.user
         if user_has_role(user, "System Administrator"):
-            return
+            raise PermissionDenied("System Administrators cannot create or alter goods inspections.")
         employee = getattr(user, "employee_profile", None)
         if not user_has_role(user, *RECEIVING_ROLES) or receipt.received_by_id != getattr(employee, "id", None):
             raise PermissionDenied(
@@ -2152,7 +2162,7 @@ class GoodsInspectionItemViewSet(CreatedByModelMixin, ModelViewSet):
     def _require_receiving_clerk(self, inspection):
         user = self.request.user
         if user_has_role(user, "System Administrator"):
-            return
+            raise PermissionDenied("System Administrators cannot create or alter goods inspections.")
         employee = getattr(user, "employee_profile", None)
         if not user_has_role(user, *RECEIVING_ROLES) or inspection.goods_receipt.received_by_id != getattr(employee, "id", None):
             raise PermissionDenied(

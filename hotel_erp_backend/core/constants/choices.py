@@ -81,6 +81,8 @@ class LedgerReferenceType(models.TextChoices):
     RETURN_TO_VENDOR = "return_to_vendor", "Return to Vendor"
     STORE_RETURN = "store_return", "Store Return"
     STOCK_COUNT = "stock_count", "Stock Count"
+    WASTE = "waste", "Waste / Spoilage"
+    POS_DEPLETION = "pos_depletion", "POS Recipe Depletion"
 
 
 class StoreRequisitionStatus(models.TextChoices):

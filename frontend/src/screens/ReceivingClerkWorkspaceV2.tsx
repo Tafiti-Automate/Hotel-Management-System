@@ -174,19 +174,30 @@ function Receive({ order, lines, app, busy, act, back, receiptRecorded }: { orde
   const [invoice, setInvoice] = useState('')
   const [delivery, setDelivery] = useState('')
   const [values, setValues] = useState<Record<string, string>>({})
+  const [tracking, setTracking] = useState<Record<string, { batch_number: string; expiry_date: string; delivery_temperature: string }>>({})
   const [reason, setReason] = useState('')
 
   useEffect(() => {
     const nextValues: Record<string, string> = {}
+    const nextTracking: Record<string, { batch_number: string; expiry_date: string; delivery_temperature: string }> = {}
     lines.forEach((line) => { nextValues[id(line.id)] = String(n(line.outstanding_quantity ?? line.approved_quantity)) })
+    lines.forEach((line) => { nextTracking[id(line.id)] = { batch_number: '', expiry_date: '', delivery_temperature: '' } })
     setValues(nextValues)
+    setTracking(nextTracking)
   }, [order.id])
 
   const items = new Map<string, Row>((app.data.items as Row[]).map((item: Row) => [id(item.id), item]))
   const positive = lines.filter((line) => n(values[id(line.id)]) > 0)
   const short = lines.some((line) => n(values[id(line.id)]) < n(line.outstanding_quantity ?? line.approved_quantity))
   const invalidLines = lines.filter((line) => validateQuantity(values[id(line.id)] ?? '', n(line.outstanding_quantity ?? line.approved_quantity)))
-  const invalid = invalidLines.length > 0
+  const invalidTracking = positive.filter((line) => {
+    const article = items.get(id(line.item))
+    const trace = tracking[id(line.id)] || { batch_number: '', expiry_date: '', delivery_temperature: '' }
+    return (Boolean(article?.batchTracking) && !trace.batch_number.trim())
+      || (Boolean(article?.expiryTracking) && !trace.expiry_date)
+      || Boolean(trace.expiry_date && trace.expiry_date < new Date().toISOString().slice(0, 10))
+  })
+  const invalid = invalidLines.length > 0 || invalidTracking.length > 0
 
   return (
     <section className="ds-card ds-detail">
@@ -202,17 +213,20 @@ function Receive({ order, lines, app, busy, act, back, receiptRecorded }: { orde
       </div>
       <div className="ds-table-scroll">
         <table className="ds-table">
-          <thead><tr><th>Article</th><th>Ordered</th><th>Previously received</th><th>Outstanding</th><th>Receive now</th><th>Unit price</th><th>Amount</th></tr></thead>
+          <thead><tr><th>Article</th><th>Ordered</th><th>Previously received</th><th>Outstanding</th><th>Receive now</th><th>Batch / lot</th><th>Expiry</th><th>Temp °C</th><th>Unit price</th><th>Amount</th></tr></thead>
           <tbody>{lines.map((line) => {
             const item = items.get(id(line.item))
-            return <tr key={id(line.id)}><td><strong>{id(item?.name || line.item_name || line.item)}</strong><small>{id(item?.sku || line.item_sku)}</small></td><td>{q(line.approved_quantity ?? line.quantity)}</td><td>{q(line.previously_received_quantity)}</td><td>{q(line.outstanding_quantity ?? line.approved_quantity)}</td><td><input type="number" min="0" max={n(line.outstanding_quantity ?? line.approved_quantity)} value={values[id(line.id)] || ''} onChange={(event) => setValues({ ...values, [id(line.id)]: event.target.value })} /></td><td>{money(line.unit_cost)}</td><td>{money(n(values[id(line.id)]) * n(line.unit_cost))}</td></tr>
+            const trace = tracking[id(line.id)] || { batch_number: '', expiry_date: '', delivery_temperature: '' }
+            const setTrace = (field: 'batch_number' | 'expiry_date' | 'delivery_temperature', value: string) => setTracking({ ...tracking, [id(line.id)]: { ...trace, [field]: value } })
+            return <tr key={id(line.id)}><td><strong>{id(item?.name || line.item_name || line.item)}</strong><small>{id(item?.sku || line.item_sku)}</small></td><td>{q(line.approved_quantity ?? line.quantity)}</td><td>{q(line.previously_received_quantity)}</td><td>{q(line.outstanding_quantity ?? line.approved_quantity)}</td><td><input type="number" min="0" max={n(line.outstanding_quantity ?? line.approved_quantity)} value={values[id(line.id)] || ''} onChange={(event) => setValues({ ...values, [id(line.id)]: event.target.value })} /></td><td><input aria-label={`Batch number for ${id(item?.name || line.item_name)}`} required={Boolean(item?.batchTracking) && n(values[id(line.id)]) > 0} placeholder={item?.batchTracking ? 'Required' : 'Optional'} value={trace.batch_number} onChange={(event) => setTrace('batch_number', event.target.value)} /></td><td><input aria-label={`Expiry date for ${id(item?.name || line.item_name)}`} required={Boolean(item?.expiryTracking) && n(values[id(line.id)]) > 0} type="date" min={new Date().toISOString().slice(0, 10)} value={trace.expiry_date} onChange={(event) => setTrace('expiry_date', event.target.value)} /></td><td><input aria-label={`Delivery temperature for ${id(item?.name || line.item_name)}`} type="number" step="0.1" placeholder="Optional" value={trace.delivery_temperature} onChange={(event) => setTrace('delivery_temperature', event.target.value)} /></td><td>{money(line.unit_cost)}</td><td>{money(n(values[id(line.id)]) * n(line.unit_cost))}</td></tr>
           })}</tbody>
         </table>
       </div>
       {invalid && <div className="ds-alert" role="alert">Review receiving quantities: each value must be valid, non-negative and no greater than the outstanding quantity.</div>}
+      {invalidTracking.length > 0 && <div className="ds-alert" role="alert">Complete required batch numbers and valid future expiry dates for tracked articles.</div>}
       {short && <label className="ds-field">Reason for short delivery *<textarea value={reason} onChange={(event) => setReason(event.target.value)} /></label>}
       <div className="ds-sticky-action"><span>Receiving records the physical delivery. Store Keeper will verify the GRN before SOH increases.</span><ConfirmTransaction title="Confirm supplier delivery" description="Create a goods receipt note for the entered quantities. This records the physical delivery but does not post stock until Stores verifies the GRN." confirmLabel="Record delivery" className="ds-btn ds-btn-primary" disabled={busy || !invoice.trim() || !positive.length || invalid || (short && !reason.trim())} busy={busy} onConfirm={async () => {
-        const receipt = await act(() => runBackendAction('purchase-orders', id(order.id), 'receive-delivery', { supplier_invoice_no: invoice, delivery_note_no: delivery, short_delivery_reason: short ? reason : '', lines: positive.map((line) => ({ purchase_order_item: id(line.id), quantity_received: n(values[id(line.id)]) })) }), 'GRN recorded · awaiting Store Keeper verification')
+        const receipt = await act(() => runBackendAction('purchase-orders', id(order.id), 'receive-delivery', { supplier_invoice_no: invoice, delivery_note_no: delivery, short_delivery_reason: short ? reason : '', lines: positive.map((line) => ({ purchase_order_item: id(line.id), quantity_received: n(values[id(line.id)]), batch_number: tracking[id(line.id)]?.batch_number || '', expiry_date: tracking[id(line.id)]?.expiry_date || null, delivery_temperature: tracking[id(line.id)]?.delivery_temperature ? Number(tracking[id(line.id)].delivery_temperature) : null })) }), 'GRN recorded · awaiting Store Keeper verification')
         const receiptId = id((receipt as Row | undefined)?.id)
         if (receiptId) receiptRecorded(receiptId)
       }}>Generate GRN</ConfirmTransaction></div>

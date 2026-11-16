@@ -682,7 +682,15 @@ class InventoryBatch(BaseModel):
         validators=[validate_non_negative_decimal],
     )
     received_date = models.DateField(auto_now_add=True)
+    batch_number = models.CharField(max_length=100, blank=True)
     expiry_date = models.DateField(null=True, blank=True)
+    delivery_temperature = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Temperature in degrees Celsius recorded when the batch was received.",
+    )
     purchase_order_item = models.ForeignKey(
         "procurement.PurchaseOrderItem",
         on_delete=models.SET_NULL,

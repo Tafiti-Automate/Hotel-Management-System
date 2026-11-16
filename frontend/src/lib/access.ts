@@ -35,6 +35,11 @@ const routePermissions: Record<string, string[]> = {
   'workflow-procure': ['procurement.view_purchaserequisition', 'inventory.view_supplieritemprice', 'procurement.view_purchaseorder', 'procurement.view_goodsreceiptnote'],
   approvals: ['approvals.view_approvalworkflow'],
   'workflow-pay': ['finance.view_supplierinvoice', 'finance.view_supplierpayment', 'finance.view_expense', 'finance.view_cashflow'],
+  'waste-control': ['materials_control.view_wasterecord'],
+  'recipes-production': ['materials_control.view_recipe', 'materials_control.view_recipeingredient'],
+  'pos-control': ['materials_control.view_posplumapping', 'materials_control.view_posimportbatch'],
+  'finance-governance': ['materials_control.view_costcenterbudget', 'materials_control.view_fiscalperiod', 'materials_control.view_budgetoverride'],
+  'integration-control': ['materials_control.view_integrationconfig', 'materials_control.view_outletassignment'],
   employees: ['employees.view_employee'],
   departments: ['departments.view_department'],
   'hr-dashboard': ['employees.view_employee', 'departments.view_department'],
@@ -48,14 +53,16 @@ const routePermissions: Record<string, string[]> = {
 const hrApps = new Set(['employees', 'departments', 'accounts'])
 
 const strictRoleRoutes: Record<string, Set<string>> = {
-  'department supervisor': new Set(['dashboard', 'detail', 'workflow-stores']),
-  supervisor: new Set(['dashboard', 'detail', 'workflow-stores']),
-  'department head': new Set(['dashboard', 'detail', 'workflow-stores', 'reports', 'reportview']),
+  'department supervisor': new Set(['dashboard', 'detail', 'workflow-stores', 'waste-control']),
+  'outlet supervisor': new Set(['dashboard', 'detail', 'workflow-stores', 'waste-control']),
+  supervisor: new Set(['dashboard', 'detail', 'workflow-stores', 'waste-control']),
+  'department head': new Set(['dashboard', 'detail', 'workflow-stores', 'waste-control', 'recipes-production', 'reports', 'reportview']),
   'store keeper': new Set(['dashboard', 'detail', 'workflow-stores', 'stock-on-hand', 'store-transfers', 'locations', 'store-inventory', 'store-analysis', 'store-usage', 'store-purchase-requests', 'reports', 'reportview']),
-  'cost controller': new Set(['dashboard', 'detail', 'workflow-stores', 'items', 'categories', 'uoms', 'itemUnits', 'suppliers', 'supplierItems', 'reports', 'reportview']),
+  'cost controller': new Set(['dashboard', 'detail', 'workflow-stores', 'waste-control', 'recipes-production', 'pos-control', 'items', 'categories', 'uoms', 'itemUnits', 'suppliers', 'supplierItems', 'reports', 'reportview']),
   'procurement manager': new Set(['dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
   'procurement officer': new Set(['dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
-  'financial manager': new Set(['dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
+  'financial manager': new Set(['dashboard', 'detail', 'workflow-procure', 'workflow-pay', 'finance-governance', 'reports', 'reportview']),
+  'accounts payable clerk': new Set(['dashboard', 'detail', 'workflow-pay', 'reports', 'reportview']),
   'general manager': new Set(['dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
   'receiving clerk': new Set(['dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
 }
@@ -93,6 +100,10 @@ export const roleReportIds: Record<string, string[]> = {
     'salesOverview', 'salesStatistics', 'salesTaxAnalysis', 'salesActivity', 'articlePotentialUsage',
     'menuEngineering', 'costOfSalesLocation', 'costCenterComparison', 'dailyFood', 'groupAnalysis',
     'fbResult', 'monthlyReport', 'lastEstimate', 'fbBudget',
+  ],
+  'accounts payable clerk': [
+    'purchaseOrders', 'goodsReceipts', 'pendingActions', 'exceptions',
+    'purchaseReceivingDeviation', 'receiptsJournal', 'supplierInvoices',
   ],
   'general manager': [
     'managementSummary', 'procurement', 'purchaseOrders', 'goodsReceipts', 'valuation',
@@ -164,6 +175,7 @@ export function operationsLandingFor(user: AccessUser): { route: string; crumb: 
     'cost controller': { route: 'dashboard', crumb: 'Cost Controller dashboard' },
     'procurement manager': { route: 'dashboard', crumb: 'Procurement dashboard' },
     'financial manager': { route: 'dashboard', crumb: 'Financial approvals dashboard' },
+    'accounts payable clerk': { route: 'workflow-pay', crumb: 'Supplier invoices & payment' },
     'general manager': { route: 'dashboard', crumb: 'Final approvals dashboard' },
     'receiving clerk': { route: 'dashboard', crumb: 'Receiving dashboard' },
   }

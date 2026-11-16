@@ -31,6 +31,7 @@ const AccessManagement = lazy(() => import('./AccessManagement'))
 const SupplierManagement = lazy(() => import('./SupplierManagement'))
 const SupplierQuotationOptionOne = lazy(() => import('./SupplierQuotationOptionOne'))
 const UnitManagement = lazy(() => import('./UnitManagement'))
+const MaterialsControl = lazy(() => import('./MaterialsControl'))
 
 const listRoutes = new Set([
   'items', 'locations', 'suppliers',
@@ -82,6 +83,11 @@ export default function AppShell() {
   else if (route === 'items') content = <ArticleManagement />
   else if (route === 'uoms' || route === 'itemUnits') content = <UnitManagement />
   else if (route === 'workflow-pay') content = <FinanceWorkbench />
+  else if (route === 'waste-control') content = <MaterialsControl section="waste" />
+  else if (route === 'recipes-production') content = <MaterialsControl section="recipes" />
+  else if (route === 'pos-control') content = <MaterialsControl section="pos" />
+  else if (route === 'finance-governance') content = <MaterialsControl section="governance" />
+  else if (route === 'integration-control') content = <MaterialsControl section="integrations" />
   else if (route === 'workflow-configure') content = <WorkflowHub kind="configure" />
   else if (route === 'suppliers') content = <SupplierManagement />
   else if (route === 'supplierItems') content = <SupplierQuotationOptionOne />

@@ -8,20 +8,41 @@ from django.db import transaction
 
 
 ROLE_SPECS = {
-    "System Administrator": {"all": True},
+    "System Administrator": {
+        # IT can configure master data, accounts and integrations, and can read
+        # operational evidence. Transactional approval/posting actions keep
+        # their own role checks and never treat this role as a finance actor.
+        "view_all": True,
+        "crud": {
+            "accounts": ["user"],
+            "departments": ["department", "branch"],
+            "employees": ["employee", "designation"],
+            "inventory": ["category", "item", "itemunitprice", "storelocation", "unitofmeasure"],
+            "organization": ["hotel"],
+            "materials_control": ["outletassignment", "integrationconfig"],
+        },
+    },
     "Department Supervisor": {
         # Supervisors originate Department requests for their own department.
         # Object-level API controls keep them on their own draft/rejected records.
-        "crud": {"inventory": ["storerequisition", "storerequisitionitem"]},
+        "crud": {
+            "inventory": ["storerequisition", "storerequisitionitem"],
+            "materials_control": ["wasterecord"],
+        },
         "view": {
             "departments": ["department", "branch"],
             "employees": ["employee"],
             "inventory": ["category", "item", "storelocation", "unitofmeasure"],
+            "materials_control": ["outletassignment", "recipe", "recipeingredient"],
         },
     },
     "Department Head": {
         # HOD no longer originates the Department request. The HOD reviews the
         # Supervisor request and may retain/reduce quantities or reject it.
+        "crud": {
+            "materials_control": ["recipe", "recipeingredient"],
+        },
+        "change": {"materials_control": ["wasterecord"]},
         "view": {
             "departments": ["department", "branch"],
             "employees": ["employee"],
@@ -29,6 +50,7 @@ ROLE_SPECS = {
                 "category", "item", "storelocation", "unitofmeasure",
                 "storerequisition", "storerequisitionitem",
             ],
+            "materials_control": ["outletassignment", "costcenterbudget"],
         },
     },
     "Cost Controller": {
@@ -36,6 +58,10 @@ ROLE_SPECS = {
             "vendors": ["supplier"],
             "inventory": ["category", "item", "itemunitprice", "supplieritemprice", "unitofmeasure"],
             "procurement": ["procurementattachment"],
+            "materials_control": [
+                "wasterecord", "recipe", "recipeingredient", "posplumapping",
+                "posimportbatch", "possaleline",
+            ],
         },
         "view": {
             "departments": ["department", "branch"],
@@ -86,14 +112,34 @@ ROLE_SPECS = {
         },
     },
     "Financial Manager": {
+        "crud": {
+            "materials_control": ["costcenterbudget", "fiscalperiod"],
+        },
         "change": {
             "approvals": ["purchaseorderapprovalworkflow"],
             "procurement": ["purchaseorder"],
+            "materials_control": ["budgetoverride"],
         },
         "view": {
             "departments": ["branch", "department"],
             "inventory": ["item", "unitofmeasure"],
             "procurement": ["purchaseorderitem", "purchaseorderactivity", "purchaserequisition", "requisitionitem"],
+            "vendors": ["supplier"],
+            "finance": ["supplierinvoice", "supplierinvoiceitem", "supplierpayment", "expense"],
+            "materials_control": ["glexport", "wasterecord", "recipe", "posimportbatch"],
+        },
+    },
+    "Accounts Payable Clerk": {
+        "crud": {
+            "finance": ["supplierinvoice", "supplierinvoiceitem", "supplierpayment"],
+        },
+        "view": {
+            "departments": ["branch", "department"],
+            "inventory": ["item", "unitofmeasure"],
+            "procurement": [
+                "purchaseorder", "purchaseorderitem", "goodsreceiptnote",
+                "goodsreceiptitem", "supplierreturn", "supplierreturnitem",
+            ],
             "vendors": ["supplier"],
         },
     },
@@ -107,6 +153,11 @@ ROLE_SPECS = {
             "inventory": ["item", "unitofmeasure"],
             "procurement": ["purchaseorderitem", "purchaseorderactivity"],
             "vendors": ["supplier"],
+            "finance": ["supplierinvoice", "expense"],
+            "materials_control": [
+                "costcenterbudget", "budgetoverride", "fiscalperiod", "glexport",
+                "wasterecord", "recipe", "posimportbatch",
+            ],
         },
     },
     "Receiving Clerk": {
@@ -137,22 +188,30 @@ RETIRED_ROLE_NAMES = (
 # are migrated into the canonical roles before the legacy groups are removed.
 ROLE_ALIASES = {
     "Supervisor": "Department Supervisor",
+    "Outlet Supervisor": "Department Supervisor",
     "SUPERVISOR": "Department Supervisor",
     "DEPARTMENT SUPERVISOR": "Department Supervisor",
     "DEPARTMENT HEAD": "Department Head",
+    "F&B Department Head": "Department Head",
     "COST CONTROLLER": "Cost Controller",
+    "F&B Cost Controller": "Cost Controller",
     "STORE KEEPER": "Store Keeper",
     "Stores Manager": "Store Keeper",
     "Store Manager": "Store Keeper",
     "STORES MANAGER": "Store Keeper",
     "PROCUREMENT OFFICER": "Procurement Manager",
     "Procurement Officer": "Procurement Manager",
+    "Purchasing Officer": "Procurement Manager",
     "PROCUREMENT MANAGER": "Procurement Manager",
     "FINANCIAL MANAGER": "Financial Manager",
     "Finance Manager": "Financial Manager",
     "Finance Controller": "Financial Manager",
+    "Financial Controller": "Financial Manager",
+    "Accounts Payable (A/P) Clerk": "Accounts Payable Clerk",
+    "AP Clerk": "Accounts Payable Clerk",
     "MANAGER": "General Manager",
     "GENERAL MANAGER": "General Manager",
+    "General Manager (GM)": "General Manager",
     "Director": "General Manager",
     "DIRECTOR": "General Manager",
     "RECIVING CLARK": "Receiving Clerk",
@@ -175,7 +234,11 @@ def model_permissions(app_label, model_name, actions):
 def permissions_for_spec(spec):
     if spec.get("all"):
         return Permission.objects.all()
-    permissions = Permission.objects.none()
+    permissions = (
+        Permission.objects.filter(codename__startswith="view_")
+        if spec.get("view_all")
+        else Permission.objects.none()
+    )
     for bucket, actions in (
         ("view", ["view"]),
         ("change", ["view", "change"]),

@@ -44,6 +44,12 @@ ROLE_REPORT_PATHS = {
         "approval-trail",
         "management-summary",
     ],
+    "Accounts Payable Clerk": [
+        "purchase-orders",
+        "goods-receipts",
+        "pending-actions",
+        "exceptions",
+    ],
     "General Manager": [
         "purchase-orders",
         "goods-receipts",

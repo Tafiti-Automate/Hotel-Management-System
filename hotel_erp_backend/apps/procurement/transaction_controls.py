@@ -171,10 +171,7 @@ class GoodsReceiptNoteViewSet(BaseGoodsReceiptNoteViewSet):
 
     def _require_store_keeper(self, request, receipt):
         if user_has_role(request.user, "System Administrator"):
-            employee = getattr(request.user, "employee_profile", None)
-            if not employee:
-                raise PermissionDenied("An employee profile is required to verify a GRN.")
-            return employee
+            raise PermissionDenied("System Administrators cannot verify or post GRNs.")
         employee = getattr(request.user, "employee_profile", None)
         if not user_has_role(request.user, "Store Keeper") or not employee or not employee.is_active:
             raise PermissionDenied("Only the Store Keeper can verify and post a received GRN to Stock on Hand.")

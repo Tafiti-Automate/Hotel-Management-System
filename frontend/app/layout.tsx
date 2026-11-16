@@ -8,6 +8,7 @@ import '../src/quotation-option-one.css'
 import '../src/dashboard-v2.css'
 import '../src/enterprise-redesign.css'
 import '../src/enterprise-foundation.css'
+import '../src/materials-control.css'
 
 export const metadata: Metadata = {
   title: 'Hotel ERP',

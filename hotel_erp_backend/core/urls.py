@@ -26,6 +26,7 @@ api_patterns = [
     path("", include("apps.notifications.urls")),
     path("", include("apps.reports.urls")),
     path("", include("apps.audit_logs.urls")),
+    path("", include("apps.materials_control.urls")),
 ]
 
 urlpatterns = [

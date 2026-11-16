@@ -12,18 +12,22 @@ const roleNavigation: Record<string, NavGroup[]> = {
     { heading: 'Department', items: [
       { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
       { route: 'workflow-stores', label: 'My requests', icon: 'assignment' },
+      { route: 'waste-control', label: 'Waste log', icon: 'delete_sweep' },
     ] },
   ],
   supervisor: [
     { heading: 'Department', items: [
       { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
       { route: 'workflow-stores', label: 'My requests', icon: 'assignment' },
+      { route: 'waste-control', label: 'Waste log', icon: 'delete_sweep' },
     ] },
   ],
   'department head': [
     { heading: 'Department', items: [
       { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
       { route: 'workflow-stores', label: 'Approvals', icon: 'approval' },
+      { route: 'waste-control', label: 'Waste review', icon: 'delete_sweep' },
+      { route: 'recipes-production', label: 'Recipe costing', icon: 'menu_book' },
     ] },
     { heading: 'Insights', items: [{ route: 'reports', label: 'Reports', icon: 'bar_chart' }] },
   ],
@@ -47,6 +51,9 @@ const roleNavigation: Record<string, NavGroup[]> = {
     { heading: 'Control desk', items: [
       { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
       { route: 'workflow-stores', label: 'Request control', icon: 'fact_check' },
+      { route: 'waste-control', label: 'Waste audit', icon: 'delete_sweep' },
+      { route: 'recipes-production', label: 'Recipe costing', icon: 'menu_book' },
+      { route: 'pos-control', label: 'POS depletion', icon: 'point_of_sale' },
     ] },
     { heading: 'Master data', items: [
       { route: 'suppliers', label: 'Suppliers', icon: 'local_shipping' },
@@ -75,8 +82,17 @@ const roleNavigation: Record<string, NavGroup[]> = {
     { heading: 'Approvals', items: [
       { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
       { route: 'workflow-procure', label: 'LPO approvals', icon: 'approval' },
+      { route: 'workflow-pay', label: 'Invoices & payments', icon: 'payments' },
+      { route: 'finance-governance', label: 'Budgets & period close', icon: 'account_balance' },
     ] },
     { heading: 'Insights', items: [{ route: 'reports', label: 'Reports', icon: 'bar_chart' }] },
+  ],
+  'accounts payable clerk': [
+    { heading: 'Accounts payable', items: [
+      { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
+      { route: 'workflow-pay', label: 'Invoices & payments', icon: 'payments' },
+    ] },
+    { heading: 'Control evidence', items: [{ route: 'reports', label: 'Reports', icon: 'bar_chart' }] },
   ],
   'general manager': [
     { heading: 'Management', items: [
@@ -111,6 +127,7 @@ const adminNavigation: NavGroup[] = [
     { route: 'locations', label: 'Stores', icon: 'warehouse' },
   ] },
   { heading: 'Governance', items: [
+    { route: 'integration-control', label: 'Integrations & outlets', icon: 'hub' },
     { route: 'reports', label: 'Reports', icon: 'bar_chart' },
     { route: 'audit-log', label: 'Audit trail', icon: 'history' },
     { route: 'access-management', label: 'User access', icon: 'manage_accounts' },

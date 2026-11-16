@@ -147,7 +147,7 @@ function buildDashboard(role: string, data: any): DashboardView {
       eyebrow: 'Department workspace', title: 'My requisitions', description: 'Create requests, follow approvals and see what Stores has issued.',
       metrics: [metric('Drafts', drafts.length, 'Continue before submission', 'edit_note', 'blue', 'workflow-stores', 'My requests'), metric('Pending HOD', pending.length, 'Waiting for department approval', 'approval', 'amber', 'workflow-stores', 'My requests'), metric('In progress', active.length, 'With control or Stores', 'schedule', 'purple', 'workflow-stores', 'My requests'), metric('Completed', done.length, 'Issued or completed', 'task_alt', 'green', 'workflow-stores', 'My requests')],
       activities: activity(storeRequests, 'workflow-stores', 'My requests', 'Request'), queueTitle: 'Recent requests', queueHint: 'Your latest department requisitions and their current stage.', queueRoute: 'workflow-stores', queueLabel: 'My requests',
-      quickLinks: [quick('Department requests', 'Create or continue a request', 'assignment_add', 'workflow-stores', 'My requests')],
+      quickLinks: [quick('Department requests', 'Create or continue a request', 'assignment_add', 'workflow-stores', 'My requests'), quick('Waste log', 'Record outlet waste at source', 'delete_sweep', 'waste-control', 'Waste control')],
       context: [{ label: 'Total requests', value: String(storeRequests.length) }],
     }
   }
@@ -160,7 +160,7 @@ function buildDashboard(role: string, data: any): DashboardView {
       eyebrow: 'Department approvals', title: 'HOD approval desk', description: 'Review department requests, retain or reduce quantities, and track approved demand through Stores.',
       metrics: [metric('Pending approval', pending.length, 'Requests awaiting your decision', 'approval', 'amber', 'workflow-stores', 'Department approvals'), metric('Approved', approved.length, 'Requests moved beyond HOD', 'task_alt', 'green', 'workflow-stores', 'Department approvals'), metric('Rejected', rejected.length, 'Requests declined', 'error', 'red', 'workflow-stores', 'Department approvals'), metric('All requests', storeRequests.length, 'Department request history', 'assignment', 'blue', 'reports', 'Reports')],
       activities: activity(storeRequests, 'workflow-stores', 'Department approvals', 'Request'), queueTitle: 'Department approval queue', queueHint: 'Requests that need a decision or have recently moved through your department.', queueRoute: 'workflow-stores', queueLabel: 'Department approvals',
-      quickLinks: [quick('Department approvals', 'Review pending requests', 'approval', 'workflow-stores', 'Department approvals'), quick('Reports', 'Department request and issue history', 'bar_chart', 'reports', 'Reports')],
+      quickLinks: [quick('Department approvals', 'Review pending requests', 'approval', 'workflow-stores', 'Department approvals'), quick('Recipe costing', 'Maintain yields and ingredients', 'menu_book', 'recipes-production', 'Recipe costing'), quick('Waste review', 'Review outlet variances', 'delete_sweep', 'waste-control', 'Waste control'), quick('Reports', 'Department request and issue history', 'bar_chart', 'reports', 'Reports')],
       context: [{ label: 'Department requests', value: String(storeRequests.length) }],
     }
   }
@@ -184,7 +184,7 @@ function buildDashboard(role: string, data: any): DashboardView {
       eyebrow: 'Cost control', title: 'Request control', description: 'Validate approved department demand against stock and master data before Stores issues.',
       metrics: [metric('Awaiting control', control.length, 'HOD-approved requests', 'fact_check', 'amber', 'workflow-stores', 'Request control'), metric('Suppliers', suppliers.length, 'Active supplier records', 'local_shipping', 'blue', 'suppliers', 'Suppliers'), metric('Articles', items.length, 'Catalogue records', 'inventory_2', 'green', 'items', 'Articles'), metric('Stock lines', balances.length, 'Available inventory positions', 'warehouse', 'purple', 'reports', 'Reports')],
       activities: activity(storeRequests, 'workflow-stores', 'Request control', 'Request'), queueTitle: 'Cost Control queue', queueHint: 'Department requests ready for quantity and availability review.', queueRoute: 'workflow-stores', queueLabel: 'Request control',
-      quickLinks: [quick('Request control', 'Review HOD-approved quantities', 'fact_check', 'workflow-stores', 'Request control'), quick('Supplier prices', 'Review quotations and price records', 'request_quote', 'supplierItems', 'Supplier quotations'), quick('Articles', 'Maintain item master data', 'inventory_2', 'items', 'Articles')],
+      quickLinks: [quick('Request control', 'Review HOD-approved quantities', 'fact_check', 'workflow-stores', 'Request control'), quick('Waste audit', 'Review operational loss', 'delete_sweep', 'waste-control', 'Waste control'), quick('Recipe costing', 'Control yields and food cost', 'menu_book', 'recipes-production', 'Recipe costing'), quick('POS depletion', 'Post sales-driven usage', 'point_of_sale', 'pos-control', 'POS depletion')],
       context: [{ label: 'Departments', value: String(departments.length) }],
     }
   }
@@ -209,8 +209,20 @@ function buildDashboard(role: string, data: any): DashboardView {
       eyebrow: 'Financial approvals', title: 'LPO approval desk', description: 'Review purchase commitments before they proceed to management or supplier fulfilment.',
       metrics: [metric('Approval queue', pending.length, 'LPOs requiring financial review', 'approval', 'amber', 'workflow-procure', 'LPO approvals'), metric('LPO value', money(total), 'Visible purchase commitments', 'payments', 'blue', 'workflow-procure', 'LPO approvals'), metric('Goods receipts', grns.length, 'Receipts available for review', 'local_shipping', 'green', 'reports', 'Reports'), metric('Suppliers', suppliers.length, 'Supplier exposure context', 'business', 'purple', 'reports', 'Reports')],
       activities: activity(orders, 'workflow-procure', 'LPO approvals', 'LPO'), queueTitle: 'Financial approval queue', queueHint: 'Purchase orders awaiting review or recently processed.', queueRoute: 'workflow-procure', queueLabel: 'LPO approvals',
-      quickLinks: [quick('LPO approvals', 'Review pending purchase commitments', 'approval', 'workflow-procure', 'LPO approvals'), quick('Reports', 'Review procurement commitments', 'bar_chart', 'reports', 'Reports')],
+      quickLinks: [quick('LPO approvals', 'Review pending purchase commitments', 'approval', 'workflow-procure', 'LPO approvals'), quick('Invoices & payments', 'Review AP documents', 'payments', 'workflow-pay', 'Invoices & payments'), quick('Budgets & close', 'Control commitments and periods', 'account_balance', 'finance-governance', 'Budgets & period close'), quick('Reports', 'Review procurement commitments', 'bar_chart', 'reports', 'Reports')],
       context: [{ label: 'Open requisitions', value: String(requisitions.length) }],
+    }
+  }
+
+  if (role === 'accounts_payable_clerk') {
+    const received = grns.filter((row: any) => ['posted', 'verified', 'completed'].includes(key(row.status)))
+    const exceptions = grns.filter((row: any) => Number(row.rejected_quantity || 0) > 0)
+    return {
+      eyebrow: 'Accounts payable', title: 'Invoice matching desk', description: 'Match supplier invoices to approved LPOs and verified receipts before payment processing.',
+      metrics: [metric('Verified GRNs', received.length, 'Receipts available for matching', 'receipt_long', 'green', 'workflow-pay', 'Invoices & payments'), metric('Purchase orders', orders.length, 'LPO evidence in scope', 'shopping_cart', 'blue', 'workflow-pay', 'Invoices & payments'), metric('Receipt exceptions', exceptions.length, 'Rejected or disputed receipt lines', 'warning', 'red', 'reports', 'Reports'), metric('Suppliers', suppliers.length, 'Supplier accounts in scope', 'business', 'purple', 'reports', 'Reports')],
+      activities: [...activity(grns, 'workflow-pay', 'Invoices & payments', 'GRN'), ...activity(orders, 'workflow-pay', 'Invoices & payments', 'LPO')], queueTitle: 'Three-way match evidence', queueHint: 'Recent receipts and purchase orders available for invoice matching.', queueRoute: 'workflow-pay', queueLabel: 'Invoices & payments',
+      quickLinks: [quick('Invoices & payments', 'Match, review and pay suppliers', 'payments', 'workflow-pay', 'Invoices & payments'), quick('AP reports', 'Review receipts and invoice controls', 'bar_chart', 'reports', 'Reports')],
+      context: [{ label: 'Visible suppliers', value: String(suppliers.length) }],
     }
   }
 
@@ -244,7 +256,7 @@ function buildDashboard(role: string, data: any): DashboardView {
       eyebrow: 'System administration', title: 'Operations overview', description: 'Monitor operational data, people, master data and system governance from one place.',
       metrics: [metric('Employees', employees.length, 'Staff records', 'groups', 'blue', 'employees', 'Employees'), metric('Suppliers', suppliers.length, 'Supplier master records', 'local_shipping', 'green', 'suppliers', 'Suppliers'), metric('Articles', items.length, 'Catalogue records', 'inventory_2', 'purple', 'items', 'Articles'), metric('Transactions', transactions, 'Workflow records in memory', 'bar_chart', 'amber', 'reports', 'Reports')],
       activities: [...activity(orders, 'workflow-procure', 'Procurement workbench', 'LPO'), ...activity(grns, 'workflow-procure', 'Procurement workbench', 'GRN'), ...activity(storeRequests, 'workflow-stores', 'Stores workflow', 'Request')], queueTitle: 'Operational activity', queueHint: 'Latest records across stores and procurement.', queueRoute: 'audit-log', queueLabel: 'Audit trail',
-      quickLinks: [quick('User access', 'Roles, accounts and permissions', 'manage_accounts', 'access-management', 'User access'), quick('Audit trail', 'Review system activity', 'history', 'audit-log', 'Audit trail'), quick('Settings', 'Property configuration', 'settings', 'hotel-profile', 'Settings')],
+      quickLinks: [quick('User access', 'Roles, accounts and permissions', 'manage_accounts', 'access-management', 'User access'), quick('Integrations', 'Outlet assignments and system links', 'hub', 'integration-control', 'Integrations'), quick('Audit trail', 'Review system activity', 'history', 'audit-log', 'Audit trail'), quick('Settings', 'Property configuration', 'settings', 'hotel-profile', 'Settings')],
       context: [{ label: 'Departments', value: String(departments.length) }],
     }
   }
