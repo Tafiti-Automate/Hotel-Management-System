@@ -96,6 +96,29 @@ def test_waste_submission_posts_inventory_once(materials_context):
 
 
 @pytest.mark.django_db
+def test_stale_waste_submission_does_not_double_deduct(materials_context):
+    user, employee, department, _branch, outlet, unit, item = materials_context
+    waste = WasteRecord.objects.create(
+        outlet=outlet,
+        department=department,
+        item=item,
+        unit=unit,
+        quantity=Decimal("2.00"),
+        reason_code="broken_service",
+        reported_by=employee,
+        created_by=user,
+    )
+    second_request_copy = WasteRecord.objects.get(pk=waste.pk)
+
+    waste.submit(user)
+    with pytest.raises(ValidationError, match="Only a draft"):
+        second_request_copy.submit(user)
+
+    assert InventoryBalance.objects.get(item=item, store=outlet).quantity_in_stock == Decimal("18.00")
+    assert StockLedger.objects.filter(reference_id=waste.pk, reference_type="waste").count() == 1
+
+
+@pytest.mark.django_db
 def test_recipe_costing_and_pos_depletion_are_idempotent(materials_context):
     user, _employee, _department, _branch, outlet, unit, item = materials_context
     recipe = Recipe.objects.create(

@@ -154,6 +154,9 @@ class WasteRecord(BaseModel):
         self.full_clean()
         with transaction.atomic():
             waste = WasteRecord.objects.select_for_update().get(pk=self.pk)
+            # Recheck after locking: two workers can hold stale draft instances.
+            if waste.status != self.STATUS_DRAFT or waste.inventory_changes_applied:
+                raise ValidationError("Only a draft waste record can be submitted.")
             balance = (
                 InventoryBalance.objects.select_for_update()
                 .filter(item=waste.item, store=waste.outlet)
