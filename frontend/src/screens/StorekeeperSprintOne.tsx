@@ -3,7 +3,6 @@ import { Icon } from '../components/Icon'
 import ConfirmTransaction from '../components/ConfirmTransaction'
 import { escapeHtml } from '../features/shared/html'
 import { createBackendRecord, errorMessage, readBackendRecords, runBackendAction } from '../lib/api'
-import type { Row } from '../lib/data'
 import { useApp } from '../state/AppContext'
 import '../operational-blueprint.css'
 
@@ -247,7 +246,7 @@ export function TransferDispatchConsole() {
       <div className="bp-panel-title"><div><h2>Approved department requests</h2><p>Only Cost-Control-approved requests for your assigned stores appear here.</p></div>
         <input className="sk-filter" aria-label="Search requisitions" placeholder="Filter store, request or department…" value={search} onChange={(event) => setSearch(event.target.value)} /></div>
       <div className="sk-batch-actions">
-        <label><input type="checkbox" aria-label="Select all visible requisitions" checked={filtered.length > 0 && filtered.every((row) => selected.includes(row.id))} onChange={(event) => setSelected((current) => event.target.checked ? Array.from(new Set([...current, ...filtered.map((row) => row.id)])) : current.filter((id) => !filtered.some((row) => row.id === id))} /> Select visible</label>
+        <label><input type="checkbox" aria-label="Select all visible requisitions" checked={filtered.length > 0 && filtered.every((row) => selected.includes(row.id))} onChange={(event) => setSelected((current) => event.target.checked ? Array.from(new Set([...current, ...filtered.map((row) => row.id)])) : current.filter((id) => !filtered.some((row) => row.id === id)))} /> Select visible</label>
         <button className="bp-quiet" type="button" disabled={!chosen.length || busy} onClick={() => printBatch('picking', chosen, valueFor)}><Icon name="print" size={16} /> Picking list</button>
         <button className="bp-quiet" type="button" disabled={!chosen.length || busy} onClick={() => printBatch('packing', chosen, valueFor)}><Icon name="print" size={16} /> Packing list</button>
       </div>
