@@ -134,7 +134,7 @@ def test_receiving_inspection_line_queryset_denies_unassigned_property():
     """The fourth receiving evidence collection must share header property scope."""
     from apps.procurement.views import GoodsInspectionItemViewSet
     from apps.inventory.models import Category, Item
-    from apps.procurement.models import PurchaseOrderItem, GoodsReceiptItem, GoodsInspectionItem
+    from apps.procurement.models import PurchaseOrderItem, GoodsReceiptItem, GoodsInspectionItem, RequisitionItem
     from types import SimpleNamespace
 
     call_command("setup_hotel_roles", verbosity=0)
@@ -176,8 +176,12 @@ def test_receiving_inspection_line_queryset_denies_unassigned_property():
         po = PurchaseOrder.objects.create(
             requisition=pr, supplier=supplier, ordered_by=employee,
         )
+        req_line = RequisitionItem.objects.create(
+            requisition=pr, item=item, quantity=Decimal("1.00"),
+        )
         po_line = PurchaseOrderItem.objects.create(
-            purchase_order=po, item=item, quantity=Decimal("1.00"),
+            purchase_order=po, requisition_item=req_line,
+            item=item, quantity=Decimal("1.00"),
             unit_cost=Decimal("5.00"),
         )
         receipt = GoodsReceiptNote.objects.create(
