@@ -121,6 +121,28 @@ def assigned_store_ids(user):
     ).values_list("store_id", flat=True)
 
 
+def scope_financial_stock_audit(queryset, user, store_lookup="store"):
+    """Bound Cost Control/Finance stock audit evidence to an assigned property.
+
+    Ordinary staff must not use global stocktake views to read another hotel.
+    Technical administrator behavior is unchanged by this read-scope helper;
+    separate role checks continue to guard posting and approval actions.
+    """
+    if not user.is_authenticated or user.is_superuser:
+        return queryset
+    if not user.groups.filter(
+        name__in=("Cost Controller", "Financial Manager", "General Manager")
+    ).exists():
+        return queryset
+    employee = getattr(user, "employee_profile", None)
+    if not employee or not employee.is_active or not employee.branch_id:
+        return queryset.none()
+    branch = employee.branch
+    if getattr(branch, "hotel_id", None):
+        return queryset.filter(**{f"{store_lookup}__branch__hotel_id": branch.hotel_id})
+    return queryset.filter(**{f"{store_lookup}__branch_id": branch.pk})
+
+
 def scope_store_requisitions(queryset, user):
     if user.is_superuser or has_role(user, "System Administrator"):
         return queryset
@@ -611,7 +633,7 @@ class StockLedgerViewSet(ReadOnlyModelViewSet):
             self.request.user, "System Administrator", "General Manager"
         ):
             return queryset.filter(store_id__in=assigned_store_ids(self.request.user))
-        return queryset
+        return scope_financial_stock_audit(queryset, self.request.user)
 
 
 class InventoryBatchViewSet(CreatedByModelMixin, ModelViewSet):
@@ -1345,7 +1367,7 @@ class StockCountViewSet(CreatedByModelMixin, ModelViewSet):
             if not employee or not employee.branch_id:
                 return queryset.none()
             return queryset.filter(store__branch_id=employee.branch_id)
-        return queryset
+        return scope_financial_stock_audit(queryset, self.request.user)
 
     def _require_count_entry(self, count):
         if self.request.user.is_superuser or not self._is_store_keeper():
@@ -1484,7 +1506,7 @@ class StockCountItemViewSet(CreatedByModelMixin, ModelViewSet):
             self.request.user, "System Administrator", "General Manager"
         ):
             return queryset.filter(stock_count__store_id__in=assigned_store_ids(self.request.user))
-        return queryset
+        return scope_financial_stock_audit(queryset, self.request.user, "stock_count__store")
 
 
 class SupplierPriceQuoteProposalViewSet(CreatedByModelMixin, ModelViewSet):
