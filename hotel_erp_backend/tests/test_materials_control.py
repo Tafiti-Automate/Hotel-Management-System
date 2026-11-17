@@ -512,7 +512,7 @@ def test_pos_depletion_captures_historical_cost_without_repricing(materials_cont
     balance.save(update_fields=("weighted_average_cost", "updated_at"))
     recipe = Recipe.objects.create(
         name="POS historical COGS recipe", outlet=outlet,
-        yield_quantity=Decimal("1.00"), created_by=user,
+        yield_quantity=Decimal("1.00"), target_food_cost_percent=Decimal("30.00"), created_by=user,
     )
     RecipeIngredient.objects.create(
         recipe=recipe, item=item, unit=unit,
@@ -592,7 +592,7 @@ def test_pos_unknown_wac_remains_unvalued_in_stock_ledger(materials_context):
     user, _employee, _department, _branch, outlet, unit, item = materials_context
     recipe = Recipe.objects.create(
         name="Unknown WAC POS recipe", outlet=outlet,
-        yield_quantity=Decimal("1.00"), created_by=user,
+        yield_quantity=Decimal("1.00"), target_food_cost_percent=Decimal("30.00"), created_by=user,
     )
     RecipeIngredient.objects.create(
         recipe=recipe, item=item, unit=unit,
