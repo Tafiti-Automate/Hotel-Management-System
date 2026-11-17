@@ -125,8 +125,12 @@ ROLE_SPECS = {
         },
         "view": {
             "departments": ["branch", "department"],
-            "inventory": ["item", "unitofmeasure"],
-            "procurement": ["purchaseorderitem", "purchaseorderactivity", "purchaserequisition", "requisitionitem"],
+            "inventory": ["item", "unitofmeasure", "stockcount", "stockcountitem", "stockledger"],
+            # Read-only GRN, receipt-line and return evidence for three-way matching.
+            "procurement": [
+                "purchaseorderitem", "purchaseorderactivity", "purchaserequisition", "requisitionitem",
+                "goodsreceiptnote", "goodsreceiptitem", "supplierreturn",
+            ],
             "vendors": ["supplier"],
             "finance": ["supplierinvoice", "supplierinvoiceitem", "supplierpayment", "expense"],
             "materials_control": ["glexport", "glaccountmapping", "wasterecord", "recipe", "posimportbatch"],
