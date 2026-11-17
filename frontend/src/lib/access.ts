@@ -84,9 +84,9 @@ const adminAllowedRoutes = new Set([
 const hrApps = new Set(['employees', 'departments', 'accounts'])
 
 const strictRoleRoutes: Record<string, Set<string>> = {
-  'department supervisor': new Set([ 'waste-new', 'stocktake-sheet','dashboard', 'detail', 'workflow-stores', 'new-store-request', 'incoming-pickup', 'waste-control']),
-  'outlet supervisor': new Set([ 'waste-new', 'stocktake-sheet','dashboard', 'detail', 'workflow-stores', 'new-store-request', 'incoming-pickup', 'waste-control']),
-  supervisor: new Set([ 'waste-new', 'stocktake-sheet','dashboard', 'detail', 'workflow-stores', 'new-store-request', 'incoming-pickup', 'waste-control']),
+  'department supervisor': new Set([ 'waste-new', 'dashboard', 'detail', 'workflow-stores', 'new-store-request', 'incoming-pickup', 'waste-control']),
+  'outlet supervisor': new Set([ 'waste-new', 'dashboard', 'detail', 'workflow-stores', 'new-store-request', 'incoming-pickup', 'waste-control']),
+  supervisor: new Set([ 'waste-new', 'dashboard', 'detail', 'workflow-stores', 'new-store-request', 'incoming-pickup', 'waste-control']),
   'department head': new Set([ 'purchasing-pr-new', 'recipes-detail', 'purchasing-order-detail','dashboard', 'detail', 'workflow-stores', 'waste-control', 'recipes-production', 'reports', 'reportview']),
   'store keeper': new Set([ 'stocktake-sheet','dashboard', 'detail', 'workflow-stores', 'grn-posting', 'transfer-dispatch', 'stock-on-hand', 'store-transfers', 'locations', 'store-inventory', 'store-analysis', 'store-usage', 'store-purchase-requests', 'reports', 'reportview']),
   'cost controller': new Set(['purchasing-quotes', 'pos-reconciliation', 'recipes-detail', 'stocktake-variance', 'store-inventory','dashboard', 'detail', 'workflow-stores', 'waste-control', 'recipes-production', 'pos-control', 'items', 'categories', 'uoms', 'itemUnits', 'suppliers', 'supplierItems', 'reports', 'reportview', 'menu-engineering']),
