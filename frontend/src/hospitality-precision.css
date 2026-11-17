@@ -1,0 +1,769 @@
+/*
+ * Enterprise Hospitality Precision
+ * Final shared presentation layer for every authenticated role workspace.
+ * Presentation only: routes, permissions, API contracts and workflow state
+ * transitions remain owned by the existing React and Django application.
+ */
+
+.application-root.screen-app {
+  --hp-canvas: #F8FAFC;
+  --hp-surface: #FFFFFF;
+  --hp-surface-muted: #F1F5F9;
+  --hp-navy: #0F2942;
+  --hp-navy-hover: #173B5C;
+  --hp-navy-soft: #E8EEF3;
+  --hp-terracotta: #C2410C;
+  --hp-amber: #D97706;
+  --hp-text: #0F172A;
+  --hp-text-muted: #475569;
+  --hp-text-faint: #64748B;
+  --hp-border: #E2E8F0;
+  --hp-border-strong: #CBD5E1;
+  --hp-sky-bg: #E0F2FE;
+  --hp-sky-text: #075985;
+  --hp-amber-bg: #FEF3C7;
+  --hp-amber-text: #92400E;
+  --hp-emerald-bg: #D1FAE5;
+  --hp-emerald-text: #065F46;
+  --hp-rose-bg: #FFE4E6;
+  --hp-rose-text: #9F1239;
+  --hp-radius-card: 12px;
+  --hp-radius-control: 8px;
+  --hp-shadow-xs: 0 1px 2px rgba(15, 23, 42, .05);
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace !important;
+
+  /* Map legacy theme contracts to the mandatory design system. */
+  --bg: var(--hp-canvas) !important;
+  --surface: var(--hp-surface) !important;
+  --surface-2: var(--hp-canvas) !important;
+  --surface-3: var(--hp-surface-muted) !important;
+  --text: var(--hp-text) !important;
+  --text-muted: var(--hp-text-muted) !important;
+  --text-faint: var(--hp-text-faint) !important;
+  --border: var(--hp-border) !important;
+  --border-2: var(--hp-border-strong) !important;
+  --accent: var(--hp-navy) !important;
+  --accent-strong: var(--hp-navy-hover) !important;
+  --accent-soft: var(--hp-navy-soft) !important;
+  --good: var(--hp-emerald-text) !important;
+  --good-soft: var(--hp-emerald-bg) !important;
+  --warn: var(--hp-amber-text) !important;
+  --warn-soft: var(--hp-amber-bg) !important;
+  --bad: var(--hp-rose-text) !important;
+  --bad-soft: var(--hp-rose-bg) !important;
+  --shadow: var(--hp-shadow-xs) !important;
+  --shadow-sm: var(--hp-shadow-xs) !important;
+
+  --erp-canvas: var(--hp-canvas);
+  --erp-surface: var(--hp-surface);
+  --erp-surface-subtle: var(--hp-canvas);
+  --erp-surface-muted: var(--hp-surface-muted);
+  --erp-border: var(--hp-border);
+  --erp-border-soft: #EDF2F7;
+  --erp-text: var(--hp-text);
+  --erp-text-muted: var(--hp-text-muted);
+  --erp-text-faint: var(--hp-text-faint);
+  --erp-blue-700: var(--hp-navy);
+  --erp-blue-600: var(--hp-navy);
+  --erp-blue-500: var(--hp-navy-hover);
+  --erp-blue-100: var(--hp-navy-soft);
+  --erp-blue-50: #F4F7FA;
+  --erp-radius-sm: var(--hp-radius-control);
+  --erp-radius: var(--hp-radius-card);
+  --erp-shadow-xs: none;
+  --erp-shadow-sm: none;
+  --approved-canvas: var(--hp-canvas);
+  --approved-card: var(--hp-surface);
+  --approved-border: var(--hp-border);
+  --approved-text: var(--hp-text);
+  --approved-muted: var(--hp-text-muted);
+  --approved-blue: var(--hp-navy);
+  --approved-blue-soft: var(--hp-navy-soft);
+  --approved-radius: var(--hp-radius-card);
+  --approved-shadow: none;
+  --approved-shadow-hover: var(--hp-shadow-xs);
+
+  min-height: 100vh;
+  color: var(--hp-text) !important;
+  background: var(--hp-canvas) !important;
+  font-family: var(--font-sans) !important;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.application-root.screen-app,
+.application-root.screen-app :where(button, input, select, textarea) {
+  font-family: var(--font-sans) !important;
+}
+
+/* Shell and role navigation */
+.application-root.screen-app .neo-app-shell,
+.application-root.screen-app .neo-app-main,
+.application-root.screen-app .neo-workspace {
+  background: var(--hp-canvas) !important;
+}
+
+.application-root.screen-app .neo-sidebar {
+  color: #D9E3EC !important;
+  border-right: 1px solid #263F55 !important;
+  background: var(--hp-navy) !important;
+  box-shadow: none !important;
+}
+
+.application-root.screen-app .neo-sidebar-brand {
+  min-height: 72px !important;
+  border-bottom-color: rgba(255, 255, 255, .1) !important;
+}
+
+.application-root.screen-app .neo-brand-mark {
+  border-radius: 10px !important;
+  border-color: rgba(255, 255, 255, .18) !important;
+  background: rgba(255, 255, 255, .08) !important;
+  box-shadow: none !important;
+}
+
+.application-root.screen-app .neo-context-card {
+  border-color: rgba(255, 255, 255, .12) !important;
+  background: rgba(255, 255, 255, .055) !important;
+  box-shadow: none !important;
+}
+
+.application-root.screen-app .neo-context-icon {
+  color: #FED7AA !important;
+  background: rgba(194, 65, 12, .22) !important;
+}
+
+.application-root.screen-app .neo-nav-heading {
+  color: #91A5B7 !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  letter-spacing: .1em !important;
+}
+
+.application-root.screen-app .neo-nav-item {
+  min-height: 40px !important;
+  border-radius: var(--hp-radius-control) !important;
+  color: #C7D3DE !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  transform: none !important;
+}
+
+.application-root.screen-app .neo-nav-item:hover {
+  color: #FFFFFF !important;
+  background: rgba(255, 255, 255, .075) !important;
+}
+
+.application-root.screen-app .neo-nav-item.is-active {
+  color: #FFFFFF !important;
+  background: rgba(255, 255, 255, .11) !important;
+  box-shadow: inset 3px 0 0 var(--hp-terracotta) !important;
+}
+
+/* Compact, calm header with an exact 20px page-title hierarchy. */
+.application-root.screen-app .neo-header {
+  min-height: 72px !important;
+  padding: 10px 24px !important;
+  border-bottom: 1px solid var(--hp-border) !important;
+  background: rgba(255, 255, 255, .96) !important;
+  box-shadow: none !important;
+  backdrop-filter: blur(12px) saturate(125%);
+}
+
+.application-root.screen-app .neo-page-title-row h1 {
+  color: var(--hp-text) !important;
+  font-size: 20px !important;
+  line-height: 1.3 !important;
+  font-weight: 600 !important;
+  letter-spacing: -.02em !important;
+}
+
+.application-root.screen-app .neo-breadcrumb,
+.application-root.screen-app .neo-page-title-row > span,
+.application-root.screen-app .neo-profile-trigger small {
+  color: var(--hp-text-faint) !important;
+  font-size: 11px !important;
+}
+
+.application-root.screen-app :is(.neo-search, .neo-property-chip, .neo-cost-center-chip, .neo-fiscal-chip) {
+  border-color: var(--hp-border) !important;
+  border-radius: var(--hp-radius-control) !important;
+  color: var(--hp-text-muted) !important;
+  background: var(--hp-canvas) !important;
+  box-shadow: none !important;
+}
+
+.application-root.screen-app .neo-workspace {
+  min-height: calc(100vh - 72px) !important;
+  padding: 24px !important;
+  background: var(--hp-canvas) !important;
+}
+
+.application-root.screen-app .neo-workspace > * {
+  max-width: 1600px;
+}
+
+/* Typography and 8px rhythm */
+.application-root.screen-app .neo-workspace :is(
+  .mc-workspace-head h1,
+  .workbench-hero h1,
+  .procurement-hero-card h1,
+  .ds-hero h1,
+  .soh-title h1,
+  .hod-dashboard-hero h1,
+  .enterprise-workspace > header h1,
+  .list-toolbar h1,
+  .reports-page > header h1
+) {
+  color: var(--hp-text) !important;
+  font-size: 20px !important;
+  line-height: 1.35 !important;
+  font-weight: 600 !important;
+  letter-spacing: -.02em !important;
+}
+
+.application-root.screen-app .neo-workspace :is(
+  .mc-section-path,
+  .mc-eyebrow,
+  .ds-eyebrow,
+  .hod-dashboard-hero > div > span,
+  .store-inventory-section-head small,
+  .neo-dashboard-eyebrow,
+  .screen-document-view > span + div > div:first-child
+) {
+  color: var(--hp-text-faint) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: .08em !important;
+  text-transform: uppercase !important;
+}
+
+.application-root.screen-app .neo-workspace :is(
+  .mc-panel-title,
+  .mc-card-head h2,
+  .ds-section-head h2,
+  .store-inventory-section-head h2,
+  .reference-panel-heading h2,
+  .procurement-table-title strong,
+  .finance-table-title strong
+) {
+  color: var(--hp-text-muted) !important;
+  font-size: 14px !important;
+  line-height: 1.4 !important;
+  font-weight: 600 !important;
+  letter-spacing: .06em !important;
+  text-transform: uppercase !important;
+}
+
+.application-root.screen-app :where(small, time, .mc-muted, .mc-key-hint, .microcopy) {
+  font-size: 11px;
+}
+
+/* Cards and surfaces */
+.application-root.screen-app .neo-workspace :is(
+  .panel,
+  .card,
+  .workspace-card,
+  .table-card,
+  .report-card,
+  .dashboard-panel,
+  .neo-dashboard-card,
+  .neo-metric-card,
+  .reference-dashboard-panel,
+  .procurement-queue-card,
+  .procurement-detail-panel,
+  .receiving-table-card,
+  .finance-table-card,
+  .workbench-metrics > div,
+  .ds-card,
+  .soh-kpi,
+  .soh-options,
+  .soh-panel,
+  .supplier-kpi-card,
+  .supplier-table-shell,
+  .store-inventory-card,
+  .mc-card,
+  .mc-dense-panel,
+  .mc-compact-metrics > div,
+  .hod-dashboard-panel,
+  .hod-dashboard-side > section,
+  .hod-dashboard-metric,
+  .access-card,
+  .access-stat,
+  .tafiti-report-group-card,
+  .explorer-workspace-layout,
+  .article-master-layout,
+  .unit-master-layout,
+  .company-settings-section,
+  .workflow-control-panel,
+  .workflow-queue-panel
+) {
+  color: var(--hp-text) !important;
+  border: 1px solid var(--hp-border) !important;
+  border-radius: var(--hp-radius-card) !important;
+  background: var(--hp-surface) !important;
+  box-shadow: none !important;
+}
+
+.application-root.screen-app .neo-workspace :is(
+  .neo-metric-grid,
+  .neo-dashboard-grid,
+  .workbench-metrics,
+  .soh-kpis,
+  .hod-dashboard-kpis,
+  .store-purchase-metrics,
+  .mc-compact-metrics
+) {
+  gap: 20px !important;
+}
+
+/* Inputs, keyboard-grid focus and buttons */
+.application-root.screen-app :is(input, select, textarea) {
+  border: 1px solid var(--hp-border-strong) !important;
+  border-radius: var(--hp-radius-control) !important;
+  color: var(--hp-text) !important;
+  background: #FFFFFF !important;
+  box-shadow: none !important;
+}
+
+.application-root.screen-app :is(input, select, textarea):focus,
+.application-root.screen-app :is(input, select, textarea):focus-visible,
+.application-root.screen-app :is(td, [role='gridcell'])[tabindex]:focus-visible {
+  border-color: var(--hp-navy) !important;
+  outline: 0 !important;
+  box-shadow: 0 0 0 2px rgba(15, 41, 66, .2) !important;
+}
+
+.application-root.screen-app :is(button, [role='button'], a):focus-visible {
+  outline: 2px solid rgba(15, 41, 66, .28) !important;
+  outline-offset: 2px !important;
+}
+
+.application-root.screen-app .neo-workspace :is(
+  .erp-primary,
+  .primary-button,
+  .ds-btn-primary,
+  .mc-action-primary,
+  .mc-primary,
+  .bp-primary,
+  .store-inventory-primary,
+  .supplier-primary-button,
+  .inventory-primary-action,
+  .enterprise-empty-action,
+  button[style*='background: var(--accent)']
+) {
+  min-height: 36px !important;
+  padding-inline: 14px !important;
+  border: 1px solid var(--hp-navy) !important;
+  border-radius: var(--hp-radius-control) !important;
+  color: #FFFFFF !important;
+  background: var(--hp-navy) !important;
+  box-shadow: none !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+
+.application-root.screen-app .neo-workspace :is(
+  .erp-primary,
+  .primary-button,
+  .ds-btn-primary,
+  .mc-action-primary,
+  .mc-primary,
+  .bp-primary,
+  .store-inventory-primary,
+  .supplier-primary-button,
+  .inventory-primary-action,
+  .enterprise-empty-action,
+  button[style*='background: var(--accent)']
+):hover:not(:disabled) {
+  color: #FFFFFF !important;
+  background: var(--hp-navy-hover) !important;
+  border-color: var(--hp-navy-hover) !important;
+  transform: none !important;
+}
+
+.application-root.screen-app .neo-workspace :is(
+  .secondary-button,
+  .ds-btn-secondary,
+  .mc-action:not(.mc-action-primary),
+  .mc-secondary,
+  .store-inventory-secondary
+) {
+  border-color: var(--hp-border-strong) !important;
+  border-radius: var(--hp-radius-control) !important;
+  color: var(--hp-text-muted) !important;
+  background: #FFFFFF !important;
+  box-shadow: none !important;
+}
+
+.application-root.screen-app .neo-workspace :is(.mc-danger-action, .mc-danger, .ds-btn-danger) {
+  border-color: #FDA4AF !important;
+  color: var(--hp-rose-text) !important;
+  background: var(--hp-rose-bg) !important;
+}
+
+/* Enterprise tables: sticky, compact, aligned and readable. */
+.application-root.screen-app .neo-workspace table {
+  width: 100%;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+
+.application-root.screen-app .neo-workspace :is(thead th, .data-head) {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 3 !important;
+  height: 40px !important;
+  color: var(--hp-navy) !important;
+  border-bottom: 1px solid var(--hp-border-strong) !important;
+  background: rgba(248, 250, 252, .94) !important;
+  backdrop-filter: blur(10px) saturate(125%);
+}
+
+.application-root.screen-app .neo-workspace thead th {
+  padding: 0 12px !important;
+  font-size: 11px !important;
+  line-height: 1 !important;
+  font-weight: 600 !important;
+  letter-spacing: .06em !important;
+  text-align: left;
+  text-transform: uppercase !important;
+}
+
+.application-root.screen-app .neo-workspace :is(.data-head button, .mc-sort-head) {
+  color: var(--hp-navy) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: .06em !important;
+}
+
+.application-root.screen-app .neo-workspace tbody td {
+  height: 40px !important;
+  min-height: 40px !important;
+  padding: 0 12px !important;
+  color: var(--hp-text-muted) !important;
+  border-bottom: 1px solid #EDF2F7 !important;
+  background: #FFFFFF !important;
+  font-size: 13px !important;
+  line-height: 1.35 !important;
+}
+
+.application-root.screen-app .neo-workspace :is(.data-row, .procurement-record-row, .finance-table-row) {
+  min-height: 40px !important;
+  color: var(--hp-text-muted) !important;
+  border-bottom-color: #EDF2F7 !important;
+  background: #FFFFFF !important;
+  font-size: 13px !important;
+}
+
+.application-root.screen-app .neo-workspace :is(tbody tr:hover td, .data-row:hover, .procurement-record-row:hover, .finance-table-row:hover) {
+  background: #F8FAFC !important;
+}
+
+.application-root.screen-app .neo-workspace :is(tbody tr:focus-visible td, .data-row:focus-visible) {
+  background: #F1F5F9 !important;
+}
+
+.application-root.screen-app .neo-workspace :is(
+  .mc-num,
+  .mc-mono,
+  .num,
+  .number,
+  .mono-data,
+  [data-mono='true'],
+  input[type='number'],
+  .neo-list-number,
+  .mc-document-link,
+  .print-reference,
+  .soh-kpi strong,
+  .neo-metric-copy strong,
+  .hod-kpi-card strong,
+  .hod-dashboard-metric strong,
+  .workbench-metrics strong,
+  .mc-compact-metrics strong,
+  .mc-impact-summary b,
+  .mc-total-line strong,
+  .store-purchase-metrics div[style*='font-size: 21px']
+) {
+  font-family: var(--font-mono) !important;
+  font-variant-numeric: tabular-nums slashed-zero !important;
+  font-feature-settings: 'tnum', 'zero' !important;
+  letter-spacing: -.02em;
+}
+
+.application-root.screen-app .neo-workspace :is(.mc-num, td.num, td.number, th.num, th.number) {
+  text-align: right !important;
+}
+
+.application-root.screen-app .mc-document-link {
+  color: var(--hp-navy) !important;
+  text-decoration-color: var(--hp-terracotta) !important;
+}
+
+/* Semantic status pills */
+.application-root.screen-app :is(
+  .mc-status,
+  .ds-status,
+  .hod-status,
+  .inventory-status-badge,
+  .soh-status,
+  .bp-state,
+  .supplier-status,
+  .print-status
+) {
+  display: inline-flex !important;
+  align-items: center !important;
+  min-height: 24px !important;
+  padding: 3px 9px !important;
+  border: 1px solid var(--hp-border) !important;
+  border-radius: 999px !important;
+  font-size: 11px !important;
+  line-height: 1 !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+
+.application-root.screen-app :is(.mc-status-warn, .ds-status.warn, .ds-status.info, .hod-status.warn, .inventory-status-badge, .bp-state) {
+  color: var(--hp-amber-text) !important;
+  border-color: #FCD34D !important;
+  background: var(--hp-amber-bg) !important;
+}
+
+.application-root.screen-app :is(.mc-status-info, .ds-status.info, .hod-status.info, .soh-status.low, .bp-state.ready) {
+  color: var(--hp-sky-text) !important;
+  border-color: #7DD3FC !important;
+  background: var(--hp-sky-bg) !important;
+}
+
+.application-root.screen-app :is(.mc-status-ok, .ds-status.good, .hod-status.good, .soh-status.good, .supplier-status.is-active) {
+  color: var(--hp-emerald-text) !important;
+  border-color: #6EE7B7 !important;
+  background: var(--hp-emerald-bg) !important;
+}
+
+.application-root.screen-app :is(.mc-status-bad, .ds-status.bad, .hod-status.bad, .soh-status.zero, .supplier-status.is-inactive, .variance-negative) {
+  color: var(--hp-rose-text) !important;
+  border-color: #FDA4AF !important;
+  background: var(--hp-rose-bg) !important;
+}
+
+/* Empty, loading and error states are never blank surfaces. */
+.application-root.screen-app :is(
+  .enterprise-empty-state,
+  .mc-no-records,
+  .mc-empty-state,
+  .soh-empty,
+  .store-inventory-empty,
+  .hod-dashboard-empty,
+  .inventory-empty-state,
+  .finance-empty-state,
+  .reports-empty-state,
+  .neo-dashboard-empty,
+  .bp-empty,
+  .ds-empty
+) {
+  min-height: 180px;
+  padding: 32px 24px !important;
+  display: flex !important;
+  flex-direction: column;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  color: var(--hp-text-muted) !important;
+  text-align: center !important;
+  background: #FFFFFF !important;
+}
+
+.application-root.screen-app :is(.enterprise-empty-icon, .mc-empty-icon, .soh-empty > span, .inventory-empty-icon) {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 2px;
+  border: 1px solid var(--hp-border);
+  border-radius: 10px;
+  color: var(--hp-navy);
+  background: var(--hp-canvas);
+}
+
+.application-root.screen-app :is(.enterprise-empty-state, .mc-no-records, .mc-empty-state, .soh-empty, .hod-dashboard-empty) strong {
+  color: var(--hp-text) !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+}
+
+.application-root.screen-app :is(.enterprise-empty-state, .mc-no-records, .mc-empty-state, .soh-empty) p {
+  max-width: 520px;
+  margin: 0 0 6px !important;
+  color: var(--hp-text-muted) !important;
+  font-size: 12px !important;
+  line-height: 1.55 !important;
+}
+
+.application-root.screen-app .mc-no-records {
+  min-height: 220px;
+}
+
+.application-root.screen-app .mc-load-state {
+  border: 1px solid var(--hp-border) !important;
+  border-radius: var(--hp-radius-card) !important;
+  background: #FFFFFF !important;
+}
+
+.application-root.screen-app .mc-alert {
+  border: 1px solid #FDBA74 !important;
+  border-radius: var(--hp-radius-control) !important;
+  color: var(--hp-amber-text) !important;
+  background: #FFF7ED !important;
+}
+
+/* Drawers and audit documents */
+.application-root.screen-app :is(
+  .form-drawer,
+  .record-detail-drawer,
+  .mc-mini-drawer,
+  .soh-drawer,
+  .procurement-detail-drawer
+) {
+  border-left: 1px solid var(--hp-border) !important;
+  border-radius: 0 !important;
+  background: #FFFFFF !important;
+  box-shadow: -1px 0 2px rgba(15, 23, 42, .06) !important;
+  animation: hpDrawerIn 200ms cubic-bezier(.2, .8, .2, 1) both !important;
+}
+
+.application-root.screen-app :is(.form-overlay, .record-detail-backdrop, .mc-dialog-backdrop, .soh-drawer-backdrop) {
+  background: rgba(15, 41, 66, .28) !important;
+  backdrop-filter: blur(2px);
+  animation: hpBackdropIn 200ms ease both;
+}
+
+.application-root.screen-app .record-detail-grid {
+  border: 1px solid var(--hp-border) !important;
+  border-radius: var(--hp-radius-card) !important;
+  overflow: hidden;
+}
+
+.application-root.screen-app .record-detail-grid > div {
+  border-color: var(--hp-border) !important;
+}
+
+.application-root.screen-app :is(.confirm-dialog, .access-modal, .neo-transaction-dialog, [role='dialog']) {
+  border-color: var(--hp-border) !important;
+  border-radius: var(--hp-radius-card) !important;
+  box-shadow: var(--hp-shadow-xs) !important;
+}
+
+.application-root.screen-app :is(.neo-notification-panel, .neo-profile-menu, .neo-branch-menu, .command-palette) {
+  border-color: var(--hp-border) !important;
+  border-radius: var(--hp-radius-card) !important;
+  box-shadow: 0 8px 24px rgba(15, 41, 66, .1) !important;
+}
+
+@keyframes hpDrawerIn {
+  from { opacity: .85; transform: translateX(24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes hpBackdropIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Dark appearance retains the same hierarchy and semantic colors. */
+.application-root.mode-dark.screen-app {
+  --hp-canvas: #0B1520;
+  --hp-surface: #111E2B;
+  --hp-surface-muted: #172635;
+  --hp-text: #F8FAFC;
+  --hp-text-muted: #CBD5E1;
+  --hp-text-faint: #94A3B8;
+  --hp-border: #2A3C4D;
+  --hp-border-strong: #3A5064;
+  --hp-navy-soft: #1A344A;
+  --hp-amber-bg: #422006;
+  --hp-amber-text: #FDE68A;
+  --hp-emerald-bg: #064E3B;
+  --hp-emerald-text: #A7F3D0;
+  --hp-rose-bg: #4C0519;
+  --hp-rose-text: #FECDD3;
+  --hp-sky-bg: #0C4A6E;
+  --hp-sky-text: #BAE6FD;
+}
+
+.application-root.mode-dark.screen-app :is(.neo-header, .neo-workspace tbody td, .data-row, .procurement-record-row, .finance-table-row) {
+  background: var(--hp-surface) !important;
+}
+
+.application-root.mode-dark.screen-app .neo-workspace :is(thead th, .data-head) {
+  background: rgba(23, 38, 53, .95) !important;
+}
+
+.application-root.mode-dark.screen-app :is(input, select, textarea) {
+  color: var(--hp-text) !important;
+  background: var(--hp-surface) !important;
+}
+
+@media (max-width: 1180px) {
+  .application-root.screen-app .neo-header {
+    grid-template-columns: minmax(240px, 1fr) minmax(260px, 420px) auto !important;
+    gap: 12px !important;
+  }
+
+  .application-root.screen-app :is(.neo-cost-center-chip, .neo-fiscal-chip) {
+    display: none !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .application-root.screen-app .neo-workspace {
+    padding: 16px !important;
+  }
+
+  .application-root.screen-app .neo-header {
+    min-height: 64px !important;
+    padding: 8px 14px !important;
+  }
+
+  .application-root.screen-app .neo-page-title-row h1 {
+    font-size: 18px !important;
+  }
+
+  .application-root.screen-app .neo-workspace :is(
+    .neo-metric-grid,
+    .neo-dashboard-grid,
+    .workbench-metrics,
+    .soh-kpis,
+    .hod-dashboard-kpis,
+    .store-purchase-metrics,
+    .mc-compact-metrics
+  ) {
+    gap: 12px !important;
+  }
+}
+
+@media (max-width: 680px) {
+  .application-root.screen-app .neo-workspace {
+    padding: 16px 12px 24px !important;
+  }
+
+  .application-root.screen-app .neo-workspace :is(.data-row, .procurement-record-row, .finance-table-row) {
+    min-height: 48px !important;
+  }
+
+  .application-root.screen-app :is(input, select, textarea) {
+    font-size: 16px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .application-root.screen-app *,
+  .application-root.screen-app *::before,
+  .application-root.screen-app *::after {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

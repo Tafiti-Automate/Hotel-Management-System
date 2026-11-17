@@ -24,7 +24,8 @@ function cellStyle(column: ColumnDef): CSSProperties {
     color: column.kind === 'bold' || numeric ? 'var(--text)' : 'var(--text-muted)',
     fontSize: column.kind === 'mono' ? 12 : 13,
     fontWeight: column.kind === 'bold' || numeric ? 600 : 450,
-    fontFamily: column.kind === 'mono' ? "'JetBrains Mono',monospace" : undefined,
+    fontFamily: column.kind === 'mono' || numeric ? "'JetBrains Mono',monospace" : undefined,
+    fontVariantNumeric: column.kind === 'mono' || numeric ? 'tabular-nums' : undefined,
   }
 }
 
@@ -262,14 +263,24 @@ export default function ListView() {
         ))}
 
         {!rows.length && (
-          <div style={{ padding: 44, textAlign: 'center', color: 'var(--text-faint)', fontSize: 13 }}>
-            {app.apiStatus === 'loading' && 'Loading records…'}
+          <div className="enterprise-empty-state">
+            <span className="enterprise-empty-icon"><Icon name={app.apiStatus === 'offline' ? 'cloud_off' : term || statusFilter || supplierFilter || articleFilter || categoryFilter || dateFrom || dateTo ? 'search_off' : 'inbox'} size={24} /></span>
+            {app.apiStatus === 'loading' && <><strong>Loading records</strong><p>Reading the latest authorised records for this workspace…</p></>}
             {app.apiStatus === 'offline' && <>
-              <div style={{ color: 'var(--bad)', marginBottom: 10 }}>{app.apiMessage || 'The service is currently unavailable.'}</div>
-              <button onClick={app.refreshData} style={secondaryAction}><Icon name="refresh" size={17} />Retry connection</button>
+              <strong>Records are temporarily unavailable</strong>
+              <p>{app.apiMessage || 'The service is currently unavailable.'}</p>
+              <button onClick={app.refreshData} className="enterprise-empty-action"><Icon name="refresh" size={17} />Retry connection</button>
             </>}
-            {app.apiStatus === 'live' && (term ? 'No records match the current search.' : emptyMessage)}
-            {app.apiStatus === 'idle' && 'Connecting…'}
+            {app.apiStatus === 'live' && <>
+              <strong>{term || statusFilter || supplierFilter || articleFilter || categoryFilter || dateFrom || dateTo ? 'No matching records' : `No ${config.title.toLowerCase()} yet`}</strong>
+              <p>{term ? 'No records match the current search.' : emptyMessage}</p>
+              {term || statusFilter || supplierFilter || articleFilter || categoryFilter || dateFrom || dateTo
+                ? <button className="enterprise-empty-action" onClick={() => { setStatusFilter(''); setSupplierFilter(''); setArticleFilter(''); setCategoryFilter(''); setDateFrom(''); setDateTo(''); app.setSearchTerm('') }}><Icon name="filter_alt_off" size={17} />Clear filters</button>
+                : config.editable && canAdd
+                  ? <button className="enterprise-empty-action" onClick={() => app.openCreate()}><Icon name="add" size={17} />{config.add}</button>
+                  : <button className="enterprise-empty-action" onClick={app.refreshData}><Icon name="refresh" size={17} />Refresh records</button>}
+            </>}
+            {app.apiStatus === 'idle' && <><strong>Connecting</strong><p>Preparing your authorised workspace…</p></>}
           </div>
         )}
         <div className="list-footer" style={{ minHeight: 48, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 18px', background: 'var(--surface-2)', color: 'var(--text-muted)', fontSize: 12 }}>

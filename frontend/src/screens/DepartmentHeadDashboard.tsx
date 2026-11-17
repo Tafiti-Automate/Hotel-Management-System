@@ -65,7 +65,7 @@ export default function DepartmentHeadDashboard() {
                 <Icon name="chevron_right" size={16} />
               </button>
             ))}
-            {!recent.length && <div className="hod-dashboard-empty"><Icon name="inbox" size={24} /><strong>No requisitions yet</strong><span>Create your first Department requisition when an Article is needed.</span></div>}
+            {!recent.length && <div className="hod-dashboard-empty"><Icon name="inbox" size={24} /><strong>No requisitions yet</strong><span>Create your first Department requisition when an Article is needed.</span><button type="button" className="erp-primary" onClick={() => app.navTo('workflow-stores', 'Department requisitions')}><Icon name="add" size={16} color="#fff" />New requisition</button></div>}
           </div>
         </section>
 

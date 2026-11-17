@@ -1,5 +1,11 @@
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
+import '@fontsource/inter/400.css'
+import '@fontsource/inter/500.css'
+import '@fontsource/inter/600.css'
+import '@fontsource/inter/700.css'
+import '@fontsource/jetbrains-mono/400.css'
+import '@fontsource/jetbrains-mono/600.css'
 import '../src/tailwind.css'
 import '../src/index.css'
 import '../src/enterprise.css'
@@ -19,6 +25,8 @@ import '../src/ui-v3.css'
 import '../src/ui-v3-runtime-fixes.css'
 /* The approved corporate shell is the final visual override. */
 import '../src/approved-hotel-gui.css'
+/* Mandatory Enterprise Hospitality Precision design system. */
+import '../src/hospitality-precision.css'
 
 export const metadata: Metadata = {
   title: 'Hotel ERP',

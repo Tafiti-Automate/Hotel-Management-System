@@ -146,6 +146,7 @@ export interface StatusPresentation {
 
 const STATUS_PRESENTATION: Record<string, StatusPresentation> = {
   draft: { label: 'Draft', tone: 'neutral' },
+  requested: { label: 'Requested', tone: 'warn' },
   submitted: { label: 'Submitted', tone: 'info' },
   pending: { label: 'Pending', tone: 'warn' },
   pending_department_approval: { label: 'Pending Department Approval', tone: 'warn' },
@@ -153,6 +154,7 @@ const STATUS_PRESENTATION: Record<string, StatusPresentation> = {
   awaiting_procurement: { label: 'Awaiting Procurement', tone: 'warn' },
   partially_issued: { label: 'Partially Issued', tone: 'warn' },
   partially_received: { label: 'Partially Received', tone: 'warn' },
+  in_transit: { label: 'In Transit', tone: 'info' },
   partially_paid: { label: 'Partially Paid', tone: 'warn' },
   approved: { label: 'Approved', tone: 'good' },
   accepted: { label: 'Accepted', tone: 'good' },
@@ -161,11 +163,13 @@ const STATUS_PRESENTATION: Record<string, StatusPresentation> = {
   paid: { label: 'Paid', tone: 'good' },
   issued: { label: 'Issued', tone: 'info' },
   completed: { label: 'Completed', tone: 'good' },
+  booked: { label: 'Booked', tone: 'good' },
   active: { label: 'Active', tone: 'good' },
   rejected: { label: 'Rejected', tone: 'bad' },
   cancelled: { label: 'Cancelled', tone: 'bad' },
   inactive: { label: 'Inactive', tone: 'bad' },
   exception: { label: 'Exception', tone: 'bad' },
+  variance_alert: { label: 'Variance Alert', tone: 'bad' },
   low: { label: 'Low', tone: 'warn' },
   critical: { label: 'Critical', tone: 'bad' },
 }
@@ -186,19 +190,23 @@ export function statusPresentation(value: string): StatusPresentation {
 export function chipStyleFor(value: string): React.CSSProperties {
   const { tone } = statusPresentation(value)
   const tones = {
-    good: ['var(--good)', 'var(--good-soft)'],
-    warn: ['var(--warn)', 'var(--warn-soft)'],
-    bad: ['var(--bad)', 'var(--bad-soft)'],
-    info: ['var(--accent)', 'var(--accent-soft)'],
-    neutral: ['var(--text-muted)', 'var(--surface-2)'],
+    good: ['var(--good)', 'var(--good-soft)', 'rgba(6, 95, 70, .22)'],
+    warn: ['var(--warn)', 'var(--warn-soft)', 'rgba(146, 64, 14, .22)'],
+    bad: ['var(--bad)', 'var(--bad-soft)', 'rgba(159, 18, 57, .22)'],
+    info: ['#075985', '#E0F2FE', 'rgba(7, 89, 133, .22)'],
+    neutral: ['var(--text-muted)', 'var(--surface-2)', 'var(--border)'],
   } as const
-  const [color, background] = tones[tone]
+  const [color, background, borderColor] = tones[tone]
   return {
-    display: 'inline-block',
-    fontSize: 12,
-    fontWeight: 650,
-    padding: '3px 10px',
-    borderRadius: 20,
+    display: 'inline-flex',
+    alignItems: 'center',
+    minHeight: 24,
+    fontSize: 11,
+    fontWeight: 600,
+    lineHeight: 1,
+    padding: '3px 9px',
+    border: `1px solid ${borderColor}`,
+    borderRadius: 999,
     color,
     background,
   }

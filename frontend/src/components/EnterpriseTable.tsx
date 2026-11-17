@@ -18,6 +18,7 @@ export type EnterpriseColumn<T extends { id?: string }> = {
 
 export default function EnterpriseTable<T extends { id?: string }>({
   rows, columns, onOpen, onSelectionChange, emptyText = 'No records match this selection.',
+  emptyTitle = 'No records found', emptyActionLabel, onEmptyAction,
   label, pageSize = 25, actions,
 }: {
   rows: T[]
@@ -25,6 +26,9 @@ export default function EnterpriseTable<T extends { id?: string }>({
   onOpen?: (row: T) => void
   onSelectionChange?: (rows: T[]) => void
   emptyText?: string
+  emptyTitle?: string
+  emptyActionLabel?: string
+  onEmptyAction?: () => void
   label: string
   pageSize?: number
   actions?: ReactNode
@@ -107,7 +111,15 @@ export default function EnterpriseTable<T extends { id?: string }>({
           {flexRender(cell.column.columnDef.cell, cell.getContext())}
         </td>)}
       </tr>)}
-      {!table.getRowModel().rows.length && <tr><td colSpan={definitions.length}><div className="mc-no-records">{emptyText}</div></td></tr>}
+      {!table.getRowModel().rows.length && <tr><td colSpan={definitions.length}><div className="mc-no-records">
+        <span className="mc-empty-icon"><Icon name={search ? 'search_off' : 'inbox'} size={22} /></span>
+        <strong>{search ? 'No matching records' : emptyTitle}</strong>
+        <p>{search ? 'Try another search term or clear the current search.' : emptyText}</p>
+        {(search || onEmptyAction) && <button type="button" className="mc-action mc-action-primary" onClick={() => {
+          if (search) { setSearch(''); setPagination((current) => ({ ...current, pageIndex: 0 })) }
+          else onEmptyAction?.()
+        }}>{search ? 'Clear search' : emptyActionLabel || 'Refresh records'}</button>}
+      </div></td></tr>}
       </tbody>
     </table></div>
     <footer className="mc-table-footer">

@@ -161,16 +161,21 @@ export function StateMessage({ loading, error, empty, children }: {
     <div className="mc-skeleton-row"/><div className="mc-skeleton-row"/><div className="mc-skeleton-row"/>
     <span>Loading current property records…</span>
   </div>
-  if (error) return <div className="mc-alert" role="alert"><Icon name="error" size={18}/>{error}</div>
-  if (empty) return <div className="mc-empty-state">{children || 'No matching records for this property.'}</div>
+  if (error) return <div className="mc-alert" role="alert"><Icon name="error" size={18}/><span>{error}</span></div>
+  if (empty) return <div className="mc-empty-state">
+    <span className="mc-empty-icon"><Icon name="inbox" size={22}/></span>
+    <strong>No records found</strong>
+    <p>{children || 'No matching records for this property.'}</p>
+  </div>
   return <>{children}</>
 }
 
 export function StatusPill({ status }: { status: unknown }) {
   const text = str(status).replace(/_/g, ' ') || 'Unknown'
-  const tone = /posted|approved|open|matched|complete|processed|active/i.test(text) ? 'ok'
-    : /reject|closed|blocked|expired|overdue|exception|unmatched/i.test(text) ? 'bad'
-      : 'warn'
+  const tone = /booked|posted|approved|matched|complete|processed|active/i.test(text) ? 'ok'
+    : /reject|closed|blocked|expired|overdue|exception|unmatched|variance/i.test(text) ? 'bad'
+      : /transit|issued|dispatch|receiv/i.test(text) ? 'info'
+        : 'warn'
   return <span className={'mc-status mc-status-' + tone}>{text}</span>
 }
 
