@@ -451,13 +451,19 @@ class InventoryBalanceViewSet(ReadOnlyModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="reconcile-reservation")
     def reconcile_reservation(self, request, pk=None):
-        if not (
+        # Reservations are operational inventory movements. IT may configure
+        # the application but must never rewrite stock figures.
+        if (
             request.user.is_superuser
-            or request.user.groups.filter(name__in=("System Administrator", "Store Keeper")).exists()
+            or has_role(request.user, "System Administrator", "General Manager")
+            or not has_role(request.user, "Store Keeper")
         ):
-            raise PermissionDenied("Only the Store Keeper can reconcile reserved stock.")
+            raise PermissionDenied("Only an assigned Store Keeper can reconcile reserved stock.")
+        balance = self.get_object()
+        if balance.store_id not in set(assigned_store_ids(request.user)):
+            raise PermissionDenied("You may reconcile reservations only for your assigned store.")
         with transaction.atomic():
-            balance = InventoryBalance.objects.select_for_update().get(pk=self.get_object().pk)
+            balance = InventoryBalance.objects.select_for_update().get(pk=balance.pk)
             lines = StoreRequisitionItem.objects.filter(
                 item=balance.item,
                 requisition__store=balance.store,
