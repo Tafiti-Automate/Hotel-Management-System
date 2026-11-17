@@ -38,9 +38,10 @@ ROLE_SCREEN_COLLECTIONS = {
         "requisitions", "requisition-items", "supplier-item-prices",
         "vendors", "purchase-orders", "supplier-price-quotes", "items", "units",
     ],
-    "Department Head": [
-        "items", "units", "storerequisitions-placeholder",
-    ],
+    "Department Head": ["items", "units", "requisitions", "requisition-items", "store-requisitions"],
+    "Department Supervisor": ["items", "stores", "store-requisitions", "waste-records"],
+    "General Manager": ["purchase-orders", "purchase-order-items", "fiscal-periods"],
+    "System Administrator": ["users", "roles", "items", "categories", "branches"],
 }
 
 
@@ -48,7 +49,7 @@ ROLE_SCREEN_COLLECTIONS = {
 @pytest.mark.parametrize(
     ("role", "endpoint"),
     [(role, endpoint) for role, paths in ROLE_SCREEN_COLLECTIONS.items()
-     for endpoint in paths if endpoint != "storerequisitions-placeholder"],
+     for endpoint in paths],
 )
 def test_authorized_screen_collections_do_not_return_403_or_404(role, endpoint):
     call_command("setup_hotel_roles", verbosity=0)
