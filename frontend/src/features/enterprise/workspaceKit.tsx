@@ -5,7 +5,8 @@ import {
 import { Icon } from '../../components/Icon'
 import RecordDetailDrawer from '../../components/RecordDetailDrawer'
 import {
-  errorMessage, fetchCommandDocument, readBackendRecords, searchGlobalCommands,
+  errorMessage, fetchCommandDocument, fetchDocumentAuditTimeline,
+  readBackendRecords, searchGlobalCommands,
 } from '../../lib/api'
 import { useApp } from '../../state/AppContext'
 
@@ -50,11 +51,29 @@ export function DocumentDrawerProvider({ children }: { children: ReactNode }) {
   const open = useCallback((req: DrawerRequest) => { setRequest(req); setError(''); setRecord(null) }, [])
   useEffect(() => {
     if (!request) return
-    if (request.record) { setRecord(redactSensitive(request.record, user.role)); return }
     let active = true
     setLoading(true)
     void (async () => {
       try {
+        const attachTimeline = async (document: ApiRow, kind?: DrawerRequest['kind']) => {
+          const id = str(document.id)
+          if (!id || !kind || kind === 'article' || !/^[0-9a-f-]{36}$/i.test(id)) {
+            return redactSensitive(document, user.role)
+          }
+          try {
+            const events = await fetchDocumentAuditTimeline(kind, id)
+            return redactSensitive({ ...document, audit_timeline: events }, user.role)
+          } catch {
+            // The user's business record remains readable even where their
+            // role is not entitled to its audit timeline.
+            return redactSensitive({ ...document, audit_timeline: [] }, user.role)
+          }
+        }
+        if (request.record) {
+          const ready = await attachTimeline(request.record, request.kind)
+          if (active) setRecord(ready)
+          return
+        }
         if (request.kind === 'requisition') {
           const [internal, external] = await Promise.all([
             readBackendRecords('store-requisitions').catch(() => []),
@@ -63,7 +82,8 @@ export function DocumentDrawerProvider({ children }: { children: ReactNode }) {
           const found = [...internal, ...external].find(row =>
             [row.id, row.requisition_no, row.requisition_number].some(value => str(value) === request.reference))
           if (!found) throw new Error('This requisition is not visible to your role.')
-          if (active) setRecord(redactSensitive(found, user.role))
+          const ready = await attachTimeline(found, 'requisition')
+          if (active) setRecord(ready)
           return
         }
         const results = await searchGlobalCommands(request.reference)
@@ -71,7 +91,8 @@ export function DocumentDrawerProvider({ children }: { children: ReactNode }) {
           && (!request.kind || value.kind === request.kind))
         if (!hit) throw new Error('No permitted matching document was returned by the server.')
         const doc = await fetchCommandDocument(hit)
-        if (active) setRecord(redactSensitive(doc, user.role))
+        const ready = await attachTimeline(doc, hit.kind)
+        if (active) setRecord(ready)
       } catch (cause) {
         if (active) setError(errorMessage(cause))
       } finally { if (active) setLoading(false) }

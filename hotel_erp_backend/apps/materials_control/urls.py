@@ -5,6 +5,7 @@ from apps.materials_control.views import (
     BudgetOverrideViewSet,
     PeriodContextView,
     GlobalCommandSearchView,
+    DocumentAuditTimelineView,
     CostCenterBudgetViewSet,
     FiscalPeriodViewSet,
     GLExportViewSet,
@@ -38,5 +39,6 @@ router.register("integration-configs", IntegrationConfigViewSet, basename="integ
 urlpatterns = [
     path("period-context/", PeriodContextView.as_view(), name="materials-period-context"),
     path("global-command-search/", GlobalCommandSearchView.as_view(), name="global-command-search"),
+    path("document-audit/<str:kind>/<uuid:document_id>/", DocumentAuditTimelineView.as_view(), name="materials-document-audit"),
 ] + router.urls
 

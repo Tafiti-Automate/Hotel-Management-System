@@ -947,6 +947,27 @@ export async function fetchCommandDocument(hit: GlobalCommandHit): Promise<Row> 
   return response.json() as Promise<Row>
 }
 
+export type DocumentAuditEvent = {
+  action: string
+  actor: string
+  created_at: string
+  sequence: number | null
+  entry_hash: string
+}
+
+export async function fetchDocumentAuditTimeline(
+  kind: 'order' | 'grn' | 'transfer' | 'requisition',
+  documentId: string,
+): Promise<DocumentAuditEvent[]> {
+  const url = endpointUrl('document-audit/' + encodeURIComponent(kind) + '/' + encodeURIComponent(documentId))
+  const response = await fetchWithTimeout(url, {
+    headers: { Accept: 'application/json', ...authHeaders() },
+  })
+  if (!response.ok) throw new Error('Document audit unavailable (' + response.status + ')')
+  const data = await response.json() as { events?: DocumentAuditEvent[] }
+  return Array.isArray(data.events) ? data.events : []
+}
+
 export interface FiscalPeriodContext {
   id?: string
   name: string

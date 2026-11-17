@@ -6,6 +6,7 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError as DjangoValidationError
 from apps.departments.models import Branch
 from django.db.models import Q
+from uuid import UUID
 from django.http import HttpResponse
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -220,6 +221,100 @@ class GlobalCommandSearchView(APIView):
                 "status": "",
             } for article in articles)
         return Response({"results": results})
+
+
+class DocumentAuditTimelineView(APIView):
+    """Read-only, property-scoped evidence for an individually authorized document.
+
+    Never expose the administrator-only audit log collection or raw metadata
+    to operational staff. A document's audit events are deliberately returned
+    only after the underlying record passes the same scoped access checks.
+    """
+
+    permission_classes = [IsAuthenticated]
+    KINDS = {
+        "order": ("procurement.view_purchaseorder", "procurement.PurchaseOrder"),
+        "grn": ("procurement.view_goodsreceiptnote", "procurement.GoodsReceiptNote"),
+        "transfer": ("inventory.view_stocktransfer", "inventory.StockTransfer"),
+        "requisition": ("inventory.view_storerequisition", "inventory.StoreRequisition"),
+    }
+
+    def get(self, request, kind, document_id):
+        from apps.audit_logs.models import AuditLog
+        from apps.procurement.models import PurchaseOrder, GoodsReceiptNote
+        from apps.inventory.models import StockTransfer, StoreRequisition
+
+        kind_info = self.KINDS.get(kind)
+        if kind_info is None:
+            raise ValidationError("Unsupported document type.")
+        try:
+            document_id = UUID(str(document_id))
+        except (ValueError, TypeError):
+            raise ValidationError("Invalid document identifier.")
+
+        user = request.user
+        unrestricted = user.is_superuser or has_role(user, "admin")
+        if not unrestricted and not user.has_perm(kind_info[0]):
+            raise PermissionDenied("This document is not available to your role.")
+
+        if kind == "order":
+            doc = PurchaseOrder.objects.select_related(
+                "requisition__branch"
+            ).filter(pk=document_id).first()
+            branch = doc.requisition.branch if doc and doc.requisition else None
+        elif kind == "grn":
+            doc = GoodsReceiptNote.objects.select_related(
+                "purchase_order__requisition__branch"
+            ).filter(pk=document_id).first()
+            branch = doc.purchase_order.requisition.branch if doc else None
+        elif kind == "transfer":
+            doc = StockTransfer.objects.select_related(
+                "from_store__branch"
+            ).filter(pk=document_id).first()
+            branch = doc.from_store.branch if doc else None
+            if doc and has_role(user, "Store Keeper") and not unrestricted:
+                employee = employee_for(user)
+                if (not employee or not doc.from_store.keeper_assignments.filter(
+                    employee=employee, is_active=True
+                ).exists()):
+                    raise PermissionDenied("This transfer is outside your assigned store.")
+        else:
+            doc = StoreRequisition.objects.select_related(
+                "store__branch"
+            ).filter(pk=document_id).first()
+            branch = doc.store.branch if doc else None
+            if doc and has_role(user, "outlet") and not unrestricted:
+                employee = employee_for(user)
+                if not employee or doc.requested_by_id != employee.pk:
+                    raise PermissionDenied("Only your own department request is visible.")
+
+        if not doc or not branch:
+            raise PermissionDenied("This document is not available in your property.")
+        if not unrestricted:
+            employee = employee_for(user)
+            if not employee or not employee.is_active or not employee.branch_id:
+                raise PermissionDenied("An active assigned property is required.")
+            if has_role(user, "finance", "management") and branch.hotel_id and employee.branch.hotel_id:
+                allowed = branch.hotel_id == employee.branch.hotel_id
+            else:
+                allowed = branch.pk == employee.branch_id
+            if not allowed:
+                raise PermissionDenied("This document is outside your assigned property.")
+
+        events = AuditLog.objects.filter(
+            entity_type=kind_info[1], entity_id=str(document_id)
+        ).select_related("actor").order_by("chain_sequence")[:200]
+        return Response({
+            "document_id": str(document_id),
+            "kind": kind,
+            "events": [{
+                "action": row.action,
+                "actor": str(row.actor) if row.actor_id else "System",
+                "created_at": row.created_at,
+                "sequence": row.chain_sequence,
+                "entry_hash": row.entry_hash,
+            } for row in events],
+        })
 
 
 class PeriodContextView(APIView):
