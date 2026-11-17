@@ -160,6 +160,15 @@ class SupplierInvoiceViewSet(CreatedByModelMixin, ModelViewSet):
         )
         super().perform_create(serializer)
 
+    def perform_update(self, serializer):
+        require_accounts_payable_action(self.request.user)
+        require_finance_property(self.request.user, serializer.instance.purchase_order)
+        require_finance_property(
+            self.request.user,
+            serializer.validated_data.get("purchase_order", serializer.instance.purchase_order),
+        )
+        super().perform_update(serializer)
+
     def get_queryset(self):
         return scope_supplier_finance_records(
             super().get_queryset(), self.request.user, "purchase_order"
@@ -222,6 +231,13 @@ class SupplierInvoiceItemViewSet(CreatedByModelMixin, ModelViewSet):
         )
         super().perform_create(serializer)
 
+    def perform_update(self, serializer):
+        require_accounts_payable_action(self.request.user)
+        require_finance_property(self.request.user, serializer.instance.invoice.purchase_order)
+        invoice = serializer.validated_data.get("invoice", serializer.instance.invoice)
+        require_finance_property(self.request.user, invoice.purchase_order)
+        super().perform_update(serializer)
+
     def get_queryset(self):
         return scope_supplier_finance_records(
             super().get_queryset(), self.request.user, "invoice__purchase_order"
@@ -250,6 +266,13 @@ class SupplierPaymentViewSet(CreatedByModelMixin, ModelViewSet):
             self.request.user, serializer.validated_data["invoice"].purchase_order
         )
         super().perform_create(serializer)
+
+    def perform_update(self, serializer):
+        require_accounts_payable_action(self.request.user)
+        require_finance_property(self.request.user, serializer.instance.invoice.purchase_order)
+        invoice = serializer.validated_data.get("invoice", serializer.instance.invoice)
+        require_finance_property(self.request.user, invoice.purchase_order)
+        super().perform_update(serializer)
 
     def get_queryset(self):
         return scope_supplier_finance_records(
