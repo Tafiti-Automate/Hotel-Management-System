@@ -3,7 +3,7 @@ from django.contrib.auth.models import Group, Permission
 from django.db.models import Count
 from rest_framework import status
 from rest_framework.authtoken.models import Token
-from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
+from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -149,10 +149,21 @@ class LogoutView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+class IsHotelSystemAdministrator(BasePermission):
+    """Role-based IT administration (without granting financial posting rights)."""
+
+    def has_permission(self, request, view):
+        user = request.user
+        return bool(
+            user and user.is_authenticated and user.is_active
+            and (user.is_superuser or user.groups.filter(name="System Administrator").exists())
+        )
+
+
 class UserViewSet(ModelViewSet):
     queryset = User.objects.all().order_by("username")
     serializer_class = UserSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsHotelSystemAdministrator]
     search_fields = ("username", "email", "employee_code", "first_name", "last_name")
     ordering_fields = ("username", "employee_code", "date_joined")
 
@@ -161,7 +172,7 @@ class RoleViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, GenericViewS
     """Operational roles and permissions are fixed; administrators only assign users."""
     queryset = Group.objects.annotate(user_count=Count("user")).order_by("name")
     serializer_class = RoleSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsHotelSystemAdministrator]
     search_fields = ("name",)
     ordering_fields = ("name",)
 
@@ -172,5 +183,5 @@ class PermissionViewSet(ReadOnlyModelViewSet):
         "content_type__app_label", "content_type__model", "codename"
     )
     serializer_class = PermissionSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsHotelSystemAdministrator]
     pagination_class = None
