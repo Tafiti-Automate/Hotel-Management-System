@@ -1,9 +1,12 @@
 import ClientApplication from '../../client-application'
+import { authorizeWorkspace } from '../../../src/lib/serverSession'
 
-/**
- * All recognized workspace paths reuse the existing authenticated application
- * during incremental App Router migration. AppContext validates role access.
- */
-export default function WorkspacePage() {
+export const dynamic = 'force-dynamic'
+
+export default async function WorkspacePage({
+  params,
+}: { params: Promise<{ section: string }> }) {
+  const { section } = await params
+  await authorizeWorkspace('/workspace/' + section)
   return <ClientApplication />
 }

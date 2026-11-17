@@ -316,6 +316,17 @@ export async function fetchPurchaseOrderPreview(id: string): Promise<string> {
   return URL.createObjectURL(await response.blob())
 }
 
+async function registerServerSession(token: string, remember: boolean): Promise<void> {
+  const response = await fetch('/api/session', {
+    method: 'POST', credentials: 'same-origin', cache: 'no-store',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ token, remember }),
+  })
+  if (!response.ok) {
+    throw new Error('The server could not establish a secure hotel session (' + response.status + ').')
+  }
+}
+
 export async function login(username: string, password: string, remember = true): Promise<AuthUser> {
   const response = await fetch(`${apiRoot()}/auth/login/`, {
     method: 'POST',
@@ -335,6 +346,7 @@ export async function login(username: string, password: string, remember = true)
   }
 
   const body = (await response.json()) as { token: string; user: AuthUser }
+  await registerServerSession(body.token, remember)
   setToken(body.token, remember)
   setStoredUser(body.user, remember)
   return body.user
@@ -356,6 +368,10 @@ export async function fetchCurrentUser(): Promise<AuthUser> {
   let remember = true
   try { remember = Boolean(localStorage.getItem(TOKEN_KEY)) } catch { /* storage unavailable */ }
   setStoredUser(user, remember)
+  const token = getToken()
+  if (token) {
+    try { await registerServerSession(token, remember) } catch { /* existing client session remains valid */ }
+  }
   return user
 }
 
@@ -371,6 +387,10 @@ export async function logout(): Promise<void> {
     })
   } catch {
     /* best-effort server-side invalidation */
+  } finally {
+    try {
+      await fetch('/api/session', { method: 'DELETE', credentials: 'same-origin' })
+    } catch { /* cookie expires and Django token is revoked */ }
   }
 }
 

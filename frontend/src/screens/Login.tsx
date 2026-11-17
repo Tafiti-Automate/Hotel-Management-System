@@ -42,6 +42,10 @@ export default function Login() {
       // The assigned property is verified server-side, never selected by trusting
       // an unauthenticated browser-supplied property name.
       await login(username.trim(),password,remember)
+      const destination=new URLSearchParams(window.location.search).get('next')
+      if(destination && destination.startsWith('/') && !destination.startsWith('//') && !destination.includes('\\')) {
+        window.location.assign(destination)
+      }
     }catch(cause){
       const message=cause instanceof Error?cause.message:'Authentication unsuccessful'
       setError(/failed to fetch|networkerror/i.test(message)
