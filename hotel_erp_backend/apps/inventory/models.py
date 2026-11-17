@@ -1098,8 +1098,24 @@ class StockAdjustment(BaseModel):
                         f"{balance.quantity_reserved} reserved for approved department requests. "
                         "Cancel or fulfil those requests before reducing stock."
                     )
+                # On a positive correction, a supplied verified unit cost is
+                # preferred. Otherwise retain the pre-adjustment WAC. Missing
+                # historical costs remain NULL rather than an invented zero.
+                previous_wac = balance.weighted_average_cost
+                unit_cost = item.unit_cost if item.unit_cost is not None else (
+                    previous_wac if previous_wac > Decimal("0") else None
+                )
+                if item.quantity_change > 0 and unit_cost is not None:
+                    balance.weighted_average_cost = (
+                        (
+                            balance.quantity_in_stock * previous_wac
+                            + item.quantity_change * unit_cost
+                        ) / new_quantity
+                    ).quantize(Decimal("0.0001"))
                 balance.quantity_in_stock = new_quantity
-                balance.save(update_fields=["quantity_in_stock", "updated_at"])
+                balance.save(update_fields=[
+                    "quantity_in_stock", "weighted_average_cost", "updated_at"
+                ])
 
                 StockLedger.objects.create(
                     item=item.item,
@@ -1108,6 +1124,10 @@ class StockAdjustment(BaseModel):
                     quantity_out=abs(item.quantity_change) if item.quantity_change < 0 else Decimal("0.00"),
                     reference_type=LedgerReferenceType.STOCK_ADJUSTMENT,
                     reference_id=adjustment.id,
+                    unit_cost_snapshot=unit_cost.quantize(Decimal("0.0001")) if unit_cost is not None else None,
+                    total_cost_snapshot=(abs(item.quantity_change) * unit_cost.quantize(Decimal("0.0001"))).quantize(Decimal("0.0001")) if unit_cost is not None else None,
+                    wac_before=previous_wac if unit_cost is not None else None,
+                    wac_after=balance.weighted_average_cost if unit_cost is not None else None,
                     note=item.reason or adjustment.reason,
                     created_by=adjustment.created_by,
                 )
@@ -2484,6 +2504,10 @@ class StockCount(BaseModel):
                         f"{balance.quantity_reserved} reserved for approved department requests. "
                         "Investigate the variance and release or fulfil the reservations first."
                     )
+                # A physical variance has no new supplier price. Preserve
+                # the store's transaction-time WAC when known.
+                count_wac = balance.weighted_average_cost
+                known_wac = count_wac > Decimal("0")
                 balance.quantity_in_stock = line.physical_quantity
                 balance.save(update_fields=["quantity_in_stock", "updated_at"])
                 StockLedger.objects.create(
@@ -2493,6 +2517,10 @@ class StockCount(BaseModel):
                     quantity_out=abs(variance) if variance < 0 else Decimal("0.00"),
                     reference_type=LedgerReferenceType.STOCK_COUNT,
                     reference_id=stock_count.id,
+                    unit_cost_snapshot=count_wac if known_wac else None,
+                    total_cost_snapshot=(abs(variance) * count_wac).quantize(Decimal("0.0001")) if known_wac else None,
+                    wac_before=count_wac if known_wac else None,
+                    wac_after=count_wac if known_wac else None,
                     note=f"Stock count adjustment {stock_count.count_no}",
                     created_by=stock_count.created_by,
                 )
