@@ -769,7 +769,6 @@
   --accent: #16734D;
   --accent-strong: #105C3E;
   --accent-soft: #EAF7EF;
-  --brand-primary: #16734D;
 }
 /* The existing night palette remains legible; only its accent changes. */
 .mode-dark.screen-app,
@@ -864,4 +863,24 @@
   color: #A6C4AF !important;
   background: #102B22 !important;
   border-bottom-color: #294C3A !important;
+}
+
+
+/* Header contrast: the legacy blue header used white foregrounds. */
+.screen-app:not(.mode-dark):not(.appearance-dark) .tafiti-header-page-context strong,
+.screen-app:not(.mode-dark):not(.appearance-dark) .tafiti-header-user-copy > span,
+.screen-app:not(.mode-dark):not(.appearance-dark) .tafiti-header-user-name {
+  color: #182A22 !important;
+}
+.screen-app:not(.mode-dark):not(.appearance-dark) .tafiti-header-user-copy small,
+.screen-app:not(.mode-dark):not(.appearance-dark) .tafiti-header-theme-trigger,
+.screen-app:not(.mode-dark):not(.appearance-dark) .tafiti-header-notification-trigger,
+.screen-app:not(.mode-dark):not(.appearance-dark) .tafiti-header-clock {
+  color: #62766B !important;
+}
+.screen-app:not(.mode-dark):not(.appearance-dark) .tafiti-header-menu,
+.screen-app:not(.mode-dark):not(.appearance-dark) .tafiti-header-profile-trigger {
+  background: #F8FAF8 !important;
+  border-color: #DFE8E1 !important;
+  color: #182A22 !important;
 }
