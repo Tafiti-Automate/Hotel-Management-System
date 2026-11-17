@@ -833,7 +833,7 @@ class FiscalPeriod(BaseModel):
     def pre_close_checklist(self):
         from apps.inventory.models import StockCount, StockTransfer, StockIssue
         from apps.procurement.models import GoodsReceiptNote
-        from apps.finance.models import SupplierInvoice
+        from apps.finance.models import SupplierInvoice, SupplierCreditNote
 
         open_grns = GoodsReceiptNote.objects.filter(
             purchase_order__requisition__branch=self.branch,
@@ -857,6 +857,11 @@ class FiscalPeriod(BaseModel):
             invoice_date__range=(self.start_date, self.end_date),
             status__in=(SupplierInvoice.STATUS_DRAFT, SupplierInvoice.STATUS_EXCEPTION),
         )
+        unresolved_credits = SupplierCreditNote.objects.filter(
+            invoice__purchase_order__requisition__branch=self.branch,
+            credit_date__range=(self.start_date, self.end_date),
+            status__in=(SupplierCreditNote.STATUS_DRAFT, SupplierCreditNote.STATUS_APPROVED),
+        )
         unresolved_pos = POSImportBatch.objects.filter(
             outlet__branch=self.branch,
             business_date__range=(self.start_date, self.end_date),
@@ -864,6 +869,8 @@ class FiscalPeriod(BaseModel):
         blockers = []
         if unresolved_invoices.exists():
             blockers.append(f"{unresolved_invoices.count()} supplier invoice(s) need matching or cancellation.")
+        if unresolved_credits.exists():
+            blockers.append(f"{unresolved_credits.count()} supplier credit note(s) need posting or resolution.")
         if unresolved_pos.exists():
             blockers.append(f"{unresolved_pos.count()} POS import(s) need depletion.")
         if open_grns.exists():
@@ -882,6 +889,7 @@ class FiscalPeriod(BaseModel):
             "open_issue_transits": transit_issues.count(),
             "open_stock_counts": open_counts.count(),
             "unresolved_invoices": unresolved_invoices.count(),
+            "unresolved_credits": unresolved_credits.count(),
             "unresolved_pos_imports": unresolved_pos.count(),
         }
 
@@ -961,7 +969,7 @@ class GLExport(BaseModel):
 
     @classmethod
     def generate(cls, period, actor):
-        from apps.finance.models import Expense, SupplierInvoice
+        from apps.finance.models import Expense, SupplierInvoice, SupplierCreditNote
 
         if period.status != FiscalPeriod.STATUS_CLOSED:
             raise ValidationError("Close the fiscal period before generating its GL export.")
@@ -1020,6 +1028,30 @@ class GLExport(BaseModel):
                           "Input VAT " + ref, mapping.tax_account, invoice.tax_amount, 0)
             add_entry(invoice.invoice_date, "supplier_invoice", ref, department,
                       description, mapping.credit_account, 0, amount)
+
+        # A posted supplier credit reverses the invoice AP liability and
+        # its original expense/inventory and input tax accounts. Monetary
+        # valuation comes from the approved credit, never current item prices.
+        credits = SupplierCreditNote.objects.filter(
+            invoice__purchase_order__requisition__branch=period.branch,
+            credit_date__range=(period.start_date, period.end_date),
+            status=SupplierCreditNote.STATUS_POSTED,
+        ).select_related("invoice__purchase_order__requisition__department", "supplier_return")
+        for credit in credits:
+            mapping = mapping_for(GLAccountMapping.SOURCE_INVOICE)
+            ref = credit.supplier_return.credit_note_number
+            department = getattr(credit.invoice.purchase_order.requisition.department, "name", "")
+            description = f"Supplier credit note {ref} against invoice {credit.invoice.invoice_number}"
+            add_entry(credit.credit_date, "supplier_credit_note", ref, department,
+                      description, mapping.credit_account, credit.total_amount, 0)
+            if credit.subtotal > 0:
+                add_entry(credit.credit_date, "supplier_credit_note", ref, department,
+                          description, mapping.debit_account, 0, credit.subtotal)
+            if credit.tax_amount > 0:
+                if not mapping.tax_account:
+                    raise ValidationError("Configure an input VAT account for taxable supplier credits.")
+                add_entry(credit.credit_date, "supplier_credit_note", ref, department,
+                          "Input VAT reversal " + ref, mapping.tax_account, 0, credit.tax_amount)
 
         expenses = Expense.objects.filter(
             store__branch=period.branch,
