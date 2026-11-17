@@ -1004,6 +1004,24 @@ class RequisitionItemViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("item__name", "item__sku")
     ordering_fields = ("quantity", "created_at")
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if user_has_role(self.request.user, "Department Head") and not self.request.user.is_superuser:
+            employee = getattr(self.request.user, "employee_profile", None)
+            return queryset.filter(requisition__requester=employee) if employee else queryset.none()
+        return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if user_has_role(user, "Department Head") and not user.is_superuser:
+            employee = getattr(user, "employee_profile", None)
+            requisition = serializer.validated_data.get("requisition")
+            if not employee or not requisition or requisition.requester_id != employee.pk:
+                raise PermissionDenied("Department Heads can only add lines to their own requisitions.")
+            if not requisition.editable:
+                raise PermissionDenied("Submitted requisition lines are locked.")
+        super().perform_create(serializer)
+
     @action(detail=True, methods=["post"], url_path="review-quantity")
     def review_quantity(self, request, pk=None):
         if not user_has_role(request.user, "System Administrator", "Procurement Manager", "Procurement Officer"):
