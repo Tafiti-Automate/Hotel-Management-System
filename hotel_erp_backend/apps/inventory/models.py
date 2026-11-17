@@ -2084,12 +2084,23 @@ class StockIssue(BaseModel):
                 balance.save(update_fields=["quantity_in_stock", "quantity_reserved", "updated_at"])
                 line.requisition_item.quantity_issued += line.base_quantity
                 line.requisition_item.save(update_fields=["quantity_issued", "updated_at"])
+                # Batch-consumption cost is the recorded historical issue
+                # value; never reprice the posting using a future catalogue cost.
+                unit_snapshot = (
+                    issue_cost / line.base_quantity
+                ).quantize(Decimal("0.0001"))
                 StockLedger.objects.create(
                     item=line.item,
                     store=issue.store,
                     quantity_out=line.base_quantity,
                     reference_type=LedgerReferenceType.STOCK_ISSUE,
                     reference_id=issue.id,
+                    unit_cost_snapshot=unit_snapshot,
+                    total_cost_snapshot=(line.base_quantity * unit_snapshot).quantize(
+                        Decimal("0.0001")
+                    ),
+                    wac_before=balance.weighted_average_cost,
+                    wac_after=balance.weighted_average_cost,
                     note=f"Stock issue {issue.issue_no} for {issue.requisition.requisition_no}",
                     created_by=issue.created_by,
                 )
