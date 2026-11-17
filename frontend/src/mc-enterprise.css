@@ -204,3 +204,82 @@
 .mc-menu-chart{width:100%;max-width:900px;margin:10px auto;padding:6px 20px}
 .mc-menu-chart svg{width:100%;height:auto;max-height:450px}
 .mc-menu-chart circle{cursor:help}
+
+
+/* Tafiti School-inspired hotel sign-in: isolated from the enterprise workspace. */
+.tafiti-login-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  display: grid;
+  place-items: center;
+  padding: 32px 16px;
+  background: #f1f5f9;
+  color: #0f172a;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.tafiti-login-page *, .tafiti-login-page *::before, .tafiti-login-page *::after { box-sizing: border-box; }
+.tafiti-login-stack { width: 100%; max-width: 420px; display: grid; gap: 16px; }
+.tafiti-login-brand-card, .tafiti-login-form-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .045);
+}
+.tafiti-login-brand-card { padding: 24px 20px; text-align: center; }
+.tafiti-login-brand-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 54px; height: 54px; margin-bottom: 11px;
+  border-radius: 13px; background: #e8f5ef; color: #16734d;
+}
+.tafiti-login-brand-card h1 { margin: 0; font-size: 24px; font-weight: 800; line-height: 1.3; letter-spacing: -.035em; color: #0f172a; }
+.tafiti-login-brand-card p { margin: 5px 0 0; font-size: 13px; font-weight: 500; line-height: 1.5; color: #64748b; }
+.tafiti-login-form-card { padding: 28px; }
+.tafiti-login-form { display: grid; gap: 19px; }
+.tafiti-login-field { min-width: 0; }
+.tafiti-login-field > label { display: block; margin: 0 0 8px; color: #334155; font-size: 13px; font-weight: 700; }
+.tafiti-login-field input:not([type="checkbox"]) {
+  width: 100%; height: 44px; margin: 0; padding: 0 13px;
+  border: 1px solid #cbd5e1; border-radius: 9px;
+  outline: none; background: #fff; color: #0f172a;
+  font: inherit; font-size: 14px; box-shadow: none;
+}
+.tafiti-login-field input::placeholder { color: #94a3b8; opacity: 1; }
+.tafiti-login-field input:focus-visible { border-color: #16734d; outline: 3px solid #d1fae5; outline-offset: 0; }
+.tafiti-login-password-wrap { position: relative; }
+.tafiti-login-password-wrap input { padding-right: 68px !important; }
+.tafiti-login-password-toggle {
+  position: absolute; top: 50%; right: 7px; transform: translateY(-50%);
+  min-height: 32px; padding: 0 9px;
+  border: 0; border-radius: 7px; background: transparent;
+  color: #475569; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+}
+.tafiti-login-password-toggle:hover { background: #f1f5f9; }
+.tafiti-login-password-toggle:focus-visible,
+.tafiti-login-submit:focus-visible { outline: 3px solid #a7f3d0; outline-offset: 2px; }
+.tafiti-login-remember { display: flex; align-items: center; gap: 9px; color: #475569; font-size: 13px; cursor: pointer; }
+.tafiti-login-remember input { width: 16px; height: 16px; margin: 0; accent-color: #16734d; }
+.tafiti-login-submit {
+  display: block; width: 100%; min-height: 44px;
+  border: 1px solid #16734d; border-radius: 9px;
+  background: #16734d; color: white; font: inherit; font-size: 14px;
+  font-weight: 750; cursor: pointer; transition: background .15s ease;
+}
+.tafiti-login-submit:hover:not(:disabled) { background: #105c3e; }
+.tafiti-login-submit:disabled, .tafiti-login-password-toggle:disabled { opacity: .6; cursor: not-allowed; }
+.tafiti-login-error, .tafiti-login-notice {
+  margin-bottom: 17px; padding: 11px 12px;
+  border: 1px solid #fecaca; border-radius: 8px;
+  background: #fef2f2; color: #991b1b; font-size: 12px; line-height: 1.5;
+}
+.tafiti-login-notice { border-color: #bfdbfe; background: #eff6ff; color: #1e40af; }
+.tafiti-login-caps { margin: 7px 0 0; font-size: 12px; color: #a16207; }
+.tafiti-login-credit { margin: 0; text-align: center; color: #94a3b8; font-size: 12px; }
+@media (max-width: 480px) {
+  .tafiti-login-page { padding: 20px 14px; }
+  .tafiti-login-brand-card { padding: 22px 16px; }
+  .tafiti-login-form-card { padding: 23px 20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tafiti-login-submit { transition: none; }
+}
