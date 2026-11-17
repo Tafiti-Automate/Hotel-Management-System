@@ -1,7 +1,7 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
@@ -31,6 +31,21 @@ from apps.finance.serializers import (
     SupplierPaymentSerializer,
 )
 from core.mixins.viewsets import CreatedByModelMixin
+
+
+def require_accounts_payable_action(user):
+    """Financial controls: only active Accounts Payable staff run invoice/payment actions.
+
+    Django model permissions still govern ordinary record access and changes.
+    IT administrators and superusers must not become payment operators.
+    """
+    if (
+        not user.is_authenticated or not user.is_active
+        or user.is_superuser
+        or user.groups.filter(name="System Administrator").exists()
+        or not user.groups.filter(name="Accounts Payable Clerk").exists()
+    ):
+        raise PermissionDenied("Only Accounts Payable staff may process supplier invoices and payments.")
 
 
 class PaymentMethodViewSet(CreatedByModelMixin, ModelViewSet):
@@ -110,6 +125,7 @@ class SupplierInvoiceViewSet(CreatedByModelMixin, ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="match")
     def match_invoice(self, request, pk=None):
+        require_accounts_payable_action(request.user)
         with transaction.atomic():
             invoice = SupplierInvoice.objects.select_for_update().get(
                 pk=self.get_object().pk
@@ -120,6 +136,7 @@ class SupplierInvoiceViewSet(CreatedByModelMixin, ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="approve-for-payment")
     def approve_for_payment(self, request, pk=None):
+        require_accounts_payable_action(request.user)
         invoice = self.get_object()
         try:
             invoice.approve_for_payment(approved_by=request.user)
@@ -172,6 +189,7 @@ class SupplierPaymentViewSet(CreatedByModelMixin, ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def post(self, request, pk=None):
+        require_accounts_payable_action(request.user)
         payment = self.get_object()
         try:
             payment.post(posted_by=request.user)
