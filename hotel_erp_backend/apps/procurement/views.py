@@ -2216,9 +2216,58 @@ class SupplierReturnViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("return_no", "supplier__name", "goods_receipt__purchase_order__po_number", "reason")
     ordering_fields = ("return_no", "return_date", "status", "created_at")
 
+    def _require_receiving_owner(self, supplier_return=None):
+        user = self.request.user
+        employee = getattr(user, "employee_profile", None)
+        if (
+            user.is_superuser
+            or not user_has_role(user, "Receiving Clerk")
+            or user_has_role(user, "System Administrator")
+            or not employee or not employee.is_active or not employee.branch_id
+        ):
+            raise PermissionDenied("Only an active Receiving Clerk may process supplier returns.")
+        if supplier_return is not None and (
+            supplier_return.goods_receipt.received_by_id != employee.pk
+            or supplier_return.store.branch_id != employee.branch_id
+        ):
+            raise PermissionDenied("Return belongs to a different receiving assignment.")
+        return employee
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        employee = getattr(user, "employee_profile", None)
+        if user.is_superuser or user_has_role(user, "System Administrator"):
+            return queryset
+        if not employee or not employee.is_active or not employee.branch_id:
+            return queryset.none()
+        if user_has_role(user, "Receiving Clerk"):
+            return queryset.filter(
+                goods_receipt__received_by=employee,
+                store__branch_id=employee.branch_id,
+            )
+        branch = employee.branch
+        if getattr(branch, "hotel_id", None):
+            return queryset.filter(store__branch__hotel_id=branch.hotel_id)
+        return queryset.filter(store__branch_id=branch.pk)
+
+    def perform_create(self, serializer):
+        employee = self._require_receiving_owner()
+        receipt = serializer.validated_data["goods_receipt"]
+        store = serializer.validated_data["store"]
+        if (
+            receipt.received_by_id != employee.pk
+            or store.branch_id != employee.branch_id
+            or receipt.purchase_order.store_id != store.pk
+        ):
+            raise PermissionDenied("The return must match your received GRN and its store.")
+        serializer.save(returned_by=employee, created_by=self.request.user)
+
+
     @action(detail=True, methods=["post"])
     def apply(self, request, pk=None):
         supplier_return = self.get_object()
+        self._require_receiving_owner(supplier_return)
         try:
             supplier_return.apply_inventory_changes(
                 dispatched_by=getattr(request.user, "employee_profile", None)
@@ -2230,6 +2279,7 @@ class SupplierReturnViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"])
     def acknowledge(self, request, pk=None):
         supplier_return = self.get_object()
+        self._require_receiving_owner(supplier_return)
         try:
             supplier_return.acknowledge(
                 acknowledged_by=str(request.data.get("acknowledged_by", "")).strip(),
