@@ -31,7 +31,7 @@ const roleNavigation: Record<string, NavGroup[]> = {
   'department head': [
     { heading: 'Department', items: [
       { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
-      { route: 'approval-inbox', label: 'Approval inbox', icon: 'approval' },
+      { route: 'workflow-stores', label: 'Department request approvals', icon: 'approval' },
       { route: 'waste-control', label: 'Waste review', icon: 'delete_sweep' },
       { route: 'purchasing-pr-new', label: 'New purchase requisition', icon: 'add_shopping_cart' },
       { route: 'recipes-production', label: 'Recipe costing', icon: 'menu_book' },
