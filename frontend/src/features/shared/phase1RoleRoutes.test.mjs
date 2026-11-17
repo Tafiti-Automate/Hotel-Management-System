@@ -25,6 +25,7 @@ test('all ten hotel roles reach their assigned operational workspaces', () => {
 test('role navigation rejects routes that use disallowed data or posting capabilities', () => {
   const forbidden = [
     ['Department Supervisor','stocktake-variance'],
+    ['Department Supervisor','stocktake-sheet'],
     ['Department Head','approval-inbox'],
     ['Department Head','purchasing-quotes'],
     ['Store Keeper','finance-period-close'],
