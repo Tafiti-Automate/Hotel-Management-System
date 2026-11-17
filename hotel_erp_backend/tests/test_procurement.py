@@ -440,6 +440,11 @@ def test_requisition_readiness_explains_missing_prerequisites():
 @pytest.mark.django_db
 def test_procurement_lpo_workspace_includes_approved_requisition_before_order_exists():
     employee, department, supplier, item = create_procurement_context()
+    # Authorized Purchasing operators must belong to a property; an unassigned
+    # employee must no longer see the global requisition queue.
+    employee.branch = Branch.objects.create(name="procurement_lpo_workspace_includes_a")
+    employee.save(update_fields=["branch"])
+
     procurement_group, _ = Group.objects.get_or_create(name="Procurement Manager")
     procurement_group.permissions.add(
         Permission.objects.get(codename="view_purchaseorder")
@@ -2158,6 +2163,11 @@ def test_role_approval_inbox_advances_from_purchasing_to_finance_to_general_mana
 @pytest.mark.django_db
 def test_supplier_pack_quote_keeps_lpo_quantity_in_article_base_uom():
     employee, department, supplier, _ = create_procurement_context()
+    # Authorized Purchasing operators must belong to a property; an unassigned
+    # employee must no longer see the global requisition queue.
+    employee.branch = Branch.objects.create(name="supplier_pack_quote_keeps_lpo_quanti")
+    employee.save(update_fields=["branch"])
+
     procurement_group, _ = Group.objects.get_or_create(name="Procurement Manager")
     employee.user.groups.add(procurement_group)
 
