@@ -150,6 +150,28 @@ RECEIVING_ROLES = ("Receiving Clerk",)
 LPO_APPROVAL_ROLES = ("Procurement Manager", "Financial Manager", "General Manager")
 
 
+def scope_grn_evidence_for_user(queryset, user, *, branch_path, receiving_owner_path):
+    """Limit GRN, receipt line and inspection evidence to the staff property.
+
+    Receiving staff only see documents they opened. Commercial control staff
+    can review their hotel (or their branch when it has no hotel parent).
+    The IT role may inspect evidence but cannot mutate receiving documents.
+    """
+    if user.is_superuser or user_has_role(user, "System Administrator"):
+        return queryset
+    employee = getattr(user, "employee_profile", None)
+    if not employee or not employee.is_active or not employee.branch_id:
+        return queryset.none()
+    scope = (
+        {f"{branch_path}__hotel_id": employee.branch.hotel_id}
+        if employee.branch.hotel_id else {f"{branch_path}_id": employee.branch_id}
+    )
+    queryset = queryset.filter(**scope)
+    if user_has_role(user, *RECEIVING_ROLES):
+        queryset = queryset.filter(**{receiving_owner_path: employee})
+    return queryset
+
+
 def requested_lpo_approval_role(request):
     """Resolve the role queue explicitly when an account carries multiple groups.
 
@@ -1996,6 +2018,7 @@ class GoodsReceiptNoteViewSet(CreatedByModelMixin, ModelViewSet):
     ordering_fields = ("received_date", "created_at")
 
     def perform_destroy(self, instance):
+        self._require_receiving_clerk(self.request, instance)
         if instance.status != GoodsReceiptStatus.DRAFT:
             raise ValidationError(
                 "A received or posted GRN cannot be deleted. Use cancellation or a controlled reversal."
@@ -2003,30 +2026,43 @@ class GoodsReceiptNoteViewSet(CreatedByModelMixin, ModelViewSet):
         instance.delete()
 
     def get_queryset(self):
-        queryset = super().get_queryset()
-        user = self.request.user
-        employee = getattr(user, "employee_profile", None)
-        if user_has_role(user, *RECEIVING_ROLES) and not user_has_role(
-            user, *COMMERCIAL_CONTROL_ROLES
-        ):
-            return queryset.filter(received_by=employee)
-        return queryset
+        return scope_grn_evidence_for_user(
+            super().get_queryset(), self.request.user,
+            branch_path="purchase_order__requisition__branch",
+            receiving_owner_path="received_by",
+        )
 
-    def _require_receiving_clerk(self, request, receipt=None):
-        if user_has_role(request.user, "System Administrator"):
+    def _require_receiving_clerk(self, request, receipt=None, purchase_order=None):
+        user = request.user
+        if user.is_superuser or user_has_role(user, "System Administrator"):
             raise PermissionDenied("System Administrators cannot create, post, or cancel GRNs.")
-        employee = getattr(request.user, "employee_profile", None)
-        if not user_has_role(request.user, *RECEIVING_ROLES):
-            raise PermissionDenied("Only the Receiving Clerk can create or post a GRN.")
-        if receipt and receipt.received_by_id != getattr(employee, "id", None):
-            raise PermissionDenied("Only the Receiving Clerk who opened this GRN can change it.")
+        employee = getattr(user, "employee_profile", None)
+        if (
+            not user_has_role(user, *RECEIVING_ROLES)
+            or not employee or not employee.is_active or not employee.branch_id
+        ):
+            raise PermissionDenied("Only an active, assigned Receiving Clerk can create or post a GRN.")
+        if receipt and (
+            receipt.received_by_id != employee.pk
+            or receipt.purchase_order.requisition.branch_id != employee.branch_id
+        ):
+            raise PermissionDenied("Only the Receiving Clerk who opened this property's GRN can change it.")
+        if purchase_order and purchase_order.requisition.branch_id != employee.branch_id:
+            raise PermissionDenied("The selected LPO belongs to another property.")
 
     def perform_create(self, serializer):
-        self._require_receiving_clerk(self.request)
+        purchase_order = serializer.validated_data["purchase_order"]
+        self._require_receiving_clerk(self.request, purchase_order=purchase_order)
         employee = getattr(self.request.user, "employee_profile", None)
-        if not employee:
-            raise ValidationError("Your account is not connected to an employee profile.")
         serializer.save(received_by=employee, created_by=self.request.user)
+
+    def perform_update(self, serializer):
+        receipt = serializer.instance
+        self._require_receiving_clerk(self.request, receipt)
+        candidate_order = serializer.validated_data.get("purchase_order")
+        if candidate_order and candidate_order.pk != receipt.purchase_order_id:
+            raise ValidationError("A GRN cannot be reassigned to a different purchase order.")
+        serializer.save()
 
     @action(detail=True, methods=["get"])
     def readiness(self, request, pk=None):
@@ -2071,14 +2107,11 @@ class GoodsReceiptItemViewSet(CreatedByModelMixin, ModelViewSet):
     ordering_fields = ("quantity_received", "base_quantity", "unit_cost", "created_at")
 
     def get_queryset(self):
-        queryset = super().get_queryset()
-        user = self.request.user
-        employee = getattr(user, "employee_profile", None)
-        if user_has_role(user, *RECEIVING_ROLES) and not user_has_role(
-            user, *COMMERCIAL_CONTROL_ROLES
-        ):
-            return queryset.filter(goods_receipt__received_by=employee)
-        return queryset
+        return scope_grn_evidence_for_user(
+            super().get_queryset(), self.request.user,
+            branch_path="goods_receipt__purchase_order__requisition__branch",
+            receiving_owner_path="goods_receipt__received_by",
+        )
 
     def _require_receiving_clerk(self, receipt):
         user = self.request.user
@@ -2128,15 +2161,11 @@ class GoodsInspectionViewSet(CreatedByModelMixin, ModelViewSet):
     ordering_fields = ("inspection_date", "status", "created_at")
 
     def get_queryset(self):
-        queryset = super().get_queryset()
-        user = self.request.user
-        if user_has_role(user, *RECEIVING_ROLES) and not user_has_role(
-            user, *COMMERCIAL_CONTROL_ROLES
-        ):
-            return queryset.filter(
-                goods_receipt__received_by=getattr(user, "employee_profile", None)
-            )
-        return queryset
+        return scope_grn_evidence_for_user(
+            super().get_queryset(), self.request.user,
+            branch_path="goods_receipt__purchase_order__requisition__branch",
+            receiving_owner_path="goods_receipt__received_by",
+        )
 
     def _require_receiving_clerk(self, receipt):
         user = self.request.user
