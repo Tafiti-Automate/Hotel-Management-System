@@ -137,15 +137,15 @@ function readAppearance(): { mode: Mode; accentName: AccentName; density: Densit
   try {
     const saved = JSON.parse(localStorage.getItem(APPEARANCE_KEY) || '{}')
     return {
-      mode: saved.mode === 'light' ? 'light' : 'dark',
-      accentName: saved.accentName || 'Blue',
+      mode: saved.mode === 'dark' ? 'dark' : 'light',
+      accentName: saved.accentName || 'Emerald',
       density: saved.density === 'Compact' ? 'Compact' : 'Airy',
     }
   } catch {
     // A light operational canvas is the safest default for long hotel shifts,
     // printed-reference work and dense inventory tables. Existing users keep
     // their saved preference and can still switch to dark appearance.
-    return { mode: 'light', accentName: 'Blue', density: 'Airy' }
+    return { mode: 'light', accentName: 'Emerald', density: 'Airy' }
   }
 }
 
