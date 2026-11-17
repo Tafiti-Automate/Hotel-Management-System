@@ -344,6 +344,8 @@ export function EnterprisePurchasingWorkbench() {
 }
 
 export function EnterpriseInvoiceMatching() {
+  const {user}=useApp()
+  const canProcessInvoice = user.role.trim().toLowerCase() === 'accounts payable clerk' && !user.isSuperuser
   const {data,loading,error,reload}=useBackendRows(FINANCE)
   const {busy,error:mutationError,run}=useOperation(reload)
   const [id,setId]=useState('')
@@ -401,7 +403,7 @@ export function EnterpriseInvoiceMatching() {
               <footer>Invoiced base units <strong>{amount(invoiceQty)}</strong></footer></div>
           </div>
           {str(invoice.match_notes)&&<div className="mc-alert">{str(invoice.match_notes)}</div>}
-          <div className="mc-decision-bar">
+          {canProcessInvoice ? <div className="mc-decision-bar">
             <ConfirmTransaction title="Run 3-way match?" description="Django compares invoice quantities, GRN receipts, pricing and supplier credits before recording a match decision."
               confirmLabel="Run matching" className={btn} disabled={busy||!['draft','exception'].includes(str(invoice.status))} busy={busy} onConfirm={match}>
               <Icon name="fact_check" size={16}/> Validate match
@@ -410,7 +412,7 @@ export function EnterpriseInvoiceMatching() {
               confirmLabel="Approve for payment" className={affirmative} disabled={busy||str(invoice.status)!=='matched'} busy={busy} onConfirm={approve}>
               <Icon name="verified" size={16}/> Approve for payment
             </ConfirmTransaction>
-          </div>
+          </div> : <div className="mc-alert mc-muted">Read-only financial review. Accounts Payable handles matching and payment approval under its assigned permissions.</div>}
         </>}
       </section>
     </div>}
