@@ -1,92 +1,105 @@
-import { useEffect, useId, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useId, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { Icon } from '../components/Icon'
 import { useApp } from '../state/AppContext'
 
-type Language='English'|'French'
-const strings={
-  English:{user:'User Name',password:'Password',database:'Database / Property',language:'Language',
-    ok:'OK',cancel:'Cancel',title:'Materials Control',prompt:'Enter your staff credentials to open your authorised property.',
-    invalid:'Enter both your user name and password.',caps:'Caps Lock is on'},
-  French:{user:'Identifiant',password:'Mot de passe',database:'Base de données / Établissement',language:'Langue',
-    ok:'Valider',cancel:'Annuler',title:'Contrôle des matières',prompt:'Saisissez vos identifiants pour accéder à votre établissement.',
-    invalid:'Saisissez votre identifiant et votre mot de passe.',caps:'Verr. Maj. activé'},
-}
-
+/**
+ * Tafiti School-inspired sign-in.
+ * Visual presentation only: credentials, trusted Django authentication,
+ * remembered session, role/property access and safe next redirect stay intact.
+ */
 export default function Login() {
-  const { login, authMessage, data }=useApp()
-  const userId=useId(),passId=useId()
-  const [username,setUsername]=useState('')
-  const [password,setPassword]=useState('')
-  const [property,setProperty]=useState('assigned')
-  const [language,setLanguage]=useState<Language>('English')
-  const [caps,setCaps]=useState(false)
-  const [remember,setRemember]=useState(true)
-  const [busy,setBusy]=useState(false)
-  const [error,setError]=useState('')
-  const t=strings[language]
-  useEffect(()=>{
-    const onKey=(e:globalThis.KeyboardEvent)=>{
-      if(e.key==='Escape'&&document.activeElement instanceof HTMLElement){
-        setUsername('');setPassword('');setError('')
-      }
-    }
-    window.addEventListener('keydown',onKey)
-    return ()=>window.removeEventListener('keydown',onKey)
-  },[])
-  const submit=async(event:FormEvent<HTMLFormElement>)=>{
+  const { login, authMessage } = useApp()
+  const userId = useId()
+  const passId = useId()
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [remember, setRemember] = useState(true)
+  const [showPassword, setShowPassword] = useState(false)
+  const [caps, setCaps] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if(busy)return
-    if(!username.trim()||!password){setError(t.invalid);return}
-    setBusy(true);setError('')
-    try{
-      // The assigned property is verified server-side, never selected by trusting
-      // an unauthenticated browser-supplied property name.
-      await login(username.trim(),password,remember)
-      const destination=new URLSearchParams(window.location.search).get('next')
-      if(destination && destination.startsWith('/') && !destination.startsWith('//') && !destination.includes('\\')) {
+    if (busy) return
+    if (!username.trim() || !password) {
+      setError('Enter both your username and password.')
+      return
+    }
+    setBusy(true)
+    setError('')
+    try {
+      // Property and role are assigned and verified by Django after login.
+      await login(username.trim(), password, remember)
+      const destination = new URLSearchParams(window.location.search).get('next')
+      if (destination && destination.startsWith('/') && !destination.startsWith('//') && !destination.includes('\\')) {
         window.location.assign(destination)
       }
-    }catch(cause){
-      const message=cause instanceof Error?cause.message:'Authentication unsuccessful'
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Authentication unsuccessful'
       setError(/failed to fetch|networkerror/i.test(message)
-        ?'The hotel authentication server is not reachable.':message)
-    }finally{setBusy(false)}
+        ? 'The hotel authentication server is not reachable.'
+        : message)
+    } finally {
+      setBusy(false)
+    }
   }
-  const detectCaps=(event:KeyboardEvent<HTMLInputElement>)=>setCaps(event.getModifierState('CapsLock'))
-  return <main className="mc-login-backdrop">
-    <section className="mc-login-window" aria-label="Hotel Materials Control sign-on">
-      <div className="mc-login-topline"><span className="mc-login-icon"><Icon name="inventory_2" size={20}/></span>
-        <div><strong>HOSPITALITY MATERIALS CONTROL</strong><small>Hotel ERP · Enterprise staff sign-on</small></div>
-        <span className="mc-login-version">MC / Web</span></div>
-      <div className="mc-login-heading">
-        <h1>{t.title}</h1><p>{t.prompt}</p>
-      </div>
-      {authMessage&&<div className="mc-login-message">{authMessage}</div>}
-      {error&&<div className="mc-login-error" role="alert">{error}</div>}
-      <form onSubmit={submit} className="mc-login-form">
-        <label htmlFor={userId}>{t.user}</label><input id={userId} name="username" autoFocus autoComplete="username"
-          autoCapitalize="none" spellCheck={false} value={username} onChange={e=>setUsername(e.target.value)} disabled={busy}/>
-        <label htmlFor={passId}>{t.password}</label><input id={passId} name="password" type="password"
-          autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)}
-          onKeyDown={detectCaps} onKeyUp={detectCaps} disabled={busy}/>
-        <label htmlFor="mc-property-select">{t.database}</label>
-        <select id="mc-property-select" value={property} onChange={e=>setProperty(e.target.value)} disabled={busy}>
-          <option value="assigned">AUTO — Authenticated assigned property</option>
-          {data.branches.map(branch=><option value={String(branch.id)} key={String(branch.id)}>{String(branch.name)}</option>)}
-        </select>
-        <label htmlFor="mc-language-select">{t.language}</label>
-        <select id="mc-language-select" value={language} onChange={e=>setLanguage(e.target.value as Language)} disabled={busy}>
-          <option value="English">English</option><option value="French">Français</option>
-        </select>
-        {caps&&<div className="mc-login-caps">{t.caps}</div>}
-        <div className="mc-login-remember"><label><input type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)}/> Keep me signed in on this device</label></div>
-        <div className="mc-login-buttons"><button type="submit" className="mc-login-ok" disabled={busy}>
-          {busy?'Signing in…':t.ok}</button>
-          <button type="button" className="mc-login-cancel" disabled={busy} onClick={()=>{setUsername('');setPassword('');setError('');setProperty('assigned')}}>{t.cancel}</button>
-        </div>
-      </form>
-      <footer className="mc-login-footer"><span><Icon name="lock" size={13}/> Staff-only access · role & property controlled</span><span>© Hotel ERP</span></footer>
-    </section>
-    <div className="mc-login-credit">Materials Control–inspired enterprise interface. Not an Oracle product.</div>
+
+  const detectCaps = (event: KeyboardEvent<HTMLInputElement>) => {
+    setCaps(event.getModifierState('CapsLock'))
+  }
+
+  return <main className="tafiti-login-page">
+    <div className="tafiti-login-stack">
+      <header className="tafiti-login-brand-card">
+        <span className="tafiti-login-brand-icon" aria-hidden="true"><Icon name="hotel" size={25} /></span>
+        <h1>Sign in</h1>
+        <p>Hotel Inventory &amp; Cost Control</p>
+      </header>
+
+      <section className="tafiti-login-form-card" aria-label="Hotel staff sign in">
+        {authMessage && <div className="tafiti-login-notice" role="status">{authMessage}</div>}
+        {error && <div className="tafiti-login-error" role="alert">{error}</div>}
+
+        <form onSubmit={submit} className="tafiti-login-form" noValidate>
+          <div className="tafiti-login-field">
+            <label htmlFor={userId}>Username</label>
+            <input id={userId} name="username" autoFocus autoComplete="username"
+              autoCapitalize="none" spellCheck={false} placeholder="Enter your username"
+              value={username} onChange={event => setUsername(event.target.value)}
+              disabled={busy} required />
+          </div>
+
+          <div className="tafiti-login-field">
+            <label htmlFor={passId}>Password</label>
+            <div className="tafiti-login-password-wrap">
+              <input id={passId} name="password" type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password" placeholder="Enter your password"
+                value={password} onChange={event => setPassword(event.target.value)}
+                onKeyDown={detectCaps} onKeyUp={detectCaps} disabled={busy} required />
+              <button type="button" className="tafiti-login-password-toggle"
+                onClick={() => setShowPassword(value => !value)} disabled={busy}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                aria-pressed={showPassword}>
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            {caps && <p className="tafiti-login-caps">Caps Lock is on</p>}
+          </div>
+
+          <label className="tafiti-login-remember">
+            <input type="checkbox" checked={remember} onChange={event => setRemember(event.target.checked)}
+              disabled={busy} />
+            <span>Remember me</span>
+          </label>
+
+          <button className="tafiti-login-submit" type="submit" disabled={busy}>
+            {busy ? 'Signing in…' : 'Sign in'}
+          </button>
+        </form>
+      </section>
+
+      <p className="tafiti-login-credit">Powered by Tafiti Automate</p>
+    </div>
   </main>
 }
