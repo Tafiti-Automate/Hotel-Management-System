@@ -40,7 +40,7 @@ def test_buyers_propose_cost_control_publishes_vendor_quote_with_discount():
     unit = UnitOfMeasure.objects.create(name="Quotation Kilogram", abbreviation="qkg")
     item = Item.objects.create(
         category=category, name="Quote Coffee", sku="QUOTE-COFFEE",
-        unit="kg", base_unit=unit,
+        unit="kg", base_unit=unit, reorder_level=Decimal("0.00"),
     )
     buyer_api = APIClient()
     buyer_api.force_authenticate(buyer)
