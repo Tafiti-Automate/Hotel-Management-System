@@ -15,7 +15,7 @@ import {
 const APPROVALS = ['approvals','requisitions','requisition-items','cost-center-budgets'] as const
 const LPO_APPROVALS = ['purchase-orders/approval-inbox','purchase-order-items','cost-center-budgets','budget-overrides'] as const
 const BUYER = ['requisitions','requisition-items','supplier-item-prices','suppliers','purchase-orders'] as const
-const QUOTES = ['supplier-item-prices','suppliers','items','units'] as const
+const QUOTES = ['supplier-item-prices','supplier-price-quotes','suppliers','items','units'] as const
 const FINANCE = ['supplier-invoices','supplier-invoice-items','purchase-orders','purchase-order-items','grns','grn-items','supplier-returns'] as const
 const BUDGETS = ['cost-center-budgets','budget-overrides','branches','departments'] as const
 const CLOSE = ['fiscal-periods','gl-exports'] as const
@@ -140,83 +140,138 @@ export function EnterpriseApprovalInbox() {
           </div>
         </>}
       </div>
-    </div>}
-  </WorkspacePage>
-}
-
-export function EnterpriseQuoteMatrix() {
-  const { data, loading, error, reload } = useBackendRows(QUOTES)
-  const { busy, error: mutationError, run } = useOperation(reload)
-  const [selection, setSelection] = useState('')
-  const [draft, setDraft] = useState<Record<string, string>>({})
-  const [creating, setCreating] = useState(false)
-  const prices = data['supplier-item-prices'] || []
-  const row = prices.find(r => str(r.id) === selection)
-  const suppliers = data.suppliers || []
-  const items = data.items || []
-  const units = data.units || []
-  const get = (key: string, fallback = '') => (draft[key] ?? (creating ? '' : str(row?.[key]))) || fallback
-  const set = (key: string, value: string) => setDraft(old => ({ ...old, [key]: value }))
-  const save = async () => {
-    const payload = {
-      supplier: get('supplier'), item: get('item'), unit: get('unit') || null,
-      unit_price: get('unit_price'), discount_percent: get('discount_percent','0'),
-      minimum_order_quantity: get('minimum_order_quantity','1.00'),
-      currency: get('currency','UGX'), quotation_reference: get('quotation_reference'),
-      effective_from: get('effective_from', new Date().toISOString().slice(0,10)),
-      quotation_valid_until: get('quotation_valid_until') || null,
-      is_preferred: get('is_preferred') === 'true', is_active: true,
-    }
-    if (!payload.supplier || !payload.item || !(Number(payload.unit_price) > 0)) return
-    const done = await run(() => creating
-      ? createBackendRecord('supplier-item-prices', payload)
-      : updateBackendRecord('supplier-item-prices', selection, payload), 'Supplier quotation saved')
-    if (done) { setDraft({}); setCreating(false); setSelection('') }
+    </div>export function EnterpriseQuoteMatrix() {
+  const app=useApp()
+  const role=app.user.role.trim().toLowerCase()
+  const buyer=role==='procurement officer'||role==='procurement manager'||role==='purchasing officer'
+  const controller=role==='cost controller'
+  const {data,loading,error,reload}=useBackendRows(QUOTES)
+  const {busy,error:mutationError,run}=useOperation(reload)
+  const [selection,setSelection]=useState('')
+  const [proposalId,setProposalId]=useState('')
+  const [creating,setCreating]=useState(false)
+  const [draft,setDraft]=useState<Record<string,string>>({})
+  const [reviewNote,setReviewNote]=useState('')
+  const prices=data['supplier-item-prices']||[]
+  const proposals=data['supplier-price-quotes']||[]
+  const price=prices.find(row=>str(row.id)===selection)
+  const proposal=proposals.find(row=>str(row.id)===proposalId)
+  const source=proposal||price
+  const get=(key:string,fallback='')=>{
+    const row=source as ApiRow|undefined
+    const mapped=key==='fixed_order_quantity'?'minimum_order_quantity':key==='valid_from'?'effective_from':key==='valid_to'?'quotation_valid_until':key
+    return (draft[key]??(creating?'':str(row?.[key]??row?.[mapped])))||fallback
   }
-  const cols: EnterpriseColumn<ApiRow>[] = [
-    {id:'sku',label:'Article / SKU',value:r=>str(r.item_name || r.item_sku),render:r=><><strong>{str(r.item_name || r.item)}</strong><small>{str(r.item_sku)}</small></>},
-    {id:'supplier',label:'Supplier',value:r=>str(r.supplier_name)},
-    {id:'price',label:'Price / BU',value:r=>dec(r.base_unit_price),render:r=><span className="mc-num">{amount(r.base_unit_price)}</span>,numeric:true},
-    {id:'qty',label:'Fixed order QTY',value:r=>dec(r.minimum_order_quantity),numeric:true},
+  const set=(key:string,value:string)=>setDraft(old=>({...old,[key]:value}))
+  const reset=()=>{setSelection('');setProposalId('');setCreating(false);setDraft({});setReviewNote('')}
+  const save=async()=>{
+    const fields={
+      supplier:get('supplier'),item:get('item'),unit:get('unit')||null,
+      unit_price:get('unit_price'),discount_percent:get('discount_percent','0'),
+      currency:get('currency','UGX'),quotation_reference:get('quotation_reference'),
+      is_preferred:get('is_preferred')==='true',
+    }
+    if(!fields.supplier||!fields.item||!(Number(fields.unit_price)>0)||Number(fields.discount_percent)>=100)return
+    const ok=await run(async()=>{
+      if(buyer){
+        const payload={...fields,fixed_order_quantity:get('fixed_order_quantity','1.00'),
+          valid_from:get('valid_from',new Date().toISOString().slice(0,10)),
+          valid_to:get('valid_to')||null}
+        if(proposal && ['draft','rejected'].includes(str(proposal.status)))
+          await updateBackendRecord('supplier-price-quotes',proposalId,payload)
+        else
+          await createBackendRecord('supplier-price-quotes',payload)
+      }else if(controller){
+        const payload={...fields,minimum_order_quantity:get('fixed_order_quantity','1.00'),
+          effective_from:get('valid_from',new Date().toISOString().slice(0,10)),
+          quotation_valid_until:get('valid_to')||null,is_active:true}
+        if(price) await updateBackendRecord('supplier-item-prices',selection,payload)
+        else await createBackendRecord('supplier-item-prices',payload)
+      }
+    },buyer?'Draft quotation saved for Cost Control':'Approved supplier price updated')
+    if(ok)reset()
+  }
+  const action=async(id:string,verb:'submit'|'approve'|'reject')=>{
+    const ok=await run(()=>runBackendAction('supplier-price-quotes',id,verb,{note:reviewNote}),
+      verb==='submit'?'Quote submitted for Cost Control':verb==='approve'?'Quote published to approved price catalogue':'Quote rejected with note')
+    if(ok)reset()
+  }
+  const priceColumns:EnterpriseColumn<ApiRow>[]=[
+    {id:'item',label:'Article / SKU',value:r=>str(r.item_name||r.item_sku),render:r=><strong>{str(r.item_name||r.item)}</strong>},
+    {id:'supplier',label:'Supplier',value:r=>str(r.supplier_name||r.supplier)},
+    {id:'base',label:'Price / BU',value:r=>dec(r.base_unit_price),render:r=><span className="mc-num">{amount(r.base_unit_price)}</span>,numeric:true},
+    {id:'qty',label:'Fixed QTY',value:r=>dec(r.minimum_order_quantity),numeric:true},
     {id:'discount',label:'Discount %',value:r=>dec(r.discount_percent),numeric:true},
     {id:'currency',label:'Currency',value:r=>str(r.currency)},
     {id:'from',label:'Valid from',value:r=>dateStr(r.effective_from)},
     {id:'to',label:'Valid to',value:r=>dateStr(r.quotation_valid_until)},
     {id:'preferred',label:'Preferred',value:r=>r.is_preferred?'Yes':'No',render:r=><StatusPill status={r.is_preferred?'preferred':'alternative'}/>},
   ]
-  return <WorkspacePage section="Purchasing / Vendor contracts" title="Supplier price quotes" subtitle="Comparable base-unit rates, effective dates and preferred suppliers."
-    actions={<button className={affirmative} onClick={() => {setCreating(true);setSelection('');setDraft({})}}><Icon name="add" size={15}/> New price quote</button>}>
-    <StateMessage loading={loading} error={error || mutationError}/>
-    {!loading && !error && <div className="mc-split mc-quote-split">
-      <EnterpriseTable<ApiRow> label="Supplier quotations" rows={prices} columns={cols}
-        onOpen={r=>{setSelection(str(r.id));setCreating(false);setDraft({})}}/>
-      {(row || creating) && <aside className="mc-dense-panel mc-form-panel">
-        <header className="mc-panel-title">{creating?'Create price quote':'Edit price quote'}</header>
-        <label className="mc-field"><span>Supplier</span><select value={get('supplier')} onChange={e=>set('supplier',e.target.value)}>
-          <option value="">Select supplier</option>{suppliers.map(r=><option key={str(r.id)} value={str(r.id)}>{str(r.name)}</option>)}</select></label>
-        <label className="mc-field"><span>Article</span><select value={get('item')} onChange={e=>set('item',e.target.value)}>
-          <option value="">Select article</option>{items.map(r=><option key={str(r.id)} value={str(r.id)}>{str(r.name)}</option>)}</select></label>
-        <label className="mc-field"><span>Unit</span><select value={get('unit')} onChange={e=>set('unit',e.target.value)}><option value="">Article base unit</option>
-          {units.map(r=><option key={str(r.id)} value={str(r.id)}>{str(r.abbreviation || r.name)}</option>)}</select></label>
-        <div className="mc-field-pair">
-          <FormField label="Quoted unit price" value={get('unit_price')} onChange={v=>set('unit_price',v)} type="number"/>
-          <FormField label="Fixed order QTY" value={get('minimum_order_quantity','1.00')} onChange={v=>set('minimum_order_quantity',v)} type="number"/>
-        </div>
-        <div className="mc-field-pair">
-          <FormField label="Discount %" value={get('discount_percent','0')} type="number" onChange={v=>set('discount_percent',v)}/>
-          <FormField label="Currency" value={get('currency','UGX')} onChange={v=>set('currency',v)}/>
-          <FormField label="Quote reference" value={get('quotation_reference')} onChange={v=>set('quotation_reference',v)}/>
-        </div>
-        <div className="mc-field-pair">
-          <FormField label="Valid from" value={get('effective_from',new Date().toISOString().slice(0,10))} type="date" onChange={v=>set('effective_from',v)}/>
-          <FormField label="Valid to" value={get('quotation_valid_until')} type="date" onChange={v=>set('quotation_valid_until',v)}/>
-        </div>
-        <label className="mc-check"><input type="checkbox" checked={get('is_preferred')==='true'} onChange={e=>set('is_preferred',String(e.target.checked))}/> Preferred supplier for this Article</label>
-        <div className="mc-alert mc-muted">Supplier prices are converted to base units after the negotiated discount. Multi-tier contracts require separate future backend pricing schedules.</div>
-        <div className="mc-decision-bar"><button className={btn} onClick={()=>{setCreating(false);setSelection('');setDraft({})}}>Cancel</button>
-          <button className={affirmative} disabled={busy||!get('supplier')||!get('item')||!(Number(get('unit_price'))>0)} onClick={()=>void save()}>Save quotation</button></div>
-      </aside>}
-    </div>}
+  const proposalColumns:EnterpriseColumn<ApiRow>[]=[
+    {id:'article',label:'Article',value:r=>str(r.item_name||r.item)},
+    {id:'supplier',label:'Supplier',value:r=>str(r.supplier_name||r.supplier)},
+    {id:'ref',label:'Vendor quote',value:r=>str(r.quotation_reference)},
+    {id:'price',label:'Quoted unit price',value:r=>dec(r.unit_price),numeric:true},
+    {id:'discount',label:'Discount %',value:r=>dec(r.discount_percent),numeric:true},
+    {id:'currency',label:'Currency',value:r=>str(r.currency)},
+    {id:'expiry',label:'Valid to',value:r=>dateStr(r.valid_to)},
+    {id:'status',label:'Review',value:r=>str(r.status),render:r=><StatusPill status={r.status}/>},
+  ]
+  const editing=creating||Boolean(price)||Boolean(proposal)
+  const editable=creating||(buyer&&Boolean(proposal)&&['draft','rejected'].includes(str(proposal?.status)))||(controller&&Boolean(price))
+  return <WorkspacePage section="Purchasing / Vendor contracts" title="Supplier price quote matrix"
+    subtitle="Purchasing proposes vendor quotes; Cost Control controls publication of contracted rates and discount history."
+    actions={<button className={affirmative} disabled={!buyer&&!controller} onClick={()=>{reset();setCreating(true)}}><Icon name="add" size={15}/> New quotation</button>}>
+    <StateMessage loading={loading} error={error||mutationError}/>
+    {!loading&&!error&&<>
+      <EnterpriseTable<ApiRow> label="Approved supplier price catalogue" rows={prices} columns={priceColumns}
+        onOpen={r=>{reset();setSelection(str(r.id))}}/>
+      <div className="mc-split mc-quote-split mc-footer-panel">
+        <section>
+          <EnterpriseTable<ApiRow> label="Vendor quotes awaiting approval" rows={proposals} columns={proposalColumns}
+            onOpen={r=>{reset();setProposalId(str(r.id))}}/>
+        </section>
+        {editing&&<aside className="mc-dense-panel mc-form-panel">
+          <header className="mc-panel-title">{creating?'New vendor quote':proposal?'Quote for review':'Published contract rate'}</header>
+          <label className="mc-field"><span>Supplier</span><select value={get('supplier')} disabled={!editable} onChange={e=>set('supplier',e.target.value)}>
+            <option value="">Choose supplier</option>{(data.suppliers||[]).map(r=><option key={str(r.id)} value={str(r.id)}>{str(r.name)}</option>)}</select></label>
+          <label className="mc-field"><span>Article</span><select value={get('item')} disabled={!editable} onChange={e=>set('item',e.target.value)}>
+            <option value="">Choose Article</option>{(data.items||[]).map(r=><option key={str(r.id)} value={str(r.id)}>{str(r.name)}</option>)}</select></label>
+          <label className="mc-field"><span>Unit</span><select value={get('unit')} disabled={!editable} onChange={e=>set('unit',e.target.value)}>
+            <option value="">Base unit</option>{(data.units||[]).map(r=><option key={str(r.id)} value={str(r.id)}>{str(r.abbreviation||r.name)}</option>)}</select></label>
+          <div className="mc-field-pair">
+            <FormField label="Quoted unit price" type="number" value={get('unit_price')} disabled={!editable} onChange={v=>set('unit_price',v)}/>
+            <FormField label="Fixed order QTY" type="number" value={get('fixed_order_quantity','1.00')} disabled={!editable} onChange={v=>set('fixed_order_quantity',v)}/>
+          </div>
+          <div className="mc-field-pair">
+            <FormField label="Discount %" type="number" value={get('discount_percent','0')} disabled={!editable} onChange={v=>set('discount_percent',v)}/>
+            <FormField label="Currency" value={get('currency','UGX')} disabled={!editable} onChange={v=>set('currency',v)}/>
+          </div>
+          <div className="mc-field-pair"><FormField label="Quote reference" value={get('quotation_reference')} disabled={!editable} onChange={v=>set('quotation_reference',v)}/>
+            <FormField label="Valid from" type="date" value={get('valid_from',new Date().toISOString().slice(0,10))} disabled={!editable} onChange={v=>set('valid_from',v)}/></div>
+          <FormField label="Valid to" type="date" value={get('valid_to')} disabled={!editable} onChange={v=>set('valid_to',v)}/>
+          <label className="mc-check"><input type="checkbox" disabled={!editable} checked={get('is_preferred')==='true'}
+            onChange={e=>set('is_preferred',String(e.target.checked))}/> Preferred supplier</label>
+          {proposal&&<div className="mc-alert mc-muted">Status: {str(proposal.status)} · Submitted quotations cannot be modified until Cost Control decides.</div>}
+          {proposal&&controller&&str(proposal.status)==='submitted'&&<FormField label="Approval / rejection note" value={reviewNote} onChange={setReviewNote}/>}
+          <div className="mc-decision-bar">
+            <button className={btn} onClick={reset}>Close</button>
+            {editable&&<button className={affirmative} disabled={busy||!get('supplier')||!get('item')||!(Number(get('unit_price'))>0)}
+              onClick={()=>void save()}>Save quotation</button>}
+            {buyer&&proposal&&['draft','rejected'].includes(str(proposal.status))&&<button className={affirmative} disabled={busy}
+              onClick={()=>void action(proposalId,'submit')}>Submit for Cost Control</button>}
+            {controller&&proposal&&str(proposal.status)==='submitted'&&<>
+              <button className={affirmative} disabled={busy} onClick={()=>void action(proposalId,'approve')}>Approve & publish</button>
+              <button className={btn+' mc-danger-action'} disabled={busy||!reviewNote.trim()} onClick={()=>void action(proposalId,'reject')}>Reject with reason</button>
+            </>}
+          </div>
+        </aside>}
+      </div>
+    </>}
+  </WorkspacePage>
+}
+
+}
   </WorkspacePage>
 }
 

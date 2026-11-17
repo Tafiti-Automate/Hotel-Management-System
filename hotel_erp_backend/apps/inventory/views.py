@@ -40,6 +40,8 @@ from apps.inventory.models import (
     StoreReturn,
     StoreReturnItem,
     SupplierItemPrice,
+    SupplierItemPriceHistory,
+    SupplierPriceQuoteProposal,
     UnitOfMeasure,
 )
 from apps.inventory.serializers import (
@@ -66,6 +68,7 @@ from apps.inventory.serializers import (
     StoreReturnItemSerializer,
     StoreReturnSerializer,
     SupplierItemPriceSerializer,
+    SupplierPriceQuoteProposalSerializer,
     UnitOfMeasureSerializer,
 )
 from apps.procurement.models import RequisitionItem
@@ -474,13 +477,6 @@ class InventoryBalanceViewSet(ReadOnlyModelViewSet):
 
 
 class SupplierItemPriceViewSet(CostControllerAuthorityMixin, CreatedByModelMixin, ModelViewSet):
-    def _require_master_data_authority(self):
-        if not has_role(self.request.user,
-            "System Administrator", "Cost Controller", "Procurement Manager",
-            "Procurement Officer", "Purchasing Officer"
-        ):
-            raise PermissionDenied("Only Purchasing, Cost Control or system master-data administrators may maintain supplier quotes.")
-
     queryset = SupplierItemPrice.objects.select_related("supplier", "item", "item__category", "unit")
     serializer_class = SupplierItemPriceSerializer
     filterset_fields = ("supplier", "item", "item__category", "unit", "is_preferred", "is_active")
@@ -1471,3 +1467,135 @@ class StockCountItemViewSet(CreatedByModelMixin, ModelViewSet):
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
         return Response(self.get_serializer(adjustment).data)
+
+
+class SupplierPriceQuoteProposalViewSet(CreatedByModelMixin, ModelViewSet):
+    """Buyer-drafted quotes are not published to the commercial price master."""
+
+    queryset = SupplierPriceQuoteProposal.objects.select_related(
+        "branch", "supplier", "item", "unit", "created_by"
+    )
+    serializer_class = SupplierPriceQuoteProposalSerializer
+    permission_classes = (IsAuthenticated,)
+    filterset_fields = ("status", "branch", "supplier", "item", "currency")
+    search_fields = ("quotation_reference", "supplier__name", "item__name", "item__sku")
+
+    @staticmethod
+    def _is_buyer(user):
+        return has_role(user, "Procurement Officer", "Procurement Manager", "Purchasing Officer")
+
+    @staticmethod
+    def _is_cost_controller(user):
+        return has_role(user, "Cost Controller")
+
+    def get_queryset(self):
+        user = self.request.user
+        employee = getattr(user, "employee_profile", None)
+        if not employee or not employee.is_active or not employee.branch_id:
+            return self.queryset.none()
+        if not (self._is_buyer(user) or self._is_cost_controller(user)):
+            return self.queryset.none()
+        return self.queryset.filter(branch_id=employee.branch_id)
+
+    def perform_create(self, serializer):
+        if not self._is_buyer(self.request.user):
+            raise PermissionDenied("Only Purchasing may propose supplier quotations.")
+        employee = self.request.user.employee_profile
+        serializer.save(created_by=self.request.user, branch=employee.branch)
+
+    def perform_update(self, serializer):
+        proposal = serializer.instance
+        if (not self._is_buyer(self.request.user)
+                or proposal.created_by_id != self.request.user.id
+                or proposal.status not in ("draft", "rejected")):
+            raise PermissionDenied("Only the originating Buyer can edit an unsubmitted quotation.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if not self._is_buyer(self.request.user) or instance.created_by_id != self.request.user.id or instance.status != "draft":
+            raise PermissionDenied("Only the Buyer may discard an unsubmitted quote.")
+        instance.delete()
+
+    @action(detail=True, methods=["post"])
+    def submit(self, request, pk=None):
+        with transaction.atomic():
+            proposal = SupplierPriceQuoteProposal.objects.select_for_update().get(
+                pk=self.get_object().pk
+            )
+            if not self._is_buyer(request.user) or proposal.created_by_id != request.user.id:
+                raise PermissionDenied("Only the originating Buyer can submit this quote.")
+            if proposal.status not in ("draft", "rejected"):
+                raise ValidationError("This quotation cannot be submitted again.")
+            proposal.full_clean()
+            proposal.status = "submitted"
+            proposal.review_note = ""
+            proposal.save(update_fields=["status", "review_note", "updated_at"])
+        return Response(self.get_serializer(proposal).data)
+
+    @action(detail=True, methods=["post"])
+    def approve(self, request, pk=None):
+        if not self._is_cost_controller(request.user) or request.user.is_superuser or has_role(request.user, "System Administrator"):
+            raise PermissionDenied("Only Cost Control may publish a vendor quote to the price catalogue.")
+        with transaction.atomic():
+            proposal = SupplierPriceQuoteProposal.objects.select_for_update().get(
+                pk=self.get_object().pk
+            )
+            if proposal.status != "submitted":
+                raise ValidationError("Only a submitted vendor quote may be approved.")
+            price = SupplierItemPrice.objects.select_for_update().filter(
+                supplier=proposal.supplier, item=proposal.item
+            ).first()
+            if price:
+                SupplierItemPriceHistory.objects.create(
+                    supplier_item_price=price, supplier=price.supplier,
+                    item=price.item, unit=price.unit,
+                    unit_price=price.unit_price, discount_percent=price.discount_percent,
+                    currency=price.currency, effective_from=price.effective_from,
+                    effective_to=timezone.localdate(), changed_by=request.user,
+                    source="approved_vendor_quote", created_by=request.user,
+                )
+            else:
+                price = SupplierItemPrice(
+                    supplier=proposal.supplier, item=proposal.item,
+                    created_by=request.user,
+                )
+            price.unit = proposal.unit
+            price.unit_price = proposal.unit_price
+            price.discount_percent = proposal.discount_percent
+            price.minimum_order_quantity = proposal.fixed_order_quantity
+            price.quotation_reference = proposal.quotation_reference
+            price.effective_from = proposal.valid_from
+            price.quotation_valid_until = proposal.valid_to
+            price.currency = proposal.currency
+            price.is_active = True
+            price.is_preferred = proposal.is_preferred
+            price.full_clean()
+            price.save()
+            if proposal.is_preferred:
+                SupplierItemPrice.objects.filter(
+                    item=proposal.item, is_preferred=True
+                ).exclude(pk=price.pk).update(is_preferred=False)
+            proposal.status = "approved"
+            proposal.reviewed_by = request.user
+            proposal.reviewed_at = timezone.now()
+            proposal.review_note = str(request.data.get("note", ""))[:1000]
+            proposal.save(update_fields=["status", "reviewed_at", "reviewed_by", "review_note", "updated_at"])
+        return Response(self.get_serializer(proposal).data)
+
+    @action(detail=True, methods=["post"])
+    def reject(self, request, pk=None):
+        if not self._is_cost_controller(request.user):
+            raise PermissionDenied("Only Cost Control can reject a vendor quotation.")
+        note = str(request.data.get("note", "")).strip()
+        if not note:
+            raise ValidationError({"note": "A rejection reason is required."})
+        with transaction.atomic():
+            proposal = SupplierPriceQuoteProposal.objects.select_for_update().get(pk=self.get_object().pk)
+            if proposal.status != "submitted":
+                raise ValidationError("Only a submitted quotation may be rejected.")
+            proposal.status = "rejected"
+            proposal.review_note = note
+            proposal.reviewed_by = request.user
+            proposal.reviewed_at = timezone.now()
+            proposal.save(update_fields=["status", "review_note", "reviewed_by", "reviewed_at", "updated_at"])
+        return Response(self.get_serializer(proposal).data)

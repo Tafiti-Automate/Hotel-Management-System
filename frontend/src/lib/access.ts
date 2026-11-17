@@ -57,7 +57,7 @@ const routePermissions: Record<string, string[]> = {
 
 const enterpriseRoleRoutes: Record<string, string[]> = {
   'purchasing-workbench': ['procurement officer', 'procurement manager'],
-  'purchasing-quotes': ['procurement officer', 'procurement manager'],
+  'purchasing-quotes': ['procurement officer', 'procurement manager', 'cost controller'],
   'purchasing-pr-new': ['department head'],
   'purchasing-order-detail': ['procurement officer', 'procurement manager', 'financial manager', 'general manager'],
   'receiving-po-detail': ['receiving clerk'],
@@ -89,7 +89,7 @@ const strictRoleRoutes: Record<string, Set<string>> = {
   supervisor: new Set([ 'waste-new', 'stocktake-sheet','dashboard', 'detail', 'workflow-stores', 'new-store-request', 'incoming-pickup', 'waste-control']),
   'department head': new Set([ 'purchasing-pr-new', 'recipes-detail', 'purchasing-order-detail','dashboard', 'detail', 'workflow-stores', 'approval-inbox', 'waste-control', 'recipes-production', 'reports', 'reportview']),
   'store keeper': new Set([ 'stocktake-sheet','dashboard', 'detail', 'workflow-stores', 'grn-posting', 'transfer-dispatch', 'stock-on-hand', 'store-transfers', 'locations', 'store-inventory', 'store-analysis', 'store-usage', 'store-purchase-requests', 'reports', 'reportview']),
-  'cost controller': new Set([ 'pos-reconciliation', 'recipes-detail', 'stocktake-variance', 'store-inventory','dashboard', 'detail', 'workflow-stores', 'waste-control', 'recipes-production', 'pos-control', 'items', 'categories', 'uoms', 'itemUnits', 'suppliers', 'supplierItems', 'reports', 'reportview', 'menu-engineering']),
+  'cost controller': new Set(['purchasing-quotes', 'pos-reconciliation', 'recipes-detail', 'stocktake-variance', 'store-inventory','dashboard', 'detail', 'workflow-stores', 'waste-control', 'recipes-production', 'pos-control', 'items', 'categories', 'uoms', 'itemUnits', 'suppliers', 'supplierItems', 'reports', 'reportview', 'menu-engineering']),
   'procurement manager': new Set([ 'purchasing-workbench', 'purchasing-quotes', 'purchasing-order-detail','dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
   'procurement officer': new Set([ 'purchasing-workbench', 'purchasing-quotes', 'purchasing-order-detail','dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
   'financial manager': new Set([ 'finance-invoice-matching', 'finance-budgets', 'finance-period-close', 'purchasing-order-detail', 'stocktake-variance','dashboard', 'detail', 'workflow-procure', 'approval-inbox', 'workflow-pay', 'finance-governance', 'reports', 'reportview', 'menu-engineering']),

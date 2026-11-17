@@ -69,7 +69,8 @@ const roleNavigation: Record<string, NavGroup[]> = {
     ] },
     { heading: 'Master data', items: [
       { route: 'suppliers', label: 'Suppliers', icon: 'local_shipping' },
-      { route: 'supplierItems', label: 'Supplier prices', icon: 'request_quote' },
+      { route: 'purchasing-quotes', label: 'Supplier quote approvals', icon: 'request_quote' },
+      { route: 'supplierItems', label: 'Supplier prices', icon: 'receipt_long' },
       { route: 'categories', label: 'Item categories', icon: 'category' },
       { route: 'items', label: 'Articles', icon: 'inventory_2' },
       { route: 'uoms', label: 'Units & conversions', icon: 'straighten' },

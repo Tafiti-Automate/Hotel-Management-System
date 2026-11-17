@@ -583,6 +583,58 @@ class SupplierItemPrice(BaseModel):
         return (discounted / factor).quantize(Decimal("0.01"))
 
 
+
+class SupplierPriceQuoteProposal(BaseModel):
+    """Purchasing Officer's vendor quote; only Cost Control may publish rates."""
+
+    STATUS_DRAFT = "draft"
+    STATUS_SUBMITTED = "submitted"
+    STATUS_APPROVED = "approved"
+    STATUS_REJECTED = "rejected"
+    STATUSES = (
+        (STATUS_DRAFT, "Draft"),
+        (STATUS_SUBMITTED, "Submitted for Cost Control"),
+        (STATUS_APPROVED, "Approved"),
+        (STATUS_REJECTED, "Rejected"),
+    )
+
+    branch = models.ForeignKey("departments.Branch", on_delete=models.PROTECT)
+    supplier = models.ForeignKey("vendors.Supplier", on_delete=models.PROTECT)
+    item = models.ForeignKey(Item, on_delete=models.PROTECT)
+    unit = models.ForeignKey(UnitOfMeasure, on_delete=models.PROTECT, null=True, blank=True)
+    quotation_reference = models.CharField(max_length=100, blank=True)
+    currency = models.CharField(max_length=10, default="UGX")
+    unit_price = models.DecimalField(max_digits=15, decimal_places=2, validators=[validate_positive_decimal])
+    discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.00"), validators=[validate_non_negative_decimal])
+    fixed_order_quantity = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("1.00"), validators=[validate_positive_decimal])
+    valid_from = models.DateField(default=timezone.localdate)
+    valid_to = models.DateField(null=True, blank=True)
+    is_preferred = models.BooleanField(default=False)
+    status = models.CharField(max_length=20, choices=STATUSES, default=STATUS_DRAFT)
+    review_note = models.TextField(blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="reviewed_supplier_quotes")
+
+    class Meta(BaseModel.Meta):
+        ordering = ("-created_at",)
+
+    def clean(self):
+        super().clean()
+        if self.discount_percent >= Decimal("100.00"):
+            raise ValidationError({"discount_percent": "Discount must be below 100 percent."})
+        if self.valid_to and self.valid_to < self.valid_from:
+            raise ValidationError({"valid_to": "The quote expiration cannot precede its start date."})
+        if self.item_id and self.unit_id:
+            permitted = self.item.base_unit_id == self.unit_id or ItemUnitPrice.objects.filter(
+                item_id=self.item_id, unit_id=self.unit_id, is_active=True
+            ).exists()
+            if not permitted:
+                raise ValidationError({"unit": "Select the base unit or an active purchasing unit."})
+
+    def __str__(self):
+        return f"{self.item} · {self.supplier} · {self.quotation_reference or self.pk}"
+
+
 class SupplierItemPriceHistory(BaseModel):
     """Immutable snapshot retained whenever a supplier catalogue price changes."""
 

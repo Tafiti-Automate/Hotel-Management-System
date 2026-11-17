@@ -30,6 +30,7 @@ from apps.inventory.models import (
     StoreReturnItem,
     SupplierItemPrice,
     SupplierItemPriceHistory,
+    SupplierPriceQuoteProposal,
     StoreKeeperAssignment,
     UnitOfMeasure,
 )
@@ -1006,3 +1007,29 @@ class StockCountSerializer(serializers.ModelSerializer):
             "updated_at",
             "created_by",
         )
+
+
+class SupplierPriceQuoteProposalSerializer(serializers.ModelSerializer):
+    supplier_name = serializers.CharField(source="supplier.name", read_only=True)
+    item_name = serializers.CharField(source="item.name", read_only=True)
+    item_sku = serializers.CharField(source="item.sku", read_only=True)
+
+    class Meta:
+        model = SupplierPriceQuoteProposal
+        fields = "__all__"
+        read_only_fields = (
+            "id", "created_by", "branch", "status", "reviewed_at",
+            "reviewed_by", "review_note", "created_at", "updated_at",
+        )
+
+    def validate(self, attrs):
+        candidate = SupplierPriceQuoteProposal(**attrs)
+        if self.instance:
+            for field in ("item", "unit", "supplier", "discount_percent", "valid_from", "valid_to"):
+                if field not in attrs:
+                    setattr(candidate, field, getattr(self.instance, field))
+        try:
+            candidate.clean()
+        except DjangoValidationError as error:
+            raise serializers.ValidationError(getattr(error, "message_dict", None) or error.messages)
+        return attrs
