@@ -125,6 +125,7 @@ ROLE_SPECS = {
             "approvals": ["purchaseorderapprovalworkflow"],
             "procurement": ["purchaseorder"],
             "materials_control": ["budgetoverride"],
+            "finance": ["suppliercreditnote"],
         },
         "view": {
             "departments": ["branch", "department"],
@@ -135,13 +136,13 @@ ROLE_SPECS = {
                 "goodsreceiptnote", "goodsreceiptitem", "supplierreturn",
             ],
             "vendors": ["supplier"],
-            "finance": ["supplierinvoice", "supplierinvoiceitem", "supplierpayment", "expense"],
+            "finance": ["supplierinvoice", "supplierinvoiceitem", "supplierpayment", "suppliercreditnote", "expense"],
             "materials_control": ["glexport", "glaccountmapping", "wasterecord", "recipe", "posimportbatch"],
         },
     },
     "Accounts Payable Clerk": {
         "crud": {
-            "finance": ["supplierinvoice", "supplierinvoiceitem", "supplierpayment"],
+            "finance": ["supplierinvoice", "supplierinvoiceitem", "supplierpayment", "suppliercreditnote"],
         },
         "view": {
             "departments": ["branch", "department"],
