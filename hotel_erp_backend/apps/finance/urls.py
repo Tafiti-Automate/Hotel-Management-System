@@ -11,6 +11,7 @@ from apps.finance.views import (
     SupplierInvoiceViewSet,
     SupplierInvoiceItemViewSet,
     SupplierPaymentViewSet,
+    SupplierCreditNoteViewSet,
 )
 
 
@@ -25,5 +26,6 @@ router.register("expenses", ExpenseViewSet, basename="expense")
 router.register("supplier-invoices", SupplierInvoiceViewSet, basename="supplier-invoice")
 router.register("supplier-invoice-items", SupplierInvoiceItemViewSet, basename="supplier-invoice-item")
 router.register("supplier-payments", SupplierPaymentViewSet, basename="supplier-payment")
+router.register("supplier-credit-notes", SupplierCreditNoteViewSet, basename="supplier-credit-note")
 
 urlpatterns = router.urls
