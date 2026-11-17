@@ -30,3 +30,40 @@ def test_management_without_employee_property_cannot_list_purchase_requisitions(
     rows = response.data["results"] if isinstance(response.data, dict) else response.data
     assert str(requisition.pk) not in {str(row["id"]) for row in rows}
     assert rows == []
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("role", ["Procurement Manager", "Financial Manager"])
+def test_management_requisitions_are_isolated_between_branches(role):
+    from apps.departments.models import Department
+    from apps.employees.models import Employee
+
+    call_command("setup_hotel_roles", verbosity=0)
+    my_branch = Branch.objects.create(name=f"{role} own branch")
+    other_branch = Branch.objects.create(name=f"{role} foreign branch")
+    my_request = PurchaseRequisition.objects.create(
+        branch=my_branch, reason="Local purchasing requirement",
+    )
+    foreign_request = PurchaseRequisition.objects.create(
+        branch=other_branch, reason="Other property purchasing requirement",
+    )
+    user = get_user_model().objects.create_user(
+        username=f"assigned-{role.lower().replace(' ', '-')}",
+        employee_code=f"ASSIGNED-{role[:4].upper()}",
+        password="test-pass-123",
+    )
+    user.groups.add(Group.objects.get(name=role))
+    Employee.objects.create(
+        user=user, branch=my_branch,
+        department=Department.objects.create(name=f"{role} purchasing department"),
+        designation=role,
+    )
+    client = APIClient()
+    client.force_authenticate(user=user)
+    response = client.get("/api/v1/requisitions/")
+    assert response.status_code == 200
+    rows = response.data["results"] if isinstance(response.data, dict) else response.data
+    ids = {str(row["id"]) for row in rows}
+    assert str(my_request.pk) in ids
+    assert str(foreign_request.pk) not in ids
+    assert client.get(f"/api/v1/requisitions/{foreign_request.pk}/").status_code == 404
