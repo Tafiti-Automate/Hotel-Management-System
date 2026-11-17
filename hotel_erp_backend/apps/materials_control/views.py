@@ -810,6 +810,11 @@ class FiscalPeriodViewSet(CreatedByModelMixin, ModelViewSet):
     def pre_close_checklist(self, request, pk=None):
         return Response(self.get_object().pre_close_checklist())
 
+    @action(detail=True, methods=["get"], url_path="inventory-valuation-reconciliation")
+    def inventory_valuation_reconciliation(self, request, pk=None):
+        self._require_finance()
+        return Response(self.get_object().inventory_valuation_reconciliation())
+
     @action(detail=True, methods=["post"])
     def close(self, request, pk=None):
         self._require_finance()

@@ -911,6 +911,99 @@ class FiscalPeriod(BaseModel):
             "unresolved_pos_imports": unresolved_pos.count(),
         }
 
+    def inventory_valuation_reconciliation(self):
+        """Read-only inventory movement valuation evidence for Finance review.
+
+        Never infer missing historical costs or post inventory journals here:
+        invoiced GRNs and supplier credits may already impact asset accounts.
+        """
+        from apps.inventory.models import StockLedger
+        from core.constants.choices import LedgerReferenceType
+
+        movements = StockLedger.objects.filter(
+            store__branch=self.branch,
+            created_at__date__range=(self.start_date, self.end_date),
+        ).order_by("created_at", "pk").values(
+            "reference_type", "reference_id", "quantity_in", "quantity_out",
+            "total_cost_snapshot", "unit_cost_snapshot", "store_id",
+        )
+        categories = {}
+        transfer_pairs = {}
+        missing = 0
+        movement_count = 0
+        for movement in movements.iterator():
+            movement_count += 1
+            source = movement["reference_type"]
+            record = categories.setdefault(source, {
+                "movement_count": 0, "valued_count": 0,
+                "unvalued_count": 0,
+                "value_in": Decimal("0.0000"),
+                "value_out": Decimal("0.0000"),
+            })
+            record["movement_count"] += 1
+            inbound = movement["quantity_in"] > 0
+            total = movement["total_cost_snapshot"]
+            if total is None or movement["unit_cost_snapshot"] is None:
+                missing += 1
+                record["unvalued_count"] += 1
+            else:
+                record["valued_count"] += 1
+                field = "value_in" if inbound else "value_out"
+                record[field] += total
+            if source == LedgerReferenceType.STOCK_TRANSFER:
+                key = str(movement["reference_id"])
+                paired = transfer_pairs.setdefault(key, {
+                    "quantity_in": Decimal("0.00"),
+                    "quantity_out": Decimal("0.00"),
+                    "value_in": Decimal("0.0000"),
+                    "value_out": Decimal("0.0000"),
+                    "unvalued_count": 0,
+                })
+                direction = "in" if inbound else "out"
+                paired[f"quantity_{direction}"] += (
+                    movement["quantity_in"] if inbound else movement["quantity_out"]
+                )
+                if total is not None:
+                    paired[f"value_{direction}"] += total
+                else:
+                    paired["unvalued_count"] += 1
+
+        transfer_warnings = []
+        for reference, pair in transfer_pairs.items():
+            if pair["quantity_in"] != pair["quantity_out"] or (
+                pair["unvalued_count"] == 0
+                and abs(pair["value_in"] - pair["value_out"]) > Decimal("0.01")
+            ):
+                transfer_warnings.append({
+                    "reference": reference,
+                    "quantity_in": str(pair["quantity_in"]),
+                    "quantity_out": str(pair["quantity_out"]),
+                    "value_in": str(pair["value_in"]),
+                    "value_out": str(pair["value_out"]),
+                })
+
+        # Transfers may legitimately dispatch and arrive in different months.
+        # A warning is not automatic proof of a broken transfer.
+        return {
+            "period_id": str(self.pk),
+            "branch_id": str(self.branch_id),
+            "movement_count": movement_count,
+            "unvalued_count": missing,
+            "categories": {
+                source: {key: str(value) if isinstance(value, Decimal) else value
+                         for key, value in info.items()}
+                for source, info in sorted(categories.items())
+            },
+            "transfer_period_warnings": transfer_warnings,
+            "ready_for_gl_mapping_review": missing == 0 and not transfer_warnings,
+            "gl_journals_posted": False,
+            "note": (
+                "Read-only valuation evidence. No stock GL journal has been "
+                "created. Historical unknown costs remain unvalued. "
+                "Transfer dispatch and receipt may cross periods."
+            ),
+        }
+
     def close(self, actor, note):
         if self.status == self.STATUS_CLOSED:
             raise ValidationError("This fiscal period is already closed.")

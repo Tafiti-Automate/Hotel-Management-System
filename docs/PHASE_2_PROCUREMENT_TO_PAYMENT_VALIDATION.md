@@ -137,3 +137,12 @@ Automated coverage: two new tests in `test_finance_integration.py` exercise both
 POS recipe depletion and outlet waste now capture the **transaction-time store WAC** in immutable StockLedger unit/total snapshots with before/after WAC. These are recorded alongside existing POS sale-line COGS; posting a POS batch twice must not double-deduct inventory or revalue the historical sale. A missing/zero WAC is retained as **NULL**, not treated as a supported zero-value cost. Tests cover priced and unpriced POS movements, immutable historical COGS on reprocessing, and priced/unpriced waste.
 
 No additional migration is needed beyond the existing nullable StockLedger snapshot migration. This change intentionally **does not auto-generate inventory-to-GL entries**: restaurant consumption/waste mappings, invoice-side double-count prevention, and unvalued historical rows must be accounted for and tested before GL automation. Staging acceptance and the previously described deployment prerequisites remain outstanding.
+
+
+## Inventory-to-GL preflight reconciliation — read-only accounting safeguard
+
+Finance can now open `GET /api/v1/fiscal-periods/<id>/inventory-valuation-reconciliation/` for its authorized property. The calculation groups **transaction-time stock ledger costs** by movement type (receipts, consumption, POS, waste, adjustments and returns), reports the count of historically unvalued movements separately, and checks whether outgoing/incoming transfer values and quantities balance **within the selected period**. A transfer dispatched at the end of one month and received in the next may generate a legitimate informational warning.
+
+The method is intentionally **read-only**: it does not create stock or GL transactions, does not assign missing historical prices, and cannot double-book the original supplier invoice/credit entries. Missing costs or unmatched transfer halves are surfaced to Finance rather than hidden by a falsely balanced ledger. It provides evidence for the subsequent approved mapping of stock movements to inventory asset, in-transit, consumption, COGS and variance accounts. Finance must verify that supplier invoice GL debits actually point to the intended inventory asset/clearing account before activating any stock-to-GL automation.
+
+This stage requires no migration or frontend build changes; its server endpoint uses the existing fiscal-period property scope and Financial Manager permission. Staging role testing is still required before production certification.
