@@ -43,3 +43,9 @@ The prior reference audit maps these stages to the historical Materials Control 
 ## Release gate
 
 Do not call the whole purchase-to-pay process complete without green CI, database migration checks, seeded end-to-end workflow execution and live/staging acceptance evidence. Earlier CI successes apply only to the commits they tested.
+
+## Incremental combined-journey validation (17 November 2026)
+
+- **Cross-property FK update protection:** invoice, invoice-line and payment `PATCH/PUT` actions now validate the original and proposed purchase-order/invoice property, rather than relying only on scoped lists and creates. Regression tests attempt to reassign authorized records to another property's PO and invoice and verify no database mutation.
+- **Approved PO → received GRN → matched invoice → split settlement:** `test_phase2_payment_journey.py` exercises the real ORM models in one test transaction: approved and issued PO with a received line, three-way matching, rejection of invoice self-approval, independent approval, two posted payments, overpayment rejection, prevention of double posting, and prohibition on rematching paid invoices. The receipt line is deliberately modeled as accepted/posted using existing helper conventions; this test is **not** a substitute for a full receiving inspection and inventory posting integration test.
+- **CI is the release gate.** Source changes do not certify live browser behavior, fiscal-period GL postings, or payment provider settlement. Continue with seeded positive and negative workflows through actual GRN posting, supplier credits, accounting reconciliation and user acceptance.
