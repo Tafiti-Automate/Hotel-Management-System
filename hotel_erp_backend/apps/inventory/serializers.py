@@ -325,6 +325,9 @@ class StoreLocationSerializer(serializers.ModelSerializer):
         branch = attrs.get("branch", getattr(self.instance, "branch", None))
         is_active = attrs.get("is_active", getattr(self.instance, "is_active", True))
         is_default = attrs.get("is_default", getattr(self.instance, "is_default", False))
+        virtual = attrs.get("is_virtual_transit", getattr(self.instance, "is_virtual_transit", False))
+        if virtual and (is_active or is_default):
+            raise serializers.ValidationError("Virtual transit locations must remain inactive and non-default.")
         if is_default and not branch:
             raise serializers.ValidationError(
                 {"is_default": "A default issuing store must belong to a branch."}
@@ -515,7 +518,10 @@ class SupplierItemPriceSerializer(serializers.ModelSerializer):
     @transaction.atomic
     def update(self, instance, validated_data):
         old_price = instance.unit_price
-        price_changed = "unit_price" in validated_data and validated_data["unit_price"] != old_price
+        price_changed = (
+            ("unit_price" in validated_data and validated_data["unit_price"] != old_price)
+            or ("discount_percent" in validated_data and validated_data["discount_percent"] != instance.discount_percent)
+        )
         if price_changed:
             request = self.context.get("request")
             SupplierItemPriceHistory.objects.create(
@@ -524,6 +530,7 @@ class SupplierItemPriceSerializer(serializers.ModelSerializer):
                 item=instance.item,
                 unit=instance.unit,
                 unit_price=old_price,
+                discount_percent=instance.discount_percent,
                 currency=instance.currency,
                 effective_from=instance.effective_from,
                 effective_to=timezone.localdate(),
@@ -964,6 +971,20 @@ class StoreReturnSerializer(serializers.ModelSerializer):
 
 class StockCountItemSerializer(serializers.ModelSerializer):
     variance = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if user and user.is_authenticated and user.groups.filter(
+            name__in=("Department Supervisor", "Outlet Supervisor", "Supervisor")
+        ).exists():
+            for field in (
+                "system_quantity", "variance", "variance_value",
+                "unit_cost", "cost", "theoretical_value",
+            ):
+                data.pop(field, None)
+        return data
 
     class Meta:
         model = StockCountItem

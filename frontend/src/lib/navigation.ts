@@ -10,6 +10,12 @@ export const workspaceRoutes = [
   'finance-governance', 'integration-control',
   'new-store-request', 'incoming-pickup', 'approval-inbox', 'menu-engineering',
   'grn-posting', 'transfer-dispatch',
+  'purchasing-workbench', 'purchasing-quotes', 'purchasing-order-detail',
+  'purchasing-pr-new', 'receiving-po-detail', 'receiving-return-new',
+  'finance-invoice-matching', 'finance-budgets', 'finance-period-close',
+  'admin-cost-centers', 'admin-authorisation-rules', 'admin-articles',
+  'stocktake-sheet', 'stocktake-variance', 'recipes-detail',
+  'pos-reconciliation', 'waste-new',
   'stock-on-hand', 'store-transfers', 'store-inventory',
   'store-analysis', 'store-usage', 'store-purchase-requests',
   'items', 'categories', 'uoms', 'itemUnits', 'locations',
@@ -32,6 +38,23 @@ const registeredRoutes = new Set<string>(workspaceRoutes)
 const semanticPaths: Partial<Record<WorkspaceRoute, string>> = {
   dashboard: '/dashboard',
   'workflow-stores': '/transfers/requisitions',
+  'purchasing-workbench': '/purchasing/workbench',
+  'purchasing-quotes': '/purchasing/quotes',
+  'purchasing-pr-new': '/purchasing/requisitions/new',
+  'purchasing-order-detail': '/purchasing/orders',
+  'receiving-po-detail': '/receiving/po',
+  'receiving-return-new': '/receiving/returns/new',
+  'finance-invoice-matching': '/finance/invoice-matching',
+  'finance-budgets': '/finance/budgets',
+  'finance-period-close': '/finance/period-close',
+  'admin-cost-centers': '/admin/cost-centers',
+  'admin-authorisation-rules': '/admin/authorisation-rules',
+  'admin-articles': '/admin/articles',
+  'stocktake-sheet': '/stocktake/counts',
+  'stocktake-variance': '/stocktake/variance',
+  'recipes-detail': '/recipes/detail',
+  'pos-reconciliation': '/pos/reconciliation',
+  'waste-new': '/adjustments/waste/new',
   'grn-posting': '/stores/grn-posting',
   'transfer-dispatch': '/stores/transfers',
   'new-store-request': '/transfers/requisitions/new',
@@ -43,25 +66,25 @@ const semanticPaths: Partial<Record<WorkspaceRoute, string>> = {
   'store-purchase-requests': '/inventory/reorder',
   'waste-control': '/adjustments/waste',
   'recipes-production': '/recipes',
-  'pos-control': '/pos/reconciliation',
-  'workflow-procure': '/purchasing/workbench',
-  'workflow-pay': '/finance/invoice-matching',
-  'finance-governance': '/finance/period-close',
+  'pos-control': '/pos/manage',
+  'workflow-procure': '/purchasing',
+  'workflow-pay': '/finance',
+  'finance-governance': '/finance/governance',
   'integration-control': '/admin/integrations',
-  supplierItems: '/purchasing/quotes',
+  supplierItems: '/admin/price-quotations',
   suppliers: '/vendors',
   orders: '/purchasing/orders',
   grns: '/receiving/grns',
   supplierReturns: '/receiving/returns',
   reports: '/reports',
   'menu-engineering': '/reports/menu-engineering',
-  items: '/admin/articles',
+  items: '/admin/articles/catalogue',
   categories: '/admin/article-groups',
   uoms: '/admin/units',
   itemUnits: '/admin/unit-conversions',
   locations: '/admin/stores',
   'access-management': '/admin/users',
-  'audit-log': '/admin/audit',
+  'audit-log': '/admin/audit-logs',
   'hotel-profile': '/admin/property',
   'workflow-configure': '/admin/workflow',
 }
@@ -69,12 +92,11 @@ const semanticLookup = new Map(
   Object.entries(semanticPaths).map(([route, path]) => [path, route as WorkspaceRoute]),
 )
 const routeAliases: Record<string, WorkspaceRoute> = {
-  '/adjustments/waste/new': 'waste-control',
-  '/finance/budgets': 'finance-governance',
-  '/purchasing/requisitions/new': 'workflow-procure',
-  '/receiving/returns/new': 'supplierReturns',
-  '/purchasing/requisitions': 'workflow-procure',
+  '/adjustments/waste': 'waste-control',
+  '/admin/audit': 'audit-log',
   '/admin/roles': 'access-management',
+  '/purchasing/quotes/catalogue': 'supplierItems',
+  '/purchasing/requisitions': 'purchasing-workbench',
 }
 
 export function routeFromPath(pathname: string): WorkspaceRoute | null {
@@ -83,10 +105,11 @@ export function routeFromPath(pathname: string): WorkspaceRoute | null {
   if (legacy) return registeredRoutes.has(legacy[1]) ? legacy[1] as WorkspaceRoute : null
   const exact = semanticLookup.get(normalized) || routeAliases[normalized]
   if (exact) return exact
-  if (/^\/purchasing\/orders\/[^/]+$/.test(normalized)) return 'workflow-procure'
-  if (/^\/receiving\/po\/[^/]+$/.test(normalized)) return 'workflow-procure'
-  if (/^\/recipes\/[^/]+$/.test(normalized)) return 'recipes-production'
-  if (/^\/stocktake\/[^/]+$/.test(normalized)) return 'store-inventory'
+  if (/^\/purchasing\/orders\/[^/]+$/.test(normalized)) return 'purchasing-order-detail'
+  if (/^\/receiving\/po\/[^/]+$/.test(normalized)) return 'receiving-po-detail'
+  if (/^\/recipes\/[^/]+$/.test(normalized)) return 'recipes-detail'
+  if (/^\/stocktake\/[^/]+\/variance$/.test(normalized)) return 'stocktake-variance'
+  if (/^\/stocktake\/[^/]+$/.test(normalized)) return 'stocktake-sheet'
   return null
 }
 
@@ -101,6 +124,23 @@ export function labelForRoute(route: string): string {
     'new-store-request': 'New internal requisition',
     'incoming-pickup': 'Confirm pickup',
     'grn-posting': 'Post received GRNs',
+    'purchasing-workbench': 'PR to PO workbench',
+    'purchasing-quotes': 'Supplier price quotes',
+    'purchasing-pr-new': 'New purchase requisition',
+    'purchasing-order-detail': 'Purchase order details',
+    'receiving-po-detail': 'Blind receiving',
+    'receiving-return-new': 'Return to supplier',
+    'finance-invoice-matching': 'Three-way invoice matching',
+    'finance-budgets': 'Cost center budgets',
+    'finance-period-close': 'Month-end closing',
+    'admin-cost-centers': 'Cost centers and stores',
+    'admin-authorisation-rules': 'Authorisation rules',
+    'admin-articles': 'Article master',
+    'stocktake-sheet': 'Blind stock count',
+    'stocktake-variance': 'Variance audit',
+    'recipes-detail': 'Recipe details',
+    'pos-reconciliation': 'POS reconciliation',
+    'waste-new': 'Record waste',
     'transfer-dispatch': 'Transfer fulfillment',
     'approval-inbox': 'Approval inbox',
     'menu-engineering': 'Menu sales analysis',

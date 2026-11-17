@@ -135,8 +135,14 @@ def fulfill_requisition(request_id, keeper, actor, quantities=None):
 
     transit_store, _ = StoreLocation.objects.get_or_create(
         branch=req.store.branch, name=TRANSIT_NAME,
-        defaults={"is_active": False, "is_default": False},
+        defaults={"is_active": False, "is_default": False, "is_virtual_transit": True},
     )
+    if not transit_store.is_virtual_transit:
+        if not transit_store.is_active and not transit_store.is_default:
+            transit_store.is_virtual_transit = True
+            transit_store.save(update_fields=["is_virtual_transit", "updated_at"])
+        else:
+            raise ValidationError("A regular location cannot be reused for virtual transit.")
     if transit_store.is_active or transit_store.is_default:
         raise ValidationError("The reserved virtual transit location cannot be a regular issuing store.")
 

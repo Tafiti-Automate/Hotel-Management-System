@@ -55,21 +55,47 @@ const routePermissions: Record<string, string[]> = {
   'hotel-profile': ['organization.view_hotel'],
 }
 
+const enterpriseRoleRoutes: Record<string, string[]> = {
+  'purchasing-workbench': ['procurement officer', 'procurement manager'],
+  'purchasing-quotes': ['procurement officer', 'procurement manager'],
+  'purchasing-pr-new': ['department head'],
+  'purchasing-order-detail': ['procurement officer', 'procurement manager', 'financial manager', 'general manager'],
+  'receiving-po-detail': ['receiving clerk'],
+  'receiving-return-new': ['receiving clerk'],
+  'finance-invoice-matching': ['accounts payable clerk', 'financial manager'],
+  'finance-budgets': ['financial manager'],
+  'finance-period-close': ['financial manager'],
+  'admin-cost-centers': ['system administrator'],
+  'admin-authorisation-rules': ['system administrator'],
+  'admin-articles': ['system administrator'],
+  'stocktake-sheet': ['department supervisor', 'outlet supervisor', 'supervisor', 'store keeper'],
+  'stocktake-variance': ['cost controller', 'financial manager'],
+  'recipes-detail': ['department head', 'cost controller'],
+  'pos-reconciliation': ['cost controller'],
+  'waste-new': ['department supervisor', 'outlet supervisor', 'supervisor'],
+}
+const adminAllowedRoutes = new Set([
+  'dashboard','hr-dashboard', 'integration-control', 'access-management', 'audit-log',
+  'hotel-profile', 'admin-cost-centers', 'admin-authorisation-rules','admin-articles',
+  'locations', 'categories', 'items', 'uoms', 'itemUnits', 'employees', 'departments',
+  'suppliers','supplierItems', 'reports','reportview',
+])
+
 const hrApps = new Set(['employees', 'departments', 'accounts'])
 
 const strictRoleRoutes: Record<string, Set<string>> = {
-  'department supervisor': new Set(['dashboard', 'detail', 'workflow-stores', 'new-store-request', 'incoming-pickup', 'waste-control']),
-  'outlet supervisor': new Set(['dashboard', 'detail', 'workflow-stores', 'new-store-request', 'incoming-pickup', 'waste-control']),
-  supervisor: new Set(['dashboard', 'detail', 'workflow-stores', 'new-store-request', 'incoming-pickup', 'waste-control']),
-  'department head': new Set(['dashboard', 'detail', 'workflow-stores', 'approval-inbox', 'waste-control', 'recipes-production', 'reports', 'reportview']),
-  'store keeper': new Set(['dashboard', 'detail', 'workflow-stores', 'grn-posting', 'transfer-dispatch', 'stock-on-hand', 'store-transfers', 'locations', 'store-inventory', 'store-analysis', 'store-usage', 'store-purchase-requests', 'reports', 'reportview']),
-  'cost controller': new Set(['dashboard', 'detail', 'workflow-stores', 'waste-control', 'recipes-production', 'pos-control', 'items', 'categories', 'uoms', 'itemUnits', 'suppliers', 'supplierItems', 'reports', 'reportview', 'menu-engineering']),
-  'procurement manager': new Set(['dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
-  'procurement officer': new Set(['dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
-  'financial manager': new Set(['dashboard', 'detail', 'workflow-procure', 'approval-inbox', 'workflow-pay', 'finance-governance', 'reports', 'reportview', 'menu-engineering']),
-  'accounts payable clerk': new Set(['dashboard', 'detail', 'workflow-pay', 'reports', 'reportview']),
-  'general manager': new Set(['dashboard', 'detail', 'workflow-procure', 'approval-inbox', 'reports', 'reportview', 'menu-engineering']),
-  'receiving clerk': new Set(['dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
+  'department supervisor': new Set([ 'waste-new', 'stocktake-sheet','dashboard', 'detail', 'workflow-stores', 'new-store-request', 'incoming-pickup', 'waste-control']),
+  'outlet supervisor': new Set([ 'waste-new', 'stocktake-sheet','dashboard', 'detail', 'workflow-stores', 'new-store-request', 'incoming-pickup', 'waste-control']),
+  supervisor: new Set([ 'waste-new', 'stocktake-sheet','dashboard', 'detail', 'workflow-stores', 'new-store-request', 'incoming-pickup', 'waste-control']),
+  'department head': new Set([ 'purchasing-pr-new', 'recipes-detail', 'purchasing-order-detail','dashboard', 'detail', 'workflow-stores', 'approval-inbox', 'waste-control', 'recipes-production', 'reports', 'reportview']),
+  'store keeper': new Set([ 'stocktake-sheet','dashboard', 'detail', 'workflow-stores', 'grn-posting', 'transfer-dispatch', 'stock-on-hand', 'store-transfers', 'locations', 'store-inventory', 'store-analysis', 'store-usage', 'store-purchase-requests', 'reports', 'reportview']),
+  'cost controller': new Set([ 'pos-reconciliation', 'recipes-detail', 'stocktake-variance', 'store-inventory','dashboard', 'detail', 'workflow-stores', 'waste-control', 'recipes-production', 'pos-control', 'items', 'categories', 'uoms', 'itemUnits', 'suppliers', 'supplierItems', 'reports', 'reportview', 'menu-engineering']),
+  'procurement manager': new Set([ 'purchasing-workbench', 'purchasing-quotes', 'purchasing-order-detail','dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
+  'procurement officer': new Set([ 'purchasing-workbench', 'purchasing-quotes', 'purchasing-order-detail','dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
+  'financial manager': new Set([ 'finance-invoice-matching', 'finance-budgets', 'finance-period-close', 'purchasing-order-detail', 'stocktake-variance','dashboard', 'detail', 'workflow-procure', 'approval-inbox', 'workflow-pay', 'finance-governance', 'reports', 'reportview', 'menu-engineering']),
+  'accounts payable clerk': new Set([ 'finance-invoice-matching','dashboard', 'detail', 'workflow-pay', 'reports', 'reportview']),
+  'general manager': new Set([ 'purchasing-order-detail','dashboard', 'detail', 'workflow-procure', 'approval-inbox', 'reports', 'reportview', 'menu-engineering']),
+  'receiving clerk': new Set([ 'receiving-po-detail', 'receiving-return-new','dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
 }
 
 export const roleReportIds: Record<string, string[]> = {
@@ -146,11 +172,15 @@ export function isStoresManager(user: Pick<AccessUser, 'role'>): boolean {
 }
 
 export function canAccessRoute(user: AccessUser, route: string): boolean {
-  if (user.isSuperuser || roleKey(user) === 'system administrator') return true
-  const strict = strictRoleRoutes[roleKey(user)]
+  const role = roleKey(user)
+  // IT may configure and inspect master data, never operate financial or stock transactions.
+  if (user.isSuperuser || role === 'system administrator') return adminAllowedRoutes.has(route)
+  const requiredRoles = enterpriseRoleRoutes[route]
+  if (requiredRoles && !requiredRoles.includes(role)) return false
+  const strict = strictRoleRoutes[role]
   if (strict && !strict.has(route)) return false
 
-  const role = roleKey(user)
+  if (requiredRoles) return true
   if (route === 'new-store-request' || route === 'incoming-pickup') {
     return ['department supervisor', 'outlet supervisor', 'supervisor'].includes(roleKey(user))
   }

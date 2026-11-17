@@ -38,8 +38,10 @@ class ApprovalWorkflowViewSet(CreatedByModelMixin, ModelViewSet):
 
     @staticmethod
     def enforce_assigned_approver(request, approval):
-        if request.user.is_superuser:
-            return
+        if request.user.is_superuser or request.user.groups.filter(
+            name="System Administrator"
+        ).exists():
+            raise PermissionDenied("IT administrators cannot approve or reject operational documents.")
         if approval.approver.user_id != request.user.id:
             raise PermissionDenied(
                 "Only the employee assigned to this approval stage can record its decision."

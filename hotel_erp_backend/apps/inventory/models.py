@@ -356,6 +356,10 @@ class StoreLocation(BaseModel):
     address = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
     is_default = models.BooleanField(default=False)
+    is_virtual_transit = models.BooleanField(default=False)
+    enable_menu_planning = models.BooleanField(default=False)
+    permanent_inventory_pot_cos = models.BooleanField(default=False)
+    is_to_budget = models.BooleanField(default=False)
 
     class Meta(BaseModel.Meta):
         constraints = [
@@ -365,6 +369,11 @@ class StoreLocation(BaseModel):
             )
         ]
         ordering = ("branch__name", "name")
+
+    def clean(self):
+        super().clean()
+        if self.is_virtual_transit and (self.is_active or self.is_default):
+            raise ValidationError("A virtual transit store cannot be active or become a default issuing store.")
 
     def __str__(self):
         if self.branch:
@@ -501,6 +510,10 @@ class SupplierItemPrice(BaseModel):
         decimal_places=2,
         validators=[validate_positive_decimal],
     )
+    discount_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal("0.00"),
+        validators=[validate_non_negative_decimal],
+    )
     minimum_order_quantity = models.DecimalField(
         max_digits=12,
         decimal_places=2,
@@ -551,6 +564,8 @@ class SupplierItemPrice(BaseModel):
                 raise ValidationError(
                     {"unit": "Choose the article base unit or an active configured purchase unit."}
                 )
+        if self.discount_percent >= Decimal("100.00"):
+            raise ValidationError({"discount_percent": "Discount must be below 100%."})
         if (
             self.quotation_valid_until
             and self.effective_from
@@ -564,7 +579,8 @@ class SupplierItemPrice(BaseModel):
     def base_unit_price(self):
         """Comparable price expressed in the article's base stock unit."""
         factor = self.item.conversion_factor_for_unit(self.unit)
-        return (self.unit_price / factor).quantize(Decimal("0.01"))
+        discounted = self.unit_price * (Decimal("1.00") - self.discount_percent / Decimal("100.00"))
+        return (discounted / factor).quantize(Decimal("0.01"))
 
 
 class SupplierItemPriceHistory(BaseModel):
@@ -579,6 +595,7 @@ class SupplierItemPriceHistory(BaseModel):
     item = models.ForeignKey(Item, on_delete=models.PROTECT)
     unit = models.ForeignKey(UnitOfMeasure, on_delete=models.PROTECT, null=True, blank=True)
     unit_price = models.DecimalField(max_digits=15, decimal_places=2)
+    discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.00"))
     currency = models.CharField(max_length=10, default="UGX")
     effective_from = models.DateField()
     effective_to = models.DateField()

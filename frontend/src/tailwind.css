@@ -1,0 +1,10 @@
+/* Scoped Tailwind v4 tokens and utilities. No preflight; preserve legacy forms. */
+@import "tailwindcss/theme.css" prefix(tw);
+@import "tailwindcss/utilities.css" prefix(tw);
+@theme {
+  --color-mc-ink: #152f42;
+  --color-mc-teal: #066a70;
+  --color-mc-border: #d7dfe5;
+  --color-mc-slate: #f4f6f8;
+  --font-mc-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}

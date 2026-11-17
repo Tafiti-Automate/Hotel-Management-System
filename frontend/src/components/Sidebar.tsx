@@ -14,7 +14,8 @@ const roleNavigation: Record<string, NavGroup[]> = {
       { route: 'new-store-request', label: 'New store request', icon: 'add_circle' },
       { route: 'workflow-stores', label: 'My requests', icon: 'assignment' },
       { route: 'incoming-pickup', label: 'Confirm pickup', icon: 'fact_check' },
-      { route: 'waste-control', label: 'Waste log', icon: 'delete_sweep' },
+      { route: 'waste-new', label: 'Record waste', icon: 'delete_sweep' },
+      { route: 'stocktake-sheet', label: 'Blind stocktake', icon: 'fact_check' },
     ] },
   ],
   supervisor: [
@@ -23,7 +24,8 @@ const roleNavigation: Record<string, NavGroup[]> = {
       { route: 'new-store-request', label: 'New store request', icon: 'add_circle' },
       { route: 'workflow-stores', label: 'My requests', icon: 'assignment' },
       { route: 'incoming-pickup', label: 'Confirm pickup', icon: 'fact_check' },
-      { route: 'waste-control', label: 'Waste log', icon: 'delete_sweep' },
+      { route: 'waste-new', label: 'Record waste', icon: 'delete_sweep' },
+      { route: 'stocktake-sheet', label: 'Blind stocktake', icon: 'fact_check' },
     ] },
   ],
   'department head': [
@@ -31,6 +33,7 @@ const roleNavigation: Record<string, NavGroup[]> = {
       { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
       { route: 'approval-inbox', label: 'Approval inbox', icon: 'approval' },
       { route: 'waste-control', label: 'Waste review', icon: 'delete_sweep' },
+      { route: 'purchasing-pr-new', label: 'New purchase requisition', icon: 'add_shopping_cart' },
       { route: 'recipes-production', label: 'Recipe costing', icon: 'menu_book' },
     ] },
     { heading: 'Insights', items: [{ route: 'reports', label: 'Reports', icon: 'bar_chart' }] },
@@ -45,6 +48,7 @@ const roleNavigation: Record<string, NavGroup[]> = {
       { route: 'stock-on-hand', label: 'Stock on Hand Control', icon: 'inventory_2' },
       { route: 'locations', label: 'Stores & locations', icon: 'warehouse' },
       { route: 'store-inventory', label: 'Manage inventory', icon: 'fact_check' },
+      { route: 'stocktake-sheet', label: 'Blind stocktake', icon: 'playlist_add_check' },
       { route: 'store-purchase-requests', label: 'Purchase requests', icon: 'shopping_cart' },
     ] },
     { heading: 'Insights', items: [
@@ -59,7 +63,8 @@ const roleNavigation: Record<string, NavGroup[]> = {
       { route: 'workflow-stores', label: 'Request control', icon: 'fact_check' },
       { route: 'waste-control', label: 'Waste audit', icon: 'delete_sweep' },
       { route: 'recipes-production', label: 'Recipe costing', icon: 'menu_book' },
-      { route: 'pos-control', label: 'POS depletion', icon: 'point_of_sale' },
+      { route: 'pos-reconciliation', label: 'POS reconciliation', icon: 'point_of_sale' },
+      { route: 'stocktake-variance', label: 'Stocktake variances', icon: 'analytics' },
       { route: 'menu-engineering', label: 'Menu sales analysis', icon: 'scatter_plot' },
     ] },
     { heading: 'Master data', items: [
@@ -74,14 +79,18 @@ const roleNavigation: Record<string, NavGroup[]> = {
   'procurement manager': [
     { heading: 'Procurement', items: [
       { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
-      { route: 'workflow-procure', label: 'Procurement workbench', icon: 'shopping_cart' },
+      { route: 'purchasing-workbench', label: 'PR-to-PO workbench', icon: 'shopping_cart' },
+      { route: 'purchasing-quotes', label: 'Supplier quotes', icon: 'request_quote' },
+      { route: 'workflow-procure', label: 'Procurement workflow', icon: 'account_tree' },
     ] },
     { heading: 'Insights', items: [{ route: 'reports', label: 'Reports', icon: 'bar_chart' }] },
   ],
   'procurement officer': [
     { heading: 'Procurement', items: [
       { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
-      { route: 'workflow-procure', label: 'Procurement workbench', icon: 'shopping_cart' },
+      { route: 'purchasing-workbench', label: 'PR-to-PO workbench', icon: 'shopping_cart' },
+      { route: 'purchasing-quotes', label: 'Supplier quotes', icon: 'request_quote' },
+      { route: 'workflow-procure', label: 'Procurement workflow', icon: 'account_tree' },
     ] },
     { heading: 'Insights', items: [{ route: 'reports', label: 'Reports', icon: 'bar_chart' }] },
   ],
@@ -91,13 +100,17 @@ const roleNavigation: Record<string, NavGroup[]> = {
       { route: 'approval-inbox', label: 'Approval inbox', icon: 'approval' },
       { route: 'workflow-procure', label: 'LPO workbench', icon: 'receipt_long' },
       { route: 'workflow-pay', label: 'Invoices & payments', icon: 'payments' },
-      { route: 'finance-governance', label: 'Budgets & period close', icon: 'account_balance' },
+      { route: 'finance-budgets', label: 'Monthly budgets', icon: 'table_chart' },
+      { route: 'finance-period-close', label: 'Month-end close', icon: 'lock' },
+      { route: 'finance-invoice-matching', label: '3-way invoice matching', icon: 'fact_check' },
+      { route: 'finance-governance', label: 'Finance governance', icon: 'account_balance' },
     ] },
     { heading: 'Insights', items: [{ route: 'reports', label: 'Reports', icon: 'bar_chart' }] },
   ],
   'accounts payable clerk': [
     { heading: 'Accounts payable', items: [
       { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
+      { route: 'finance-invoice-matching', label: '3-way invoice matching', icon: 'fact_check' },
       { route: 'workflow-pay', label: 'Invoices & payments', icon: 'payments' },
     ] },
     { heading: 'Control evidence', items: [{ route: 'reports', label: 'Reports', icon: 'bar_chart' }] },
@@ -105,6 +118,7 @@ const roleNavigation: Record<string, NavGroup[]> = {
   'general manager': [
     { heading: 'Management', items: [
       { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
+      { route: 'menu-engineering', label: 'Menu engineering', icon: 'scatter_plot' },
       { route: 'approval-inbox', label: 'Final approvals', icon: 'verified' },
     ] },
     { heading: 'Insights', items: [{ route: 'reports', label: 'Reports', icon: 'bar_chart' }] },
@@ -113,6 +127,8 @@ const roleNavigation: Record<string, NavGroup[]> = {
     { heading: 'Receiving', items: [
       { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
       { route: 'workflow-procure', label: 'Receiving & GRN', icon: 'local_shipping' },
+      { route: 'receiving-po-detail', label: 'Blind receiving', icon: 'inventory' },
+      { route: 'receiving-return-new', label: 'Return to supplier', icon: 'assignment_return' },
     ] },
     { heading: 'Insights', items: [{ route: 'reports', label: 'Reports', icon: 'bar_chart' }] },
   ],
@@ -122,27 +138,19 @@ const roleNavigation: Record<string, NavGroup[]> = {
 roleNavigation['outlet supervisor'] = roleNavigation['department supervisor']
 
 const adminNavigation: NavGroup[] = [
-  { heading: 'Operations', items: [
-    { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
-    { route: 'workflow-stores', label: 'Stores workflow', icon: 'inventory' },
-    { route: 'stock-on-hand', label: 'Stock on hand', icon: 'inventory_2' },
-    { route: 'workflow-procure', label: 'Procurement', icon: 'shopping_cart' },
-    { route: 'workflow-pay', label: 'Finance', icon: 'payments' },
-  ] },
   { heading: 'Master data', items: [
-    { route: 'suppliers', label: 'Suppliers', icon: 'local_shipping' },
-    { route: 'supplierItems', label: 'Supplier prices', icon: 'request_quote' },
-    { route: 'categories', label: 'Item categories', icon: 'category' },
-    { route: 'items', label: 'Articles', icon: 'inventory_2' },
-    { route: 'uoms', label: 'Units & conversions', icon: 'straighten' },
-    { route: 'locations', label: 'Stores', icon: 'warehouse' },
+    { route:'dashboard', label:'IT dashboard', icon:'space_dashboard' },
+    { route:'admin-cost-centers', label:'Cost center / Stores', icon:'warehouse' },
+    { route:'admin-articles', label:'Article master', icon:'inventory_2' },
+    { route:'admin-authorisation-rules', label:'Authorisation rules', icon:'rule' },
+    { route:'uoms', label:'Unit conversions', icon:'straighten' },
+    { route:'categories', label:'Item super groups', icon:'category' },
   ] },
-  { heading: 'Governance', items: [
-    { route: 'integration-control', label: 'Integrations & outlets', icon: 'hub' },
-    { route: 'reports', label: 'Reports', icon: 'bar_chart' },
-    { route: 'audit-log', label: 'Audit trail', icon: 'history' },
-    { route: 'access-management', label: 'User access', icon: 'manage_accounts' },
-    { route: 'hotel-profile', label: 'Settings', icon: 'settings' },
+  { heading: 'System controls', items: [
+    { route:'access-management', label:'Users / Roles', icon:'manage_accounts' },
+    { route:'audit-log', label:'Immutable audit', icon:'history' },
+    { route:'integration-control', label:'Integrations', icon:'hub' },
+    { route:'hotel-profile', label:'Property setup', icon:'settings' },
   ] },
 ]
 

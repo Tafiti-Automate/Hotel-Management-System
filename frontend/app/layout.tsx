@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
+import '../src/tailwind.css'
 import '../src/index.css'
 import '../src/enterprise.css'
 import '../src/hotel-ui-v2.css'
@@ -10,6 +11,7 @@ import '../src/enterprise-redesign.css'
 import '../src/enterprise-foundation.css'
 import '../src/materials-control.css'
 import '../src/operational-blueprint.css'
+import '../src/mc-enterprise.css'
 
 export const metadata: Metadata = {
   title: 'Hotel ERP',

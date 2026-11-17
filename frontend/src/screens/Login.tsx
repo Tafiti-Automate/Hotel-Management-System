@@ -1,134 +1,88 @@
-import { FormEvent, KeyboardEvent, useId, useState } from 'react'
-import { useApp } from '../state/AppContext'
+import { useEffect, useId, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { Icon } from '../components/Icon'
+import { useApp } from '../state/AppContext'
 
-function friendlyError(error: unknown): string {
-  const message = error instanceof Error ? error.message : ''
-  if (/failed to fetch|networkerror|load failed/i.test(message)) return 'The hotel server could not be reached. Check your connection and try again.'
-  if (/\b404\b|not found/i.test(message)) return 'The authentication service is unavailable. Contact your system administrator.'
-  if (/invalid credentials/i.test(message)) return 'The username, employee ID, or password is incorrect.'
-  return message || 'We could not sign you in. Please try again.'
+type Language='English'|'French'
+const strings={
+  English:{user:'User Name',password:'Password',database:'Database / Property',language:'Language',
+    ok:'OK',cancel:'Cancel',title:'Materials Control',prompt:'Enter your staff credentials to open your authorised property.',
+    invalid:'Enter both your user name and password.',caps:'Caps Lock is on'},
+  French:{user:'Identifiant',password:'Mot de passe',database:'Base de données / Établissement',language:'Langue',
+    ok:'Valider',cancel:'Annuler',title:'Contrôle des matières',prompt:'Saisissez vos identifiants pour accéder à votre établissement.',
+    invalid:'Saisissez votre identifiant et votre mot de passe.',caps:'Verr. Maj. activé'},
 }
 
 export default function Login() {
-  const { login, authMessage } = useApp()
-  const usernameId = useId()
-  const passwordId = useId()
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [remember, setRemember] = useState(true)
-  const [showPassword, setShowPassword] = useState(false)
-  const [capsLock, setCapsLock] = useState(false)
-  const [usernameError, setUsernameError] = useState('')
-  const [passwordError, setPasswordError] = useState('')
-  const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [showHelp, setShowHelp] = useState(false)
-
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (busy) return
-    const cleanUsername = username.trim()
-    const nextUsernameError = cleanUsername ? '' : 'Enter your username or employee ID.'
-    const nextPasswordError = password ? '' : 'Enter your password.'
-    setUsernameError(nextUsernameError)
-    setPasswordError(nextPasswordError)
-    setError('')
-    if (nextUsernameError || nextPasswordError) return
-
-    setBusy(true)
-    try {
-      await login(cleanUsername, password, remember)
-    } catch (reason) {
-      setError(friendlyError(reason))
-    } finally {
-      setBusy(false)
+  const { login, authMessage, data }=useApp()
+  const userId=useId(),passId=useId()
+  const [username,setUsername]=useState('')
+  const [password,setPassword]=useState('')
+  const [property,setProperty]=useState('assigned')
+  const [language,setLanguage]=useState<Language>('English')
+  const [caps,setCaps]=useState(false)
+  const [remember,setRemember]=useState(true)
+  const [busy,setBusy]=useState(false)
+  const [error,setError]=useState('')
+  const t=strings[language]
+  useEffect(()=>{
+    const onKey=(e:globalThis.KeyboardEvent)=>{
+      if(e.key==='Escape'&&document.activeElement instanceof HTMLElement){
+        setUsername('');setPassword('');setError('')
+      }
     }
+    window.addEventListener('keydown',onKey)
+    return ()=>window.removeEventListener('keydown',onKey)
+  },[])
+  const submit=async(event:FormEvent<HTMLFormElement>)=>{
+    event.preventDefault()
+    if(busy)return
+    if(!username.trim()||!password){setError(t.invalid);return}
+    setBusy(true);setError('')
+    try{
+      // The assigned property is verified server-side, never selected by trusting
+      // an unauthenticated browser-supplied property name.
+      await login(username.trim(),password,remember)
+    }catch(cause){
+      const message=cause instanceof Error?cause.message:'Authentication unsuccessful'
+      setError(/failed to fetch|networkerror/i.test(message)
+        ?'The hotel authentication server is not reachable.':message)
+    }finally{setBusy(false)}
   }
-
-  const detectCaps = (event: KeyboardEvent<HTMLInputElement>) => setCapsLock(event.getModifierState('CapsLock'))
-
-  return <main className="neo-auth-page">
-    <section className="neo-auth-brand" aria-label="Hotel ERP">
-      <div className="neo-auth-brand-top">
-        <span className="neo-auth-logo"><Icon name="hotel" size={24} color="#fff" fill /></span>
-        <span><strong>Hotel ERP</strong><small>Operations & administration</small></span>
+  const detectCaps=(event:KeyboardEvent<HTMLInputElement>)=>setCaps(event.getModifierState('CapsLock'))
+  return <main className="mc-login-backdrop">
+    <section className="mc-login-window" aria-label="Hotel Materials Control sign-on">
+      <div className="mc-login-topline"><span className="mc-login-icon"><Icon name="inventory_2" size={20}/></span>
+        <div><strong>HOSPITALITY MATERIALS CONTROL</strong><small>Hotel ERP · Enterprise staff sign-on</small></div>
+        <span className="mc-login-version">MC / Web</span></div>
+      <div className="mc-login-heading">
+        <h1>{t.title}</h1><p>{t.prompt}</p>
       </div>
-
-      <div className="neo-auth-brand-copy">
-        <span className="neo-auth-kicker">Hotel operations system</span>
-        <h1>One workspace for every operational shift.</h1>
-        <p>Access your property’s stores, purchasing, finance and workflow controls from one governed system.</p>
-        <div className="neo-auth-access-note">
-          <Icon name="verified_user" size={18} />
-          <span><strong>Authorised staff access</strong><small>Your available tools are determined by your assigned role and property.</small></span>
+      {authMessage&&<div className="mc-login-message">{authMessage}</div>}
+      {error&&<div className="mc-login-error" role="alert">{error}</div>}
+      <form onSubmit={submit} className="mc-login-form">
+        <label htmlFor={userId}>{t.user}</label><input id={userId} name="username" autoFocus autoComplete="username"
+          autoCapitalize="none" spellCheck={false} value={username} onChange={e=>setUsername(e.target.value)} disabled={busy}/>
+        <label htmlFor={passId}>{t.password}</label><input id={passId} name="password" type="password"
+          autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)}
+          onKeyDown={detectCaps} onKeyUp={detectCaps} disabled={busy}/>
+        <label htmlFor="mc-property-select">{t.database}</label>
+        <select id="mc-property-select" value={property} onChange={e=>setProperty(e.target.value)} disabled={busy}>
+          <option value="assigned">AUTO — Authenticated assigned property</option>
+          {data.branches.map(branch=><option value={String(branch.id)} key={String(branch.id)}>{String(branch.name)}</option>)}
+        </select>
+        <label htmlFor="mc-language-select">{t.language}</label>
+        <select id="mc-language-select" value={language} onChange={e=>setLanguage(e.target.value as Language)} disabled={busy}>
+          <option value="English">English</option><option value="French">Français</option>
+        </select>
+        {caps&&<div className="mc-login-caps">{t.caps}</div>}
+        <div className="mc-login-remember"><label><input type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)}/> Keep me signed in on this device</label></div>
+        <div className="mc-login-buttons"><button type="submit" className="mc-login-ok" disabled={busy}>
+          {busy?'Signing in…':t.ok}</button>
+          <button type="button" className="mc-login-cancel" disabled={busy} onClick={()=>{setUsername('');setPassword('');setError('');setProperty('assigned')}}>{t.cancel}</button>
         </div>
-      </div>
-
-      <footer><span>Hotel Operations ERP</span><span>Internal staff access only</span></footer>
+      </form>
+      <footer className="mc-login-footer"><span><Icon name="lock" size={13}/> Staff-only access · role & property controlled</span><span>© Hotel ERP</span></footer>
     </section>
-
-    <section className="neo-auth-form-panel">
-      <div className="neo-auth-form-wrap">
-        <header className="neo-auth-form-heading">
-          <span className="neo-auth-mobile-logo"><Icon name="hotel" size={21} color="#fff" fill /></span>
-          <div><span>Staff access</span><h2>Sign in</h2><p>Use your staff username or employee ID to continue.</p></div>
-        </header>
-
-        {authMessage && <div className="neo-auth-notice"><Icon name="info" size={18} /><span>{authMessage}</span></div>}
-        {error && <div className="neo-auth-error" role="alert"><Icon name="error" size={18} /><span>{error}</span></div>}
-
-        <form className="neo-auth-form" onSubmit={submit} noValidate>
-          <label htmlFor={usernameId}>Username or employee ID</label>
-          <div className={`neo-auth-input ${usernameError ? 'is-error' : ''}`}>
-            <Icon name="person" size={19} />
-            <input
-              id={usernameId}
-              name="username"
-              value={username}
-              onChange={(event) => { setUsername(event.target.value); if (usernameError) setUsernameError('') }}
-              autoFocus
-              autoCapitalize="none"
-              autoComplete="username"
-              spellCheck={false}
-              aria-invalid={Boolean(usernameError)}
-              placeholder="e.g. admin or EMP-001"
-            />
-          </div>
-          {usernameError && <small className="neo-field-error">{usernameError}</small>}
-
-          <div className="neo-auth-password-label"><label htmlFor={passwordId}>Password</label><button type="button" onClick={() => setShowHelp((value) => !value)}>Need help?</button></div>
-          <div className={`neo-auth-input ${passwordError ? 'is-error' : ''}`}>
-            <Icon name="lock" size={19} />
-            <input
-              id={passwordId}
-              name="password"
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={(event) => { setPassword(event.target.value); if (passwordError) setPasswordError('') }}
-              onKeyDown={detectCaps}
-              onKeyUp={detectCaps}
-              onBlur={() => setCapsLock(false)}
-              autoComplete="current-password"
-              aria-invalid={Boolean(passwordError)}
-              placeholder="Enter your password"
-            />
-            <button className="neo-auth-password-toggle" type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'}><Icon name={showPassword ? 'visibility_off' : 'visibility'} size={18} /></button>
-          </div>
-          {passwordError && <small className="neo-field-error">{passwordError}</small>}
-          {!passwordError && capsLock && <small className="neo-caps-warning"><Icon name="keyboard_capslock" size={14} />Caps Lock is on</small>}
-
-          {showHelp && <div className="neo-auth-help"><Icon name="support_agent" size={18} /><span><strong>Access problem?</strong><small>Contact your system administrator to reset your staff credentials or verify your account status.</small></span></div>}
-
-          <label className="neo-auth-remember"><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} /><span>Keep me signed in on this device</span></label>
-
-          <button type="submit" className="neo-auth-submit" disabled={busy}>
-            {busy ? <><span className="neo-button-spinner" />Signing in…</> : <>Sign in <Icon name="arrow_forward" size={18} /></>}
-          </button>
-        </form>
-
-        <div className="neo-auth-security"><Icon name="shield" size={16} /><span>Your session is protected and automatically expires after inactivity.</span></div>
-      </div>
-    </section>
+    <div className="mc-login-credit">Materials Control–inspired enterprise interface. Not an Oracle product.</div>
   </main>
 }

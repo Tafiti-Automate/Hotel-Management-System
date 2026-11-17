@@ -66,6 +66,8 @@ class PurchaseOrderViewSet(BasePurchaseOrderViewSet):
     """Use hotel-wide management authority while retaining branch controls elsewhere."""
 
     def _current_approval_step(self, order, request):
+        if request.user.is_superuser or user_has_role(request.user, "System Administrator"):
+            raise PermissionDenied("IT administrators cannot authorise purchase orders.")
         step = order.approval_workflow.filter(
             status=ApprovalStatus.PENDING,
         ).order_by("stage").first()
@@ -174,8 +176,8 @@ class GoodsReceiptNoteViewSet(BaseGoodsReceiptNoteViewSet):
         return queryset
 
     def _require_store_keeper(self, request, receipt):
-        if user_has_role(request.user, "System Administrator"):
-            raise PermissionDenied("System Administrators cannot verify or post GRNs.")
+        if request.user.is_superuser or user_has_role(request.user, "System Administrator"):
+            raise PermissionDenied("IT administrators cannot verify or post GRNs.")
         employee = getattr(request.user, "employee_profile", None)
         if not user_has_role(request.user, "Store Keeper") or not employee or not employee.is_active:
             raise PermissionDenied("Only the Store Keeper can verify and post a received GRN to Stock on Hand.")

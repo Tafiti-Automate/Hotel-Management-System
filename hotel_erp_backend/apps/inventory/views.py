@@ -438,6 +438,8 @@ class InventoryBalanceViewSet(ReadOnlyModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        if has_role(self.request.user, "Department Supervisor", "Outlet Supervisor", "Supervisor", "Receiving Clerk"):
+            return queryset.none()
         if has_role(self.request.user, "Store Keeper") and not has_role(
             self.request.user, "System Administrator", "General Manager"
         ):
@@ -472,6 +474,13 @@ class InventoryBalanceViewSet(ReadOnlyModelViewSet):
 
 
 class SupplierItemPriceViewSet(CostControllerAuthorityMixin, CreatedByModelMixin, ModelViewSet):
+    def _require_master_data_authority(self):
+        if not has_role(self.request.user,
+            "System Administrator", "Cost Controller", "Procurement Manager",
+            "Procurement Officer", "Purchasing Officer"
+        ):
+            raise PermissionDenied("Only Purchasing, Cost Control or system master-data administrators may maintain supplier quotes.")
+
     queryset = SupplierItemPrice.objects.select_related("supplier", "item", "item__category", "unit")
     serializer_class = SupplierItemPriceSerializer
     filterset_fields = ("supplier", "item", "item__category", "unit", "is_preferred", "is_active")
@@ -1210,6 +1219,8 @@ class StockIssueViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"])
     def apply(self, request, pk=None):
         issue = self.get_object()
+        if request.user.is_superuser or has_role(request.user, "System Administrator"):
+            raise PermissionDenied("IT administrators cannot post inventory issues.")
         if not has_role(request.user, "Store Keeper"):
             raise PermissionDenied("Only an assigned Storekeeper can dispatch issue vouchers.")
         if issue.inventory_changes_applied:
