@@ -335,6 +335,19 @@ class SupplierInvoice(BaseModel):
     def perform_three_way_match(self, amount_tolerance=Decimal("0.01")):
         if self.status not in (self.STATUS_DRAFT, self.STATUS_EXCEPTION):
             raise ValidationError("Only draft or exception invoices may be matched. Approved and paid invoices are locked.")
+        # Header-only matching has no per-line allocation. Once a header-only
+        # invoice has reserved a receipt's value, it cannot be claimed again.
+        # Similarly, detailed lines cannot safely allocate quantities against
+        # a previously matched header-only invoice without a credit/reversal.
+        locked_statuses = (
+            self.STATUS_MATCHED, self.STATUS_APPROVED,
+            self.STATUS_PARTIALLY_PAID, self.STATUS_PAID,
+        )
+        prior_matched = SupplierInvoice.objects.filter(
+            purchase_order_id=self.purchase_order_id,
+            status__in=locked_statuses,
+        ).exclude(pk=self.pk)
+        prior_header_only = prior_matched.filter(items__isnull=True).exists()
         invoice_lines = list(
             self.items.select_related(
                 "purchase_order_item",
@@ -343,6 +356,19 @@ class SupplierInvoice(BaseModel):
             )
         )
         if invoice_lines:
+            if prior_header_only:
+                self.status = self.STATUS_EXCEPTION
+                self.quantity_variance = Decimal("0.00")
+                self.amount_variance = self.subtotal
+                self.match_notes = (
+                    "A previously matched header-only invoice already claims this "
+                    "purchase order's received value. Reconcile or reverse it first."
+                )
+                self.save(update_fields=(
+                    "status", "quantity_variance", "amount_variance",
+                    "match_notes", "updated_at",
+                ))
+                return
             accepted_value = Decimal("0.00")
             calculated_subtotal = Decimal("0.00")
             quantity_variance = Decimal("0.00")
@@ -398,6 +424,22 @@ class SupplierInvoice(BaseModel):
             )
             return
 
+        # A header-only invoice cannot be reconciled against receipts already
+        # claimed by a matched line invoice or another header-only invoice.
+        if prior_matched.exists():
+            self.status = self.STATUS_EXCEPTION
+            self.quantity_variance = Decimal("0.00")
+            self.amount_variance = self.subtotal
+            self.match_notes = (
+                "Accepted receipts have already been allocated to a matched "
+                "invoice for this purchase order. Use invoice lines for new "
+                "partial receipts or resolve the previous invoice."
+            )
+            self.save(update_fields=(
+                "status", "quantity_variance", "amount_variance",
+                "match_notes", "updated_at",
+            ))
+            return
         accepted_value = Decimal("0.00")
         for receipt in self.purchase_order.goods_receipt_notes.all():
             for line in receipt.items.select_related("purchase_order_item"):
