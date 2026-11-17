@@ -2104,16 +2104,6 @@ class GoodsReceiptItemViewSet(CreatedByModelMixin, ModelViewSet):
             raise ValidationError("Remove the inspection decision before removing this GRN line.")
         instance.delete()
 
-    @action(detail=True, methods=["post"], url_path="post-to-inventory")
-    def post_to_inventory(self, request, pk=None):
-        receipt_item = self.get_object()
-        try:
-            receipt_item.post_to_inventory()
-        except DjangoValidationError as error:
-            raise_drf_validation_error(error)
-        serializer = self.get_serializer(receipt_item)
-        return Response(serializer.data)
-
 class VendorQuotationItemViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = VendorQuotationItem.objects.select_related("quotation", "requisition_item", "item", "unit")
     serializer_class = VendorQuotationItemSerializer
