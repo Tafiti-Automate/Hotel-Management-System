@@ -573,24 +573,23 @@ export function EnterprisePurchaseOrderDetail() {
 }
 
 export function EnterprisePurchaseRequisitionBuilder() {
-  const {data,loading,error,reload}=useBackendRows(['items','units','supplier-item-prices'])
+  const {data,loading,error,reload}=useBackendRows(['items','units'])
   const {busy,error:mutationError,run}=useOperation(reload)
   const [reason,setReason]=useState('')
   const [selectedItem,setSelectedItem]=useState('')
   const [quantity,setQuantity]=useState('1')
+  const [estimatedCost,setEstimatedCost]=useState('')
   const [lines,setLines]=useState<{item:string;name:string;unit:string;quantity:number;price:number;supplier:string}[]>([])
   const articles=data.items||[]
-  const quotes=data['supplier-item-prices']||[]
-  const selectedQuote=quotes.find(q=>str(q.item)===selectedItem&&q.is_preferred)
   const subtotal=lines.reduce((s,line)=>s+line.quantity*line.price,0)
   const add=()=>{
     const item=articles.find(r=>str(r.id)===selectedItem)
-    if(!item||!(Number(quantity)>0))return
+    if(!item||!(Number(quantity)>0)||!(Number(estimatedCost)>0))return
     lines.length>=50?void 0:setLines(old=>[...old,{
       item:selectedItem,name:str(item.name),unit:str(item.base_unit),
-      quantity:Number(quantity),price:dec(selectedQuote?.unit_price),supplier:str(selectedQuote?.supplier_name||'Unquoted'),
+      quantity:Number(quantity),price:Number(estimatedCost),supplier:'To be sourced by Purchasing',
     }])
-    setSelectedItem('');setQuantity('1')
+    setSelectedItem('');setQuantity('1');setEstimatedCost('')
   }
   const save=async()=>{
     if(!reason.trim()||!lines.length)return
@@ -605,7 +604,7 @@ export function EnterprisePurchaseRequisitionBuilder() {
     },'Purchase requisition and lines saved')
   }
   return <WorkspacePage section="Purchase / Requisitions" title="New purchase requisition"
-    subtitle="Prepare an external purchase requisition or daily market list with linked supplier quote reference.">
+    subtitle="Prepare an external purchase requisition or daily market list using a department estimate; Purchasing manages confidential supplier quotes.">
     <StateMessage loading={loading} error={error||mutationError}/>
     {!loading&&!error&&<div className="mc-split mc-new-pr">
       <section className="mc-dense-panel mc-form-panel"><header className="mc-panel-title">Requisition details</header>
@@ -613,15 +612,15 @@ export function EnterprisePurchaseRequisitionBuilder() {
         <label className="mc-field"><span>Article</span><select value={selectedItem} onChange={event=>setSelectedItem(event.target.value)}>
           <option value="">Choose Article</option>{articles.map(r=><option key={str(r.id)} value={str(r.id)}>{str(r.sku)} · {str(r.name)}</option>)}</select></label>
         <FormField label="Requested quantity" value={quantity} onChange={setQuantity} type="number"/>
-        <InfoLine label="Preferred quote" value={selectedQuote?str(selectedQuote.supplier_name)+' · '+str(selectedQuote.currency)+' '+amount(selectedQuote.unit_price):'No preferred quote configured'}/>
-        <button className={btn} disabled={!selectedItem||!(Number(quantity)>0)} onClick={add}><Icon name="add" size={15}/> Add Article</button>
+        <FormField label="Estimated unit cost (UGX)" value={estimatedCost} onChange={setEstimatedCost} type="number" placeholder="Enter departmental budget estimate"/>
+        <button className={btn} disabled={!selectedItem||!(Number(quantity)>0)||!(Number(estimatedCost)>0)} onClick={add}><Icon name="add" size={15}/> Add Article</button>
       </section>
       <section className="mc-dense-panel"><header className="mc-panel-title">Daily market list · {lines.length} lines</header>
         <table className="mc-simple-table"><thead><tr><th>Article</th><th>Supplier</th><th className="mc-num">Qty</th><th className="mc-num">Estimated unit</th><th></th></tr></thead>
         <tbody>{lines.map((line,i)=><tr key={i}><td>{line.name}</td><td>{line.supplier}</td><td className="mc-num">{line.quantity}</td><td className="mc-num">{amount(line.price)}</td>
           <td><button className="mc-link-button" onClick={()=>setLines(old=>old.filter((_,j)=>j!==i))} aria-label={'Remove '+line.name}><Icon name="close" size={15}/></button></td></tr>)}</tbody></table>
         <div className="mc-total-line"><span>Estimated subtotal · excluding VAT</span><strong>UGX {amount(subtotal)}</strong></div>
-        <div className="mc-alert mc-muted">VAT calculation and locked contracted quote snapshots require backend support. This form stores Django's current estimated unit-cost field; it does not represent an authorised PO.</div>
+        <div className="mc-alert mc-muted">The estimate is for budget planning only, not a contracted supplier price. Purchasing selects supplier quotations later; saving a PR does not authorise a PO.</div>
         <div className="mc-decision-bar"><ConfirmTransaction title="Save purchase requisition?" description="Creates an external PR and its item lines in the existing backend; approval routing remains a separate step."
           confirmLabel="Save requisition" className={affirmative} busy={busy} disabled={busy||!reason.trim()||!lines.length} onConfirm={save}>
           <Icon name="save" size={15}/> Save PR
