@@ -170,3 +170,27 @@ def test_reconciliation_confirmation_requires_independent_user(bank_reconciliati
     with pytest.raises(DjangoValidationError, match="preparer cannot confirm"):
         matching.confirm(actor=reviewer, note="Same person")
     assert matching.status == SupplierPaymentReconciliation.STATUS_PENDING
+
+
+@pytest.mark.django_db
+def test_matched_bank_entry_is_locked_even_for_administrator(bank_reconciliation_context):
+    preparer, reviewer, poster, it, payment, entry, bank, invoice = bank_reconciliation_context
+    SupplierPaymentReconciliation.objects.create(
+        payment=payment, bank_transaction=entry, created_by=preparer
+    )
+    administrator = get_user_model().objects.create_superuser(
+        username="bank-locked-superuser", employee_code="PH2-BR-SUPER",
+        password="test-pass-123",
+    )
+    client = APIClient()
+    client.force_authenticate(user=administrator)
+    response = client.patch(
+        f"/api/v1/bank-transactions/{entry.pk}/",
+        {"amount": "100.00"}, format="json",
+    )
+    assert response.status_code == 400
+    response = client.delete(f"/api/v1/bank-transactions/{entry.pk}/")
+    assert response.status_code == 400
+    entry.refresh_from_db()
+    assert entry.amount == Decimal("2000.00")
+    assert BankTransaction.objects.filter(pk=entry.pk).exists()
