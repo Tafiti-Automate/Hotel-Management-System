@@ -48,6 +48,23 @@ def require_accounts_payable_action(user):
         raise PermissionDenied("Only Accounts Payable staff may process supplier invoices and payments.")
 
 
+def scope_supplier_finance_records(queryset, user, purchase_order_path):
+    """Finance records are visible only within the actor's assigned property."""
+    if user.is_superuser:
+        return queryset
+    employee = getattr(user, "employee_profile", None)
+    if not employee or not employee.is_active or not employee.branch_id:
+        return queryset.none()
+    branch = employee.branch
+    if getattr(branch, "hotel_id", None):
+        return queryset.filter(
+            **{f"{purchase_order_path}__requisition__branch__hotel_id": branch.hotel_id}
+        )
+    return queryset.filter(
+        **{f"{purchase_order_path}__requisition__branch_id": branch.pk}
+    )
+
+
 class PaymentMethodViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = PaymentMethod.objects.all()
     serializer_class = PaymentMethodSerializer
@@ -116,6 +133,11 @@ class SupplierInvoiceViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("invoice_number", "supplier__name", "purchase_order__po_number")
     ordering_fields = ("invoice_date", "due_date", "subtotal", "status", "created_at")
 
+    def get_queryset(self):
+        return scope_supplier_finance_records(
+            super().get_queryset(), self.request.user, "purchase_order"
+        )
+
     def perform_destroy(self, instance):
         if instance.status != SupplierInvoice.STATUS_DRAFT:
             raise ValidationError(
@@ -163,6 +185,11 @@ class SupplierInvoiceItemViewSet(CreatedByModelMixin, ModelViewSet):
     )
     ordering_fields = ("quantity", "unit_price", "created_at")
 
+    def get_queryset(self):
+        return scope_supplier_finance_records(
+            super().get_queryset(), self.request.user, "invoice__purchase_order"
+        )
+
     def perform_destroy(self, instance):
         if instance.invoice.status not in (
             SupplierInvoice.STATUS_DRAFT,
@@ -179,6 +206,11 @@ class SupplierPaymentViewSet(CreatedByModelMixin, ModelViewSet):
     filterset_fields = ("invoice", "payment_method", "bank_account", "status", "payment_date")
     search_fields = ("reference", "invoice__invoice_number", "invoice__supplier__name")
     ordering_fields = ("payment_date", "amount", "status", "created_at")
+
+    def get_queryset(self):
+        return scope_supplier_finance_records(
+            super().get_queryset(), self.request.user, "invoice__purchase_order"
+        )
 
     def perform_destroy(self, instance):
         if instance.status != SupplierPayment.STATUS_DRAFT:
