@@ -1319,6 +1319,12 @@ class StockCountViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("count_no", "store__name", "note")
     ordering_fields = ("count_no", "count_date", "status", "created_at")
 
+    def get_permissions(self):
+        # Approving a count is a financial action, not general inventory editing.
+        if self.action == "approve":
+            return [IsAuthenticated()]
+        return super().get_permissions()
+
     def _is_store_keeper(self):
         return has_role(self.request.user, "Store Keeper") and not has_role(
             self.request.user, "System Administrator", "General Manager"
@@ -1328,6 +1334,11 @@ class StockCountViewSet(CreatedByModelMixin, ModelViewSet):
         queryset = super().get_queryset()
         if self._is_store_keeper():
             return queryset.filter(store_id__in=assigned_store_ids(self.request.user))
+        if self.action == "approve":
+            employee = getattr(self.request.user, "employee_profile", None)
+            if not employee or not employee.branch_id:
+                return queryset.none()
+            return queryset.filter(store__branch_id=employee.branch_id)
         return queryset
 
     def perform_create(self, serializer):
@@ -1359,9 +1370,18 @@ class StockCountViewSet(CreatedByModelMixin, ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
+        if (request.user.is_superuser
+                or has_role(request.user, "System Administrator", "Store Keeper")
+                or not has_role(request.user, "Financial Manager")):
+            raise PermissionDenied("Only the Financial Manager may approve a submitted stocktake.")
+        employee = getattr(request.user, "employee_profile", None)
+        if not employee or not employee.branch_id:
+            raise PermissionDenied("An assigned Financial Manager employee and property are required.")
         stock_count = self.get_object()
+        if stock_count.conducted_by_id == employee.pk:
+            raise PermissionDenied("You cannot approve a stocktake that you conducted.")
         try:
-            stock_count.approve(approved_by=getattr(request.user, "employee_profile", None))
+            stock_count.approve(approved_by=employee)
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
         return Response(self.get_serializer(stock_count).data)
@@ -1377,6 +1397,8 @@ class StockCountViewSet(CreatedByModelMixin, ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def apply(self, request, pk=None):
+        if request.user.is_superuser or not self._is_store_keeper():
+            raise PermissionDenied("Only an assigned Store Keeper can post approved stocktake variances.")
         stock_count = self.get_object()
         try:
             stock_count.apply_variances()
