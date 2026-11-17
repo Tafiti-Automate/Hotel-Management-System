@@ -1011,6 +1011,16 @@ class GoodsInspectionItemSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "Inspection decisions cannot change after GRN posting or cancellation."
             )
+        if self.instance and (
+            (attrs.get("inspection") and attrs["inspection"].pk != self.instance.inspection_id)
+            or (
+                attrs.get("goods_receipt_item")
+                and attrs["goods_receipt_item"].pk != self.instance.goods_receipt_item_id
+            )
+        ):
+            raise serializers.ValidationError(
+                "An inspection decision cannot be transferred to another inspection or GRN line."
+            )
         if inspection and receipt_item and receipt_item.goods_receipt_id != inspection.goods_receipt_id:
             raise serializers.ValidationError(
                 {"goods_receipt_item": "This line does not belong to the inspected goods receipt."}

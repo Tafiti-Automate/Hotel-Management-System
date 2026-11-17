@@ -127,3 +127,90 @@ def test_receiving_clerk_cannot_reassign_or_delete_unowned_grn():
     assert own.purchase_order_id == po1.pk
     assert client.delete(f"/api/v1/grns/{own.pk}/").status_code == 204
     assert not GoodsReceiptNote.objects.filter(pk=own.pk).exists()
+
+
+@pytest.mark.django_db
+def test_receiving_inspection_line_queryset_denies_unassigned_property():
+    """The fourth receiving evidence collection must share header property scope."""
+    from apps.procurement.views import GoodsInspectionItemViewSet
+    from apps.inventory.models import Category, Item
+    from apps.procurement.models import PurchaseOrderItem, GoodsReceiptItem, GoodsInspectionItem
+    from types import SimpleNamespace
+
+    call_command("setup_hotel_roles", verbosity=0)
+    branch_a = Branch.objects.create(name="Inspection line property A")
+    branch_b = Branch.objects.create(name="Inspection line property B")
+    department = Department.objects.create(name="Inspection line audit")
+    user = get_user_model().objects.create_user(
+        username="inspection-line-property-owner", employee_code="INSP-SCOPE-A",
+        password="test-password",
+    )
+    user.groups.add(Group.objects.get(name="Receiving Clerk"))
+    owner = Employee.objects.create(
+        user=user, branch=branch_a, department=department, designation="Receiving Clerk",
+    )
+    other_user = get_user_model().objects.create_user(
+        username="inspection-line-other-owner", employee_code="INSP-SCOPE-B",
+        password="test-password",
+    )
+    other = Employee.objects.create(
+        user=other_user, branch=branch_b, department=department,
+        designation="Receiving Clerk",
+    )
+    supplier = Supplier.objects.create(
+        name="Inspection line property supplier", email="inspection-scope@example.com",
+        phone="+256700000002", address="Kampala",
+        tin_number="INSP-SCOPE", registration_number="INSP-SCOPE",
+    )
+    item = Item.objects.create(
+        category=Category.objects.create(name="Inspection line category"),
+        name="Inspection audit article", sku="INSP-SCOPE-ITEM",
+        unit="kg", reorder_level=Decimal("0.00"),
+    )
+    lines = []
+    for branch, employee in ((branch_a, owner), (branch_b, other)):
+        pr = PurchaseRequisition.objects.create(
+            requester=employee, department=department, branch=branch,
+            reason="Inspection line scope",
+        )
+        po = PurchaseOrder.objects.create(
+            requisition=pr, supplier=supplier, ordered_by=employee,
+        )
+        po_line = PurchaseOrderItem.objects.create(
+            purchase_order=po, item=item, quantity=Decimal("1.00"),
+            unit_cost=Decimal("5.00"),
+        )
+        receipt = GoodsReceiptNote.objects.create(
+            purchase_order=po, received_by=employee,
+        )
+        receipt_line = GoodsReceiptItem.objects.create(
+            goods_receipt=receipt, purchase_order_item=po_line,
+            item=item, quantity_received=Decimal("1.00"),
+            unit_cost=Decimal("5.00"),
+        )
+        inspection = GoodsInspection.objects.create(
+            goods_receipt=receipt, inspected_by=employee,
+        )
+        line = GoodsInspectionItem.objects.create(
+            inspection=inspection, goods_receipt_item=receipt_line, item=item,
+            quantity_received=Decimal("1.00"),
+            quantity_accepted=Decimal("1.00"),
+        )
+        lines.append(line)
+    client = APIClient()
+    client.force_authenticate(user=user)
+    response = client.get("/api/v1/goods-inspection-items/")
+    assert response.status_code == 200, getattr(response, "data", None)
+    data = response.data.get("results", response.data) if isinstance(response.data, dict) else response.data
+    ids = {str(row["id"]) for row in data}
+    assert str(lines[0].pk) in ids
+    assert str(lines[1].pk) not in ids
+    assert client.get(f"/api/v1/goods-inspection-items/{lines[1].pk}/").status_code == 404
+    response = client.patch(
+        f"/api/v1/goods-inspection-items/{lines[0].pk}/",
+        {"inspection": str(lines[1].inspection_id)},
+        format="json",
+    )
+    assert response.status_code in (400, 403), getattr(response, "data", None)
+    lines[0].refresh_from_db()
+    assert lines[0].inspection_id != lines[1].inspection_id

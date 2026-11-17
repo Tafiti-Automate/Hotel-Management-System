@@ -2204,24 +2204,25 @@ class GoodsInspectionItemViewSet(CreatedByModelMixin, ModelViewSet):
     ordering_fields = ("quantity_received", "quantity_accepted", "quantity_rejected", "created_at")
 
     def get_queryset(self):
-        queryset = super().get_queryset()
-        user = self.request.user
-        if user_has_role(user, *RECEIVING_ROLES) and not user_has_role(
-            user, *COMMERCIAL_CONTROL_ROLES
-        ):
-            return queryset.filter(
-                inspection__goods_receipt__received_by=getattr(user, "employee_profile", None)
-            )
-        return queryset
+        return scope_grn_evidence_for_user(
+            super().get_queryset(), self.request.user,
+            branch_path="inspection__goods_receipt__purchase_order__requisition__branch",
+            receiving_owner_path="inspection__goods_receipt__received_by",
+        )
 
     def _require_receiving_clerk(self, inspection):
         user = self.request.user
         if user_has_role(user, "System Administrator"):
             raise PermissionDenied("System Administrators cannot create or alter goods inspections.")
         employee = getattr(user, "employee_profile", None)
-        if not user_has_role(user, *RECEIVING_ROLES) or inspection.goods_receipt.received_by_id != getattr(employee, "id", None):
+        if (
+            user.is_superuser or not user_has_role(user, *RECEIVING_ROLES)
+            or not employee or not employee.is_active or not employee.branch_id
+            or inspection.goods_receipt.received_by_id != employee.pk
+            or inspection.goods_receipt.purchase_order.requisition.branch_id != employee.branch_id
+        ):
             raise PermissionDenied(
-                "Only the Receiving Clerk who opened the GRN can record its inspection lines."
+                "Only the active Receiving Clerk assigned to this property's GRN can record inspection lines."
             )
 
     def perform_create(self, serializer):
@@ -2230,6 +2231,16 @@ class GoodsInspectionItemViewSet(CreatedByModelMixin, ModelViewSet):
 
     def perform_update(self, serializer):
         self._require_receiving_clerk(serializer.instance.inspection)
+        if (
+            serializer.validated_data.get("inspection", serializer.instance.inspection).pk
+            != serializer.instance.inspection_id
+            or serializer.validated_data.get(
+                "goods_receipt_item", serializer.instance.goods_receipt_item
+            ).pk != serializer.instance.goods_receipt_item_id
+        ):
+            raise ValidationError(
+                "An inspection decision cannot be reassigned to another inspection or receipt line."
+            )
         super().perform_update(serializer)
 
     def perform_destroy(self, instance):
