@@ -50,3 +50,16 @@ For each canonical role below, using the **actual deployed frontend and backend*
 4. Frontend automated navigation checks do not replace role-specific browser tests. In particular, the outlet blind-count workflow remains a separate feature and is not yet represented as a permitted Store Keeper count.
 
 Phase 1 must not be considered signed off until the production/staging environment passes the above role matrix with documented evidence.
+
+
+## Machine-readable ten-role deployment readiness report
+
+After deployment and an authorized `setup_hotel_roles` run, execute the **read-only** preflight:
+
+```sh
+python manage.py audit_role_readiness --json --strict
+```
+
+It emits one JSON object with `schema_version`, `read_only`, `all_roles_ready`, `ready_role_count`, `required_role_count`, and exactly ten role summaries containing counts of active/assigned, inactive and unassigned accounts plus a blocker code. It does **not** print user names, employee identifiers, emails, role passwords or property details. Without `--strict`, the command returns a non-blocking report; with `--strict`, it exits with an error if any required role is missing or unready. A code-only CI environment without real users must not be treated as ten-role acceptance. Keep exported JSON in access-controlled deployment evidence, not public GitHub commits.
+
+**Acceptance meaning:** ten role assignments passing does *not* prove that the assigned users can execute their full browser journeys. Separate API/GUI actions, property/store scope, migrations, realistic transactions and screen-by-screen signoff still remain essential. This command creates no accounts and does not change inventory.

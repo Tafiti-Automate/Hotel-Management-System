@@ -1,4 +1,5 @@
 """Read-only acceptance preflight for the ten approved hotel operational roles."""
+import json
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.management.base import BaseCommand, CommandError
@@ -12,17 +13,29 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
+            "--json", action="store_true",
+            help="Print one machine-readable report without names, emails or employee IDs.",
+        )
+        parser.add_argument(
             "--strict", action="store_true",
             help="Exit unsuccessfully when a required operational role has no ready user.",
         )
 
     def handle(self, *args, **options):
         failures = []
+        role_results = []
+        json_output = options.get('json', False)
         for role in SYSTEM_ROLE_NAMES:
             group = Group.objects.filter(name=role).first()
             if not group:
                 failures.append(f"{role}: group missing; run setup_hotel_roles after deployment")
-                self.stdout.write(f"[MISSING] {role}: role group does not exist")
+                role_results.append({
+                    "role": role, "ready": False, "ready_users": 0,
+                    "inactive_users": 0, "missing_assignment_users": 0,
+                    "blocker": "role_group_missing",
+                })
+                if not json_output:
+                    self.stdout.write(f"[MISSING] {role}: role group does not exist")
                 continue
 
             ready = 0
@@ -53,16 +66,32 @@ class Command(BaseCommand):
                 ready += 1
 
             status = "READY" if ready else "NOT READY"
-            self.stdout.write(
-                f"[{status}] {role}: {ready} active and assigned; "
-                f"{inactive} inactive; {unassigned} missing operational assignment"
-            )
+            role_results.append({
+                "role": role, "ready": bool(ready), "ready_users": ready,
+                "inactive_users": inactive, "missing_assignment_users": unassigned,
+                "blocker": None if ready else "no_active_assigned_user",
+            })
+            if not json_output:
+                self.stdout.write(
+                    f"[{status}] {role}: {ready} active and assigned; "
+                    f"{inactive} inactive; {unassigned} missing operational assignment"
+                )
             if not ready:
                 failures.append(f"{role}: no active, correctly assigned user")
 
-        self.stdout.write(
-            f"Role readiness: {len(SYSTEM_ROLE_NAMES) - len(failures)}/"
-            f"{len(SYSTEM_ROLE_NAMES)} canonical roles have a usable account"
-        )
+        if json_output:
+            self.stdout.write(json.dumps({
+                "schema_version": 1,
+                "read_only": True,
+                "all_roles_ready": not failures,
+                "ready_role_count": len(SYSTEM_ROLE_NAMES) - len(failures),
+                "required_role_count": len(SYSTEM_ROLE_NAMES),
+                "roles": role_results,
+            }, sort_keys=True))
+        else:
+            self.stdout.write(
+                f"Role readiness: {len(SYSTEM_ROLE_NAMES) - len(failures)}/"
+                f"{len(SYSTEM_ROLE_NAMES)} canonical roles have a usable account"
+            )
         if failures and options["strict"]:
             raise CommandError("Role acceptance is blocked: " + "; ".join(failures))
