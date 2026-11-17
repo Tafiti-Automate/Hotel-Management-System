@@ -1357,27 +1357,6 @@ class StockCountViewSet(CreatedByModelMixin, ModelViewSet):
             raise_drf_validation_error(error)
         return Response(self.get_serializer(stock_count).data)
 
-    @action(detail=True, methods=["post"], url_path="assign-store")
-    def assign_store(self, request, pk=None):
-        requisition = self.get_object()
-        if not has_role(request.user, "System Administrator", "Store Keeper"):
-            raise PermissionDenied("Only the Store Keeper can choose the destination store.")
-        if requisition.status != StoreRequisitionStatus.SUBMITTED:
-            raise ValidationError("The destination store can only be selected for a submitted Department request.")
-        store_id = request.data.get("store")
-        if not store_id:
-            raise ValidationError({"store": "Select the destination store."})
-        store = StoreLocation.objects.filter(pk=store_id, is_active=True).first()
-        if not store:
-            raise ValidationError({"store": "The selected destination store is not available."})
-        if not has_role(request.user, "System Administrator") and not StoreKeeperAssignment.objects.filter(
-            store=store, employee=getattr(request.user, "employee_profile", None), is_active=True
-        ).exists():
-            raise PermissionDenied("You can only route requests to a store assigned to you.")
-        requisition.store = store
-        requisition.save(update_fields=["store", "updated_at"])
-        return Response(self.get_serializer(requisition).data)
-
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
         stock_count = self.get_object()
