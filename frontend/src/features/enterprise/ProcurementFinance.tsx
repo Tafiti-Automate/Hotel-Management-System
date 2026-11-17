@@ -16,7 +16,7 @@ const APPROVALS = ['approvals','requisitions','requisition-items','cost-center-b
 const LPO_APPROVALS = ['purchase-orders/approval-inbox','purchase-order-items','cost-center-budgets','budget-overrides'] as const
 const BUYER = ['requisitions','requisition-items','supplier-item-prices','suppliers','purchase-orders'] as const
 const QUOTES = ['supplier-item-prices','supplier-price-quotes','suppliers','items','units'] as const
-const FINANCE = ['supplier-invoices','supplier-invoice-items','supplier-credit-notes','purchase-orders','purchase-order-items','grns','grn-items','supplier-returns'] as const
+const FINANCE = ['supplier-invoices','supplier-invoice-items','supplier-credit-notes','supplier-payments','supplier-payment-reconciliations','purchase-orders','purchase-order-items','grns','grn-items','supplier-returns'] as const
 const BUDGETS = ['cost-center-budgets','budget-overrides','branches','departments'] as const
 const CLOSE = ['fiscal-periods','gl-exports'] as const
 const btn = 'mc-action'
@@ -350,6 +350,10 @@ export function EnterpriseInvoiceMatching() {
   const [creditReturnId,setCreditReturnId]=useState('')
   const [creditSubtotal,setCreditSubtotal]=useState('')
   const [creditTax,setCreditTax]=useState('0')
+  const [reconciliationPayment,setReconciliationPayment]=useState('')
+  const [bankEntryId,setBankEntryId]=useState('')
+  const [reconciliationNote,setReconciliationNote]=useState('')
+
   const {data,loading,error,reload}=useBackendRows(FINANCE)
   const {busy,error:mutationError,run}=useOperation(reload)
   const [id,setId]=useState('')
@@ -362,6 +366,25 @@ export function EnterpriseInvoiceMatching() {
   const accepted=(data['grn-items']||[]).filter(row=>grnIds.includes(str(row.goods_receipt)))
   const returns=(data['supplier-returns']||[]).filter(row=>grnIds.includes(str(row.goods_receipt)))
   const credits=(data['supplier-credit-notes']||[]).filter(row=>str(row.invoice)===id)
+  const postedPayments=(data['supplier-payments']||[]).filter(row=>str(row.invoice)===id&&str(row.status)==='posted')
+  const invoicePaymentIds=new Set(postedPayments.map(row=>str(row.id)))
+  const bankMatches=(data['supplier-payment-reconciliations']||[]).filter(row=>invoicePaymentIds.has(str(row.payment)))
+  const availablePayments=postedPayments.filter(row=>!bankMatches.some(match=>str(match.payment)===str(row.id)))
+  const prepareBankMatch=async()=>{
+    if(!reconciliationPayment||!bankEntryId.trim())return
+    const ok=await run(()=>createBackendRecord('supplier-payment-reconciliations',{
+      payment:reconciliationPayment,bank_transaction:bankEntryId.trim()
+    }),'Bank entry matched for Finance review')
+    if(ok){setReconciliationPayment('');setBankEntryId('')}
+  }
+  const confirmBankMatch=async(matchId:string)=>{
+    if(!reconciliationNote.trim())return
+    const ok=await run(()=>runBackendAction('supplier-payment-reconciliations',matchId,'confirm',{
+      note:reconciliationNote
+    }),'Bank reconciliation confirmed')
+    if(ok)setReconciliationNote('')
+  }
+
   const eligibleReturns=returns.filter(row=>str(row.status)==='posted' && !!str(row.credit_note_number) &&
     !!str(row.supplier_acknowledged_at) && !(data['supplier-credit-notes']||[]).some(c=>str(c.supplier_return)===str(row.id)))
   const makeCredit=async()=>{
@@ -453,6 +476,39 @@ export function EnterpriseInvoiceMatching() {
                 disabled={busy||!creditReturnId||!(Number(creditSubtotal)>0)||Number(creditTax)<0}
                 onClick={()=>void makeCredit()}>Prepare supplier credit</button>
             </div>}
+          </div>
+          <div className="mc-dense-panel">
+            <header className="mc-panel-title">Bank reconciliation <span>{bankMatches.length}/{postedPayments.length}</span></header>
+            {postedPayments.map(payment=>{
+              const match=bankMatches.find(row=>str(row.payment)===str(payment.id))
+              return <div className="mc-match-row" key={str(payment.id)}>
+                <b>{str(payment.reference)} · UGX {amount(payment.amount)}</b>
+                <StatusPill status={match?.status||'unmatched'}/>
+                {match&&<small>Bank ref: {str(match.bank_reference||match.bank_transaction)}</small>}
+                {match&&str(match.status)==='pending'&&canApproveCredit&&
+                  <button className={affirmative} type="button" disabled={busy||!reconciliationNote.trim()}
+                    onClick={()=>void confirmBankMatch(str(match.id))}>Confirm bank match</button>}
+              </div>
+            })}
+            {canApproveCredit&&bankMatches.some(row=>str(row.status)==='pending')&&
+              <FormField label="Bank evidence review note" value={reconciliationNote}
+                onChange={setReconciliationNote} placeholder="Document how statement evidence was checked"/>}
+            {canProcessInvoice&&availablePayments.length>0&&<div className="mc-form-panel">
+              <label className="mc-field"><span>Posted payment</span>
+                <select value={reconciliationPayment} onChange={e=>setReconciliationPayment(e.target.value)}>
+                  <option value="">Choose payment for matching</option>
+                  {availablePayments.map(row=><option key={str(row.id)} value={str(row.id)}>
+                    {str(row.reference)} · UGX {amount(row.amount)}
+                  </option>)}
+                </select>
+              </label>
+              <FormField label="Recorded bank transaction ID" value={bankEntryId}
+                onChange={setBankEntryId} placeholder="Copy the transaction UUID from the bank register"/>
+              <button className={affirmative} type="button" disabled={busy||!reconciliationPayment||!bankEntryId.trim()}
+                onClick={()=>void prepareBankMatch()}>Prepare reconciliation</button>
+            </div>}
+            {!postedPayments.length&&<p className="mc-muted">No posted supplier payments for this invoice.</p>}
+            <p className="mc-muted">Matching a recorded bank entry does not independently verify external bank settlement.</p>
           </div>
           {canProcessInvoice ? <div className="mc-decision-bar">
             <ConfirmTransaction title="Run 3-way match?" description="Django compares invoice quantities, GRN receipts, pricing and supplier credits before recording a match decision."
