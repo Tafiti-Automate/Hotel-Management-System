@@ -2,12 +2,12 @@ import {
   createContext, useCallback, useContext, useEffect, useMemo, useState,
   type ReactNode,
 } from 'react'
-import { Icon } from '../components/Icon'
-import RecordDetailDrawer from '../components/RecordDetailDrawer'
+import { Icon } from '../../components/Icon'
+import RecordDetailDrawer from '../../components/RecordDetailDrawer'
 import {
   errorMessage, fetchCommandDocument, readBackendRecords, searchGlobalCommands,
-} from '../lib/api'
-import { useApp } from '../state/AppContext'
+} from '../../lib/api'
+import { useApp } from '../../state/AppContext'
 
 export type ApiRow = { id?: string; [key: string]: unknown }
 export const str = (value: unknown): string => value == null ? '' : String(value)
