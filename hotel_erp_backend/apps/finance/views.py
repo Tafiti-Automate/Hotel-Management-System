@@ -65,6 +65,26 @@ def scope_supplier_finance_records(queryset, user, purchase_order_path):
     )
 
 
+def require_finance_property(user, purchase_order):
+    """Validate FK targets on CREATE, when get_queryset cannot protect them."""
+    if not purchase_order:
+        raise ValidationError("Choose a purchase order in your assigned hotel.")
+    if user.is_superuser:
+        raise PermissionDenied("Technical accounts cannot create supplier payment records.")
+    employee = getattr(user, "employee_profile", None)
+    if not employee or not employee.is_active or not employee.branch_id:
+        raise PermissionDenied("An active employee and assigned property are required.")
+    branch_id = purchase_order.requisition.branch_id
+    hotel_id = getattr(employee.branch, "hotel_id", None)
+    order_branch = purchase_order.requisition.branch
+    if hotel_id:
+        allowed = getattr(order_branch, "hotel_id", None) == hotel_id
+    else:
+        allowed = branch_id == employee.branch_id
+    if not allowed:
+        raise PermissionDenied("This purchase order belongs to another property.")
+
+
 class PaymentMethodViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = PaymentMethod.objects.all()
     serializer_class = PaymentMethodSerializer
@@ -133,6 +153,13 @@ class SupplierInvoiceViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("invoice_number", "supplier__name", "purchase_order__po_number")
     ordering_fields = ("invoice_date", "due_date", "subtotal", "status", "created_at")
 
+    def perform_create(self, serializer):
+        require_accounts_payable_action(self.request.user)
+        require_finance_property(
+            self.request.user, serializer.validated_data["purchase_order"]
+        )
+        super().perform_create(serializer)
+
     def get_queryset(self):
         return scope_supplier_finance_records(
             super().get_queryset(), self.request.user, "purchase_order"
@@ -185,6 +212,13 @@ class SupplierInvoiceItemViewSet(CreatedByModelMixin, ModelViewSet):
     )
     ordering_fields = ("quantity", "unit_price", "created_at")
 
+    def perform_create(self, serializer):
+        require_accounts_payable_action(self.request.user)
+        require_finance_property(
+            self.request.user, serializer.validated_data["invoice"].purchase_order
+        )
+        super().perform_create(serializer)
+
     def get_queryset(self):
         return scope_supplier_finance_records(
             super().get_queryset(), self.request.user, "invoice__purchase_order"
@@ -206,6 +240,13 @@ class SupplierPaymentViewSet(CreatedByModelMixin, ModelViewSet):
     filterset_fields = ("invoice", "payment_method", "bank_account", "status", "payment_date")
     search_fields = ("reference", "invoice__invoice_number", "invoice__supplier__name")
     ordering_fields = ("payment_date", "amount", "status", "created_at")
+
+    def perform_create(self, serializer):
+        require_accounts_payable_action(self.request.user)
+        require_finance_property(
+            self.request.user, serializer.validated_data["invoice"].purchase_order
+        )
+        super().perform_create(serializer)
 
     def get_queryset(self):
         return scope_supplier_finance_records(
