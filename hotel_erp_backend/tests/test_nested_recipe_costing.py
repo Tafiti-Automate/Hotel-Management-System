@@ -88,7 +88,7 @@ def test_nested_recipe_cost_rollup_and_pos_depletion_exactly_once(materials_cont
     api.force_authenticate(cost_user)
     result = api.get("/api/v1/reports/analysis/menuEngineering/")
     assert result.status_code == 200, result.data
-    matching = [row for row in result.data["rows"] if row["sku"] == parent.code]
+    matching = [row for row in result.data["results"] if row["sku"] == parent.code]
     assert len(matching) == 1, result.data
     assert matching[0]["cogs"] == "5000.00"
     assert matching[0]["profit"] == "45000.00"

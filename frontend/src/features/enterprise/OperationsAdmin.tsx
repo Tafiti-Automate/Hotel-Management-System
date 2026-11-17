@@ -596,7 +596,7 @@ export function EnterpriseMenuEngineering() {
     setBusy(true);setError('')
     try{
       const result=await fetchOperationalReport('menuEngineering',{})
-      setReport(Array.isArray(result.rows)?result.rows as ApiRow[]:[])
+      setReport(Array.isArray(result.results)?result.results as ApiRow[]:[])
     }catch(reason){setError(errorMessage(reason))}
     finally{setBusy(false)}
   }
