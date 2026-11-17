@@ -11,7 +11,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     dependencies = [
         ("finance", "0005_supplier_finance_maker_checker"),
-        ("procurement", "0001_initial"),
+        ("procurement", "0034_consolidated_purchase_order_sources"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
