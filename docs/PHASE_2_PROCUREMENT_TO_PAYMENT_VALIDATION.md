@@ -25,7 +25,9 @@ The prior reference audit maps these stages to the historical Materials Control 
 2. **Payment action role authorization.** `match`, `approve-for-payment` and supplier payment `post` now require an active Accounts Payable Clerk and explicitly deny IT administrators/superusers. Existing independent approver and preparer checks in the models remain in force.
 3. **Cross-property financial reads.** Supplier invoice, invoice-line and payment viewsets now scope queries to the assigned hotel via the purchase order's requisition branch; where no hotel is attached to the branch, access is scoped to that branch. Missing/inactive employee property assignment returns no records.
 4. **Creation-path authorization and payment immutability.** Supplier invoice, invoice-line and payment creation now check Accounts Payable authority and the related purchase order’s property; invoices and payments cannot be inserted into an unauthorized hotel using known foreign-key IDs. Posted/cancelled payment amounts cannot be modified through normal PATCH/PUT.
-5. Tests: `test_phase2_invoice_controls.py` validates denied actions, locked invoice states and posted-payment immutability; `test_phase2_finance_property_scope.py` tests two-property reads and blocked cross-hotel invoice/payment creation.
+5. **Receiving and supplier-return action controls.** The stand-alone GRN item `post-to-inventory` action was removed; inventory booking must use the authorized parent GRN lifecycle. Supplier-return headers and lines now require an assigned Receiving Clerk for creates/edits and post/acknowledge actions, scope reads by receiving ownership or property, and lock posted returns against edits.
+6. **Tests:** `test_phase2_grn_line_posting.py` checks the removed item posting route and retained document posting route; `test_phase2_supplier_return_authorization.py` checks IT denials, cross-property access and posted-line locks.
+7. Tests: `test_phase2_invoice_controls.py` validates denied actions, locked invoice states and posted-payment immutability; `test_phase2_finance_property_scope.py` tests two-property reads and blocked cross-hotel invoice/payment creation.
 
 ## Still required before Phase 2 completion
 
@@ -34,7 +36,7 @@ The prior reference audit maps these stages to the historical Materials Control 
 - Test three-way quantity/price exceptions, supplier credits, cancelled/returned goods, invoice cross-line cumulative matching and payment overrun.
 - **Partially addressed:** cross-property invoice and payment creation is blocked and object lookups use scoped querysets. Complete tests for invoice line foreign keys and other mutation paths, including payments posted concurrently.
 - Validate invoice and payment object creation and editing are restricted to the correct stages and actor, beyond the new custom action checks.
-- Confirm branch-level scope on GRNs, return items, and PO lines including via nested endpoints.
+- **Partially addressed:** supplier return header/line endpoints now check receiving ownership and property. Confirm property-scoped GRN and PO line reads and mutations, including dynamic/nested endpoints, with seeded two-property browser tests.
 - Verify inventory GL journal entries and reconciliation with payable balance and period locks.
 - Confirm actual deployment plus ten real-role journeys, specifically separation of invoice creator vs approver and payment preparer vs poster.
 
