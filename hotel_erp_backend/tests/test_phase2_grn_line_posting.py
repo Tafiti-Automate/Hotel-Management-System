@@ -70,13 +70,16 @@ def test_assigned_store_keeper_posts_receipt_with_line_destination_not_po_header
     # No PO header store: per-line assignment must drive Store Keeper visibility.
     po = PurchaseOrder.objects.create(
         requisition=pr, supplier=supplier, ordered_by=requester,
-        store=None, status=POStatus.ISSUED,
+        store=None,
     )
     po_line = PurchaseOrderItem.objects.create(
         purchase_order=po, requisition_item=source_line,
         item=item, quantity=Decimal("4.00"), unit_cost=Decimal("100.00"),
         destination_store=destination,
     )
+    # A real LPO is composed while draft, then authorized and issued.
+    po.status = POStatus.ISSUED
+    po.save(update_fields=("status", "updated_at"))
     grn = GoodsReceiptNote.objects.create(
         purchase_order=po, received_by=requester,
     )
