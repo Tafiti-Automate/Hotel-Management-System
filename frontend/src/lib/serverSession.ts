@@ -40,6 +40,7 @@ export async function authorizeWorkspace(pathname: string): Promise<void> {
   try { identity = await response.json() } catch { redirect(login) }
   if (!identity?.id || typeof identity.role !== 'string') redirect(login)
   const route = routeFromPath(destination)
+  if (!route) redirect('/dashboard')
   const allowed = canAccessRoute({
     role: identity.role,
     permissions: Array.isArray(identity.permissions) ? identity.permissions : [],
