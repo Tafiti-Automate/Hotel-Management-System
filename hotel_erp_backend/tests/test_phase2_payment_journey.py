@@ -1,5 +1,7 @@
 """Full approved-LPO -> received GRN -> invoice -> split-payment accounting journey."""
 from decimal import Decimal
+import csv
+import io
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -7,6 +9,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from apps.finance.models import PaymentMethod, SupplierInvoice, SupplierPayment
+from apps.materials_control.models import FiscalPeriod, GLExport, GLAccountMapping
 from apps.departments.models import Branch
 from apps.inventory.models import InventoryBalance, StockLedger, StoreLocation
 from apps.procurement.models import (
@@ -120,3 +123,33 @@ def test_received_purchase_is_matched_approved_and_paid_in_two_independent_posti
         invoice.perform_three_way_match()
     invoice.refresh_from_db()
     assert invoice.status == SupplierInvoice.STATUS_PAID
+
+    # Both cash disbursements must be represented separately in the period GL.
+    period = FiscalPeriod.objects.create(
+        branch=branch, name="Full supplier payment journal",
+        start_date=timezone.localdate().replace(day=1), end_date=timezone.localdate(),
+    )
+    GLAccountMapping.objects.create(
+        branch=branch, source_type=GLAccountMapping.SOURCE_INVOICE,
+        debit_account="INVENTORY-1400", credit_account="TRADE-AP-2100",
+    )
+    period.close(approver, "GRN and supplier settlements reviewed.")
+    with pytest.raises(ValidationError, match="GL account mapping"):
+        GLExport.generate(period, approver)
+    GLAccountMapping.objects.create(
+        branch=branch, source_type=GLAccountMapping.SOURCE_PAYMENT,
+        debit_account="TRADE-AP-2100", credit_account="BANK-CLEARING-1100",
+    )
+    export = GLExport.generate(period, approver)
+    rows = list(csv.DictReader(io.StringIO(export.payload)))
+    payment_rows = [row for row in rows if row["source"] == "supplier_payment"]
+    assert len(payment_rows) == 4
+    assert sum(Decimal(row["debit"]) for row in payment_rows) == Decimal("2500.00")
+    assert sum(Decimal(row["credit"]) for row in payment_rows) == Decimal("2500.00")
+    assert {row["account"] for row in payment_rows} == {
+        "TRADE-AP-2100", "BANK-CLEARING-1100",
+    }
+    assert sum(Decimal(row["debit"]) for row in rows) == sum(
+        Decimal(row["credit"]) for row in rows
+    )
+    assert GLExport.generate(period, approver).pk == export.pk
