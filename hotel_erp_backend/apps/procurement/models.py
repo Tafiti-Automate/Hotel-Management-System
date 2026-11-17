@@ -2469,6 +2469,7 @@ class GoodsReceiptItem(BaseModel):
             )
             # One WAC for each Article within its Store, updated under the stock row lock.
             opening_qty = balance.quantity_in_stock
+            prior_wac = balance.weighted_average_cost
             closing_qty = opening_qty + post_quantity
             balance.weighted_average_cost = (
                 (
@@ -2505,6 +2506,10 @@ class GoodsReceiptItem(BaseModel):
                 quantity_in=post_quantity,
                 reference_type=LedgerReferenceType.GRN_RECEIPT,
                 reference_id=receipt_item.goods_receipt.id,
+                unit_cost_snapshot=receipt_item.base_unit_cost.quantize(Decimal("0.0001")),
+                total_cost_snapshot=(post_quantity * receipt_item.base_unit_cost).quantize(Decimal("0.0001")),
+                wac_before=prior_wac,
+                wac_after=balance.weighted_average_cost,
                 note=f"Received against {receipt_item.goods_receipt}",
                 created_by=receipt_item.created_by,
             )
