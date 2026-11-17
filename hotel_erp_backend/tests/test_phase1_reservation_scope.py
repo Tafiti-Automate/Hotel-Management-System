@@ -48,7 +48,7 @@ def test_store_keeper_cannot_reconcile_another_store_balance():
     other = StoreLocation.objects.create(branch=branch, name="Other test store")
     category = Category.objects.create(name="Reservation scope test category")
     item = Item.objects.create(category=category, name="Reservation scope rice",
-                               sku="RSCOPE-RICE-001", unit="kg")
+                               sku="RSCOPE-RICE-001", unit="kg", reorder_level=Decimal("0.00"))
     balance = InventoryBalance.objects.create(
         item=item, store=other, quantity_in_stock=Decimal("10.00"),
         quantity_reserved=Decimal("2.00"),
