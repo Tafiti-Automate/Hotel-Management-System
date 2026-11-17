@@ -204,8 +204,8 @@ export default function Sidebar() {
 
     <aside className={`neo-sidebar ${collapsed ? 'is-collapsed' : ''} ${mobileOpen ? 'is-mobile-open' : ''}`}>
       <div className="neo-sidebar-brand">
-        <span className="neo-brand-mark"><Icon name="hotel" size={21} color="#fff" fill /></span>
-        {!collapsed && <span className="neo-brand-copy"><strong>Hotel ERP</strong><small>{workspaceTitle}</small></span>}
+        <span className="neo-brand-mark"><Icon name="hotel" size={21} color="#D8B46C" /></span>
+        {!collapsed && <span className="neo-brand-copy"><strong>HOTEL ERP</strong><small>Materials &amp; Cost Control</small></span>}
         <button className="neo-icon-button neo-sidebar-collapse" onClick={() => setCollapsed((value) => !value)} aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'} title={collapsed ? 'Expand navigation' : 'Collapse navigation'}>
           <Icon name={collapsed ? 'right_panel_open' : 'left_panel_close'} size={18} />
         </button>

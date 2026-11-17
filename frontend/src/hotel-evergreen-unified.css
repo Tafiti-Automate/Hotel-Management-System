@@ -1,0 +1,464 @@
+
+/*
+ * Hotel ERP — approved unified evergreen visual system.
+ * Faithful to five signed-off desktop concepts, adapted for responsive runtime.
+ * This stylesheet must load LAST after hospitality-precision.css.
+ * No transaction data, backend privileges, or status transitions are changed.
+ */
+.application-root.screen-app {
+  --hp-canvas:#F7F8F5; --hp-surface:#FFFFFF; --hp-surface-muted:#F1F5F1;
+  --hp-navy:#17382C; --hp-navy-hover:#27634E; --hp-navy-soft:#E8F4EA;
+  --hp-terracotta:#BD8F48; --hp-amber:#BD8F48;
+  --hp-text:#1C2924; --hp-text-muted:#5D7065; --hp-text-faint:#78877E;
+  --hp-border:#DFE7DE; --hp-border-strong:#C9D6CB;
+  --hp-sky-bg:#E5F0F5; --hp-sky-text:#31738D;
+  --hp-amber-bg:#FAEDD3; --hp-amber-text:#91631E;
+  --hp-emerald-bg:#E0F2E6; --hp-emerald-text:#176A49;
+  --hp-rose-bg:#FAE6E3; --hp-rose-text:#A64A3C;
+  --hp-radius-card:11px; --hp-radius-control:8px;
+  --erp-sidebar-width:252px; --erp-header-height:70px;
+  --erp-navy-950:#103127; --erp-navy-900:#17382C;
+  --erp-navy-800:#27634E; --erp-nav:#103127;
+  --erp-canvas:#F7F8F5; --erp-surface:#FFFFFF;
+  --erp-surface-subtle:#FBFCFA; --erp-surface-muted:#F1F5F1;
+  --erp-border:#DFE7DE; --erp-border-soft:#EAF0EA;
+  --erp-text:#1C2924; --erp-text-muted:#5D7065; --erp-text-faint:#829187;
+  --erp-blue-700:#17382C; --erp-blue-600:#176A49;
+  --erp-blue-500:#27634E; --erp-blue-100:#E5F3E9; --erp-blue-50:#F0F8F1;
+  --ui-navy:#17382C; --ui-navy-2:#27634E; --ui-navy-3:#176A49;
+  --ui-bg:#F7F8F5; --ui-panel:#FFFFFF; --ui-panel-soft:#FAFCFA;
+  --ui-line:#DFE7DE; --ui-line-strong:#C9D6CB;
+  --ui-text:#1C2924; --ui-muted:#5D7065; --ui-faint:#829187;
+  --approved-navy-950:#103127; --approved-navy-900:#17382C;
+  --approved-blue:#176A49; --approved-blue-strong:#12573D;
+  --approved-blue-soft:#E5F3E9; --approved-canvas:#F7F8F5;
+  --approved-card:#FFFFFF; --approved-border:#DFE7DE;
+  --approved-text:#1C2924; --approved-muted:#5D7065;
+  --bg:#F7F8F5!important; --surface:#FFFFFF!important;
+  --surface-2:#FAFCFA!important; --surface-3:#F1F5F1!important;
+  --text:#1C2924!important; --text-muted:#5D7065!important;
+  --text-faint:#78877E!important;
+  --border:#DFE7DE!important; --border-2:#C9D6CB!important;
+  --accent:#176A49!important; --accent-strong:#12573D!important;
+  --accent-soft:#E5F3E9!important;
+  --good:#176A49!important; --good-soft:#E0F2E6!important;
+  --warn:#91631E!important; --warn-soft:#FAEDD3!important;
+  --bad:#A64A3C!important; --bad-soft:#FAE6E3!important;
+  background:#F7F8F5!important; color:#1C2924!important;
+}
+/* Shared application shell, not fake static screens. */
+.application-root.screen-app :is(.neo-app-shell,.neo-app-main,.neo-workspace) {
+  background:#F7F8F5!important;
+}
+.application-root.screen-app .neo-app-main {min-width:0!important}
+.application-root.screen-app .neo-sidebar {
+  width:var(--erp-sidebar-width)!important;
+  color:#EAF2EA!important;
+  border-right:1px solid rgba(255,255,255,.11)!important;
+  background:linear-gradient(155deg,#17382C 0%,#103127 76%,#0C2A22 100%)!important;
+  box-shadow:none!important;
+}
+.application-root.screen-app .neo-sidebar.is-collapsed {width:74px!important}
+.application-root.screen-app .neo-sidebar-brand {
+  min-height:78px!important; border-bottom-color:rgba(255,255,255,.12)!important;
+}
+.application-root.screen-app .neo-brand-mark {
+  width:40px!important; height:40px!important;
+  border:1px solid rgba(222,183,103,.39)!important;
+  background:rgba(255,255,255,.07)!important; border-radius:9px!important;
+  box-shadow:none!important;
+}
+.application-root.screen-app .neo-brand-copy strong {
+  color:#FFFFFF!important;font-size:16px!important;
+  font-weight:770!important;letter-spacing:.025em!important;
+}
+.application-root.screen-app .neo-brand-copy small {
+  color:#BED0C3!important;font-size:10px!important;
+}
+.application-root.screen-app .neo-context-card {
+  color:#EAF2EA!important;
+  background:rgba(255,255,255,.06)!important;
+  border:1px solid rgba(255,255,255,.14)!important;
+  border-radius:9px!important;box-shadow:none!important;
+}
+.application-root.screen-app .neo-context-icon {
+  color:#E8C27A!important;background:rgba(189,143,72,.17)!important;
+}
+.application-root.screen-app .neo-context-copy :is(strong,small) {color:#E1EDE5!important}
+.application-root.screen-app .neo-nav-heading {
+  color:#A6BDAE!important;font-size:10px!important;
+  font-weight:730!important;text-transform:uppercase!important;
+  letter-spacing:.11em!important;
+}
+.application-root.screen-app .neo-nav-item {
+  min-height:41px!important;border-radius:8px!important;
+  color:#D8E8DD!important;font-size:12.5px!important;
+  font-weight:540!important;box-shadow:none!important;
+}
+.application-root.screen-app .neo-nav-icon {color:#CADCCE!important}
+.application-root.screen-app .neo-nav-item:hover {
+  background:rgba(255,255,255,.09)!important;color:#FFFFFF!important;
+}
+.application-root.screen-app .neo-nav-item.is-active {
+  background:#27634E!important;color:#FFFFFF!important;font-weight:700!important;
+  box-shadow:inset 3px 0 0 #D8B46C!important;
+}
+.application-root.screen-app .neo-nav-item.is-active .neo-nav-icon {color:#EDD091!important}
+.application-root.screen-app .neo-sidebar-footer {
+  background:rgba(0,0,0,.07)!important;border-top-color:rgba(255,255,255,.12)!important;
+}
+.application-root.screen-app .neo-sidebar-user-copy strong {color:#FFFFFF!important}
+.application-root.screen-app .neo-sidebar-user-copy small {color:#BED2C4!important}
+/* Compact topbar: property, search, notification, role context. */
+.application-root.screen-app .neo-header {
+  display:grid!important;
+  grid-template-columns:minmax(205px,300px) minmax(210px,1fr) auto!important;
+  align-items:center!important;gap:19px!important;
+  height:auto!important;min-height:70px!important;
+  padding:10px 24px!important;background:#FFFFFF!important;
+  border-bottom:1px solid #DFE7DE!important;
+  box-shadow:0 1px 2px rgba(26,56,34,.025)!important;
+  backdrop-filter:none!important;
+}
+.application-root.screen-app .erp-topbar-left {display:flex;align-items:center;gap:10px;min-width:0}
+.application-root.screen-app .erp-topbar-left .neo-popover-anchor {min-width:0;flex:1}
+.application-root.screen-app .neo-property-chip {
+  display:flex!important;min-height:43px!important;width:100%!important;min-width:0!important;
+  border:1px solid #DAE5DC!important;border-radius:8px!important;
+  background:#FBFCFA!important;color:#28583E!important;
+  font-size:12px!important;font-weight:700!important;
+}
+.application-root.screen-app .neo-property-chip:disabled {opacity:1!important;cursor:default}
+.application-root.screen-app .neo-property-chip span {
+  overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
+}
+.application-root.screen-app .neo-search {
+  justify-self:center;width:100%!important;max-width:550px!important;
+  min-height:43px!important;
+  background:#FAFCFA!important;color:#778779!important;
+  border:1px solid #DAE5DC!important;border-radius:8px!important;
+  box-shadow:none!important;
+}
+.application-root.screen-app .neo-search kbd {
+  background:#FFFFFF!important;border-color:#DAE5DC!important;color:#738575!important;
+}
+.application-root.screen-app .neo-header-actions {
+  display:flex!important;align-items:center!important;gap:10px!important;justify-content:flex-end!important;
+}
+.application-root.screen-app :is(.neo-cost-center-chip,.neo-fiscal-chip) {display:none!important}
+.application-root.screen-app .neo-header-icon {
+  color:#315D43!important;background:#FAFCFA!important;
+  border:1px solid #E2EAE3!important;border-radius:8px!important;
+}
+.application-root.screen-app .neo-profile-trigger {
+  background:#FFFFFF!important;color:#1C2924!important;
+  border:1px solid #E2EAE3!important;border-radius:8px!important;
+}
+.application-root.screen-app .neo-profile-trigger strong {color:#1C2924!important;font-size:12px!important}
+.application-root.screen-app .neo-profile-trigger small {color:#708173!important;font-size:10px!important}
+.application-root.screen-app .neo-sync-state.is-live {color:#176A49!important}
+/* In-page header follows the approved dashboard and workbench layout. */
+.application-root.screen-app .erp-page-heading {
+  display:flex;align-items:flex-end;justify-content:space-between;gap:16px;
+  background:#F7F8F5;color:#1C2924;padding:24px 30px 8px;
+}
+.application-root.screen-app .erp-page-heading .neo-breadcrumb {
+  display:flex;align-items:center;gap:7px;
+  margin-bottom:10px;color:#7B8C7D!important;font-size:11px!important;
+}
+.application-root.screen-app .erp-page-heading .neo-breadcrumb strong {color:#3D6B4D!important}
+.application-root.screen-app .erp-page-heading .neo-page-title-row {
+  display:flex;flex-direction:column;align-items:flex-start;gap:5px;
+}
+.application-root.screen-app .erp-page-heading .neo-page-title-row h1 {
+  margin:0!important;font-size:29px!important;line-height:1.15!important;
+  font-weight:770!important;color:#1C2924!important;letter-spacing:-.035em!important;
+}
+.application-root.screen-app .erp-page-heading .neo-page-title-row>span {
+  color:#687A6D!important;font-size:12.5px!important;max-width:none!important;
+}
+.application-root.screen-app .erp-page-heading-context {
+  display:flex;gap:9px;align-items:center;padding-bottom:2px;
+}
+.application-root.screen-app :is(.erp-heading-period,.erp-heading-cost-center) {
+  display:inline-flex;align-items:center;gap:8px;white-space:nowrap;
+  border:1px solid #DFE7DE;border-radius:8px;
+  background:#FFFFFF;color:#486350;
+  padding:10px 12px;font-size:11px;font-weight:650;
+}
+.application-root.screen-app .erp-heading-period.is-closed {
+  color:#92621B;background:#FAEDD3;border-color:#E9D8B8;
+}
+.application-root.screen-app .neo-workspace {
+  background:#F7F8F5!important;min-height:calc(100vh - 168px)!important;
+  padding:14px 30px 34px!important;
+}
+.application-root.screen-app .neo-workspace>* {max-width:none!important}
+.application-root.screen-app .neo-workspace :is(
+  .mc-workspace-head h1,.workbench-hero h1,.procurement-hero-card h1,.ds-hero h1,
+  .soh-title h1,.hod-dashboard-hero h1,.enterprise-workspace>header h1
+) {
+  color:#1C2924!important;font-size:20px!important;font-weight:720!important;
+  letter-spacing:-.02em!important;
+}
+.application-root.screen-app .neo-workspace :is(
+  .mc-panel-title,.mc-card-head h2,.ds-section-head h2,.store-inventory-section-head h2,
+  .reference-panel-heading h2,.procurement-table-title strong,.finance-table-title strong
+) {
+  color:#314738!important;font-size:15px!important;font-weight:700!important;
+  letter-spacing:-.01em!important;text-transform:none!important;
+}
+/* All modules share panels and real operational tables; no placeholder UI. */
+.application-root.screen-app .neo-workspace :is(
+ .panel,.card,.workspace-card,.table-card,.report-card,.dashboard-panel,
+ .neo-dashboard-card,.neo-metric-card,.mc-dense-panel,.mc-form-panel,.mc-detail-panel,
+ .mc-master-list,.mc-footer-panel,.mc-invoice-detail,.mc-three-way,
+ .bp-panel,.ds-card,.ds-detail,.soh-panel,.finance-table-card,
+ .procurement-queue-card,.procurement-detail-panel,.finance-action-panel,
+ .access-card,.workflow-control-panel,.workflow-queue-panel
+) {
+  background:#FFFFFF!important;color:#1C2924!important;
+  border:1px solid #DFE7DE!important;border-radius:11px!important;
+  box-shadow:0 1px 3px rgba(23,56,44,.04)!important;
+}
+.application-root.screen-app .neo-workspace :is(.neo-dashboard-intro,.workbench-hero,.ds-hero,.bp-heading) {
+  background:transparent!important;box-shadow:none!important;border-color:transparent!important;
+}
+.application-root.screen-app .neo-workspace :is(
+ .neo-metric-grid,.neo-dashboard-grid,.workbench-metrics,.soh-kpis,
+ .hod-dashboard-kpis,.mc-compact-metrics,.sk-kpis,.finance-kpi-grid
+) {gap:14px!important}
+.application-root.screen-app .neo-workspace :is(
+ .neo-metric-card,.workbench-metric,.mc-compact-metrics>div,.sk-kpis>div,.finance-kpi
+) {
+  background:#FFFFFF!important;border:1px solid #DFE7DE!important;
+  border-radius:10px!important;box-shadow:none!important;
+}
+.application-root.screen-app .neo-workspace :is(
+ .neo-metric-icon,.workbench-metric-icon,.finance-kpi-icon,.neo-welcome-icon
+) {background:#E4F3E9!important;color:#176A49!important;border-radius:9px!important}
+.application-root.screen-app .neo-workspace :is(.neo-metric-copy strong,.neo-metric-value,.sk-kpis strong) {
+  color:#1C2924!important;font-weight:760!important;
+}
+.application-root.screen-app .neo-workspace :is(table,.mc-dense-table,.mc-simple-table,.bp-table,.ds-table) {
+  border-collapse:separate;border-spacing:0;color:#304639;font-size:12px;
+}
+.application-root.screen-app .neo-workspace :is(table thead th,.mc-dense-table thead th,.data-head) {
+  background:#F1F5F1!important;color:#566B5D!important;
+  border-bottom:1px solid #DDE7DD!important;
+  font-size:11px!important;font-weight:760!important;letter-spacing:.012em!important;
+  text-transform:none!important;
+}
+.application-root.screen-app .neo-workspace :is(table tbody td,.data-cell,.finance-table-row,.procurement-record-row) {
+  color:#304639!important;border-bottom-color:#E9EFE8!important;font-size:12px!important;
+}
+.application-root.screen-app .neo-workspace table tbody tr:hover {background:#F4FAF5!important}
+.application-root.screen-app .neo-workspace :is(.mc-row-selected,.selected-row) {background:#EDF7EF!important}
+.application-root.screen-app .neo-workspace :is(.mc-num,.numeric,.number,.money) {
+  font-variant-numeric:tabular-nums!important;
+}
+.application-root.screen-app .neo-workspace :is(.mc-link-button,.record-ref,.record-code) {
+  color:#176A49!important;font-weight:730!important;
+}
+.application-root.screen-app :is(.mc-dense-scroll,.bp-table-scroll,.ds-table-scroll,.table-scroll,.mc-table-scroll) {
+  max-width:100%;overflow-x:auto!important;
+}
+/* Transaction controls: consistent fields, buttons and status semantics. */
+.application-root.screen-app .neo-workspace :is(
+ input:not([type=checkbox]):not([type=radio]),select,textarea,.mc-picker
+) {
+  min-height:37px;color:#1C2924!important;background:#FFFFFF!important;
+  border:1px solid #D3E0D5!important;border-radius:8px!important;box-shadow:none!important;
+}
+.application-root.screen-app .neo-workspace :is(input,textarea)::placeholder {color:#97A59A!important}
+.application-root.screen-app :is(button,input,textarea,select,a):focus-visible {
+  outline:2px solid #176A49!important;outline-offset:2px!important;
+}
+.application-root.screen-app :is(input,textarea,select):focus {
+  border-color:#4E9670!important;box-shadow:0 0 0 3px rgba(23,106,73,.12)!important;
+}
+.application-root.screen-app .neo-workspace :is(
+ .mc-action-primary,.bp-primary,.ds-btn-primary,.btn-primary,.primary-action
+) {
+  color:#FFFFFF!important;background:#176A49!important;border-color:#176A49!important;
+  font-weight:700!important;border-radius:8px!important;box-shadow:none!important;
+}
+.application-root.screen-app .neo-workspace :is(
+ .mc-action-primary,.bp-primary,.ds-btn-primary,.btn-primary,.primary-action
+):hover:not(:disabled) {background:#12573D!important;border-color:#12573D!important}
+.application-root.screen-app .neo-workspace :is(.mc-action,.bp-quiet,.ds-btn-secondary,.mc-sort-head) {
+  border-radius:8px!important;
+}
+.application-root.screen-app .neo-workspace button:disabled {opacity:.54;cursor:not-allowed}
+.application-root.screen-app .neo-workspace :is(.mc-alert,.bp-error,.ds-alert,.neo-data-state,.neo-screen-failure) {
+  border-radius:9px!important;
+}
+.application-root.screen-app .neo-workspace :is(.mc-confidential,.mc-security-note) {
+  color:#276B49!important;background:#EFF8F0!important;
+  border:1px solid #C6E3CF!important;border-radius:8px!important;
+}
+.application-root.screen-app .neo-workspace :is(.mc-tabs,.ds-tabs,.bp-tabs,.procurement-queue-tabs,.receiving-view-tabs) {
+  border-bottom-color:#DFE7DE!important;
+}
+.application-root.screen-app .neo-workspace :is(
+ .mc-tabs button[aria-selected=true],.ds-tabs button[aria-selected=true],
+ .bp-tabs button[aria-selected=true],.procurement-queue-tabs button[aria-selected=true]
+) {
+  border-bottom-color:#176A49!important;color:#176A49!important;
+}
+.application-root.screen-app .neo-workspace :is(.mc-invoice-layout,.mc-receive-split,.sk-grn,.mc-quote-split,.mc-approval-split) {
+  gap:15px!important;min-width:0;
+}
+.application-root.screen-app .neo-workspace .bp-issue.selected {
+  background:#EDF7EF!important;border-left:3px solid #176A49!important;
+}
+.application-root.screen-app .neo-workspace :is(.neo-route-skeleton,.neo-skeleton-panel,.neo-skeleton-line) {
+  background:#EAF2EA!important;
+}
+/* Launcher and simple two-card sign in retain real authentication. */
+.application-root.screen-launchpad {
+  --bg:#F7F8F5!important;--text:#1C2924!important;--accent:#176A49!important;
+  background:#F7F8F5!important;
+}
+.application-root.screen-launchpad :is(.neo-launchpad-header,.neo-module-card,.neo-session-card) {
+  color:#1C2924!important;background:#FFFFFF!important;border-color:#DFE7DE!important;
+}
+.application-root.screen-login {
+  --bg:#F7F8F5!important;--surface:#FFFFFF!important;
+  --text:#1C2924!important;--accent:#176A49!important;
+  background:#F7F8F5!important;
+}
+.application-root.screen-login .tafiti-login-page {
+  display:grid!important;place-items:center!important;min-height:100vh!important;
+  background:radial-gradient(circle at 15% 85%,rgba(23,106,73,.07),transparent 33%),#F7F8F5!important;
+}
+.application-root.screen-login .tafiti-login-stack {
+  width:min(93vw,780px)!important;max-width:780px!important;
+  display:grid!important;grid-template-columns:.9fr 1.1fr!important;align-items:stretch!important;
+  position:relative!important;overflow:hidden!important;
+  background:#FFFFFF!important;border:1px solid #DFE7DE!important;
+  border-radius:15px!important;box-shadow:0 20px 55px rgba(17,45,31,.09)!important;
+}
+.application-root.screen-login .tafiti-login-brand-card {
+  display:flex;flex-direction:column;justify-content:center;align-items:flex-start;
+  min-height:438px!important;padding:52px 30px!important;
+  background:linear-gradient(150deg,#17382C,#103127)!important;
+  color:#FFFFFF!important;border:0!important;border-radius:0!important;box-shadow:none!important;
+}
+.application-root.screen-login .tafiti-login-brand-icon {
+  color:#E8C37B!important;background:rgba(255,255,255,.06)!important;
+  border:1px solid rgba(223,186,105,.38)!important;
+}
+.application-root.screen-login .tafiti-login-brand-card h1 {
+  color:#FFFFFF!important;text-align:left!important;
+  font-size:29px!important;letter-spacing:-.03em!important;margin:16px 0 8px!important;
+}
+.application-root.screen-login .tafiti-login-brand-card p {
+  color:#C6DACA!important;text-align:left!important;font-size:12.5px!important;line-height:1.65!important;
+}
+.application-root.screen-login .tafiti-login-form-card {
+  background:#FFFFFF!important;min-height:438px!important;
+  padding:50px 37px 38px!important;border:0!important;border-radius:0!important;box-shadow:none!important;
+}
+.application-root.screen-login .tafiti-login-field label {
+  color:#304639!important;font-size:12px!important;font-weight:700!important;
+}
+.application-root.screen-login .tafiti-login-field input {
+  min-height:44px;border-radius:8px!important;
+  border:1px solid #CDDDCF!important;color:#1C2924!important;background:#FFFFFF!important;
+}
+.application-root.screen-login .tafiti-login-submit {
+  min-height:44px;border-radius:8px!important;
+  background:#176A49!important;color:#FFFFFF!important;box-shadow:none!important;
+}
+.application-root.screen-login .tafiti-login-credit {
+  position:absolute;bottom:13px;left:51%;color:#758378!important;font-size:10px!important;
+}
+/* Preserve existing dark toggle, while preventing unreadable dark-on-dark panels. */
+.application-root.screen-app.mode-dark {
+  --hp-canvas:#101E18;--hp-surface:#1C2D24;--hp-surface-muted:#284032;
+  --hp-text:#ECF3EB;--hp-text-muted:#C1D3C6;--hp-text-faint:#A3BAAB;
+  --hp-border:#375548;--hp-border-strong:#456655;
+  --bg:#101E18!important;--surface:#1C2D24!important;
+  --text:#ECF3EB!important;--text-muted:#C1D3C6!important;
+  --border:#375548!important;--accent:#72C697!important;
+  background:#101E18!important;
+}
+.application-root.screen-app.mode-dark :is(.neo-app-main,.neo-workspace,.erp-page-heading) {
+  background:#101E18!important;color:#ECF3EB!important;
+}
+.application-root.screen-app.mode-dark .neo-workspace :is(
+ .panel,.card,.mc-dense-panel,.mc-form-panel,.mc-detail-panel,.mc-master-list,
+ .bp-panel,.ds-card,.ds-detail,.neo-dashboard-card,.neo-metric-card,.mc-invoice-detail
+) {
+  background:#1C2D24!important;color:#ECF3EB!important;border-color:#375548!important;
+}
+.application-root.screen-app.mode-dark .neo-header {background:#1C2D24!important;border-color:#375548!important}
+.application-root.screen-app.mode-dark .erp-page-heading h1 {color:#ECF3EB!important}
+.application-root.screen-app.mode-dark .neo-workspace table thead th {
+  background:#284032!important;color:#C1D3C6!important;
+}
+.application-root.screen-app.mode-dark .neo-workspace table tbody td {
+  color:#ECF3EB!important;border-color:#375548!important;
+}
+/* Tablet and mobile: do not clip long transactional tables. */
+@media(max-width:1390px) {
+ .application-root.screen-app .neo-header {
+   grid-template-columns:minmax(170px,240px) minmax(150px,1fr) auto!important;
+   gap:12px!important;padding:10px 17px!important;
+ }
+ .application-root.screen-app .neo-sync-state {display:none!important}
+ .application-root.screen-app .erp-heading-cost-center {display:none!important}
+ .application-root.screen-app .erp-page-heading {padding:20px 22px 7px!important}
+ .application-root.screen-app .neo-workspace {padding:12px 22px 28px!important}
+}
+@media(max-width:1060px) {
+ .application-root.screen-app .neo-header {
+   grid-template-columns:minmax(155px,215px) minmax(120px,1fr) auto!important;
+ }
+ .application-root.screen-app .neo-profile-trigger span {display:none!important}
+ .application-root.screen-app .neo-workspace :is(.mc-invoice-layout,.mc-receive-split,.sk-grn) {
+   grid-template-columns:minmax(0,1fr)!important;
+ }
+}
+@media(max-width:900px) {
+ .application-root.screen-app .neo-app-main {margin-left:0!important}
+ .application-root.screen-app .neo-header {
+   grid-template-columns:minmax(140px,180px) minmax(120px,1fr) auto!important;
+   padding:9px 13px!important;
+ }
+ .application-root.screen-app .neo-mobile-menu {display:inline-flex!important}
+ .application-root.screen-app .erp-page-heading {padding:17px 16px 7px!important}
+ .application-root.screen-app .erp-page-heading h1 {font-size:22px!important}
+ .application-root.screen-app .neo-workspace {padding:12px 16px 24px!important}
+}
+@media(max-width:680px) {
+ .application-root.screen-app .neo-header {grid-template-columns:minmax(0,1fr) auto!important}
+ .application-root.screen-app .neo-search {display:none!important}
+ .application-root.screen-app .erp-page-heading {
+   flex-direction:column;align-items:flex-start;gap:8px;
+ }
+ .application-root.screen-app .erp-page-heading h1 {font-size:20px!important}
+ .application-root.screen-app .neo-workspace {padding:11px 12px 24px!important}
+ .application-root.screen-app .neo-workspace :is(
+   .neo-metric-grid,.workbench-metrics,.sk-kpis,.finance-kpi-grid
+ ) {grid-template-columns:repeat(2,minmax(0,1fr))!important}
+ .application-root.screen-app .neo-workspace :is(input,select,textarea) {font-size:16px!important}
+ .application-root.screen-login .tafiti-login-stack {display:block!important;width:min(94vw,420px)!important}
+ .application-root.screen-login .tafiti-login-brand-card {min-height:auto!important;padding:24px 25px!important}
+ .application-root.screen-login .tafiti-login-brand-card h1 {font-size:21px!important;margin:8px 0!important}
+ .application-root.screen-login .tafiti-login-form-card {min-height:auto!important;padding:27px 24px 40px!important}
+ .application-root.screen-login .tafiti-login-credit {left:24px!important;bottom:10px!important}
+}
+@media print {
+ .application-root.screen-app :is(.neo-sidebar,.neo-header,.erp-page-heading,.neo-skip-link) {
+   display:none!important;
+ }
+ .application-root.screen-app .neo-app-main {margin:0!important;width:100%!important}
+ .application-root.screen-app .neo-workspace {background:white!important;padding:0!important}
+}
+@media(prefers-reduced-motion:reduce) {
+ .application-root.screen-app *, .application-root.screen-login * {
+   transition-duration:.01ms!important;animation-duration:.01ms!important;
+ }
+}

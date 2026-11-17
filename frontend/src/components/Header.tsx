@@ -114,11 +114,18 @@ export default function Header() {
 
   return <>
     <header className="neo-header">
-      <div className="neo-header-page">
+      <div className="erp-topbar-left">
         <button className="neo-mobile-menu" type="button" onClick={openMobileNavigation} aria-label="Open navigation"><Icon name="menu" size={20} /></button>
-        <div className="neo-page-copy">
-          <div className="neo-breadcrumb"><span>{moduleName}</span><Icon name="chevron_right" size={12} /><strong>{pageTitle}</strong></div>
-          <div className="neo-page-title-row"><h1>{pageTitle}</h1><span>{pageDescription}</span></div>
+<div className="neo-popover-anchor">
+          <button type="button" className="neo-property-chip neo-switch-property" disabled={!canSelectProperty} aria-label="Active property" aria-haspopup={canSelectProperty ? 'listbox' : undefined} aria-expanded={canSelectProperty ? propertyMenuOpen : undefined} onClick={() => setPropertyMenuOpen((open) => !open)}>
+            <Icon name="business" size={15} /><span>{propertyName}</span>{canSelectProperty && <Icon name="expand_more" size={14} />}
+          </button>
+          {propertyMenuOpen && <>
+            <button type="button" className="neo-popover-backdrop" aria-label="Close property selector" onClick={() => setPropertyMenuOpen(false)} />
+            <div className="neo-context-dropdown" role="listbox" aria-label="Select property">
+              {app.data.branches.map((branch) => <button type="button" role="option" aria-selected={String(branch.name) === app.currentBranch} key={String(branch.id)} onClick={() => { app.selectBranch(String(branch.name)); setPropertyMenuOpen(false) }}>{String(branch.name)}</button>)}
+            </div>
+          </>}
         </div>
       </div>
 
@@ -130,17 +137,6 @@ export default function Header() {
 
       <div className="neo-header-actions">
         <span className={`neo-sync-state is-${app.apiStatus}`} title={`API status: ${app.apiStatus}`}><i />{app.apiStatus === 'live' ? 'Live' : app.apiStatus === 'loading' ? 'Syncing' : app.apiStatus === 'offline' ? 'Offline' : 'Connecting'}</span>
-        <div className="neo-popover-anchor">
-          <button type="button" className="neo-property-chip neo-switch-property" disabled={!canSelectProperty} aria-label="Active property" aria-haspopup={canSelectProperty ? 'listbox' : undefined} aria-expanded={canSelectProperty ? propertyMenuOpen : undefined} onClick={() => setPropertyMenuOpen((open) => !open)}>
-            <Icon name="business" size={15} /><span>{propertyName}</span>{canSelectProperty && <Icon name="expand_more" size={14} />}
-          </button>
-          {propertyMenuOpen && <>
-            <button type="button" className="neo-popover-backdrop" aria-label="Close property selector" onClick={() => setPropertyMenuOpen(false)} />
-            <div className="neo-context-dropdown" role="listbox" aria-label="Select property">
-              {app.data.branches.map((branch) => <button type="button" role="option" aria-selected={String(branch.name) === app.currentBranch} key={String(branch.id)} onClick={() => { app.selectBranch(String(branch.name)); setPropertyMenuOpen(false) }}>{String(branch.name)}</button>)}
-            </div>
-          </>}
-        </div>
         <span className="neo-cost-center-chip" title="Active department / cost center"><Icon name="account_tree" size={14} />{contextName}</span>
         <span className={'neo-fiscal-chip' + (period?.status === 'closed' ? ' is-closed' : '')} title="Current fiscal period"><Icon name="calendar_month" size={14} />{periodLabel}</span>
 
@@ -196,6 +192,16 @@ export default function Header() {
         </div>
       </div>
     </header>
+    <div className="erp-page-heading">
+      <div className="erp-page-heading-main">
+        <div className="neo-breadcrumb"><span>{moduleName}</span><Icon name="chevron_right" size={12} /><strong>{pageTitle}</strong></div>
+        <div className="neo-page-title-row"><h1>{pageTitle}</h1><span>{pageDescription}</span></div>
+      </div>
+      <div className="erp-page-heading-context" aria-label="Current operational context">
+        <span className="erp-heading-cost-center"><Icon name="account_tree" size={15} />{contextName}</span>
+        <span className={'erp-heading-period' + (period?.status === 'closed' ? ' is-closed' : '')}><Icon name="calendar_month" size={15} />{periodLabel}</span>
+      </div>
+    </div>
 
     <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
   </>

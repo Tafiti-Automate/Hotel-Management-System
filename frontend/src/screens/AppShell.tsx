@@ -114,10 +114,10 @@ export default function AppShell() {
     : role === 'receiving clerk'
       ? <ReceivingClerkWorkspaceV2 />
       : <ProcurementWorkbench />
-  else if (route === 'workflow-stores') content = departmentSupplyRoles.has(role)
-    ? <DepartmentSupplyWorkspace />
-    : role === 'department head'
-      ? <DepartmentRequisitions />
+  else if (route === 'workflow-stores') content = role === 'department head'
+    ? <DepartmentRequisitions />
+    : departmentSupplyRoles.has(role)
+      ? <DepartmentSupplyWorkspace />
       : <InventoryWorkbench />
   else if (route === 'stock-on-hand') content = <StockOnHand />
   else if (route === 'store-transfers') content = <InventoryWorkbench initialTab="transfers" />
@@ -152,7 +152,7 @@ export default function AppShell() {
   else if (route === 'access-management') content = <AccessManagement />
   else content = <Dashboard />
 
-  return <DocumentDrawerProvider><div className="neo-app-shell">
+  return <DocumentDrawerProvider><div className="neo-app-shell" data-ui-design="hospitality-evergreen">
     <a className="neo-skip-link" href="#main-workspace">Skip to main workspace</a>
     <Sidebar />
     <div className="neo-app-main">

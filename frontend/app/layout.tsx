@@ -27,6 +27,8 @@ import '../src/ui-v3-runtime-fixes.css'
 import '../src/approved-hotel-gui.css'
 /* Mandatory Enterprise Hospitality Precision design system. */
 import '../src/hospitality-precision.css'
+/* Final approved five-screen visual foundation, shared by every role. */
+import '../src/hotel-evergreen-unified.css'
 
 export const metadata: Metadata = {
   title: 'Hotel ERP',
