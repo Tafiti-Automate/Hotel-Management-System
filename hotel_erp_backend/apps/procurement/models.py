@@ -2824,12 +2824,22 @@ class SupplierReturn(BaseModel):
                 balance = InventoryBalance.objects.select_for_update().get(item=line.item, store=supplier_return.store)
                 balance.quantity_in_stock -= line.base_quantity
                 balance.save(update_fields=["quantity_in_stock", "updated_at"])
+                # Inventory leaves at the store's transaction-time WAC.
+                # Supplier credit valuation is separately based on original
+                # invoiced/received value, and may differ from current WAC.
+                unit_snapshot = balance.weighted_average_cost
                 StockLedger.objects.create(
                     item=line.item,
                     store=supplier_return.store,
                     quantity_out=line.base_quantity,
                     reference_type=LedgerReferenceType.RETURN_TO_VENDOR,
                     reference_id=supplier_return.id,
+                    unit_cost_snapshot=unit_snapshot,
+                    total_cost_snapshot=(line.base_quantity * unit_snapshot).quantize(
+                        Decimal("0.0001")
+                    ),
+                    wac_before=unit_snapshot,
+                    wac_after=unit_snapshot,
                     note=f"Return to supplier {supplier_return.return_no}",
                     created_by=supplier_return.created_by,
                 )
