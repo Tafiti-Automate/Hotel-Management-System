@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
+from django.db import connection
 
 from apps.materials_control.models import BudgetOverride, CostCenterBudget, FiscalPeriod
 
@@ -65,14 +66,20 @@ def enforce_requisition_budget(requisition):
 def assert_period_open(branch_id, transaction_date):
     if not branch_id or not transaction_date:
         return
-    closed = FiscalPeriod.objects.filter(
+    # When a business posting runs inside transaction.atomic, lock the
+    # matching period row even while it is OPEN. Otherwise a concurrent
+    # Finance close could overtake a posting after its initial status check.
+    # Non-atomic creates are still checked but do not own a long-lived lock.
+    periods = FiscalPeriod.objects.filter(
         branch_id=branch_id,
         start_date__lte=transaction_date,
         end_date__gte=transaction_date,
-        status=FiscalPeriod.STATUS_CLOSED,
-    ).first()
-    if closed:
+    )
+    if connection.in_atomic_block:
+        periods = periods.select_for_update()
+    period = periods.first()
+    if period and period.status == FiscalPeriod.STATUS_CLOSED:
         raise ValidationError(
-            f"Fiscal period {closed.name} is closed; transactions dated {transaction_date} are locked."
+            f"Fiscal period {period.name} is closed; transactions dated {transaction_date} are locked."
         )
 

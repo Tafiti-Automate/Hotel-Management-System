@@ -619,3 +619,61 @@ def test_pos_unknown_wac_remains_unvalued_in_stock_ledger(materials_context):
     assert ledger.unit_cost_snapshot is None
     assert ledger.total_cost_snapshot is None
     assert line.cost_of_goods_sold is None
+
+
+@pytest.mark.django_db
+def test_closing_a_stale_accounting_period_never_overwrites_finance_audit_note(materials_context):
+    user, employee, department, branch, outlet, unit, item = materials_context
+    today = timezone.localdate()
+    period = FiscalPeriod.objects.create(
+        branch=branch, name="Stale close protection",
+        start_date=today.replace(day=1), end_date=today,
+    )
+    stale = FiscalPeriod.objects.get(pk=period.pk)
+    period.close(user, "Approved financial controller close.")
+    with pytest.raises(ValidationError, match="already closed"):
+        stale.close(user, "Overwrite historical approval")
+    period.refresh_from_db()
+    assert period.close_note == "Approved financial controller close."
+    assert period.status == FiscalPeriod.STATUS_CLOSED
+
+
+@pytest.mark.django_db
+def test_closed_accounting_period_blocks_waste_stock_posting_without_partial_deduction(materials_context):
+    user, employee, department, branch, outlet, unit, item = materials_context
+    waste = WasteRecord.objects.create(
+        outlet=outlet, department=department, item=item, unit=unit,
+        quantity=Decimal("2.00"), reason_code="broken_service",
+        reported_by=employee, created_by=user,
+    )
+    today = timezone.localdate()
+    period = FiscalPeriod.objects.create(
+        branch=branch, name="Waste close gate",
+        start_date=today.replace(day=1), end_date=today,
+    )
+    initial = InventoryBalance.objects.get(item=item, store=outlet).quantity_in_stock
+    period.close(user, "Waste posting period closed")
+    with pytest.raises(ValidationError, match="closed"):
+        waste.submit(user)
+    waste.refresh_from_db()
+    assert waste.status == WasteRecord.STATUS_DRAFT
+    assert waste.inventory_changes_applied is False
+    assert InventoryBalance.objects.get(item=item, store=outlet).quantity_in_stock == initial
+    assert not StockLedger.objects.filter(reference_id=waste.pk).exists()
+
+
+@pytest.mark.django_db
+def test_pos_import_cannot_be_inserted_for_a_closed_business_date(materials_context):
+    user, employee, department, branch, outlet, unit, item = materials_context
+    today = timezone.localdate()
+    period = FiscalPeriod.objects.create(
+        branch=branch, name="POS close gate",
+        start_date=today.replace(day=1), end_date=today,
+    )
+    period.close(user, "POS business date closed")
+    with pytest.raises(ValidationError, match="closed"):
+        POSImportBatch.objects.create(
+            outlet=outlet, business_date=today,
+            source="TestPOS", source_reference="CLOSED-DATE-1", created_by=user,
+        )
+    assert not POSImportBatch.objects.filter(source_reference="CLOSED-DATE-1").exists()

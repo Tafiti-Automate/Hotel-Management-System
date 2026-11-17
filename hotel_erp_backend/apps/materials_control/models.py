@@ -1071,20 +1071,29 @@ class FiscalPeriod(BaseModel):
         }
 
     def close(self, actor, note):
-        if self.status == self.STATUS_CLOSED:
-            raise ValidationError("This fiscal period is already closed.")
-        checklist = self.pre_close_checklist()
-        if not checklist["can_close"]:
-            raise ValidationError(checklist["blockers"])
         if not str(note).strip():
             raise ValidationError("Enter a period-close note.")
-        self.status = self.STATUS_CLOSED
-        self.closed_at = timezone.now()
-        self.closed_by = actor
-        self.close_note = str(note).strip()
-        self.save(
-            update_fields=("status", "closed_at", "closed_by", "close_note", "updated_at")
-        )
+        # A stale in-memory period must not pass the close checklist after
+        # another Finance request already closed it. Lock the row while
+        # validating outstanding documents and setting the closed state.
+        with transaction.atomic():
+            period = FiscalPeriod.objects.select_for_update().get(pk=self.pk)
+            if period.status == self.STATUS_CLOSED:
+                raise ValidationError("This fiscal period is already closed.")
+            checklist = period.pre_close_checklist()
+            if not checklist["can_close"]:
+                raise ValidationError(checklist["blockers"])
+            period.status = self.STATUS_CLOSED
+            period.closed_at = timezone.now()
+            period.closed_by = actor
+            period.close_note = str(note).strip()
+            period.save(update_fields=(
+                "status", "closed_at", "closed_by", "close_note", "updated_at",
+            ))
+            self.status = period.status
+            self.closed_at = period.closed_at
+            self.closed_by = period.closed_by
+            self.close_note = period.close_note
 
     def __str__(self):
         return f"{self.branch} - {self.name}"

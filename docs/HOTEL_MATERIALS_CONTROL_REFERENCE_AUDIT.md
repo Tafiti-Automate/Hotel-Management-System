@@ -60,3 +60,18 @@ Compared frontend enterprise workbench `useBackendRows` collection names in `Ope
 ## Release criteria
 
 Do **not** describe the system as Oracle-equivalent or fully complete until: (a) all Django and Next.js CI checks pass, (b) each of the 10 roles passes positive/negative API access tests, (c) complete requisition-to-payment and stocktake-to-GL transactions have been exercised on seeded test data, and (d) production deployment and permissions have been verified separately.
+
+
+## Finalization pass — accounting-period concurrency and acceptance limitations
+
+The client target specification requires hard accounting-period locking after Finance closes the month (guide pp. 1 and 3). The existing app already registered `apps/materials_control/signals.py` to protect POS, waste, stock, invoices, payment, GRN and child-document writes. This pass **did not duplicate those signals**. It tightened `FiscalPeriod.close()` to perform the status recheck, open-document checklist and closure under a row lock in one database transaction. `assert_period_open()` now locks the matching period (including still-open periods) when called in an atomic posting transaction, preventing a simultaneous Finance close from overtaking a transaction after its open-period check. Non-atomic writes are still checked by signals, but **end-to-end serializability of all mutation paths has not been certified**.
+
+Regression tests verify stale period-close objects cannot overwrite an approved Finance close note; waste stock posting in a closed period is rolled back without changing stock or ledger; backdated POS import creation is rejected. Existing supplier-payment/credit period locks and full CI remain required.
+
+### Verification evidence needed before claiming 98–99% complete
+
+**A green code build is not client acceptance.** Outstanding non-code evidence includes: actual staging URL and deployed backend SHA; applied migrations and ten ready, property-assigned roles (`audit_role_readiness --strict`); one full real-user department request → approval → PO → blind GRN → inventory → three-way invoice → payment sequence; an outlet issue/transfer/pickup sequence; POS-to-recipe-to-COGS and waste; stocktake, variance and Finance closing; every role's allowed and denied pages/actions; printed/exported reports and bank reconciliation evidence; live restore test and security/backup signoff. For each transaction record operator role, transaction ID, expected and observed result, date, screenshot/log and tester signoff. Keep production credentials and staff identities out of Git.
+
+**Known material parity gap:** The target guide specifies four-decimal *base-unit quantities*, while some current `StockLedger`/inventory quantity fields still store two decimal places. Changing this is a cross-module conversion, migration and rounding acceptance task, not something to silently mark verified. Inventory GL mappings currently produce a **read-only preview**, not approved booked GL postings. The attached historical Oracle manual is a benchmark for workflows, not proof that the custom system has reproduced every historical screen.
+
+**Release rule:** Label the project development-complete only after the code gates and documented staging role journeys pass. Assign no automatic 98–99% based solely on CI.
