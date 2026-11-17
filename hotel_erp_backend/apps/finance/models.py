@@ -690,6 +690,17 @@ class SupplierPayment(BaseModel):
                 raise ValidationError("The supplier invoice is not approved for payment.")
             if payment.amount > invoice.balance_due:
                 raise ValidationError("Payment cannot exceed the invoice balance.")
+            from apps.materials_control.models import FiscalPeriod
+            branch = invoice.purchase_order.requisition.branch
+            if branch and FiscalPeriod.objects.filter(
+                branch=branch,
+                start_date__lte=payment.payment_date,
+                end_date__gte=payment.payment_date,
+                status=FiscalPeriod.STATUS_CLOSED,
+            ).exists():
+                raise ValidationError("Cannot post supplier payments in a closed fiscal period.")
+            if payment.bank_account_id and not payment.bank_account.is_active:
+                raise ValidationError("The selected bank account is inactive.")
 
             payment.status = self.STATUS_POSTED
             payment.posted_at = timezone.now()
