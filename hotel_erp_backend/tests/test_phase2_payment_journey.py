@@ -153,3 +153,63 @@ def test_received_purchase_is_matched_approved_and_paid_in_two_independent_posti
         Decimal(row["credit"]) for row in rows
     )
     assert GLExport.generate(period, approver).pk == export.pk
+
+
+@pytest.mark.django_db
+def test_stale_invoice_approval_cannot_reopen_a_paid_or_cancelled_invoice():
+    """A previously matched invoice snapshot must never undo a later decision."""
+    requester, department, supplier, item = create_procurement_context()
+    branch = Branch.objects.create(name="Stale invoice acceptance property")
+    requester.branch = branch
+    requester.save(update_fields=("branch", "updated_at"))
+    order_request = PurchaseRequisition.objects.create(
+        requester=requester, department=department, branch=branch,
+        reason="Invoice status race regression",
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=order_request, supplier=supplier, ordered_by=requester,
+    )
+    preparer = get_user_model().objects.create_user(
+        username="stale-invoice-preparer",
+        employee_code="PH2-INV-STALE-PREP", password="test-pass-123",
+    )
+    approver = get_user_model().objects.create_user(
+        username="stale-invoice-approver",
+        employee_code="PH2-INV-STALE-APP", password="test-pass-123",
+    )
+    invoice = SupplierInvoice.objects.create(
+        supplier=supplier, purchase_order=order,
+        invoice_number="PH2-STALE-STATUS",
+        subtotal=Decimal("100.00"), due_date=timezone.localdate(),
+        created_by=preparer,
+    )
+    invoice.status = SupplierInvoice.STATUS_MATCHED
+    invoice.save(update_fields=("status", "updated_at"))
+    stale = SupplierInvoice.objects.get(pk=invoice.pk)
+
+    # Another request has reached a terminal state while Finance still has
+    # the matched invoice on screen.
+    invoice.status = SupplierInvoice.STATUS_PAID
+    invoice.save(update_fields=("status", "updated_at"))
+    with pytest.raises(ValidationError, match="Only a successfully matched"):
+        stale.approve_for_payment(approved_by=approver)
+    invoice.refresh_from_db()
+    assert invoice.status == SupplierInvoice.STATUS_PAID
+    assert invoice.approved_by_id is None
+
+    invoice.status = SupplierInvoice.STATUS_CANCELLED
+    invoice.save(update_fields=("status", "updated_at"))
+    with pytest.raises(ValidationError, match="Only a successfully matched"):
+        stale.approve_for_payment(approved_by=approver)
+    invoice.refresh_from_db()
+    assert invoice.status == SupplierInvoice.STATUS_CANCELLED
+
+    # A fresh legitimate matched invoice can still be approved by a
+    # different actor, and repeated approval remains blocked.
+    invoice.status = SupplierInvoice.STATUS_MATCHED
+    invoice.save(update_fields=("status", "updated_at"))
+    invoice.approve_for_payment(approved_by=approver)
+    assert invoice.status == SupplierInvoice.STATUS_APPROVED
+    assert invoice.approved_by_id == approver.pk
+    with pytest.raises(ValidationError, match="Only a successfully matched"):
+        stale.approve_for_payment(approved_by=approver)

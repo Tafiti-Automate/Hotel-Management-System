@@ -472,18 +472,26 @@ class SupplierInvoice(BaseModel):
         )
 
     def approve_for_payment(self, approved_by=None):
-        if self.status != self.STATUS_MATCHED:
-            raise ValidationError("Only a successfully matched invoice can be approved.")
-        if approved_by and self.created_by_id == approved_by.id:
-            raise ValidationError(
-                "The employee who registered the invoice cannot approve it for payment."
+        # A matching screen can be left open while another Finance user pays,
+        # cancels or amends an invoice. Recheck persisted state under a row
+        # lock, never approve the caller's stale in-memory status.
+        with transaction.atomic():
+            invoice = SupplierInvoice.objects.select_for_update().get(pk=self.pk)
+            if invoice.status != self.STATUS_MATCHED:
+                raise ValidationError("Only a successfully matched invoice can be approved.")
+            if approved_by and invoice.created_by_id == approved_by.id:
+                raise ValidationError(
+                    "The employee who registered the invoice cannot approve it for payment."
+                )
+            invoice.status = self.STATUS_APPROVED
+            invoice.approved_at = timezone.now()
+            invoice.approved_by = approved_by or invoice.approved_by
+            invoice.save(
+                update_fields=("status", "approved_at", "approved_by", "updated_at")
             )
-        self.status = self.STATUS_APPROVED
-        self.approved_at = timezone.now()
-        self.approved_by = approved_by or self.approved_by
-        self.save(
-            update_fields=("status", "approved_at", "approved_by", "updated_at")
-        )
+            self.status = invoice.status
+            self.approved_at = invoice.approved_at
+            self.approved_by = invoice.approved_by
 
     def __str__(self):
         return f"{self.supplier} invoice {self.invoice_number}"
