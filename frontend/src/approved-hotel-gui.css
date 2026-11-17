@@ -5,19 +5,19 @@
  */
 
 .screen-app {
-  --approved-navy-950: #042748;
-  --approved-navy-900: #06355f;
-  --approved-navy-800: #0a467a;
-  --approved-blue: #1473f3;
-  --approved-blue-strong: #0864e8;
-  --approved-blue-soft: #eaf3ff;
-  --approved-canvas: #f4f8fd;
+  --approved-navy-950: #092B22;
+  --approved-navy-900: #0C3C2D;
+  --approved-navy-800: #14533C;
+  --approved-blue: #16734D;
+  --approved-blue-strong: #105C3E;
+  --approved-blue-soft: #EAF7EF;
+  --approved-canvas: #F6F8F6;
   --approved-card: #ffffff;
-  --approved-border: #dce6f1;
-  --approved-border-soft: #e9eff6;
-  --approved-text: #102142;
-  --approved-muted: #60718d;
-  --approved-faint: #8b9ab0;
+  --approved-border: #DFE8E1;
+  --approved-border-soft: #EBF0EB;
+  --approved-text: #182A22;
+  --approved-muted: #62766B;
+  --approved-faint: #88998F;
   --approved-good: #12a568;
   --approved-good-soft: #e8f8f1;
   --approved-warning: #f29a2e;
@@ -39,8 +39,8 @@
   width: var(--approved-sidebar) !important;
   min-width: var(--approved-sidebar) !important;
   background:
-    radial-gradient(circle at 20% 0%, rgba(37, 132, 245, .22), transparent 250px),
-    linear-gradient(180deg, #073e70 0%, var(--approved-navy-900) 36%, var(--approved-navy-950) 100%) !important;
+    radial-gradient(circle at 20% 0%, rgba(50, 148, 94, .20), transparent 250px),
+    linear-gradient(180deg, #104632 0%, var(--approved-navy-900) 36%, var(--approved-navy-950) 100%) !important;
   border-right: 1px solid rgba(255,255,255,.075) !important;
   box-shadow: 10px 0 32px rgba(4, 32, 59, .08) !important;
 }
@@ -112,8 +112,8 @@
 }
 .screen-app .tafiti-sidebar-nav-item.active {
   color: #fff !important;
-  background: linear-gradient(135deg, #1680ff, #0867e7) !important;
-  box-shadow: 0 8px 20px rgba(0, 75, 177, .28), inset 0 1px 0 rgba(255,255,255,.22) !important;
+  background: linear-gradient(135deg, #21885C, #116944) !important;
+  box-shadow: 0 8px 20px rgba(8,87,52,.25), inset 0 1px 0 rgba(255,255,255,.22) !important;
 }
 .screen-app .tafiti-sidebar-nav-label {
   font-size: 12.25px !important;
@@ -149,25 +149,25 @@
   width: min(100%, 510px) !important;
   height: 39px !important;
   padding: 0 13px !important;
-  border: 1px solid #d7e3f0 !important;
+  border: 1px solid #D7E5D9 !important;
   border-radius: 10px !important;
-  background: #f8fbff !important;
+  background: #FAFCFA !important;
   box-shadow: inset 0 1px 1px rgba(28, 66, 104, .018) !important;
 }
 .screen-app .tafiti-school-search:hover,
 .screen-app .tafiti-school-search:focus-visible {
-  border-color: #b9cff0 !important;
+  border-color: #B9D7C4 !important;
   background: #fff !important;
 }
 .screen-app .header-search-label {
-  color: #7f90a8 !important;
+  color: #718F7D !important;
   font-size: 11.5px !important;
 }
 .screen-app .tafiti-school-context-chip {
   min-height: 38px !important;
   padding: 0 14px !important;
-  color: #253b5c !important;
-  border-color: #d8e3ef !important;
+  color: #254C39 !important;
+  border-color: #D7E5D9 !important;
   background: #fff !important;
   border-radius: 9px !important;
   font-size: 10.5px !important;
@@ -178,12 +178,12 @@
 .screen-app .header-notification-trigger {
   width: 38px !important;
   height: 38px !important;
-  color: #36506f !important;
+  color: #3A614B !important;
   border-radius: 9px !important;
 }
 .screen-app .tafiti-school-icon-button:hover,
 .screen-app .header-notification-trigger:hover {
-  background: #f2f7fd !important;
+  background: #F3F8F4 !important;
 }
 .screen-app .tafiti-school-profile {
   min-height: 48px !important;
@@ -191,15 +191,15 @@
   border-radius: 10px !important;
 }
 .screen-app .tafiti-school-profile:hover {
-  background: #f5f9fd !important;
+  background: #F5F9F5 !important;
 }
 .screen-app .tafiti-header-user-copy > span {
-  color: #172b4d !important;
+  color: #1B4030 !important;
   font-size: 11.5px !important;
   font-weight: 800 !important;
 }
 .screen-app .tafiti-header-user-copy small {
-  color: #7e8fa8 !important;
+  color: #718F7D !important;
   font-size: 9.5px !important;
 }
 
@@ -261,15 +261,15 @@
 .screen-app .tafiti-app-content input,
 .screen-app .tafiti-app-content select,
 .screen-app .tafiti-app-content textarea {
-  border-color: #d8e3ef !important;
+  border-color: #D7E5D9 !important;
   border-radius: 8px !important;
   background: #fff !important;
 }
 .screen-app .tafiti-app-content input:focus,
 .screen-app .tafiti-app-content select:focus,
 .screen-app .tafiti-app-content textarea:focus {
-  border-color: #77acf7 !important;
-  box-shadow: 0 0 0 3px rgba(20,115,243,.10) !important;
+  border-color: #65A887 !important;
+  box-shadow: 0 0 0 3px rgba(22,115,77,.12) !important;
 }
 .screen-app .erp-primary,
 .screen-app .ds-btn-primary,
@@ -278,8 +278,8 @@
   color: #fff !important;
   border-color: transparent !important;
   border-radius: 8px !important;
-  background: linear-gradient(135deg, #1880fb, #0867e7) !important;
-  box-shadow: 0 7px 16px rgba(8, 103, 231, .18) !important;
+  background: linear-gradient(135deg, #208A5C, #116944) !important;
+  box-shadow: 0 7px 16px rgba(17,105,68,.18) !important;
 }
 .screen-app .erp-primary:hover,
 .screen-app .ds-btn-primary:hover {
@@ -290,18 +290,18 @@
   padding-top: 10px !important;
   padding-bottom: 10px !important;
   color: #667894 !important;
-  background: #f5f8fc !important;
-  border-bottom: 1px solid #dfe8f2 !important;
+  background: #F5F8F5 !important;
+  border-bottom: 1px solid #E0E8E1 !important;
   font-size: 9px !important;
   font-weight: 820 !important;
   letter-spacing: .035em !important;
 }
 .screen-app tbody td {
-  color: #30425e !important;
-  border-bottom-color: #e8eef5 !important;
+  color: #365847 !important;
+  border-bottom-color: #EBF2EC !important;
 }
 .screen-app tbody tr:hover td {
-  background: #f8fbff !important;
+  background: #FAFCFA !important;
 }
 .screen-app .status-chip,
 .screen-app .chip,
@@ -332,7 +332,7 @@
   padding: 0 12px !important;
   border: 1px solid #d7e3ef !important;
   border-radius: 9px !important;
-  color: #405472 !important;
+  color: #3E614A !important;
   background: #fff !important;
   box-shadow: var(--approved-shadow) !important;
 }
@@ -359,7 +359,7 @@
 }
 .screen-app .dashboard-task-card:hover {
   transform: translateY(-2px) !important;
-  border-color: #c5d8ef !important;
+  border-color: #C5DFCC !important;
   box-shadow: var(--approved-shadow-hover) !important;
 }
 .screen-app .dashboard-task-icon {
@@ -370,7 +370,7 @@
   place-items: center !important;
   border-radius: 10px !important;
   color: var(--approved-blue) !important;
-  background: #eaf3ff !important;
+  background: #EAF7EF !important;
 }
 .screen-app .dashboard-task-card.tone-warning .dashboard-task-icon { color: #e38213 !important; background: #fff1df !important; }
 .screen-app .dashboard-task-card.tone-good .dashboard-task-icon { color: var(--approved-good) !important; background: var(--approved-good-soft) !important; }
@@ -538,7 +538,7 @@
 .screen-app .procurement-queue-tab.is-active {
   color: #155fc6 !important;
   border-color: #9bc2f8 !important;
-  background: #eaf3ff !important;
+  background: #EAF7EF !important;
 }
 .screen-app .workbench-metrics {
   gap: 11px !important;
@@ -567,8 +567,8 @@
   box-shadow: var(--approved-shadow) !important;
 }
 .screen-app .receiving-document-fields {
-  background: #f8fbff !important;
-  border-color: #dfe8f2 !important;
+  background: #FAFCFA !important;
+  border-color: #E0E8E1 !important;
 }
 
 /* ===== Stock, inventory, suppliers, finance and reports ===== */
