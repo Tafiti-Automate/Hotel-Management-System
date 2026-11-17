@@ -4,6 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
+from rest_framework.permissions import IsAuthenticated
 
 from apps.finance.models import (
     BankAccount,
@@ -17,6 +18,7 @@ from apps.finance.models import (
     SupplierInvoiceItem,
     SupplierPayment,
     SupplierCreditNote,
+    SupplierPaymentReconciliation,
 )
 from apps.procurement.models import PurchaseOrder
 from apps.finance.serializers import (
@@ -31,6 +33,7 @@ from apps.finance.serializers import (
     SupplierInvoiceItemSerializer,
     SupplierPaymentSerializer,
     SupplierCreditNoteSerializer,
+    SupplierPaymentReconciliationSerializer,
 )
 from core.mixins.viewsets import CreatedByModelMixin
 
@@ -125,6 +128,20 @@ class BankTransactionViewSet(CreatedByModelMixin, ModelViewSet):
     filterset_fields = ("bank_account", "store", "transaction_type", "date")
     search_fields = ("reference", "note", "bank_account__account_number", "store__name")
     ordering_fields = ("date", "amount", "created_at")
+
+    def perform_update(self, serializer):
+        if SupplierPaymentReconciliation.objects.filter(
+            bank_transaction=serializer.instance
+        ).exists():
+            raise ValidationError("Matched bank evidence is locked.")
+        super().perform_update(serializer)
+
+    def perform_destroy(self, instance):
+        if SupplierPaymentReconciliation.objects.filter(
+            bank_transaction=instance
+        ).exists():
+            raise ValidationError("Matched bank evidence cannot be deleted.")
+        instance.delete()
 
 
 class ExpenseCategoryViewSet(CreatedByModelMixin, ModelViewSet):
@@ -368,3 +385,58 @@ class SupplierCreditNoteViewSet(CreatedByModelMixin, ModelViewSet):
         except DjangoValidationError as error:
             raise ValidationError(getattr(error, "messages", str(error)))
         return Response(self.get_serializer(credit).data)
+
+
+class SupplierPaymentReconciliationViewSet(CreatedByModelMixin, ModelViewSet):
+    queryset = SupplierPaymentReconciliation.objects.select_related(
+        "payment__invoice__purchase_order__requisition__branch",
+        "bank_transaction__bank_account", "created_by", "confirmed_by",
+    )
+    serializer_class = SupplierPaymentReconciliationSerializer
+    filterset_fields = ("payment", "bank_transaction", "status")
+    search_fields = ("payment__reference", "bank_transaction__reference")
+    ordering_fields = ("created_at", "status")
+
+    def get_permissions(self):
+        # Financial Managers may confirm without receiving blanket change rights.
+        if self.action == "confirm":
+            return [IsAuthenticated()]
+        return super().get_permissions()
+
+    def get_queryset(self):
+        return scope_supplier_finance_records(
+            super().get_queryset(), self.request.user,
+            "payment__invoice__purchase_order",
+        )
+
+    def perform_create(self, serializer):
+        require_accounts_payable_action(self.request.user)
+        require_finance_property(
+            self.request.user,
+            serializer.validated_data["payment"].invoice.purchase_order,
+        )
+        serializer.save(created_by=self.request.user)
+
+    def perform_update(self, serializer):
+        raise ValidationError("Payment reconciliations are immutable.")
+
+    def perform_destroy(self, instance):
+        raise ValidationError("Payment reconciliation evidence cannot be deleted.")
+
+    @action(detail=True, methods=["post"])
+    def confirm(self, request, pk=None):
+        user = request.user
+        if (
+            not user.is_authenticated or not user.is_active or user.is_superuser
+            or user.groups.filter(name="System Administrator").exists()
+            or not user.groups.filter(name="Financial Manager").exists()
+        ):
+            raise PermissionDenied(
+                "Only an assigned Financial Manager may confirm bank reconciliation."
+            )
+        matching = self.get_object()
+        try:
+            matching.confirm(actor=user, note=request.data.get("note", ""))
+        except DjangoValidationError as error:
+            raise ValidationError(getattr(error, "messages", str(error)))
+        return Response(self.get_serializer(matching).data)
