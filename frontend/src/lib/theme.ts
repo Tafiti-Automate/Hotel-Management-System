@@ -7,7 +7,7 @@ export type Density = 'Airy' | 'Compact'
 export const accentMap: Record<AccentName, string> = {
   Violet: '#6E56F0',
   Blue: '#2563EB',
-  Emerald: '#0E9F6E',
+  Emerald: '#16734D',
   Brass: '#B8893B',
   Rose: '#E0476B',
   Slate: '#5B6472',
@@ -90,7 +90,7 @@ export interface ThemeOptions {
 
 /** Build the full set of CSS custom properties for the root element. */
 export function themeVars({ mode, accentName, density }: ThemeOptions): Record<string, string> {
-  const selectedAccent = accentMap[accentName] || accentMap.Blue
+  const selectedAccent = accentMap[accentName] || accentMap.Emerald
   const accent = accentName === 'Blue' && mode === 'dark' ? '#3B82F6' : selectedAccent
   const base = mode === 'dark' ? DARK : LIGHT
   const airy = density !== 'Compact'
