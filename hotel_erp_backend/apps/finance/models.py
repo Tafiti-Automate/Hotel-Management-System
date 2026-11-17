@@ -879,3 +879,99 @@ class SupplierCreditNote(BaseModel):
 
     def __str__(self):
         return f"{self.supplier_return.credit_note_number} · {self.invoice.invoice_number}"
+
+
+class SupplierPaymentReconciliation(BaseModel):
+    """Audited one-to-one match of a posted supplier payment to a bank entry.
+
+    A bank entry may be manually entered. A match validates recorded evidence;
+    it is not a claim of independent bank-statement authenticity.
+    """
+    STATUS_PENDING = "pending"
+    STATUS_CONFIRMED = "confirmed"
+    STATUS_CHOICES = (
+        (STATUS_PENDING, "Pending review"),
+        (STATUS_CONFIRMED, "Confirmed against recorded bank entry"),
+    )
+
+    payment = models.OneToOneField(
+        SupplierPayment, on_delete=models.PROTECT,
+        related_name="bank_reconciliation",
+    )
+    bank_transaction = models.OneToOneField(
+        BankTransaction, on_delete=models.PROTECT,
+        related_name="supplier_payment_reconciliation",
+    )
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING,
+    )
+    review_note = models.TextField(blank=True)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        related_name="confirmed_supplier_payment_reconciliations",
+        null=True, blank=True,
+    )
+
+    class Meta(BaseModel.Meta):
+        ordering = ("-created_at",)
+
+    def _validate_match(self):
+        payment = self.payment
+        entry = self.bank_transaction
+        if payment.status != SupplierPayment.STATUS_POSTED:
+            raise ValidationError("Only posted supplier payments can be reconciled.")
+        if not payment.bank_account_id:
+            raise ValidationError("Supplier payment requires a recorded bank account.")
+        if payment.bank_account_id != entry.bank_account_id:
+            raise ValidationError("Bank statement entry and supplier payment account differ.")
+        if entry.transaction_type != BankTransactionType.WITHDRAWAL:
+            raise ValidationError("A supplier payment must match a bank withdrawal.")
+        if entry.amount != payment.amount:
+            raise ValidationError("Bank entry amount differs from the posted supplier payment.")
+        if not entry.reference.strip():
+            raise ValidationError("The bank transaction must have a traceable reference.")
+        if not payment.reference.strip():
+            raise ValidationError("Supplier payment must have a traceable reference.")
+        from apps.materials_control.models import FiscalPeriod
+        branch = payment.invoice.purchase_order.requisition.branch
+        if branch and FiscalPeriod.objects.filter(
+            branch=branch,
+            start_date__lte=entry.date,
+            end_date__gte=entry.date,
+            status=FiscalPeriod.STATUS_CLOSED,
+        ).exists():
+            raise ValidationError("Cannot confirm reconciliation for a bank entry in a closed period.")
+
+    def clean(self):
+        super().clean()
+        if self.payment_id and self.bank_transaction_id:
+            self._validate_match()
+
+    def confirm(self, *, actor, note):
+        with transaction.atomic():
+            match = SupplierPaymentReconciliation.objects.select_for_update().get(
+                pk=self.pk
+            )
+            if match.status != self.STATUS_PENDING:
+                raise ValidationError("This payment reconciliation has already been confirmed.")
+            if not actor or actor.pk == match.created_by_id:
+                raise ValidationError("The reconciliation preparer cannot confirm their own match.")
+            if not str(note).strip():
+                raise ValidationError("A bank-reconciliation evidence note is required.")
+            # Lock the source evidence before checking. Confirmation never
+            # changes the supplier payment, bank entry, or GL journal.
+            SupplierPayment.objects.select_for_update().get(pk=match.payment_id)
+            BankTransaction.objects.select_for_update().get(pk=match.bank_transaction_id)
+            match._validate_match()
+            match.status = self.STATUS_CONFIRMED
+            match.confirmed_at = timezone.now()
+            match.confirmed_by = actor
+            match.review_note = str(note).strip()
+            match.save(update_fields=(
+                "status", "confirmed_at", "confirmed_by", "review_note", "updated_at"
+            ))
+            self.status = match.status
+            self.confirmed_at = match.confirmed_at
+            self.confirmed_by = actor
+            self.review_note = match.review_note
