@@ -71,6 +71,18 @@ def test_finance_invoice_and_payment_records_are_scoped_to_property(role):
         assert str(forbidden) not in ids, endpoint
 
     if role == "Accounts Payable Clerk":
+        # Financially final documents must return a controlled 400, not a 500.
+        own_invoice = invoices[0]
+        own_invoice.status = SupplierInvoice.STATUS_PAID
+        own_invoice.save(update_fields=("status", "updated_at"))
+        response = client.post(
+            f"/api/v1/supplier-invoices/{own_invoice.pk}/match/"
+        )
+        assert response.status_code == 400
+        own_invoice.refresh_from_db()
+        assert own_invoice.status == SupplierInvoice.STATUS_PAID
+
+    if role == "Accounts Payable Clerk":
         # A posted FK cannot be used to write into another property's payable.
         foreign_order = invoices[1].purchase_order
         response = client.post("/api/v1/supplier-invoices/", {
