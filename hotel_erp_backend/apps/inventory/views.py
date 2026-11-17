@@ -73,7 +73,7 @@ from apps.inventory.serializers import (
 )
 from apps.procurement.models import RequisitionItem
 from core.mixins.viewsets import CreatedByModelMixin
-from core.constants.choices import ItemBusinessType, StoreRequisitionStatus
+from core.constants.choices import ItemBusinessType, StoreRequisitionStatus, StockCountStatus
 
 
 def raise_drf_validation_error(error):
@@ -1413,6 +1413,34 @@ class StockCountItemViewSet(CreatedByModelMixin, ModelViewSet):
     filterset_fields = ("stock_count", "item")
     search_fields = ("stock_count__count_no", "item__name", "item__sku")
     ordering_fields = ("system_quantity", "physical_quantity", "created_at")
+
+    def _require_editable_count(self, stock_count):
+        if self.request.user.is_superuser or not (
+            has_role(self.request.user, "Store Keeper")
+            and not has_role(self.request.user, "System Administrator", "General Manager")
+        ):
+            raise PermissionDenied("Only an assigned Store Keeper may enter physical stock counts.")
+        if stock_count.store_id not in set(assigned_store_ids(self.request.user)):
+            raise PermissionDenied("Stock count is outside your assigned stores.")
+        if stock_count.inventory_changes_applied or stock_count.status not in (
+            StockCountStatus.DRAFT, StockCountStatus.IN_PROGRESS
+        ):
+            raise ValidationError("Submitted, approved, or booked stock counts are locked.")
+
+    def perform_create(self, serializer):
+        self._require_editable_count(serializer.validated_data["stock_count"])
+        super().perform_create(serializer)
+
+    def perform_update(self, serializer):
+        self._require_editable_count(serializer.instance.stock_count)
+        if ("stock_count" in serializer.validated_data
+                and serializer.validated_data["stock_count"].pk != serializer.instance.stock_count_id):
+            raise ValidationError("An existing count line cannot be moved to another count.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self._require_editable_count(instance.stock_count)
+        instance.delete()
 
     def get_queryset(self):
         queryset = super().get_queryset()
