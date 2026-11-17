@@ -69,3 +69,29 @@ def test_finance_invoice_and_payment_records_are_scoped_to_property(role):
         ids = {str(row["id"]) for row in records}
         assert str(accessible) in ids, endpoint
         assert str(forbidden) not in ids, endpoint
+
+    if role == "Accounts Payable Clerk":
+        # A posted FK cannot be used to write into another property's payable.
+        foreign_order = invoices[1].purchase_order
+        response = client.post("/api/v1/supplier-invoices/", {
+            "supplier": str(supplier.pk),
+            "purchase_order": str(foreign_order.pk),
+            "invoice_number": "CROSS-HOTEL-UNAUTHORIZED",
+            "due_date": str(timezone.localdate()),
+            "subtotal": "100.00",
+        })
+        assert response.status_code == 403
+        assert not SupplierInvoice.objects.filter(
+            invoice_number="CROSS-HOTEL-UNAUTHORIZED"
+        ).exists()
+
+        response = client.post("/api/v1/supplier-payments/", {
+            "invoice": str(invoices[1].pk),
+            "amount": "5.00",
+            "payment_method": str(method.pk),
+            "reference": "CROSS-HOTEL-PAYMENT",
+        })
+        assert response.status_code == 403
+        assert not SupplierPayment.objects.filter(
+            reference="CROSS-HOTEL-PAYMENT"
+        ).exists()
