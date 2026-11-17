@@ -315,8 +315,20 @@ class SupplierInvoice(BaseModel):
         )
 
     @property
+    def credited_amount(self):
+        return sum(
+            (credit.total_amount for credit in self.supplier_credits.filter(
+                status=SupplierCreditNote.STATUS_POSTED
+            )),
+            Decimal("0.00"),
+        )
+
+    @property
     def balance_due(self):
-        return max(self.total_amount - self.paid_amount, Decimal("0.00"))
+        return max(
+            self.total_amount - self.paid_amount - self.credited_amount,
+            Decimal("0.00"),
+        )
 
     def clean(self):
         super().clean()
@@ -699,3 +711,145 @@ class SupplierPayment(BaseModel):
 
     def __str__(self):
         return f"{self.reference}: {self.amount}"
+
+
+class SupplierCreditNote(BaseModel):
+    """Valued AP reversal linked to one acknowledged, posted supplier return.
+
+    A supplier return alone only changes stock and records acknowledgement.
+    Financial liability changes after an independent Finance approval followed
+    by an Accounts Payable posting, both serialized against the invoice.
+    """
+    STATUS_DRAFT = "draft"
+    STATUS_APPROVED = "approved"
+    STATUS_POSTED = "posted"
+    STATUS_CHOICES = (
+        (STATUS_DRAFT, "Draft"),
+        (STATUS_APPROVED, "Approved"),
+        (STATUS_POSTED, "Posted"),
+    )
+
+    invoice = models.ForeignKey(
+        SupplierInvoice, on_delete=models.PROTECT, related_name="supplier_credits",
+    )
+    supplier_return = models.OneToOneField(
+        "procurement.SupplierReturn", on_delete=models.PROTECT,
+        related_name="financial_credit",
+    )
+    credit_date = models.DateField(default=timezone.localdate)
+    subtotal = models.DecimalField(
+        max_digits=15, decimal_places=2, validators=[validate_positive_decimal],
+    )
+    tax_amount = models.DecimalField(
+        max_digits=15, decimal_places=2, default=Decimal("0.00"),
+        validators=[validate_non_negative_decimal],
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_DRAFT)
+    note = models.TextField(blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="approved_supplier_credit_notes",
+    )
+    posted_at = models.DateTimeField(null=True, blank=True)
+    posted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="posted_supplier_credit_notes",
+    )
+
+    class Meta(BaseModel.Meta):
+        ordering = ("-credit_date", "-created_at")
+
+    @property
+    def total_amount(self):
+        return self.subtotal + self.tax_amount
+
+    def _validate_evidence(self):
+        record = self.supplier_return
+        if not record.inventory_changes_applied or not record.supplier_acknowledged_at:
+            raise ValidationError("A posted supplier return and acknowledgement are required.")
+        if not record.credit_note_number.strip():
+            raise ValidationError("Record the supplier's credit note reference first.")
+        if (record.supplier_id != self.invoice.supplier_id or
+                record.goods_receipt.purchase_order_id != self.invoice.purchase_order_id):
+            raise ValidationError("Credit note, GRN, LPO and invoice supplier must agree.")
+        if self.invoice.status not in (
+            SupplierInvoice.STATUS_APPROVED,
+            SupplierInvoice.STATUS_PARTIALLY_PAID,
+            SupplierInvoice.STATUS_PAID,
+        ):
+            raise ValidationError("Only an approved supplier invoice may be credited.")
+        # Do not derive credits from today's mutable catalogue prices. Value the
+        # physical return at the actual LPO receipt rate, on the same GRN.
+        received_lines = {
+            line.item_id: line.base_unit_cost
+            for line in record.goods_receipt.items.select_related("purchase_order_item")
+            if line.inventory_changes_applied and line.store_id == record.store_id
+        }
+        return_value = Decimal("0.00")
+        for line in record.items.all():
+            if line.item_id not in received_lines:
+                raise ValidationError("Returned article is not on the posted receiving GRN.")
+            return_value += line.base_quantity * received_lines[line.item_id]
+        if self.subtotal > return_value.quantize(Decimal("0.01")):
+            raise ValidationError("Credit subtotal exceeds original returned-goods LPO value.")
+        if self.tax_amount > self.invoice.tax_amount:
+            raise ValidationError("Credit tax exceeds original invoice tax.")
+
+    def clean(self):
+        super().clean()
+        if self.invoice_id and self.supplier_return_id:
+            self._validate_evidence()
+
+    def approve(self, *, actor):
+        with transaction.atomic():
+            credit = SupplierCreditNote.objects.select_for_update().get(pk=self.pk)
+            if credit.status != self.STATUS_DRAFT:
+                raise ValidationError("Only draft supplier credits can be approved.")
+            if not actor or actor.pk == credit.created_by_id:
+                raise ValidationError("A separate Financial Manager must approve the credit.")
+            credit._validate_evidence()
+            credit.status = self.STATUS_APPROVED
+            credit.approved_at = timezone.now()
+            credit.approved_by = actor
+            credit.save(update_fields=("status", "approved_at", "approved_by", "updated_at"))
+            self.status, self.approved_at, self.approved_by = (
+                credit.status, credit.approved_at, credit.approved_by,
+            )
+
+    def post(self, *, actor):
+        from apps.materials_control.models import FiscalPeriod
+        with transaction.atomic():
+            credit = SupplierCreditNote.objects.select_for_update().get(pk=self.pk)
+            invoice = SupplierInvoice.objects.select_for_update().get(pk=credit.invoice_id)
+            if credit.status != self.STATUS_APPROVED:
+                raise ValidationError("Only approved supplier credits can be posted.")
+            if not actor or actor.pk in (credit.created_by_id, credit.approved_by_id):
+                raise ValidationError("A separate Accounts Payable poster is required.")
+            credit._validate_evidence()
+            branch = invoice.purchase_order.requisition.branch
+            if FiscalPeriod.objects.filter(
+                branch=branch, start_date__lte=credit.credit_date,
+                end_date__gte=credit.credit_date, status=FiscalPeriod.STATUS_CLOSED,
+            ).exists():
+                raise ValidationError("Cannot post a supplier credit in a closed fiscal period.")
+            if credit.total_amount > invoice.balance_due:
+                raise ValidationError("Supplier credit exceeds the unpaid invoice balance.")
+            credit.status = self.STATUS_POSTED
+            credit.posted_at = timezone.now()
+            credit.posted_by = actor
+            credit.save(update_fields=("status", "posted_at", "posted_by", "updated_at"))
+            invoice.refresh_from_db()
+            if invoice.balance_due <= Decimal("0.00"):
+                invoice.status = SupplierInvoice.STATUS_PAID
+            elif invoice.paid_amount > 0:
+                invoice.status = SupplierInvoice.STATUS_PARTIALLY_PAID
+            else:
+                invoice.status = SupplierInvoice.STATUS_APPROVED
+            invoice.save(update_fields=("status", "updated_at"))
+            self.status, self.posted_at, self.posted_by = (
+                credit.status, credit.posted_at, credit.posted_by,
+            )
+
+    def __str__(self):
+        return f"{self.supplier_return.credit_note_number} · {self.invoice.invoice_number}"
