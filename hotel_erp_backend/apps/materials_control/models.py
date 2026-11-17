@@ -916,9 +916,11 @@ class FiscalPeriod(BaseModel):
 class GLAccountMapping(BaseModel):
     SOURCE_INVOICE = "supplier_invoice"
     SOURCE_EXPENSE = "expense"
+    SOURCE_PAYMENT = "supplier_payment"
     SOURCE_CHOICES = (
         (SOURCE_INVOICE, "Supplier invoices"),
         (SOURCE_EXPENSE, "Expenses"),
+        (SOURCE_PAYMENT, "Supplier payments (AP debit / bank clearing credit)"),
     )
 
     branch = models.ForeignKey(
@@ -969,7 +971,7 @@ class GLExport(BaseModel):
 
     @classmethod
     def generate(cls, period, actor):
-        from apps.finance.models import Expense, SupplierInvoice, SupplierCreditNote
+        from apps.finance.models import Expense, SupplierInvoice, SupplierCreditNote, SupplierPayment
 
         if period.status != FiscalPeriod.STATUS_CLOSED:
             raise ValidationError("Close the fiscal period before generating its GL export.")
@@ -1052,6 +1054,26 @@ class GLExport(BaseModel):
                     raise ValidationError("Configure an input VAT account for taxable supplier credits.")
                 add_entry(credit.credit_date, "supplier_credit_note", ref, department,
                           "Input VAT reversal " + ref, mapping.tax_account, 0, credit.tax_amount)
+
+        # Export only posted supplier payments from this fiscal period. This
+        # settles AP, not an invented historical stock valuation; bank-level
+        # settlement must be reconciled separately against provider statements.
+        payments = SupplierPayment.objects.filter(
+            invoice__purchase_order__requisition__branch=period.branch,
+            payment_date__range=(period.start_date, period.end_date),
+            status=SupplierPayment.STATUS_POSTED,
+        ).select_related("invoice__purchase_order__requisition__department", "bank_account")
+        for payment in payments:
+            mapping = mapping_for(GLAccountMapping.SOURCE_PAYMENT)
+            department = getattr(payment.invoice.purchase_order.requisition.department, "name", "")
+            ref = payment.reference or str(payment.pk)
+            description = f"Supplier payment {ref} for invoice {payment.invoice.invoice_number}"
+            if payment.bank_account_id:
+                description += f" ({payment.bank_account.name})"
+            add_entry(payment.payment_date, "supplier_payment", ref, department,
+                      description, mapping.debit_account, payment.amount, 0)
+            add_entry(payment.payment_date, "supplier_payment", ref, department,
+                      description, mapping.credit_account, 0, payment.amount)
 
         expenses = Expense.objects.filter(
             store__branch=period.branch,
