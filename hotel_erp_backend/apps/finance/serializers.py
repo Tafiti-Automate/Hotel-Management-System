@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.core.exceptions import ValidationError as DjangoValidationError
 
 from apps.finance.models import (
     BankAccount,
@@ -12,6 +13,7 @@ from apps.finance.models import (
     SupplierInvoiceItem,
     SupplierPayment,
     SupplierCreditNote,
+    SupplierPaymentReconciliation,
 )
 
 
@@ -221,5 +223,38 @@ class SupplierCreditNoteSerializer(serializers.ModelSerializer):
                     supplier_return.goods_receipt.purchase_order_id != invoice.purchase_order_id):
                 raise serializers.ValidationError(
                     "Credit return must correspond to the same supplier and LPO as the invoice."
+                )
+        return attrs
+
+
+class SupplierPaymentReconciliationSerializer(serializers.ModelSerializer):
+    payment_reference = serializers.CharField(source="payment.reference", read_only=True)
+    bank_reference = serializers.CharField(source="bank_transaction.reference", read_only=True)
+
+    class Meta:
+        model = SupplierPaymentReconciliation
+        fields = "__all__"
+        read_only_fields = (
+            "id", "status", "confirmed_at", "confirmed_by", "review_note",
+            "payment_reference", "bank_reference",
+            "created_at", "updated_at", "created_by",
+        )
+
+    def validate(self, attrs):
+        if self.instance and attrs:
+            raise serializers.ValidationError(
+                "Bank reconciliation source evidence cannot be altered or reassigned."
+            )
+        payment = attrs.get("payment")
+        bank_entry = attrs.get("bank_transaction")
+        if payment and bank_entry:
+            candidate = SupplierPaymentReconciliation(
+                payment=payment, bank_transaction=bank_entry
+            )
+            try:
+                candidate._validate_match()
+            except DjangoValidationError as error:
+                raise serializers.ValidationError(
+                    getattr(error, "messages", str(error))
                 )
         return attrs
