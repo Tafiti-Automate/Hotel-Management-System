@@ -2762,6 +2762,9 @@ class SupplierReturn(BaseModel):
             raise ValidationError("Supplier return has already been applied.")
         with transaction.atomic():
             supplier_return = SupplierReturn.objects.select_for_update().get(pk=self.pk)
+            # Serialize competing returns against the same GRN so two concurrent
+            # dispatches cannot each claim the same remaining accepted stock.
+            GoodsReceiptNote.objects.select_for_update().get(pk=supplier_return.goods_receipt_id)
             if supplier_return.inventory_changes_applied or supplier_return.status != SupplierReturnStatus.DRAFT:
                 raise ValidationError("Only a draft, unposted supplier return may be dispatched.")
             if supplier_return.goods_receipt.purchase_order.supplier_id != supplier_return.supplier_id:
@@ -2843,6 +2846,11 @@ class SupplierReturn(BaseModel):
                 raise ValidationError("Supplier acknowledgement has already been recorded.")
             acknowledged_by = str(acknowledged_by or "").strip()
             credit_note_number = str(credit_note_number or "").strip()
+            if credit_note_number:
+                # Serialize credit reference checks for this vendor on databases
+                # supporting row locks (e.g. PostgreSQL).
+                from apps.vendors.models import Supplier
+                Supplier.objects.select_for_update().get(pk=supplier_return.supplier_id)
             if not acknowledged_by:
                 raise ValidationError("Enter the supplier representative who acknowledged the return.")
             if credit_note_number and SupplierReturn.objects.filter(
