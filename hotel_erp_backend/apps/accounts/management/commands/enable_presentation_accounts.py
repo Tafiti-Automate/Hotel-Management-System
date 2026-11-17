@@ -11,7 +11,7 @@ from apps.accounts.role_policy import grant_employee_self_service
 
 
 ACCOUNT_SPECS = (
-    ("esther.requester", "Requester", "DEMO_REQUESTER_PASSWORD"),
+    ("esther.requester", "Department Supervisor", "DEMO_REQUESTER_PASSWORD"),
     ("rebecca.departmenthead", "Department Head", "DEMO_DEPARTMENT_HEAD_PASSWORD"),
     ("alice.costcontroller", "Cost Controller", "DEMO_COST_CONTROLLER_PASSWORD"),
     ("samuel.storekeeper", "Store Keeper", "DEMO_STORE_KEEPER_PASSWORD"),

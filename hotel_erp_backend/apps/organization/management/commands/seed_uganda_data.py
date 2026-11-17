@@ -77,6 +77,11 @@ class Command(BaseCommand):
             )
 
         if options["reset"]:
+            if AuditLog.objects.exists() or StockLedger.objects.exists():
+                raise CommandError(
+                    "Existing audit or stock ledger evidence is immutable. "
+                    "Do not reset this database; create a fresh demo database instead."
+                )
             self.stdout.write(
                 self.style.WARNING("Reset requested: deleting existing application data...")
             )

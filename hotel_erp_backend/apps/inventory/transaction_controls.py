@@ -1,6 +1,6 @@
 """Inventory controls shared across role-specific workspaces.
 
-The Department Head remains the Department Requisition originator. This module
+The Department Supervisor originates requests; HOD and Cost Control approve them. This module
 also keeps Store Keeper hotel/property scoping, monotonic requisition quantities,
 and read-only Stock on Hand valuation fields used by the Stores workspace.
 """

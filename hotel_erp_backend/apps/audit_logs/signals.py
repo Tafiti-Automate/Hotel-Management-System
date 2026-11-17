@@ -1,3 +1,4 @@
+import logging
 from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
@@ -22,7 +23,7 @@ from apps.procurement.models import (
     PurchaseRequisition,
     SupplierReturn,
 )
-from core.constants.choices import ApprovalStatus, GoodsReceiptStatus, POStatus, PRStatus
+from core.constants.choices import ApprovalStatus, GoodsReceiptStatus, POStatus, PRStatus, StoreRequisitionStatus
 
 
 def _json_value(value):
@@ -131,17 +132,32 @@ def audit_document_change(sender, instance, created, **kwargs):
         if before.get(key) != value
     }
     actor = getattr(instance, "created_by", None)
-    record_audit(
-        actor=actor,
-        action="document_created" if created else "document_updated",
-        entity_type=f"{sender._meta.app_label}.{sender.__name__}",
-        entity_id=instance.id,
-        metadata={
-            "changes": changed,
-            "status": getattr(instance, "status", None),
-        },
-        created_by=actor,
-    )
+    def write_audit():
+        return record_audit(
+            actor=actor,
+            action="document_created" if created else "document_updated",
+            entity_type=f"{sender._meta.app_label}.{sender.__name__}",
+            entity_id=instance.id,
+            metadata={
+                "changes": changed,
+                "status": getattr(instance, "status", None),
+            },
+            created_by=actor,
+        )
+
+    # A new or edited *draft* request is not a booked posting. If audit storage
+    # is temporarily unavailable, preserve the Supervisor's unsubmitted draft.
+    # All submitted/approved financial and stock documents remain fail-closed.
+    if sender is StoreRequisition and instance.status == StoreRequisitionStatus.DRAFT:
+        try:
+            write_audit()
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "Draft Store Requisition %s saved while audit writer was unavailable",
+                instance.pk,
+            )
+        return
+    write_audit()
 
 
 @receiver(pre_delete)

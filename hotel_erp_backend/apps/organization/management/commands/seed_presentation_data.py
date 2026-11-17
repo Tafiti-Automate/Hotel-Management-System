@@ -273,8 +273,8 @@ class Command(BaseCommand):
                 "Nambasa",
                 "UG-HQ-106",
                 "Housekeeping",
-                "Room Attendant",
-                "Requester",
+                "Housekeeping Supervisor",
+                "Department Supervisor",
                 "+256 701 410 106",
             ),
             "housekeeping_head": (

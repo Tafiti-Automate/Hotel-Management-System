@@ -457,9 +457,9 @@ def test_department_user_store_request_uses_own_identity(client):
         username="department-requester", employee_code="EMP-REQUESTER", password="test-pass-123"
     )
     own_employee = Employee.objects.create(
-        user=user, department=own_department, branch=branch, designation="Requester"
+        user=user, department=own_department, branch=branch, designation="Department Supervisor"
     )
-    user.groups.add(Group.objects.get_or_create(name="Requester")[0])
+    user.groups.add(Group.objects.get_or_create(name="Department Supervisor")[0])
     other_user = get_user_model().objects.create_user(
         username="other-requester", employee_code="EMP-OTHER", password="test-pass-123"
     )
@@ -545,9 +545,9 @@ def test_requester_store_options_and_selection_are_limited_to_own_branch():
         user=user,
         department=department,
         branch=branch,
-        designation="Requester",
+        designation="Department Supervisor",
     )
-    user.groups.add(Group.objects.get_or_create(name="Requester")[0])
+    user.groups.add(Group.objects.get_or_create(name="Department Supervisor")[0])
     requisition = StoreRequisition.objects.create(
         department=department,
         requested_by=employee,
@@ -615,108 +615,76 @@ def test_store_requisition_requires_issuing_store_before_submit():
 
 
 @pytest.mark.django_db
+
 def test_store_request_requires_department_head_before_store_keeper_review():
+    """A Supervisor request must pass both HOD and Cost Control before Stores."""
     branch = Branch.objects.create(name="Approval Flow Hotel")
     department = Department.objects.create(name="Approval Flow Housekeeping")
-    store = StoreLocation.objects.create(branch=branch, name="Approval Flow Store")
+    store = StoreLocation.objects.create(branch=branch, name="Approval Flow Store", is_active=True)
+    unit = UnitOfMeasure.objects.create(name="Flow Pieces", abbreviation="flp")
     category = Category.objects.create(name="Approval Flow Supplies")
     item = Item.objects.create(
-        category=category, name="Approval Soap", unit="L", reorder_level=Decimal("1")
+        category=category, name="Approval Soap", sku="SOAP-APFLOW", unit="pcs",
+        base_unit=unit, reorder_level=Decimal("1.00"),
     )
-    employee_user = get_user_model().objects.create_user(
-        username="requesting-employee", employee_code="EMP-FLOW-EMPLOYEE"
-    )
-    employee = Employee.objects.create(
-        user=employee_user, department=department, branch=branch, designation="Requester"
-    )
-    employee_user.groups.add(Group.objects.get_or_create(name="Requester")[0])
-    head_user = get_user_model().objects.create_user(
-        username="requesting-head", employee_code="EMP-FLOW-HEAD"
-    )
-    head = Employee.objects.create(
-        user=head_user, department=department, branch=branch, designation="Department Head"
-    )
-    head_user.groups.add(Group.objects.get_or_create(name="Department Head")[0])
-    stores_user = get_user_model().objects.create_user(
-        username="approval-flow-storekeeper", employee_code="EMP-FLOW-STORES"
-    )
-    stores_user.groups.add(Group.objects.get_or_create(name="Store Keeper")[0])
-    stores = Employee.objects.create(
-        user=stores_user, department=department, branch=branch, designation="Store Keeper"
-    )
-    StoreKeeperAssignment.objects.create(store=store, employee=stores)
 
-    employee_request = StoreRequisition.objects.create(
-        department=department, store=store, requested_by=employee
-    )
-    request_line = StoreRequisitionItem.objects.create(
-        requisition=employee_request,
-        item=item,
-        quantity_requested=Decimal("2"),
-        remarks="For the second-floor guest rooms.",
-    )
-    employee_request.submit(actor=employee_user)
-    assert employee_request.status == StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL
-    assert employee_request.department_approved_by is None
-    with pytest.raises(ValidationError, match="HOD-approved Department request"):
-        employee_request.create_shortage_purchase_requisition(created_by=stores_user)
+    def employee(username, code, role):
+        user = get_user_model().objects.create_user(username=username, employee_code=code)
+        user.groups.add(Group.objects.get_or_create(name=role)[0])
+        return user, Employee.objects.create(
+            user=user, department=department, branch=branch, designation=role
+        )
 
-    stores_client = APIClient()
-    stores_client.force_authenticate(stores_user)
-    assert stores_client.get("/api/v1/store-requisitions/").data["results"] == []
+    supervisor_user, supervisor = employee("flow-supervisor", "FLOW-SUP", "Department Supervisor")
+    hod_user, hod = employee("flow-hod", "FLOW-HOD", "Department Head")
+    cost_user, cost = employee("flow-cost", "FLOW-COST", "Cost Controller")
+    keeper_user, keeper = employee("flow-keeper", "FLOW-KEEP", "Store Keeper")
+    StoreKeeperAssignment.objects.create(store=store, employee=keeper, is_active=True)
+    InventoryBalance.objects.create(item=item, store=store, quantity_in_stock=Decimal("5.00"))
 
-    head_client = APIClient()
-    head_client.force_authenticate(head_user)
-    response = head_client.post(
-        f"/api/v1/store-requisitions/{employee_request.pk}/department-approve/",
-        {"comments": "The rooms require these supplies."},
+    request = StoreRequisition.objects.create(
+        department=department, store=store, requested_by=supervisor
+    )
+    line = StoreRequisitionItem.objects.create(
+        requisition=request, item=item, unit=unit, quantity_requested=Decimal("2.00")
+    )
+    request.submit(actor=supervisor_user)
+    assert request.status == StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL
+    assert request.department_approved_by is None
+
+    stores = APIClient()
+    stores.force_authenticate(keeper_user)
+    assert stores.get("/api/v1/store-requisitions/").data["results"] == []
+
+    head = APIClient()
+    head.force_authenticate(hod_user)
+    approved_hod = head.post(
+        f"/api/v1/store-requisitions/{request.pk}/department-approve/",
+        {"items": [{"id": str(line.pk), "approved_quantity": "2.00"}]},
         format="json",
     )
-    assert response.status_code == 200
-    employee_request.refresh_from_db()
-    assert employee_request.status == StoreRequisitionStatus.SUBMITTED
-    assert employee_request.department_approved_by == head
-    assert employee_request.department_approval_comments == "The rooms require these supplies."
-    assert stores_client.get("/api/v1/store-requisitions/").data["count"] == 1
+    assert approved_hod.status_code == 200, approved_hod.data
+    request.refresh_from_db()
+    assert request.status == StoreRequisitionStatus.SUBMITTED
+    assert request.department_approved_by == hod
+    assert stores.get("/api/v1/store-requisitions/").data["results"] == []
 
-    response = stores_client.patch(
-        f"/api/v1/store-requisition-items/{request_line.pk}/",
-        {"quantity_approved": "2.00", "storekeeper_comment": "Available in stock."},
+    cost_client = APIClient()
+    cost_client.force_authenticate(cost_user)
+    approved_cost = cost_client.post(
+        f"/api/v1/store-requisitions/{request.pk}/cost-control-approve/",
+        {"items": [{"id": str(line.pk), "approved_quantity": "2.00"}]},
         format="json",
     )
-    assert response.status_code == 200
-    request_line.refresh_from_db()
-    assert request_line.remarks == "For the second-floor guest rooms."
-    assert request_line.storekeeper_comment == "Available in stock."
-
-    purchase = employee_request.create_shortage_purchase_requisition(
-        created_by=stores_user, reason="No approval soap is available in the issuing store."
-    )
-    assert employee_request.status == StoreRequisitionStatus.AWAITING_PROCUREMENT
-    assert employee_request.procurement_requisition == purchase
-    assert purchase.requester == employee
-    assert purchase.department == department
-    assert purchase.items.get().quantity == Decimal("2")
-    with pytest.raises(ValidationError, match="not been fully received"):
-        employee_request.resume_after_procurement()
-
-    purchase.status = PRStatus.FULFILLED
-    purchase.save(update_fields=["status", "updated_at"])
-    employee_request.resume_after_procurement()
-    employee_request.refresh_from_db()
-    assert employee_request.status == StoreRequisitionStatus.COMPLETED
-
-    head_request = StoreRequisition.objects.create(
-        department=department, store=store, requested_by=head
-    )
-    StoreRequisitionItem.objects.create(
-        requisition=head_request, item=item, quantity_requested=Decimal("1")
-    )
-    head_request.submit(actor=head_user)
-    assert head_request.status == StoreRequisitionStatus.PENDING_DEPARTMENT_APPROVAL
-    assert head_request.department_approved_by is None
-    with pytest.raises(ValidationError, match="cannot approve their own"):
-        head_request.approve_department(head)
+    assert approved_cost.status_code == 200, approved_cost.data
+    request.refresh_from_db()
+    assert request.status == StoreRequisitionStatus.APPROVED
+    assert request.approved_by == cost
+    balance = InventoryBalance.objects.get(item=item, store=store)
+    assert balance.quantity_reserved == Decimal("2.00")
+    assert str(request.pk) in {
+        str(row["id"]) for row in stores.get("/api/v1/store-requisitions/").data["results"]
+    }
 
 
 @pytest.mark.django_db
@@ -902,9 +870,9 @@ def test_employee_store_request_resolves_default_store_from_authenticated_branch
         user=user,
         department=department,
         branch=branch,
-        designation="Requester",
+        designation="Department Supervisor",
     )
-    user.groups.add(Group.objects.get_or_create(name="Requester")[0])
+    user.groups.add(Group.objects.get_or_create(name="Department Supervisor")[0])
     store = StoreLocation.objects.create(
         name="Main Store",
         branch=branch,
@@ -925,73 +893,77 @@ def test_employee_store_request_resolves_default_store_from_authenticated_branch
     assert request.store is None
 
 @pytest.mark.django_db
+
 def test_department_head_can_reduce_quantity_without_overwriting_requester_quantity():
+    """Each approval level is independent and may not increase earlier limits."""
     branch = Branch.objects.create(name="HOD Quantity Hotel")
     department = Department.objects.create(name="HOD Quantity Housekeeping")
-    store = StoreLocation.objects.create(branch=branch, name="HOD Quantity Store")
-    category = Category.objects.create(name="HOD Quantity Supplies")
-    item = Item.objects.create(category=category, name="HOD Quantity Paper", unit="ream", reorder_level=Decimal("1"))
+    store = StoreLocation.objects.create(branch=branch, name="HOD Quantity Store", is_active=True)
+    unit = UnitOfMeasure.objects.create(name="Quantity Ream", abbreviation="qrm")
+    category = Category.objects.create(name="Quantity Paper")
+    item = Item.objects.create(
+        category=category, name="HOD Quantity Paper", sku="HOD-PAPER-QTY",
+        unit="ream", base_unit=unit, reorder_level=Decimal("1.00"),
+    )
+    def person(name, code, role):
+        user = get_user_model().objects.create_user(username=name, employee_code=code)
+        user.groups.add(Group.objects.get_or_create(name=role)[0])
+        return user, Employee.objects.create(user=user, department=department, branch=branch, designation=role)
 
-    requester_user = get_user_model().objects.create_user(username="hod-qty-requester", employee_code="HOD-QTY-REQ")
-    requester = Employee.objects.create(user=requester_user, department=department, branch=branch, designation="Requester")
-    requester_user.groups.add(Group.objects.get_or_create(name="Requester")[0])
-
-    head_user = get_user_model().objects.create_user(username="hod-qty-head", employee_code="HOD-QTY-HOD")
-    head = Employee.objects.create(user=head_user, department=department, branch=branch, designation="Department Head")
-    head_user.groups.add(Group.objects.get_or_create(name="Department Head")[0])
-
-    keeper_user = get_user_model().objects.create_user(username="hod-qty-keeper", employee_code="HOD-QTY-SK")
-    keeper = Employee.objects.create(user=keeper_user, department=department, branch=branch, designation="Store Keeper")
-    keeper_user.groups.add(Group.objects.get_or_create(name="Store Keeper")[0])
+    supervisor_user, requester = person("hod-qty-supervisor", "HOD-QTY-SUP", "Department Supervisor")
+    head_user, head = person("hod-qty-head", "HOD-QTY-HOD", "Department Head")
+    cost_user, cost = person("hod-qty-controller", "HOD-QTY-COST", "Cost Controller")
+    keeper_user, keeper = person("hod-qty-keeper", "HOD-QTY-SK", "Store Keeper")
     StoreKeeperAssignment.objects.create(store=store, employee=keeper)
+    InventoryBalance.objects.create(item=item, store=store, quantity_in_stock=Decimal("20.00"))
+    request = StoreRequisition.objects.create(department=department, store=store, requested_by=requester)
+    line = StoreRequisitionItem.objects.create(
+        requisition=request, item=item, unit=unit, quantity_requested=Decimal("10.00")
+    )
+    request.submit(actor=supervisor_user)
 
-    requisition = StoreRequisition.objects.create(department=department, store=store, requested_by=requester)
-    line = StoreRequisitionItem.objects.create(requisition=requisition, item=item, quantity_requested=Decimal("10.00"))
-    requisition.submit(actor=requester_user)
+    hod = APIClient()
+    hod.force_authenticate(head_user)
+    cannot_raise = hod.post(
+        f"/api/v1/store-requisitions/{request.pk}/department-approve/",
+        {"items": [{"id": str(line.pk), "approved_quantity": "11.00"}]}, format="json",
+    )
+    assert cannot_raise.status_code == 400
 
-    head_client = APIClient()
-    head_client.force_authenticate(head_user)
-    response = head_client.post(
-        f"/api/v1/store-requisitions/{requisition.pk}/department-approve/",
-        {"items": [{"id": str(line.pk), "approved_quantity": "7.00"}]},
+    approved = hod.post(
+        f"/api/v1/store-requisitions/{request.pk}/department-approve/",
+        {"items": [{"id": str(line.pk), "approved_quantity": "7.00", "reason": "Reduced demand"}]},
         format="json",
     )
-    assert response.status_code == 200
+    assert approved.status_code == 200, approved.data
+
+    cost_client = APIClient()
+    cost_client.force_authenticate(cost_user)
+    too_high = cost_client.post(
+        f"/api/v1/store-requisitions/{request.pk}/cost-control-approve/",
+        {"items": [{"id": str(line.pk), "approved_quantity": "8.00"}]}, format="json",
+    )
+    assert too_high.status_code == 400
+    accepted = cost_client.post(
+        f"/api/v1/store-requisitions/{request.pk}/cost-control-approve/",
+        {"items": [{"id": str(line.pk), "approved_quantity": "6.00", "reason": "Reduced after review"}]},
+        format="json",
+    )
+    assert accepted.status_code == 200, accepted.data
 
     line.refresh_from_db()
-    requisition.refresh_from_db()
     assert line.base_quantity_requested == Decimal("10.00")
     assert line.hod_approved_quantity == Decimal("7.00")
-    assert line.quantity_approved == Decimal("0.00")
-    assert requisition.status == StoreRequisitionStatus.SUBMITTED
-    assert requisition.department_approved_by == head
+    assert line.quantity_approved == Decimal("6.00")
+    assert request.items.get().quantity_issued == Decimal("0.00")
 
     keeper_client = APIClient()
     keeper_client.force_authenticate(keeper_user)
-    assign = keeper_client.post(
-        f"/api/v1/store-requisitions/{requisition.pk}/assign-store/",
-        {"store": str(store.pk)},
-        format="json",
-    )
-    assert assign.status_code == 200
-
-    too_high = keeper_client.patch(
+    illicit_edit = keeper_client.patch(
         f"/api/v1/store-requisition-items/{line.pk}/",
-        {"quantity_approved": "8.00", "storekeeper_comment": ""},
-        format="json",
+        {"quantity_approved": "8.00"}, format="json",
     )
-    assert too_high.status_code == 400
-
-    accepted = keeper_client.patch(
-        f"/api/v1/store-requisition-items/{line.pk}/",
-        {"quantity_approved": "6.00", "storekeeper_comment": "Forward six"},
-        format="json",
-    )
-    assert accepted.status_code == 200
-    line.refresh_from_db()
-    assert line.quantity_approved == Decimal("6.00")
-    assert line.base_quantity_requested == Decimal("10.00")
-    assert line.hod_approved_quantity == Decimal("7.00")
+    assert illicit_edit.status_code == 403
 
 
 @pytest.mark.django_db

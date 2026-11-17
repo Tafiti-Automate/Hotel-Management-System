@@ -13,7 +13,7 @@ from apps.inventory.models import Category, Item, StoreLocation, UnitOfMeasure
 User = get_user_model()
 
 
-def build_hod_draft():
+def build_supervisor_draft():
     department = Department.objects.create(name="Housekeeping Draft Save")
     branch = Branch.objects.create(name="Draft Save Property")
     store = StoreLocation.objects.create(branch=branch, name="Main Store", is_active=True)
@@ -30,16 +30,16 @@ def build_hod_draft():
     )
 
     user = User.objects.create_user(
-        username="hod-draft-save",
-        employee_code="HOD-DS-001",
+        username="supervisor-draft-save",
+        employee_code="SUP-DS-001",
         password="test-pass-123",
     )
-    user.groups.add(Group.objects.get_or_create(name="Department Head")[0])
+    user.groups.add(Group.objects.get_or_create(name="Department Supervisor")[0])
     Employee.objects.create(
         user=user,
         department=department,
         branch=branch,
-        designation="Department Head",
+        designation="Department Supervisor",
         is_active=True,
     )
 
@@ -55,8 +55,8 @@ def build_hod_draft():
 
 
 @pytest.mark.django_db
-def test_hod_can_save_existing_draft_requisition_details():
-    client, request_id, store = build_hod_draft()
+def test_supervisor_can_save_own_draft_but_not_backdate_it():
+    client, request_id, store = build_supervisor_draft()
 
     saved = client.patch(
         f"/api/v1/store-requisitions/{request_id}/",
@@ -70,13 +70,14 @@ def test_hod_can_save_existing_draft_requisition_details():
 
     assert saved.status_code == 200, saved.data
     assert saved.data["purpose"] == "Housekeeping supplies"
-    assert saved.data["required_date"] == "2026-10-13"
+    from django.utils import timezone
+    assert saved.data["required_date"] == str(timezone.localdate())
     assert str(saved.data["store"]) == str(store.pk)
 
 
 @pytest.mark.django_db
-def test_hod_draft_save_is_not_rolled_back_by_audit_failure(monkeypatch):
-    client, request_id, store = build_hod_draft()
+def test_supervisor_draft_save_is_not_rolled_back_by_audit_failure(monkeypatch):
+    client, request_id, store = build_supervisor_draft()
 
     def broken_audit_create(*args, **kwargs):
         raise RuntimeError("simulated production audit failure")
@@ -95,4 +96,5 @@ def test_hod_draft_save_is_not_rolled_back_by_audit_failure(monkeypatch):
 
     assert saved.status_code == 200, saved.data
     assert saved.data["purpose"] == "Save even if audit is unavailable"
-    assert saved.data["required_date"] == "2026-10-14"
+    from django.utils import timezone
+    assert saved.data["required_date"] == str(timezone.localdate())

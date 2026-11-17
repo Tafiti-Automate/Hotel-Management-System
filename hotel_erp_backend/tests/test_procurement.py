@@ -51,7 +51,7 @@ from apps.procurement.serializers import (
     PurchaseRequisitionSerializer,
 )
 from apps.vendors.models import Supplier
-from core.constants.choices import POStatus, PRStatus
+from core.constants.choices import GoodsReceiptStatus, POStatus, PRStatus
 
 
 def create_procurement_context():
@@ -1830,7 +1830,7 @@ def test_receiving_clerk_workspace_keeps_grn_after_lpo_is_fully_received():
     assert workspace.data["receiptItems"][0]["item_name"] == item.name
     assert workspace.data["receiptItems"][0]["item_sku"] == item.sku
     assert workspace.data["receiptItems"][0]["unit_name"] == item.base_unit.name
-    assert workspace.data["receiptItems"][0]["ordered_quantity"] == "2.00"
+    assert "ordered_quantity" not in workspace.data["receiptItems"][0]
     assert workspace.data["receiptItems"][0]["accepted_quantity"] == "2.00"
     assert workspace.data["receiptItems"][0]["rejected_quantity"] == "0.00"
 

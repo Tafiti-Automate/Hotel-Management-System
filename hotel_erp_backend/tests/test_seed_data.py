@@ -47,7 +47,7 @@ def test_operational_reseed_preserves_accounts_and_builds_supplier_catalogue():
         email="requester@example.com",
         password="Preserved-Requester-Password-02!",
     )
-    requester.groups.add(Group.objects.get(name="Requester"))
+    requester.groups.add(Group.objects.get(name="Department Supervisor"))
     old_hotel = Hotel.objects.create(name="Old production hotel", created_by=admin)
     old_branch = Branch.objects.create(
         hotel=old_hotel,
@@ -96,7 +96,7 @@ def test_operational_reseed_preserves_accounts_and_builds_supplier_catalogue():
     assert restored_requester.password == original_requester_hash
     assert restored_admin.check_password("Preserved-Admin-Password-01!")
     assert restored_requester.check_password("Preserved-Requester-Password-02!")
-    assert list(restored_requester.groups.values_list("name", flat=True)) == ["Requester"]
+    assert list(restored_requester.groups.values_list("name", flat=True)) == ["Department Supervisor"]
     assert restored_requester.employee_profile.branch.name == "Main Branch"
     assert restored_requester.employee_profile.department.name == "Housekeeping"
     assert restored_requester.employee_profile.contact == "+256700111222"
@@ -154,18 +154,18 @@ def test_seed_uganda_data_populates_empty_database_and_refuses_overwrite(monkeyp
 
 
 @pytest.mark.django_db
-def test_seed_uganda_data_reset_replaces_existing_demo_data(monkeypatch):
+def test_seed_uganda_data_reset_rejects_deletion_of_immutable_audit_evidence(monkeypatch):
     monkeypatch.setenv("SEED_EMPLOYEE_PASSWORD", "sample-pass-123")
     call_command("seed_uganda_data", hotel_name="First Hotel", verbosity=0)
+    from apps.audit_logs.models import AuditLog
+    assert AuditLog.objects.exists()
 
-    call_command(
-        "seed_uganda_data",
-        hotel_name="Replacement Hotel",
-        reset=True,
-        verbosity=0,
-    )
+    with pytest.raises(CommandError, match="immutable"):
+        call_command(
+            "seed_uganda_data", hotel_name="Replacement Hotel", reset=True, verbosity=0
+        )
 
-    assert list(Hotel.objects.values_list("name", flat=True)) == ["Replacement Hotel"]
+    assert list(Hotel.objects.values_list("name", flat=True)) == ["First Hotel"]
     assert get_user_model().objects.get(username="jokello").check_password(
         "sample-pass-123"
     )
@@ -202,7 +202,7 @@ def test_seed_presentation_data_builds_connected_uganda_workflows(monkeypatch):
         get_user_model().objects.get(username="esther.requester").groups.values_list(
             "name", flat=True
         )
-    ) == ["Requester"]
+    ) == ["Department Supervisor"]
     assert get_user_model().objects.get(username="grace.generalmanager").check_password(
         "sample-pass-123"
     )
@@ -219,7 +219,7 @@ def test_seed_presentation_data_builds_connected_uganda_workflows(monkeypatch):
     assert Sale.objects.count() == counts["sales"]
 
     account_specs = (
-        ("esther.requester", "Requester", "DEMO_REQUESTER_PASSWORD", "Requester-Test-Password-01!"),
+        ("esther.requester", "Department Supervisor", "DEMO_REQUESTER_PASSWORD", "Requester-Test-Password-01!"),
         (
             "rebecca.departmenthead",
             "Department Head",

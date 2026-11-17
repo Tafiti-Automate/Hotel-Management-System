@@ -405,7 +405,7 @@ def test_financial_manager_role_route_uses_requesting_property():
     requisition.refresh_from_db()
     assert requisition.branch == branch
     assert requisition.hotel == hotel
-    assert re.fullmatch(r"i\d{2}-\d{5,}", requisition.requisition_number)
+    assert re.fullmatch(r"\d{6,}", requisition.requisition_number)
     assert requisition.approval_workflow.get().approver == food_finance
 
 

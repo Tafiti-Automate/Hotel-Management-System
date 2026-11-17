@@ -126,6 +126,8 @@ def test_dummy_cache_still_enforces_absolute_token_lifetime():
 
 @pytest.mark.django_db
 def test_role_permission_changes_are_returned_on_next_login(client):
+    """System-defined roles cannot be edited; reassignment updates the next token."""
+    call_command("setup_hotel_roles", verbosity=0)
     admin = get_user_model().objects.create_superuser(
         username="access-admin", employee_code="EMP-ACCESS-ADMIN", password="test-pass-123"
     )
@@ -133,20 +135,29 @@ def test_role_permission_changes_are_returned_on_next_login(client):
         username="store-user", employee_code="EMP-STORE", password="test-pass-123"
     )
     link_employee(user, "ROLE")
-    role = Group.objects.create(name="Custom Store Role")
-    user.groups.set([role])
-    permission = Permission.objects.get(
+    store_role = Group.objects.get(name="Store Keeper")
+    supervisor_role = Group.objects.get(name="Department Supervisor")
+    user.groups.set([store_role])
+    read_only_permission = Permission.objects.get(
         content_type__app_label="employees", codename="view_employee"
     )
 
     client.force_login(admin)
-    response = client.patch(
-        f"/api/v1/roles/{role.pk}/",
-        {"permission_ids": [permission.pk]},
+    refused = client.patch(
+        f"/api/v1/roles/{store_role.pk}/",
+        {"permission_ids": [read_only_permission.pk]},
         content_type="application/json",
     )
-    assert response.status_code == 200
+    assert refused.status_code == 405
+    assert store_role.permissions.filter(pk=read_only_permission.pk).exists()
 
+    # Administrators may assign a different pre-approved role to an employee.
+    assigned = client.patch(
+        f"/api/v1/users/{user.pk}/",
+        {"role": str(supervisor_role.pk)},
+        content_type="application/json",
+    )
+    assert assigned.status_code == 200, assigned.content
     client.logout()
     response = client.post(
         "/api/v1/auth/login/",
@@ -154,7 +165,8 @@ def test_role_permission_changes_are_returned_on_next_login(client):
         content_type="application/json",
     )
     assert response.status_code == 200
-    assert "employees.view_employee" in response.json()["user"]["permissions"]
+    assert response.json()["user"]["role"] == "Department Supervisor"
+    assert "inventory.add_storerequisition" in response.json()["user"]["permissions"]
 
 
 @override_settings(CORS_ALLOWED_ORIGINS=["https://hotel.example.com"])
@@ -195,9 +207,9 @@ def test_setup_hotel_roles_creates_operational_groups():
     procurement_manager = Group.objects.get(name="Procurement Manager")
     accounts_payable = Group.objects.get(name="Accounts Payable Clerk")
 
-    assert store_keeper.permissions.filter(codename="change_storerequisition").exists()
+    assert not store_keeper.permissions.filter(codename="change_storerequisition").exists()
     assert not store_keeper.permissions.filter(codename="add_storerequisition").exists()
-    assert store_keeper.permissions.filter(codename="change_storerequisitionitem").exists()
+    assert not store_keeper.permissions.filter(codename="change_storerequisitionitem").exists()
 
     # Supervisors originate requests; Department Heads review them in the
     # role-gated workflow without receiving draft-edit permissions.
