@@ -64,10 +64,12 @@ def test_grn_header_and_inspection_evidence_isolated_by_property(role):
         inspections.append(inspect)
     client = APIClient()
     client.force_authenticate(user=user)
-    for endpoint, expected, forbidden in (
-        ("grns", receipts[0].pk, receipts[1].pk),
-        ("goods-inspections", inspections[0].pk, inspections[1].pk),
-    ):
+    # Financial Manager can review GRN headers, but inspection details are
+    # intentionally a Receiving Clerk permission in the ten-role matrix.
+    collections = [("grns", receipts[0].pk, receipts[1].pk)]
+    if role == "Receiving Clerk":
+        collections.append(("goods-inspections", inspections[0].pk, inspections[1].pk))
+    for endpoint, expected, forbidden in collections:
         response = client.get(f"/api/v1/{endpoint}/")
         assert response.status_code == 200, response.data
         records = response.data.get("results", response.data) if isinstance(response.data, dict) else response.data
