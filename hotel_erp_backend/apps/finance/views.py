@@ -16,6 +16,7 @@ from apps.finance.models import (
     SupplierInvoice,
     SupplierInvoiceItem,
     SupplierPayment,
+    SupplierCreditNote,
 )
 from apps.procurement.models import PurchaseOrder
 from apps.finance.serializers import (
@@ -29,6 +30,7 @@ from apps.finance.serializers import (
     SupplierInvoiceSerializer,
     SupplierInvoiceItemSerializer,
     SupplierPaymentSerializer,
+    SupplierCreditNoteSerializer,
 )
 from core.mixins.viewsets import CreatedByModelMixin
 
@@ -295,3 +297,74 @@ class SupplierPaymentViewSet(CreatedByModelMixin, ModelViewSet):
         except DjangoValidationError as error:
             raise ValidationError(getattr(error, "messages", str(error)))
         return Response(self.get_serializer(payment).data)
+
+
+class SupplierCreditNoteViewSet(CreatedByModelMixin, ModelViewSet):
+    queryset = SupplierCreditNote.objects.select_related(
+        "invoice__purchase_order__requisition__branch",
+        "supplier_return__goods_receipt", "created_by", "approved_by", "posted_by",
+    )
+    serializer_class = SupplierCreditNoteSerializer
+    filterset_fields = ("invoice", "supplier_return", "status", "credit_date")
+    search_fields = ("invoice__invoice_number", "supplier_return__credit_note_number")
+    ordering_fields = ("credit_date", "status", "created_at")
+
+    def get_queryset(self):
+        return scope_supplier_finance_records(
+            super().get_queryset(), self.request.user, "invoice__purchase_order"
+        )
+
+    def perform_create(self, serializer):
+        require_accounts_payable_action(self.request.user)
+        invoice = serializer.validated_data["invoice"]
+        require_finance_property(self.request.user, invoice.purchase_order)
+        # Validate the actual posted return and its LPO before any INSERT.
+        credit = SupplierCreditNote(
+            **serializer.validated_data, created_by=self.request.user,
+        )
+        try:
+            credit.full_clean()
+        except DjangoValidationError as error:
+            raise ValidationError(getattr(error, "message_dict", getattr(error, "messages", str(error))))
+        serializer.save(created_by=self.request.user)
+
+    def perform_update(self, serializer):
+        require_accounts_payable_action(self.request.user)
+        credit = serializer.instance
+        if (("invoice" in serializer.validated_data
+             and serializer.validated_data["invoice"].pk != credit.invoice_id)
+                or ("supplier_return" in serializer.validated_data
+                    and serializer.validated_data["supplier_return"].pk != credit.supplier_return_id)):
+            raise ValidationError("Credit note source return and invoice cannot be reassigned.")
+        require_finance_property(self.request.user, credit.invoice.purchase_order)
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        require_accounts_payable_action(self.request.user)
+        if instance.status != SupplierCreditNote.STATUS_DRAFT:
+            raise ValidationError("Approved or posted supplier credits cannot be deleted.")
+        instance.delete()
+
+    @action(detail=True, methods=["post"])
+    def approve(self, request, pk=None):
+        user = request.user
+        if (not user.is_authenticated or not user.is_active or user.is_superuser
+                or user.groups.filter(name="System Administrator").exists()
+                or not user.groups.filter(name="Financial Manager").exists()):
+            raise PermissionDenied("Only the Financial Manager can approve supplier credit notes.")
+        credit = self.get_object()
+        try:
+            credit.approve(actor=user)
+        except DjangoValidationError as error:
+            raise ValidationError(getattr(error, "messages", str(error)))
+        return Response(self.get_serializer(credit).data)
+
+    @action(detail=True, methods=["post"])
+    def post(self, request, pk=None):
+        require_accounts_payable_action(request.user)
+        credit = self.get_object()
+        try:
+            credit.post(actor=request.user)
+        except DjangoValidationError as error:
+            raise ValidationError(getattr(error, "messages", str(error)))
+        return Response(self.get_serializer(credit).data)
