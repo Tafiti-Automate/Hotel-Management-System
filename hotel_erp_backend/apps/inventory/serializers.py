@@ -990,7 +990,7 @@ class StockCountItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = StockCountItem
         fields = "__all__"
-        read_only_fields = ("id", "variance", "created_at", "updated_at", "created_by")
+        read_only_fields = ("id", "variance", "system_quantity", "created_at", "updated_at", "created_by")
 
 
 class StockCountSerializer(serializers.ModelSerializer):
