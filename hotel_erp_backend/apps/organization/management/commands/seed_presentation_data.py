@@ -633,8 +633,22 @@ class Command(BaseCommand):
             created_by=employees["procurement"].user,
         )
         order.submit_for_approval()
-        for approval in order.approval_workflow.order_by("stage"):
-            approval.approve(decided_by=approval.approver.user)
+        # Current LPO authorisation uses role queues rather than a fixed
+        # employee in PurchaseOrderApprovalWorkflow.approver. Use a seeded
+        # holder of each required canonical role and record the actual actor.
+        role_approvers = {
+            "Procurement Manager": employees["procurement"],
+            "Financial Manager": employees["finance"],
+            "General Manager": employees["manager"],
+        }
+        for approval in order.approval_workflow.select_related("approver_role").order_by("stage"):
+            role_name = approval.approver_role.name if approval.approver_role_id else ""
+            approver = approval.approver or role_approvers.get(role_name)
+            if not approver:
+                raise CommandError(
+                    f"No seeded approver for LPO stage {approval.stage}: {role_name or approval.stage_name}"
+                )
+            approval.approve(decided_by=approver.user)
         order.refresh_from_db()
         order.issue(
             sent_by=employees["procurement"],

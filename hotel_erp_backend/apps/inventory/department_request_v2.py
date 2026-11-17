@@ -78,6 +78,12 @@ class StoreRequisitionItemViewSet(CreatedByModelMixin,ModelViewSet):
         if not(is_supervisor(self.request.user) and e and r.requested_by_id==e.id and r.status in (StoreRequisitionStatus.DRAFT,StoreRequisitionStatus.REJECTED)):
             raise PermissionDenied("Only the Supervisor who created this request can edit its draft Articles.")
     def perform_create(self,s): self._editable(s.validated_data["requisition"]); s.save(created_by=self.request.user)
+    def update(self, request, *args, **kwargs):
+        # Reject unauthorised edits before DRF field validation. Booked request
+        # lines belong to the approval/dispatch API, never ordinary PATCH.
+        line = self.get_object()
+        self._editable(line.requisition)
+        return super().update(request, *args, **kwargs)
     def perform_update(self,s): self._editable(s.instance.requisition); s.save()
     def perform_destroy(self,obj): self._editable(obj.requisition); obj.delete()
     @action(detail=True,methods=["post"])
