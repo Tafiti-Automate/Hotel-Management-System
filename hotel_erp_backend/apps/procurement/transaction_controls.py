@@ -9,6 +9,7 @@ verifies the GRN and only then posts accepted quantities into Stock on Hand.
 from decimal import Decimal
 
 from django.db import transaction
+from django.db.models import Exists, OuterRef
 from rest_framework import serializers
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -16,7 +17,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.procurement.consolidation import consolidate_approved_requisitions
-from apps.procurement.models import GoodsReceiptNote
+from apps.procurement.models import GoodsReceiptNote, GoodsReceiptItem
 from apps.inventory.stores_fulfillment import post_grn_to_inventory
 from apps.inventory.models import StoreKeeperAssignment
 from apps.materials_control.models import FiscalPeriod
@@ -178,13 +179,34 @@ class PurchaseOrderViewSet(BasePurchaseOrderViewSet):
 
 
 def _store_keeper_receipt_scope(queryset, user, *, receipt_path="purchase_order"):
+    """Scope inventory verification to assigned stores and true line destinations.
+
+    A purchase order's header store is optional; its GRN lines are authoritative.
+    Mixed-store receipts must not be visible as a keeper's actionable document.
+    """
     employee = getattr(user, "employee_profile", None)
-    if not employee or not employee.branch_id:
+    if not employee or not employee.is_active or not employee.branch_id:
         return queryset.none()
-    branch = employee.branch
-    if getattr(branch, "hotel_id", None):
-        return queryset.filter(**{f"{receipt_path}__store__branch__hotel_id": branch.hotel_id})
-    return queryset.filter(**{f"{receipt_path}__store__branch_id": employee.branch_id})
+    assigned = list(StoreKeeperAssignment.objects.filter(
+        employee=employee, is_active=True, store__is_active=True,
+        store__branch_id=employee.branch_id,
+    ).values_list("store_id", flat=True))
+    if not assigned:
+        return queryset.none()
+    if receipt_path == "purchase_order":
+        unassigned_line = GoodsReceiptItem.objects.filter(
+            goods_receipt_id=OuterRef("pk")
+        ).exclude(store_id__in=assigned)
+        return queryset.filter(
+            purchase_order__requisition__branch_id=employee.branch_id,
+            items__store_id__in=assigned,
+        ).annotate(
+            _has_unassigned_destination=Exists(unassigned_line)
+        ).filter(_has_unassigned_destination=False).distinct()
+    return queryset.filter(
+        goods_receipt__purchase_order__requisition__branch_id=employee.branch_id,
+        store_id__in=assigned,
+    )
 
 
 class GoodsReceiptNoteViewSet(BaseGoodsReceiptNoteViewSet):
