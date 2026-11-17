@@ -80,3 +80,34 @@ def test_department_supervisor_does_not_receive_full_stock_ledger_by_default():
     client = APIClient()
     client.force_authenticate(user=user)
     assert client.get("/api/v1/stock-ledger/").status_code == 403
+
+
+@pytest.mark.django_db
+def test_non_admin_cannot_open_it_user_or_role_registry():
+    call_command("setup_hotel_roles", verbosity=0)
+    user = get_user_model().objects.create_user(
+        username="contract-nonadmin", employee_code="PHASE1-NONADMIN",
+        password="test-pass-123",
+    )
+    user.groups.add(Group.objects.get(name="Cost Controller"))
+    client = APIClient()
+    client.force_authenticate(user=user)
+    for endpoint in ("users", "roles", "permissions"):
+        assert client.get(f"/api/v1/{endpoint}/").status_code == 403
+
+
+@pytest.mark.django_db
+def test_hod_has_no_supplier_contract_or_price_master_access():
+    call_command("setup_hotel_roles", verbosity=0)
+    user = get_user_model().objects.create_user(
+        username="contract-head", employee_code="PHASE1-HEAD",
+        password="test-pass-123",
+    )
+    user.groups.add(Group.objects.get(name="Department Head"))
+    client = APIClient()
+    client.force_authenticate(user=user)
+    assert client.get("/api/v1/supplier-item-prices/").status_code == 403
+    assert not user.has_perm("inventory.change_supplieritemprice")
+    assert not user.has_perm("procurement.change_purchaserequisition")
+    assert user.has_perm("procurement.add_purchaserequisition")
+    assert user.has_perm("procurement.add_requisitionitem")
