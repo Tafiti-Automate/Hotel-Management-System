@@ -167,6 +167,10 @@ class WasteRecord(BaseModel):
                 raise ValidationError(
                     f"Only {available} is available for {waste.item} in {waste.outlet}."
                 )
+            # Capture the original WAC before stock changes. A zero/unknown
+            # WAC is not reliable cost evidence, so retain nullable snapshots.
+            unit_cost = balance.weighted_average_cost
+            valued = unit_cost > Decimal("0.0000")
             balance.quantity_in_stock -= waste.base_quantity
             balance.save(update_fields=("quantity_in_stock", "updated_at"))
             StockLedger.objects.create(
@@ -175,6 +179,12 @@ class WasteRecord(BaseModel):
                 quantity_out=waste.base_quantity,
                 reference_type=LedgerReferenceType.WASTE,
                 reference_id=waste.pk,
+                unit_cost_snapshot=unit_cost if valued else None,
+                total_cost_snapshot=(
+                    waste.base_quantity * unit_cost
+                ).quantize(Decimal("0.0001")) if valued else None,
+                wac_before=unit_cost if valued else None,
+                wac_after=unit_cost if valued else None,
                 note=f"{waste.get_reason_code_display()}: {waste.note}".strip(": "),
                 created_by=actor,
             )
@@ -580,6 +590,8 @@ class POSImportBatch(BaseModel):
                     )
             for item_id, required in demand.items():
                 balance = balances[item_id]
+                unit_cost = balance.weighted_average_cost
+                valued = unit_cost > Decimal("0.0000")
                 balance.quantity_in_stock -= required
                 balance.save(update_fields=("quantity_in_stock", "updated_at"))
                 StockLedger.objects.create(
@@ -588,6 +600,12 @@ class POSImportBatch(BaseModel):
                     quantity_out=required,
                     reference_type=LedgerReferenceType.POS_DEPLETION,
                     reference_id=batch.pk,
+                    unit_cost_snapshot=unit_cost if valued else None,
+                    total_cost_snapshot=(
+                        required * unit_cost
+                    ).quantize(Decimal("0.0001")) if valued else None,
+                    wac_before=unit_cost if valued else None,
+                    wac_after=unit_cost if valued else None,
                     note=f"POS recipe depletion for {batch.business_date}",
                     created_by=actor,
                 )

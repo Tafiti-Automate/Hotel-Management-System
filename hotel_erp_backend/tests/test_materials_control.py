@@ -502,3 +502,120 @@ def test_global_command_search_uses_authorized_article_catalogue(materials_conte
     assert any(row["kind"] == "article" and row["id"] == str(item.pk) for row in matches)
     assert all(row["kind"] not in ("order", "grn", "transfer") for row in matches)
     assert all("unit_cost" not in row for row in matches)
+
+
+@pytest.mark.django_db
+def test_pos_depletion_captures_historical_cost_without_repricing(materials_context):
+    user, _employee, _department, _branch, outlet, unit, item = materials_context
+    balance = InventoryBalance.objects.get(item=item, store=outlet)
+    balance.weighted_average_cost = Decimal("1250.0000")
+    balance.save(update_fields=("weighted_average_cost", "updated_at"))
+    recipe = Recipe.objects.create(
+        name="POS historical COGS recipe", outlet=outlet,
+        yield_quantity=Decimal("1.00"), created_by=user,
+    )
+    RecipeIngredient.objects.create(
+        recipe=recipe, item=item, unit=unit,
+        quantity=Decimal("2.00"), trim_percent=Decimal("0.00"), created_by=user,
+    )
+    recipe.publish(user)
+    POSPLUMapping.objects.create(
+        outlet=outlet, external_plu="COST-POS-1", recipe=recipe, created_by=user,
+    )
+    batch = POSImportBatch.objects.create(
+        outlet=outlet, business_date=timezone.localdate(),
+        source="TestPOS", source_reference="VALUED-POS-001", created_by=user,
+    )
+    line = POSSaleLine.objects.create(
+        batch=batch, external_plu="COST-POS-1",
+        external_reference="COST-CHECK-001", quantity=Decimal("2.00"),
+        created_by=user,
+    )
+    batch.process(user)
+    ledger = StockLedger.objects.get(
+        reference_id=batch.pk, reference_type="pos_depletion",
+    )
+    assert ledger.quantity_out == Decimal("4.00")
+    assert ledger.unit_cost_snapshot == Decimal("1250.0000")
+    assert ledger.total_cost_snapshot == Decimal("5000.0000")
+    assert ledger.wac_before == ledger.wac_after == Decimal("1250.0000")
+    line.refresh_from_db()
+    assert line.cost_of_goods_sold == Decimal("5000.00")
+    balance.refresh_from_db()
+    balance.weighted_average_cost = Decimal("1800.0000")
+    balance.save(update_fields=("weighted_average_cost", "updated_at"))
+    batch.process(user)
+    ledger.refresh_from_db()
+    line.refresh_from_db()
+    assert ledger.total_cost_snapshot == Decimal("5000.0000")
+    assert line.cost_of_goods_sold == Decimal("5000.00")
+    assert StockLedger.objects.filter(
+        reference_id=batch.pk, reference_type="pos_depletion"
+    ).count() == 1
+
+
+@pytest.mark.django_db
+def test_waste_retains_transaction_time_wac_and_unknown_costs(materials_context):
+    user, employee, department, _branch, outlet, unit, item = materials_context
+    balance = InventoryBalance.objects.get(item=item, store=outlet)
+    balance.weighted_average_cost = Decimal("2750.0000")
+    balance.save(update_fields=("weighted_average_cost", "updated_at"))
+    waste = WasteRecord.objects.create(
+        outlet=outlet, department=department, item=item, unit=unit,
+        quantity=Decimal("2.00"), reason_code="broken_service",
+        reported_by=employee, created_by=user,
+    )
+    waste.submit(user)
+    ledger = StockLedger.objects.get(reference_id=waste.pk, reference_type="waste")
+    assert ledger.quantity_out == Decimal("2.00")
+    assert ledger.unit_cost_snapshot == Decimal("2750.0000")
+    assert ledger.total_cost_snapshot == Decimal("5500.0000")
+    assert ledger.wac_before == ledger.wac_after == Decimal("2750.0000")
+    balance.refresh_from_db()
+    balance.weighted_average_cost = Decimal("0.0000")
+    balance.save(update_fields=("weighted_average_cost", "updated_at"))
+    unvalued = WasteRecord.objects.create(
+        outlet=outlet, department=department, item=item, unit=unit,
+        quantity=Decimal("1.00"), reason_code="broken_service",
+        reported_by=employee, created_by=user,
+    )
+    unvalued.submit(user)
+    unknown = StockLedger.objects.get(reference_id=unvalued.pk, reference_type="waste")
+    assert unknown.unit_cost_snapshot is None
+    assert unknown.total_cost_snapshot is None
+    assert unknown.wac_before is None
+    assert unknown.wac_after is None
+
+
+@pytest.mark.django_db
+def test_pos_unknown_wac_remains_unvalued_in_stock_ledger(materials_context):
+    user, _employee, _department, _branch, outlet, unit, item = materials_context
+    recipe = Recipe.objects.create(
+        name="Unknown WAC POS recipe", outlet=outlet,
+        yield_quantity=Decimal("1.00"), created_by=user,
+    )
+    RecipeIngredient.objects.create(
+        recipe=recipe, item=item, unit=unit,
+        quantity=Decimal("1.00"), trim_percent=Decimal("0.00"), created_by=user,
+    )
+    recipe.publish(user)
+    POSPLUMapping.objects.create(
+        outlet=outlet, external_plu="UNKNOWN-WAC", recipe=recipe, created_by=user,
+    )
+    batch = POSImportBatch.objects.create(
+        outlet=outlet, business_date=timezone.localdate(),
+        source="TestPOS", source_reference="UNKNOWN-POS-COST-001", created_by=user,
+    )
+    line = POSSaleLine.objects.create(
+        batch=batch, external_plu="UNKNOWN-WAC",
+        external_reference="UNKNOWN-POS-CHECK-001",
+        quantity=Decimal("1.00"), created_by=user,
+    )
+    batch.process(user)
+    ledger = StockLedger.objects.get(
+        reference_id=batch.pk, reference_type="pos_depletion",
+    )
+    line.refresh_from_db()
+    assert ledger.unit_cost_snapshot is None
+    assert ledger.total_cost_snapshot is None
+    assert line.cost_of_goods_sold is None
