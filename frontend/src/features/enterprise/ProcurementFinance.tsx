@@ -140,7 +140,11 @@ export function EnterpriseApprovalInbox() {
           </div>
         </>}
       </div>
-    </div>export function EnterpriseQuoteMatrix() {
+    </div>}
+  </WorkspacePage>
+}
+
+export function EnterpriseQuoteMatrix() {
   const app=useApp()
   const role=app.user.role.trim().toLowerCase()
   const buyer=role==='procurement officer'||role==='procurement manager'||role==='purchasing officer'
