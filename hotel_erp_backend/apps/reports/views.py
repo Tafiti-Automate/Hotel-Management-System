@@ -962,7 +962,70 @@ class MaterialsAnalysisReportView(ReportAPIView):
             [{"key": "receipt", "label": "Receipt"}, {"key": "date", "label": "Date"}, {"key": "store", "label": "Store"}, {"key": "customer", "label": "Customer"}, {"key": "payment", "label": "Payment method"}, {"key": "total", "label": "Total", "kind": "money"}, {"key": "paid", "label": "Paid", "kind": "money"}, {"key": "status", "label": "Status"}], rows,
         )
 
+    def menu_profitability(self, request):
+        """Recipe-level POS net sales and frozen, transaction-date cost of goods."""
+        from apps.materials_control.models import POSSaleLine
+
+        lines = apply_store_scope(
+            POSSaleLine.objects.select_related("batch__outlet", "mapping__recipe")
+            .filter(inventory_changes_applied=True, mapping__isnull=False),
+            request, store_field="batch__outlet",
+        )
+        from_date = parse_date(request.query_params.get("date_from", ""))
+        to_date = parse_date(request.query_params.get("date_to", ""))
+        if from_date:
+            lines = lines.filter(batch__business_date__gte=from_date)
+        if to_date:
+            lines = lines.filter(batch__business_date__lte=to_date)
+        grouped = {}
+        for line in lines:
+            recipe = line.mapping.recipe
+            row = grouped.setdefault(str(recipe.pk), {
+                "sku": recipe.code, "article": recipe.name,
+                "quantity": Decimal("0.00"), "sales": Decimal("0.00"),
+                "cogs": Decimal("0.00"), "unpriced": 0, "transactions": 0,
+            })
+            row["quantity"] += line.quantity
+            row["sales"] += line.net_sales
+            row["transactions"] += 1
+            if line.cost_of_goods_sold is None:
+                row["unpriced"] += 1
+            else:
+                row["cogs"] += line.cost_of_goods_sold
+        rows = []
+        for row in sorted(grouped.values(), key=lambda entry: entry["article"]):
+            priced = row["unpriced"] == 0 and row["sales"] > 0
+            profit = row["sales"] - row["cogs"] if priced else None
+            margin = ((profit / row["sales"]) * Decimal("100")).quantize(
+                Decimal("0.01")
+            ) if priced else None
+            rows.append({
+                "sku": row["sku"], "article": row["article"],
+                "quantity": decimal_string(row["quantity"]),
+                "sales": decimal_string(row["sales"]),
+                "cogs": decimal_string(row["cogs"]) if priced else None,
+                "profit": decimal_string(profit) if priced else None,
+                "margin_percent": decimal_string(margin) if priced else None,
+                "transactions": row["transactions"],
+                "unpriced_transactions": row["unpriced"],
+            })
+        return analysis_response(
+            "Menu Engineering",
+            "Posted POS popularity and frozen recipe COGS; unknown costs remain unclassified.",
+            [
+                {"key":"article","label":"Recipe"},
+                {"key":"sku","label":"Recipe code"},
+                {"key":"quantity","label":"Sold quantity","kind":"number"},
+                {"key":"sales","label":"Net POS sales","kind":"money"},
+                {"key":"cogs","label":"Posted recipe cost","kind":"money"},
+                {"key":"profit","label":"Gross profit","kind":"money"},
+                {"key":"margin_percent","label":"Margin %","kind":"number"},
+            ], rows,
+        )
+
     def sales_statistics(self, request, report_kind):
+        if report_kind == "menuEngineering":
+            return self.menu_profitability(request)
         sale_ids = analysis_sales(request).filter(inventory_changes_applied=True, is_cancelled=False).values_list("id", flat=True)
         lines = SaleItem.objects.select_related("item__category", "sale__store").filter(sale_id__in=sale_ids)
         if request.query_params.get("category"):

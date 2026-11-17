@@ -100,9 +100,14 @@ class RecipeSerializer(CleanModelSerializer):
 
 
 class RecipeIngredientSerializer(CleanModelSerializer):
-    item_name = serializers.CharField(source="item.name", read_only=True)
-    item_sku = serializers.CharField(source="item.sku", read_only=True)
-    base_unit_name = serializers.CharField(source="item.base_unit.abbreviation", read_only=True)
+    item_name = serializers.SerializerMethodField()
+    item_sku = serializers.CharField(source="item.sku", read_only=True, allow_null=True)
+    base_unit_name = serializers.CharField(source="item.base_unit.abbreviation", read_only=True, allow_null=True)
+    sub_recipe_name = serializers.CharField(source="sub_recipe.name", read_only=True, allow_null=True)
+
+    def get_item_name(self, obj):
+        return obj.sub_recipe.name if obj.sub_recipe_id else obj.item.name
+
     gross_base_quantity = serializers.DecimalField(max_digits=14, decimal_places=4, read_only=True)
     current_base_unit_cost = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     ingredient_cost = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)

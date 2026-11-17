@@ -257,8 +257,10 @@ export function EnterpriseRecipeDetail() {
   const id=chosenId||pathId
   const recipe=(data.recipes||[]).find(r=>str(r.id)===id)
   const ingredients=(data['recipe-ingredients']||[]).filter(r=>str(r.recipe)===id)
+  const subRecipes=(data.recipes||[]).filter(r=>str(r.id)!==id&&str(r.outlet)===str(recipe?.outlet)&&r.status==='published'&&r.is_sub_recipe)
   const items=data.items||[]
   const [article,setArticle]=useState('')
+  const [subRecipe,setSubRecipe]=useState('')
   const [quantity,setQuantity]=useState('1.00')
   const [trim,setTrim]=useState('0')
   const [changes,setChanges]=useState<Record<string,string>>({})
@@ -269,11 +271,12 @@ export function EnterpriseRecipeDetail() {
     await execute(()=>updateBackendRecord('recipe-ingredients',str(line.id),{trim_percent:percentage}),'Ingredient yield updated')
   }
   const add=async()=>{
-    if(!article||!(Number(quantity)>0)||Number(trim)<0||Number(trim)>=100)return
+    if((!article&&!subRecipe)||(article&&subRecipe)||!(Number(quantity)>0)||Number(trim)<0||Number(trim)>=100)return
     await execute(()=>createBackendRecord('recipe-ingredients',{
-      recipe:id,item:article,quantity,trim_percent:trim,
-    }),'Recipe ingredient added')
-    setArticle('');setQuantity('1');setTrim('0')
+      recipe:id,item:subRecipe?null:article,sub_recipe:subRecipe||null,
+      quantity,trim_percent:trim,
+    }),subRecipe?'Published sub-recipe added':'Article ingredient added')
+    setArticle('');setSubRecipe('');setQuantity('1');setTrim('0')
   }
   const portions=dec(recipe?.yield_quantity)||1
   const cost=dec(recipe?.total_cost)
@@ -294,7 +297,7 @@ export function EnterpriseRecipeDetail() {
         <section className="mc-dense-panel"><header className="mc-panel-title">Ingredient tree <StatusPill status={recipe.status}/></header>
           <div className="mc-recipe-tree"><div className="mc-tree-root"><Icon name="restaurant_menu" size={17}/><strong>{str(recipe.name)}</strong><span>UGX {amount(cost)}</span></div>
             {ingredients.map(line=><div className="mc-tree-ingredient" key={str(line.id)}>
-              <div><Icon name="subdirectory_arrow_right" size={15}/><span><strong>{str(line.item_name||line.item)}</strong><small>Base units: {str(line.base_quantity)} · Gross: {str(line.gross_base_quantity)}</small></span></div>
+              <div><Icon name="subdirectory_arrow_right" size={15}/><span><strong>{str(line.sub_recipe_name||line.item_name||line.item)}</strong><small>{line.sub_recipe?'Sub-recipe · yielded portions':'Article · base units'}: {str(line.base_quantity)} · Gross: {str(line.gross_base_quantity)}</small></span></div>
               <div className="mc-tree-cost"><strong>UGX {amount(line.ingredient_cost)}</strong><small>Unit UGX {amount(line.current_base_unit_cost)}</small></div>
               <label><span>Trim / waste {str(changes[str(line.id)]??line.trim_percent)}%</span>
                 <input type="range" min="0" max="99" step="0.5" value={str(changes[str(line.id)]??line.trim_percent)}
@@ -302,14 +305,16 @@ export function EnterpriseRecipeDetail() {
               <button className={btn} disabled={!editable||busy||changes[str(line.id)]===undefined} onClick={()=>void update(line)}>Apply trim</button>
             </div>)}
           </div>
-          <div className="mc-alert mc-muted">Nested recipe-to-recipe ingredients are not implemented in the existing Django RecipeIngredient model. This screen therefore displays the real Article tree only; it does not invent recursive cost rollups.</div>
+          <div className="mc-alert mc-muted">Nested recipes use their published yield units. Consumption expands recursively to stock Articles on POS import; circular references and cross-outlet recipes are blocked server-side.</div>
         </section>
         <section className="mc-dense-panel mc-form-panel"><header className="mc-panel-title">Add ingredient</header>
-          <label className="mc-field"><span>Article</span><select value={article} onChange={e=>setArticle(e.target.value)}>
+          <label className="mc-field"><span>Article</span><select disabled={!!subRecipe} value={article} onChange={e=>setArticle(e.target.value)}>
             <option value="">Select Article</option>{items.map(r=><option key={str(r.id)} value={str(r.id)}>{str(r.name)}</option>)}</select></label>
+          <label className="mc-field"><span>Or published sub-recipe</span><select disabled={!!article} value={subRecipe} onChange={e=>setSubRecipe(e.target.value)}>
+            <option value="">Select a sub-recipe</option>{subRecipes.map(r=><option key={str(r.id)} value={str(r.id)}>{str(r.name)} · {str(r.yield_unit)}</option>)}</select></label>
           <div className="mc-field-pair"><FormField label="Ingredient quantity" type="number" value={quantity} onChange={setQuantity}/>
             <FormField label="Trim %" type="number" value={trim} onChange={setTrim}/></div>
-          <button className={primary} disabled={!editable||busy||!article||!(Number(quantity)>0)||Number(trim)>=100} onClick={()=>void add()}>
+          <button className={primary} disabled={!editable||busy||(!article&&!subRecipe)||!(Number(quantity)>0)||Number(trim)>=100} onClick={()=>void add()}>
             <Icon name="add" size={15}/> Add ingredient</button>
           <div className="mc-total-line"><span>Total batch cost</span><strong>UGX {amount(cost)}</strong></div>
           <div className="mc-total-line"><span>Suggested price / target</span><strong>UGX {amount(recipe.suggested_selling_price)}</strong></div>
@@ -584,7 +589,6 @@ type MenuSale = { sku:string; article:string; quantity:number; sales:number; mar
 type EngineGroup = 'Stars'|'Plowhorses'|'Puzzles'|'Dogs'
 const engineeringGroups:EngineGroup[] = ['Stars','Plowhorses','Puzzles','Dogs']
 export function EnterpriseMenuEngineering() {
-  const {data,loading:balanceLoading,error:balanceError}=useBackendRows(['inventory-balances'])
   const [report,setReport]=useState<ApiRow[]>([])
   const [busy,setBusy]=useState(true)
   const [error,setError]=useState('')
@@ -597,16 +601,11 @@ export function EnterpriseMenuEngineering() {
     finally{setBusy(false)}
   }
   useEffect(()=>{void reload()},[])
-  const positions=report.map(row=>{
-    const sku=str(row.sku)
-    const qty=dec(row.quantity)
-    const sales=dec(row.sales)
-    const batch=(data['inventory-balances']||[]).find(b=>str(b.item_sku||b.item)===sku||str(b.item_sku)===sku)
-    const wac=dec(batch?.weighted_average_cost)
-    const cost=wac>0?qty*wac:null
-    const margin=cost!==null&&sales>0?(sales-cost)/sales*100:null
-    return {sku,article:str(row.article),quantity:qty,sales,profit:cost===null?null:sales-cost,margin}
-  }) as MenuSale[]
+  const positions=report.map(row=>({
+    sku:str(row.sku), article:str(row.article), quantity:dec(row.quantity),
+    sales:dec(row.sales), profit:row.profit==null?null:dec(row.profit),
+    margin:row.margin_percent==null?null:dec(row.margin_percent),
+  })) as MenuSale[]
   const valid=positions.filter(item=>item.margin!==null)
   const median=(numbers:number[]):number=>{if(!numbers.length)return 0;const ordered=[...numbers].sort((a,b)=>a-b);return ordered[Math.floor(ordered.length/2)]}
   const popularThreshold=median(valid.map(r=>r.quantity))
@@ -623,14 +622,14 @@ export function EnterpriseMenuEngineering() {
     y:90-((r.margin??0)-minMargin)/(maxMargin-minMargin)*80,
   })
   return <WorkspacePage section="F&B / Management analysis" title="Menu engineering"
-    subtitle="Sales popularity against estimated gross margin at current inventory valuation."
+    subtitle="Posted POS sales and immutable transaction-date recipe costs."
     actions={<button className={btn} onClick={()=>void reload()}><Icon name="refresh" size={16}/> Refresh</button>}>
-    <StateMessage loading={busy||balanceLoading} error={error||balanceError}/>
-    {!busy&&!balanceLoading&&!error&&!balanceError&&<>
+    <StateMessage loading={busy} error={error}/>
+    {!busy&&!error&&<>
       <div className="mc-compact-metrics">{engineeringGroups.map(group=><div key={group}><span>{group}</span>
         <strong>{valid.filter(r=>classify(r)===group).length}</strong></div>)}</div>
       <section className="mc-dense-panel mc-menu-engineering">
-        <header className="mc-panel-title">Popularity × Profitability <span>{valid.length} articles with valuation</span></header>
+        <header className="mc-panel-title">Popularity × Profitability <span>{valid.length} recipes with posted COGS</span></header>
         <div className="mc-menu-chart">
           <svg viewBox="0 0 100 100" role="img" aria-label="Menu engineering quadrants by sales quantity and estimated margin">
             <rect x="8" y="10" width="41" height="40" fill="#e6f2ed"/>
@@ -648,10 +647,10 @@ export function EnterpriseMenuEngineering() {
                 <title>{r.article} · {r.quantity} sold · {r.margin?.toFixed(1)}% estimated margin</title>
               </circle>})}
             <text x="49" y="97" fontSize="3" textAnchor="middle" fill="#5b747e">Popularity · Sold quantity</text>
-            <text transform="translate(3,50) rotate(-90)" fontSize="3" textAnchor="middle" fill="#5b747e">Estimated gross margin %</text>
+            <text transform="translate(3,50) rotate(-90)" fontSize="3" textAnchor="middle" fill="#5b747e">Historical gross margin %</text>
           </svg>
         </div>
-        <div className="mc-alert mc-muted">Profitability uses current inventory WAC where available, not historical POS recipe COGS. Items without valued inventory are excluded from quadrants instead of being given invented margins.</div>
+        <div className="mc-alert mc-muted">Profitability uses costs captured when POS sales posted to stock, not today's WAC. Recipes with unvalued historical transactions are excluded from quadrants.</div>
       </section>
       <EnterpriseTable<ApiRow> label="Menu engineering classifications"
         rows={valid.map(r=>({...r,id:r.sku,classification:classify(r)}))}
@@ -660,8 +659,8 @@ export function EnterpriseMenuEngineering() {
           {id:'classification',label:'Classification',value:r=>str(r.classification),render:r=><StatusPill status={r.classification}/>},
           {id:'quantity',label:'Sold quantity',value:r=>dec(r.quantity),numeric:true},
           {id:'sales',label:'Sales UGX',value:r=>dec(r.sales),render:r=><span className="mc-num">{amount(r.sales)}</span>,numeric:true},
-          {id:'profit',label:'Estimated gross profit UGX',value:r=>dec(r.profit),render:r=><span className={dec(r.profit)<0?'mc-cost-over':'mc-cost-ok'}>{amount(r.profit)}</span>,numeric:true},
-          {id:'margin',label:'Estimated margin %',value:r=>dec(r.margin),render:r=><span className="mc-num">{dec(r.margin).toFixed(1)}%</span>,numeric:true},
+          {id:'profit',label:'Historical gross profit UGX',value:r=>dec(r.profit),render:r=><span className={dec(r.profit)<0?'mc-cost-over':'mc-cost-ok'}>{amount(r.profit)}</span>,numeric:true},
+          {id:'margin',label:'Historical gross margin %',value:r=>dec(r.margin),render:r=><span className="mc-num">{dec(r.margin).toFixed(1)}%</span>,numeric:true},
         ]}/>
       {valid.length===0&&<div className="mc-alert">Profitability classification requires sales and valued stock for the relevant menu articles.</div>}
     </>}

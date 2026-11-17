@@ -297,7 +297,13 @@ class Recipe(BaseModel):
 class RecipeIngredient(BaseModel):
     recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name="ingredients")
     item = models.ForeignKey(
-        "inventory.Item", on_delete=models.PROTECT, related_name="recipe_ingredients"
+        "inventory.Item", on_delete=models.PROTECT, related_name="recipe_ingredients",
+        null=True, blank=True,
+    )
+    sub_recipe = models.ForeignKey(
+        Recipe, on_delete=models.PROTECT, related_name="used_in_recipes",
+        null=True, blank=True,
+        help_text="Published sub-recipe, in its configured yield unit.",
     )
     unit = models.ForeignKey(
         "inventory.UnitOfMeasure",
@@ -325,20 +331,63 @@ class RecipeIngredient(BaseModel):
 
     class Meta(BaseModel.Meta):
         constraints = [
-            models.UniqueConstraint(fields=("recipe", "item"), name="unique_recipe_ingredient")
+            models.UniqueConstraint(
+                fields=("recipe", "item"), condition=models.Q(item__isnull=False),
+                name="unique_recipe_ingredient",
+            ),
+            models.UniqueConstraint(
+                fields=("recipe", "sub_recipe"), condition=models.Q(sub_recipe__isnull=False),
+                name="unique_recipe_sub_recipe",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(item__isnull=False, sub_recipe__isnull=True)
+                    | models.Q(item__isnull=True, sub_recipe__isnull=False)
+                ),
+                name="recipe_ingredient_exactly_one_source",
+            ),
         ]
-        ordering = ("item__name",)
+        ordering = ("item__name", "sub_recipe__name")
 
     def clean(self):
         super().clean()
+        if bool(self.item_id) == bool(self.sub_recipe_id):
+            raise ValidationError("Choose either one Article or one sub-recipe, never both.")
         if self.trim_percent >= Decimal("100"):
             raise ValidationError({"trim_percent": "Trim percentage must be below 100%."})
         if self.recipe_id and self.recipe.status != Recipe.STATUS_DRAFT:
             raise ValidationError("Only draft recipes can be edited; publish a new revision.")
+        if self.sub_recipe_id:
+            if self.unit_id:
+                raise ValidationError({"unit": "Sub-recipes use their yield unit; leave Article unit blank."})
+            if not self.recipe_id:
+                raise ValidationError({"recipe": "Choose a parent recipe."})
+            if self.recipe_id == self.sub_recipe_id:
+                raise ValidationError({"sub_recipe": "A recipe cannot contain itself."})
+            if self.sub_recipe.outlet_id != self.recipe.outlet_id:
+                raise ValidationError({"sub_recipe": "Sub-recipes must belong to the same outlet."})
+            if self.sub_recipe.status != Recipe.STATUS_PUBLISHED:
+                raise ValidationError({"sub_recipe": "Only published sub-recipes can be included."})
+            seen = set()
+            pending = [self.sub_recipe_id]
+            while pending:
+                recipe_id = pending.pop()
+                if recipe_id == self.recipe_id:
+                    raise ValidationError({"sub_recipe": "Circular sub-recipe nesting is not permitted."})
+                if recipe_id in seen:
+                    continue
+                seen.add(recipe_id)
+                pending.extend(
+                    RecipeIngredient.objects.filter(recipe_id=recipe_id)
+                    .exclude(sub_recipe_id__isnull=True)
+                    .values_list("sub_recipe_id", flat=True)
+                )
 
     def save(self, *args, **kwargs):
-        self.base_quantity = self.item.quantity_in_base_units(
-            self.quantity, self.unit
+        self.base_quantity = (
+            self.item.quantity_in_base_units(self.quantity, self.unit)
+            if self.item_id
+            else self.quantity
         ).quantize(Decimal("0.0001"))
         self.full_clean()
         super().save(*args, **kwargs)
@@ -352,7 +401,15 @@ class RecipeIngredient(BaseModel):
 
     @property
     def current_base_unit_cost(self):
-        from apps.inventory.models import InventoryBatch, SupplierItemPrice
+        if self.sub_recipe_id:
+            return self.sub_recipe.cost_per_yield
+        from apps.inventory.models import InventoryBalance, InventoryBatch, SupplierItemPrice
+
+        balance = InventoryBalance.objects.filter(
+            item=self.item, store=self.recipe.outlet
+        ).first()
+        if balance and balance.weighted_average_cost > 0:
+            return balance.weighted_average_cost.quantize(Decimal("0.01"))
 
         batches = InventoryBatch.objects.filter(
             item=self.item,
@@ -380,7 +437,7 @@ class RecipeIngredient(BaseModel):
         )
 
     def __str__(self):
-        return f"{self.recipe} - {self.item}"
+        return f"{self.recipe} - {self.sub_recipe or self.item}"
 
 
 class POSPLUMapping(BaseModel):
@@ -476,6 +533,7 @@ class POSImportBatch(BaseModel):
 
             unmapped = []
             mapped = []
+            demand_by_line = {}
             demand = {}
             for line in lines:
                 mapping = POSPLUMapping.objects.filter(
@@ -489,15 +547,13 @@ class POSImportBatch(BaseModel):
                     continue
                 line.mapping = mapping
                 mapped.append(line)
-                for ingredient in mapping.recipe.ingredients.select_related("item", "unit"):
-                    required = (
-                        ingredient.gross_base_quantity
-                        * line.quantity
-                        / mapping.recipe.yield_quantity
-                    ).quantize(Decimal("0.0001"))
-                    demand[ingredient.item_id] = demand.get(
-                        ingredient.item_id, Decimal("0.0000")
-                    ) + required
+                from apps.materials_control.recipe_costing import expand_recipe_demand
+                expanded = expand_recipe_demand(
+                    mapping.recipe, line.quantity, require_published=True
+                )
+                demand_by_line[line.pk] = expanded
+                for item_id, required in expanded.items():
+                    demand[item_id] = demand.get(item_id, Decimal("0.0000")) + required
 
             # Inventory balances and the stock ledger are intentionally held at
             # two decimal places. Aggregate the full recipe demand first, then
@@ -536,12 +592,28 @@ class POSImportBatch(BaseModel):
                     created_by=actor,
                 )
             for line in mapped:
+                # Snapshot valuation while inventory balances are locked. Historic
+                # profit must not change after a later supplier or WAC update.
+                # Null explicitly means at least one Article had no reliable WAC.
+                positions = demand_by_line[line.pk]
+                if all(
+                    item_id in balances and balances[item_id].weighted_average_cost > 0
+                    for item_id in positions
+                ):
+                    line.cost_of_goods_sold = sum(
+                        (qty * balances[item_id].weighted_average_cost
+                         for item_id, qty in positions.items()),
+                        Decimal("0.00"),
+                    ).quantize(Decimal("0.01"))
+                else:
+                    line.cost_of_goods_sold = None
                 line.inventory_changes_applied = True
                 line.processed_at = timezone.now()
                 line.save(
                     update_fields=(
                         "mapping",
                         "inventory_changes_applied",
+                        "cost_of_goods_sold",
                         "processed_at",
                         "updated_at",
                     )
@@ -594,6 +666,10 @@ class POSSaleLine(BaseModel):
         blank=True,
     )
     inventory_changes_applied = models.BooleanField(default=False)
+    cost_of_goods_sold = models.DecimalField(
+        max_digits=15, decimal_places=2, null=True, blank=True,
+        help_text="Cost captured on first successful POS stock posting; null means unvalued.",
+    )
     processed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta(BaseModel.Meta):
