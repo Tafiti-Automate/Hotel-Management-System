@@ -2320,6 +2320,54 @@ class SupplierReturnItemViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("supplier_return__return_no", "item__name", "item__sku", "reason")
     ordering_fields = ("quantity", "base_quantity", "created_at")
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        employee = getattr(user, "employee_profile", None)
+        if user.is_superuser or user_has_role(user, "System Administrator"):
+            return queryset
+        if not employee or not employee.is_active or not employee.branch_id:
+            return queryset.none()
+        if user_has_role(user, "Receiving Clerk"):
+            return queryset.filter(
+                supplier_return__goods_receipt__received_by=employee,
+                supplier_return__store__branch_id=employee.branch_id,
+            )
+        branch = employee.branch
+        if getattr(branch, "hotel_id", None):
+            return queryset.filter(supplier_return__store__branch__hotel_id=branch.hotel_id)
+        return queryset.filter(supplier_return__store__branch_id=branch.pk)
+
+    def _require_draft_return(self, supplier_return):
+        user = self.request.user
+        employee = getattr(user, "employee_profile", None)
+        if (
+            user.is_superuser or user_has_role(user, "System Administrator")
+            or not user_has_role(user, "Receiving Clerk")
+            or not employee or not employee.is_active
+            or supplier_return.goods_receipt.received_by_id != employee.pk
+            or supplier_return.store.branch_id != employee.branch_id
+        ):
+            raise PermissionDenied("Only the assigned Receiving Clerk may edit this return.")
+        if supplier_return.status != SupplierReturnStatus.DRAFT or supplier_return.inventory_changes_applied:
+            raise ValidationError("Posted supplier return items are locked.")
+
+    def perform_create(self, serializer):
+        self._require_draft_return(serializer.validated_data["supplier_return"])
+        super().perform_create(serializer)
+
+    def perform_update(self, serializer):
+        self._require_draft_return(serializer.instance.supplier_return)
+        if ("supplier_return" in serializer.validated_data and
+                serializer.validated_data["supplier_return"].pk != serializer.instance.supplier_return_id):
+            raise ValidationError("Return lines cannot be moved between supplier returns.")
+        super().perform_update(serializer)
+
+    def perform_destroy(self, instance):
+        self._require_draft_return(instance.supplier_return)
+        instance.delete()
+
+
 
 class ProcurementAttachmentViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = ProcurementAttachment.objects.select_related("created_by")
