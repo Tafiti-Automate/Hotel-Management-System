@@ -737,3 +737,131 @@
   .screen-app .ds-hero h1 { font-size: 22px !important; }
   .screen-app .ds-form-grid { grid-template-columns: 1fr !important; }
 }
+
+
+/* ==========================================================================
+   Hotel ERP forest-green design tokens — authenticated workspace only.
+   Keep status colors semantic (success, warnings, errors) and tables neutral.
+   This layer intentionally follows the earlier corporate GUI overrides.
+   ========================================================================== */
+.screen-app:not(.mode-dark):not(.appearance-dark) {
+  --ui-navy: #0C3C2D;
+  --ui-navy-2: #14533C;
+  --ui-navy-3: #16734D;
+  --ui-accent: #16734D;
+  --ui-bg: #F6F8F6;
+  --ui-panel: #FFFFFF;
+  --ui-panel-soft: #F8FAF8;
+  --ui-line: #DFE8E1;
+  --ui-line-strong: #C9D9CE;
+  --ui-text: #182A22;
+  --ui-muted: #62766B;
+  --ui-faint: #88998F;
+  --tafiti-navy-950: #092B22;
+  --tafiti-navy-900: #0C3C2D;
+  --tafiti-blue-700: #105C3E;
+  --tafiti-blue-600: #16734D;
+  --tafiti-blue-500: #21885C;
+  --tafiti-canvas: #F6F8F6;
+  --tafiti-panel-soft: #F8FAF8;
+  --tafiti-border: #DFE8E1;
+  --tafiti-text: #182A22;
+  --accent: #16734D;
+  --accent-strong: #105C3E;
+  --accent-soft: #EAF7EF;
+  --brand-primary: #16734D;
+}
+/* The existing night palette remains legible; only its accent changes. */
+.mode-dark.screen-app,
+.appearance-dark.screen-app {
+  --ui-navy: #092B22;
+  --ui-navy-2: #104632;
+  --ui-navy-3: #16734D;
+  --ui-accent: #65C18D;
+  --accent: #65C18D;
+  --accent-soft: rgba(101,193,141,.17);
+  --accent-strong: #88D9A8;
+}
+.screen-app .tafiti-sidebar,
+.application-root.screen-app .tafiti-sidebar {
+  background: linear-gradient(180deg, #104632 0%, #0C3C2D 50%, #092B22 100%) !important;
+  border-right-color: rgba(255,255,255,.10) !important;
+}
+.screen-app .tafiti-sidebar-nav-item.active,
+.application-root.screen-app .tafiti-sidebar-nav-item.active {
+  color: #fff !important;
+  background: #16734D !important;
+  box-shadow: inset 3px 0 0 #88D9A8 !important;
+}
+.screen-app .tafiti-sidebar-nav-item:hover:not(.active),
+.application-root.screen-app .tafiti-sidebar-nav-item:hover:not(.active) {
+  background: rgba(120,205,153,.12) !important;
+}
+.screen-app .tafiti-app-header,
+.application-root.screen-app .tafiti-app-header {
+  background: #FFFFFF !important;
+  border-bottom: 1px solid #DFE8E1 !important;
+  box-shadow: 0 1px 6px rgba(20,67,43,.045) !important;
+}
+.screen-app .tafiti-app-main,
+.screen-app .tafiti-app-shell,
+.screen-app .tafiti-app-content {
+  background-color: #F6F8F6 !important;
+}
+.screen-app .tafiti-app-content .erp-primary,
+.screen-app .tafiti-app-content .ds-btn-primary,
+.screen-app .tafiti-app-content button[style*="var(--accent)"] {
+  background: #16734D !important;
+  border-color: #16734D !important;
+  color: white !important;
+  box-shadow: none !important;
+}
+.screen-app .tafiti-app-content .erp-primary:hover:not(:disabled),
+.screen-app .tafiti-app-content .ds-btn-primary:hover:not(:disabled) {
+  background: #105C3E !important;
+}
+.screen-app .tafiti-app-content input:focus,
+.screen-app .tafiti-app-content select:focus,
+.screen-app .tafiti-app-content textarea:focus {
+  border-color: #369768 !important;
+  box-shadow: 0 0 0 3px rgba(22,115,77,.12) !important;
+}
+.screen-app .tafiti-app-content thead th {
+  background: #F5F8F5 !important;
+  border-bottom-color: #DFE8E1 !important;
+  color: #54695B !important;
+}
+.screen-app .dashboard-task-card:not(.tone-warning):not(.tone-danger):not(.tone-good) .dashboard-task-icon {
+  background: #EAF7EF !important;
+  color: #16734D !important;
+}
+.screen-app .reference-panel-heading button,
+.screen-app .report-catalog-open,
+.screen-app .reports-area-tabs button.active {
+  color: #16734D !important;
+}
+.screen-app :is(button,a,input,select,textarea):focus-visible {
+  outline-color: #369768;
+}
+.mode-dark.screen-app .tafiti-app-header,
+.appearance-dark.screen-app .tafiti-app-header,
+.mode-dark.application-root.screen-app .tafiti-app-header,
+.appearance-dark.application-root.screen-app .tafiti-app-header {
+  background: #102B22 !important;
+  border-bottom-color: #294C3A !important;
+  box-shadow: none !important;
+}
+.mode-dark.screen-app .tafiti-app-main,
+.mode-dark.screen-app .tafiti-app-shell,
+.mode-dark.screen-app .tafiti-app-content,
+.appearance-dark.screen-app .tafiti-app-main,
+.appearance-dark.screen-app .tafiti-app-shell,
+.appearance-dark.screen-app .tafiti-app-content {
+  background-color: #071421 !important;
+}
+.mode-dark.screen-app .tafiti-app-content thead th,
+.appearance-dark.screen-app .tafiti-app-content thead th {
+  color: #A6C4AF !important;
+  background: #102B22 !important;
+  border-bottom-color: #294C3A !important;
+}
