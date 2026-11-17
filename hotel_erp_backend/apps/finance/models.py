@@ -781,20 +781,35 @@ class SupplierCreditNote(BaseModel):
             raise ValidationError("Only an approved supplier invoice may be credited.")
         # Do not derive credits from today's mutable catalogue prices. Value the
         # physical return at the actual LPO receipt rate, on the same GRN.
-        received_lines = {
-            line.item_id: line.base_unit_cost
-            for line in record.goods_receipt.items.select_related("purchase_order_item")
-            if line.inventory_changes_applied and line.store_id == record.store_id
-        }
+        received_totals = {}
+        for line in record.goods_receipt.items.select_related("purchase_order_item"):
+            if not line.inventory_changes_applied or line.store_id != record.store_id:
+                continue
+            quantity = line.inventory_post_quantity()
+            value = quantity * line.base_unit_cost
+            accepted_qty, accepted_value = received_totals.get(
+                line.item_id, (Decimal("0.00"), Decimal("0.00"))
+            )
+            received_totals[line.item_id] = (accepted_qty + quantity, accepted_value + value)
         return_value = Decimal("0.00")
         for line in record.items.all():
-            if line.item_id not in received_lines:
+            accepted_qty, accepted_value = received_totals.get(
+                line.item_id, (Decimal("0.00"), Decimal("0.00"))
+            )
+            if accepted_qty <= Decimal("0.00"):
                 raise ValidationError("Returned article is not on the posted receiving GRN.")
-            return_value += line.base_quantity * received_lines[line.item_id]
+            # Weighted actual LPO receipt value, never a mutable supplier price.
+            return_value += line.base_quantity * accepted_value / accepted_qty
         if self.subtotal > return_value.quantize(Decimal("0.01")):
             raise ValidationError("Credit subtotal exceeds original returned-goods LPO value.")
         if self.tax_amount > self.invoice.tax_amount:
             raise ValidationError("Credit tax exceeds original invoice tax.")
+        if self.invoice.subtotal > 0:
+            tax_cap = (self.invoice.tax_amount * self.subtotal / self.invoice.subtotal).quantize(
+                Decimal("0.01")
+            )
+            if self.tax_amount > tax_cap:
+                raise ValidationError("Credit tax exceeds the invoice's proportional input VAT.")
 
     def clean(self):
         super().clean()
