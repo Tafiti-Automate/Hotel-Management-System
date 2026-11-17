@@ -697,6 +697,24 @@ class StockLedger(BaseModel):
         choices=LedgerReferenceType.choices,
     )
     reference_id = models.UUIDField()
+    # Immutable transaction-time valuation. NULL means historical cost evidence
+    # was not recorded; old entries must not be backfilled using today's WAC.
+    unit_cost_snapshot = models.DecimalField(
+        max_digits=15, decimal_places=4, null=True, blank=True,
+        validators=[validate_non_negative_decimal],
+    )
+    total_cost_snapshot = models.DecimalField(
+        max_digits=20, decimal_places=4, null=True, blank=True,
+        validators=[validate_non_negative_decimal],
+    )
+    wac_before = models.DecimalField(
+        max_digits=15, decimal_places=4, null=True, blank=True,
+        validators=[validate_non_negative_decimal],
+    )
+    wac_after = models.DecimalField(
+        max_digits=15, decimal_places=4, null=True, blank=True,
+        validators=[validate_non_negative_decimal],
+    )
     note = models.TextField(blank=True)
 
     class Meta(BaseModel.Meta):
@@ -708,6 +726,21 @@ class StockLedger(BaseModel):
 
     def clean(self):
         super().clean()
+        snapshot_fields = (
+            self.unit_cost_snapshot, self.total_cost_snapshot,
+            self.wac_before, self.wac_after,
+        )
+        if any(value is not None for value in snapshot_fields) and not all(
+            value is not None for value in snapshot_fields
+        ):
+            raise ValidationError(
+                "A valued stock movement requires unit, total, before and after cost snapshots."
+            )
+        if all(value is not None for value in snapshot_fields):
+            qty = self.quantity_in or self.quantity_out
+            expected = (qty * self.unit_cost_snapshot).quantize(Decimal("0.0001"))
+            if abs(expected - self.total_cost_snapshot) > Decimal("0.0001"):
+                raise ValidationError("Historical stock ledger quantity and total valuation disagree.")
         if self.quantity_in > Decimal("0") and self.quantity_out > Decimal("0"):
             raise ValidationError("A stock movement cannot be both inbound and outbound.")
         if self.quantity_in == Decimal("0") and self.quantity_out == Decimal("0"):
