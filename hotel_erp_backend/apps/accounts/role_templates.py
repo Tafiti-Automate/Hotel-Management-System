@@ -43,7 +43,10 @@ ROLE_SPECS = {
             "materials_control": ["recipe", "recipeingredient"],
         },
         "change": {"materials_control": ["wasterecord"]},
+        # Heads may originate quantity-only department PRs; no commercial price rights.
+        "add": {"procurement": ["purchaserequisition", "requisitionitem"]},
         "view": {
+            "procurement": ["purchaserequisition", "requisitionitem"],
             "departments": ["department", "branch"],
             "employees": ["employee"],
             "inventory": [
@@ -247,6 +250,7 @@ def permissions_for_spec(spec):
         else Permission.objects.none()
     )
     for bucket, actions in (
+        ("add", ["view", "add"]),
         ("view", ["view"]),
         ("change", ["view", "change"]),
         ("crud", ["view", "add", "change", "delete"]),
