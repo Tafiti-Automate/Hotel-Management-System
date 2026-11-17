@@ -704,14 +704,17 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
         # from it. A request must not be visible to Procurement at sourcing and
         # then disappear from the same user's LPO queue after handoff.
         if user_has_role(user, "Financial Manager", "General Manager"):
-            if employee and employee.branch_id and employee.branch.hotel_id:
+            if not employee or not employee.is_active or not employee.branch_id:
+                return queryset.none()
+            if employee.branch.hotel_id:
                 return queryset.filter(hotel_id=employee.branch.hotel_id)
-            return queryset
+            # Legacy branches without a linked hotel must not expose global PRs.
+            return queryset.filter(branch_id=employee.branch_id)
 
         if user_has_role(user, "Procurement Manager", "Procurement Officer"):
-            if employee and employee.branch_id:
-                return queryset.filter(branch=employee.branch)
-            return queryset
+            if not employee or not employee.is_active or not employee.branch_id:
+                return queryset.none()
+            return queryset.filter(branch_id=employee.branch_id)
 
         if not employee:
             return queryset.none()
