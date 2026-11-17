@@ -245,3 +245,114 @@ def test_partial_invoice_lines_cannot_bill_the_same_accepted_quantity_twice():
     assert duplicate.status == SupplierInvoice.STATUS_EXCEPTION
     assert duplicate.quantity_variance == Decimal("1.00")
     assert "remaining accepted quantity" in duplicate.match_notes
+
+
+@pytest.mark.django_db
+def test_accepted_receipt_cannot_be_double_matched_by_header_only_invoices():
+    employee, department, supplier, item = create_procurement_context()
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee, department=department,
+        reason="Header-only duplicate matching guard", status=PRStatus.APPROVED,
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition, item=item, quantity=Decimal("5.00"),
+        approved_quantity=Decimal("5.00"), estimated_unit_cost=Decimal("1000.00"),
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition, supplier=supplier, ordered_by=employee,
+        po_number="PO-NO-DUPLICATE-MATCH",
+    )
+    order_item = PurchaseOrderItem.objects.create(
+        purchase_order=order, item=item, quantity=Decimal("5.00"),
+        unit_cost=Decimal("1000.00"),
+    )
+    authorize_order_for_test(order)
+    order.issue(sent_by=employee)
+    receipt = GoodsReceiptNote.objects.create(
+        purchase_order=order, received_by=employee,
+    )
+    GoodsReceiptItem.objects.create(
+        goods_receipt=receipt, purchase_order_item=order_item,
+        quantity_received=Decimal("5.00"), unit_cost=Decimal("1000.00"),
+        inventory_changes_applied=True,
+    )
+
+    first = SupplierInvoice.objects.create(
+        supplier=supplier, purchase_order=order,
+        invoice_number="PH2-HEADER-FIRST", subtotal=Decimal("5000.00"),
+        due_date=timezone.localdate(),
+    )
+    first.perform_three_way_match()
+    assert first.status == SupplierInvoice.STATUS_MATCHED
+
+    duplicate = SupplierInvoice.objects.create(
+        supplier=supplier, purchase_order=order,
+        invoice_number="PH2-HEADER-SECOND", subtotal=Decimal("5000.00"),
+        due_date=timezone.localdate(),
+    )
+    duplicate.perform_three_way_match()
+    assert duplicate.status == SupplierInvoice.STATUS_EXCEPTION
+    assert "already been allocated" in duplicate.match_notes
+    assert first.status == SupplierInvoice.STATUS_MATCHED
+
+    detailed = SupplierInvoice.objects.create(
+        supplier=supplier, purchase_order=order,
+        invoice_number="PH2-DETAIL-AFTER-HEADER", subtotal=Decimal("1000.00"),
+        due_date=timezone.localdate(),
+    )
+    SupplierInvoiceItem.objects.create(
+        invoice=detailed, purchase_order_item=order_item,
+        quantity=Decimal("1.00"), unit_price=Decimal("1000.00"),
+    )
+    detailed.perform_three_way_match()
+    assert detailed.status == SupplierInvoice.STATUS_EXCEPTION
+    assert "header-only invoice" in detailed.match_notes
+
+
+@pytest.mark.django_db
+def test_header_only_invoice_cannot_claim_a_previously_matched_line_invoice():
+    employee, department, supplier, item = create_procurement_context()
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee, department=department,
+        reason="Line allocated before header", status=PRStatus.APPROVED,
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition, item=item, quantity=Decimal("2.00"),
+        approved_quantity=Decimal("2.00"), estimated_unit_cost=Decimal("1000.00"),
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition, supplier=supplier, ordered_by=employee,
+        po_number="PO-LINE-BEFORE-HEADER",
+    )
+    line = PurchaseOrderItem.objects.create(
+        purchase_order=order, item=item, quantity=Decimal("2.00"),
+        unit_cost=Decimal("1000.00"),
+    )
+    authorize_order_for_test(order)
+    order.issue(sent_by=employee)
+    receipt = GoodsReceiptNote.objects.create(purchase_order=order, received_by=employee)
+    GoodsReceiptItem.objects.create(
+        goods_receipt=receipt, purchase_order_item=line,
+        quantity_received=Decimal("2.00"), unit_cost=Decimal("1000.00"),
+        inventory_changes_applied=True,
+    )
+    first = SupplierInvoice.objects.create(
+        supplier=supplier, purchase_order=order,
+        invoice_number="PH2-DETAIL-FIRST", subtotal=Decimal("1000.00"),
+        due_date=timezone.localdate(),
+    )
+    SupplierInvoiceItem.objects.create(
+        invoice=first, purchase_order_item=line,
+        quantity=Decimal("1.00"), unit_price=Decimal("1000.00"),
+    )
+    first.perform_three_way_match()
+    assert first.status == SupplierInvoice.STATUS_MATCHED
+
+    header = SupplierInvoice.objects.create(
+        supplier=supplier, purchase_order=order,
+        invoice_number="PH2-HEADER-AFTER-DETAIL", subtotal=Decimal("2000.00"),
+        due_date=timezone.localdate(),
+    )
+    header.perform_three_way_match()
+    assert header.status == SupplierInvoice.STATUS_EXCEPTION
+    assert "already been allocated" in header.match_notes
