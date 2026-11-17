@@ -489,6 +489,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "requisition",
+            "source_requisitions",
             "supplier",
             "ordered_by",
             "store",
@@ -524,6 +525,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
         )
         read_only_fields = (
             "id",
+            "source_requisitions",
             "status",
             "revision",
             "submitted_for_approval_at",

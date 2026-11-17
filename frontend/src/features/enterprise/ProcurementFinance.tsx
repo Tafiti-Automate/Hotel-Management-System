@@ -284,28 +284,32 @@ export function EnterprisePurchasingWorkbench() {
     const parent=requisitions.find(req=>str(req.id)===str(line.requisition))
     return parent && ['approved','partially_ordered'].includes(str(parent.status))
   })
-  const quotes=data['supplier-item-prices']||[]
   const groups=useMemo(()=>{
     const grouped=new Map<string,{name:string;lines:ApiRow[];total:number}>()
     for(const line of selected){
-      const quote=quotes.find(q=>str(q.item)===str(line.item)&&q.is_preferred)
-      const supplier=str(line.procurement_supplier||quote?.supplier||'unallocated')
-      const curr=str(quote?.currency||'UGX')
+      const supplier=str(line.procurement_supplier||'unallocated')
+      const requisition=requisitions.find(r=>str(r.id)===str(line.requisition))
+      const curr=str(requisition?.currency||'UGX')
       const key=supplier+'|'+curr
-      const current=grouped.get(key)||{name: supplier==='unallocated'?'Supplier not allocated':str(quote?.supplier_name||supplier)+' · '+curr,lines:[],total:0}
+      const current=grouped.get(key)||{name:supplier==='unallocated'?'Supplier not allocated':str(line.procurement_supplier_name||supplier)+' · '+curr,lines:[],total:0}
       current.lines.push(line)
-      current.total+=dec(line.approved_quantity||line.quantity)*dec(quote?.unit_price||line.estimated_unit_cost)
+      current.total+=dec(line.procurement_quantity)*dec(line.procurement_unit_cost)
       grouped.set(key,current)
     }
     return Array.from(grouped.values())
-  },[selected,quotes])
-  const canGenerate=selected.length>0&&selected.every(line=>Boolean(line.procurement_supplier))
+  },[selected,requisitions])
+  const canGenerate=selected.length>0&&selected.every(line=>Boolean(
+    line.procurement_supplier&&line.procurement_supplier_price&&line.procurement_unit
+    &&dec(line.procurement_quantity)>0&&dec(line.procurement_unit_cost)>0
+  ))
   const generate=async()=>{
     if(!canGenerate)return
-    const distinct=Array.from(new Set(selected.map(line=>str(line.requisition))))
-    const ok=await run(async()=>{
-      for(const req of distinct) await runBackendAction('requisitions',req,'create-allocated-lpos')
-    },'Purchase orders generated for the selected approved requisitions')
+    const ok=await run(
+      ()=>createBackendRecord('purchase-orders/consolidate-approved',{
+        requisition_item_ids:selected.map(line=>str(line.id)),
+      }),
+      'Supplier purchase orders created from selected PR lines',
+    )
     if(ok)setSelected([])
   }
   const cols:EnterpriseColumn<ApiRow>[]=[
@@ -313,11 +317,12 @@ export function EnterprisePurchasingWorkbench() {
     {id:'article',label:'Article',value:r=>str(r.item_name||r.item)},
     {id:'department',label:'Cost center',value:r=>str(requisitions.find(p=>str(p.id)===str(r.requisition))?.department_name||'')},
     {id:'qty',label:'Qty approved',value:r=>dec(r.approved_quantity||r.quantity),numeric:true},
-    {id:'supplier',label:'Allocated supplier',value:r=>str(r.procurement_supplier||'Not allocated')},
+    {id:'supplier',label:'Allocated supplier',value:r=>str(r.procurement_supplier_name||r.procurement_supplier||'Not allocated')},
+    {id:'contract',label:'Quote locked',value:r=>r.procurement_supplier_price?'Yes':'No',render:r=><StatusPill status={r.procurement_supplier_price?'allocated':'unallocated'}/>},
     {id:'destination',label:'Destination store',value:r=>str(r.destination_store||r.destination_type)},
   ]
   return <WorkspacePage section="Purchase / Order proposal" title="PR-to-PO workbench"
-    subtitle="Select approved requisition lines, review supplier allocation and generate controlled LPOs."
+    subtitle="Consolidate approved PR lines from several departments into one draft LPO per supplier and currency."
     actions={<button className={btn} onClick={()=>void reload()}><Icon name="refresh" size={16}/> Refresh</button>}>
     <StateMessage loading={loading} error={error||mutationError}/>
     {!loading&&!error&&<>
@@ -326,11 +331,11 @@ export function EnterprisePurchasingWorkbench() {
       <EnterpriseTable<ApiRow> label="Approved requisition lines" rows={lines} columns={cols} onSelectionChange={setSelected}/>
       <section className="mc-dense-panel mc-footer-panel"><header className="mc-panel-title">Proposed supplier batches</header>
         <div className="mc-batch-groups">{groups.map(group=><div key={group.name}><strong>{group.name}</strong><span>{group.lines.length} lines</span><b className="mc-num">UGX {amount(group.total)}</b></div>)}</div>
-        <div className="mc-alert mc-muted">Existing Django purchase orders are attached to a single purchase requisition. This action creates grouped LPOs within each selected PR; cross-PR merging into one PO requires a new backend consolidation service.</div>
+        <div className="mc-alert mc-muted">Each Article retains its originating PR, department, destination and approved quantity. The backend revalidates supplier quotes and rejects duplicated commitments inside a single transaction.</div>
         <div className="mc-decision-bar">
-          <ConfirmTransaction title="Generate purchase orders?" description="The Django procurement service will create LPOs for selected approved PRs. Ensure suppliers and currencies are allocated first."
+          <ConfirmTransaction title="Consolidate approved purchase requisitions?" description="One draft LPO will be created per supplier and currency, retaining every original requisition line for approval, receiving and audit."
             confirmLabel="Generate LPOs" className={affirmative} busy={busy} disabled={!canGenerate||busy} onConfirm={generate}>
-            <Icon name="receipt_long" size={15}/> Group by allocated supplier & create POs
+            <Icon name="receipt_long" size={15}/> Consolidate PRs by supplier
           </ConfirmTransaction>
         </div>
       </section>
@@ -516,7 +521,7 @@ export function EnterprisePeriodClose() {
 }
 
 export function EnterprisePurchaseOrderDetail() {
-  const {data,loading,error,reload}=useBackendRows(['purchase-orders','purchase-order-items','grns'])
+  const {data,loading,error,reload}=useBackendRows(['purchase-orders','purchase-order-items','grns','requisitions'])
   const {busy,error:mutationError,run}=useOperation(reload)
   const pathId=typeof window==='undefined'?'':window.location.pathname.split('/').filter(Boolean).at(-1)||''
   const [chosenId,setChosenId]=useState('')
@@ -544,6 +549,20 @@ export function EnterprisePurchaseOrderDetail() {
           <div className="mc-impact-track"><span style={{width:(ordered?Math.min(100,received/ordered*100):0)+'%'}}/></div></div>
         <div className="mc-decision-bar"><button className={btn} disabled={busy} onClick={()=>void run(()=>downloadControlledPurchaseOrder(id),'PO document downloaded')}>
           <Icon name="print" size={16}/> Print approved LPO PDF</button></div>
+      </section>
+      <section className="mc-dense-panel mc-footer-panel">
+        <header className="mc-panel-title">Originating purchase requisitions</header>
+        {Array.isArray(order.source_requisitions)&&order.source_requisitions.map(value=>{
+          const reference=(data.requisitions||[]).find(r=>str(r.id)===str(value))
+          return <div key={str(value)} className="mc-info-row">
+            <DocumentReference kind="requisition" reference={str(reference?.requisition_number||value)}
+              record={reference||undefined}/>
+            <span>{str(reference?.department_name||reference?.department||'Department')}</span>
+          </div>
+        })}
+        {!Array.isArray(order.source_requisitions)&&<div className="mc-empty-state">
+          This legacy purchase order uses its primary requisition reference.
+        </div>}
       </section>
       <section className="mc-dense-panel mc-footer-panel"><header className="mc-panel-title">Linked goods receipts</header>
         {receipts.map(row=><div className="mc-info-row" key={str(row.id)}><DocumentReference reference={str(row.grn_number)} kind="grn" record={row}/><StatusPill status={row.status}/></div>)}

@@ -15,6 +15,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.procurement.consolidation import consolidate_approved_requisitions
 from apps.procurement.models import GoodsReceiptNote
 from apps.inventory.stores_fulfillment import post_grn_to_inventory
 from apps.inventory.models import StoreKeeperAssignment
@@ -107,6 +108,42 @@ class PurchaseOrderViewSet(BasePurchaseOrderViewSet):
                 )
             return step
         raise PermissionDenied("This approval stage has no assigned role or employee.")
+
+    @action(detail=False, methods=["post"], url_path="consolidate-approved")
+    def consolidate_approved(self, request):
+        """One supplier LPO for selected approved lines across multiple departments."""
+        if request.user.is_superuser or user_has_role(request.user, "System Administrator"):
+            raise PermissionDenied("IT administrators cannot create purchase orders.")
+        if not user_has_role(request.user, "Procurement Manager", "Procurement Officer"):
+            raise PermissionDenied("Only authorised Purchasing staff can consolidate approved PRs.")
+        buyer = getattr(request.user, "employee_profile", None)
+        try:
+            orders = consolidate_approved_requisitions(
+                buyer=buyer,
+                actor=request.user,
+                requisition_item_ids=request.data.get("requisition_item_ids"),
+            )
+        except Exception as error:
+            from django.core.exceptions import ValidationError as DjangoValidationError
+            if isinstance(error, DjangoValidationError):
+                raise ValidationError(
+                    getattr(error, "message_dict", None) or error.messages
+                ) from error
+            raise
+        return Response([
+            {
+                "id": str(order.pk),
+                "lpo_number": order.lpo_number,
+                "status": order.status,
+                "supplier": str(order.supplier_id),
+                "source_requisitions": [
+                    str(pk) for pk in order.source_requisitions.values_list("pk", flat=True)
+                ],
+                "line_count": order.items.count(),
+                "total_amount": str(order.total_amount),
+            }
+            for order in orders
+        ], status=201)
 
     @action(detail=True, methods=["post"], url_path="receive-delivery")
     def receive_delivery(self, request, pk=None):

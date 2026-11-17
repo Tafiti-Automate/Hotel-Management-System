@@ -1115,6 +1115,10 @@ class PurchaseOrder(BaseModel):
         on_delete=models.PROTECT,
         related_name="purchase_orders",
     )
+    source_requisitions = models.ManyToManyField(
+        PurchaseRequisition, blank=True, related_name="consolidated_purchase_orders",
+        help_text="All approved requisitions contributing individual Articles to this LPO.",
+    )
     supplier = models.ForeignKey(
         "vendors.Supplier",
         on_delete=models.PROTECT,
@@ -1298,36 +1302,62 @@ class PurchaseOrder(BaseModel):
         if self.status != status:
             self.status = status
             self.save(update_fields=["status", "updated_at"])
-        self.requisition.sync_fulfillment_status()
+        for request in self._all_source_requisitions():
+            request.sync_fulfillment_status()
+
+    def _all_source_requisitions(self):
+        """Include the legacy primary requisition and any consolidated sources."""
+        ids = {self.requisition_id}
+        if self.pk:
+            ids.update(self.source_requisitions.values_list("pk", flat=True))
+            ids.update(
+                self.items.exclude(requisition_item__isnull=True)
+                .values_list("requisition_item__requisition_id", flat=True)
+            )
+        return PurchaseRequisition.objects.filter(pk__in=ids)
 
     def quantity_commitment_blockers(self):
+        """Never consume more than each originating PR's approved base quantity."""
         blockers = []
         if self.total_amount <= Decimal("0.00"):
             blockers.append("The approved LPO total must remain greater than zero.")
-        for order_line in self.items.select_related("item"):
-            requisition_line = self.requisition.items.filter(item=order_line.item).first()
+        order_lines = self.items.select_related(
+            "item", "requisition_item__requisition", "unit"
+        )
+        source_ids = {self.requisition_id}
+        if self.pk:
+            source_ids.update(self.source_requisitions.values_list("pk", flat=True))
+        for order_line in order_lines:
+            requisition_line = order_line.requisition_item
             if not requisition_line:
-                blockers.append(f"{order_line.item} is not on the source requisition.")
+                requisition_line = self.requisition.items.filter(item=order_line.item).first()
+            if not requisition_line:
+                blockers.append(f"{order_line.item} has no approved originating PR line.")
                 continue
-            ordered_elsewhere = sum(
+            parent = requisition_line.requisition
+            if parent.pk not in source_ids:
+                blockers.append(f"{order_line.item} comes from an unrelated requisition.")
+                continue
+            if parent.status not in (PRStatus.APPROVED, PRStatus.PARTIALLY_ORDERED):
+                blockers.append(f"Source {parent.requisition_number} is no longer approved.")
+            if parent.branch_id != self.requisition.branch_id or parent.currency != self.requisition.currency:
+                blockers.append(f"Source {parent.requisition_number} has a different property or currency.")
+            approved_elsewhere = sum(
                 (
                     line.approved_base_quantity
                     for line in PurchaseOrderItem.objects.filter(
-                        purchase_order__requisition=self.requisition,
-                        item=order_line.item,
+                        requisition_item=requisition_line,
                         purchase_order__status__in=(
-                            POStatus.APPROVED,
-                            POStatus.ISSUED,
-                            POStatus.PARTIALLY_RECEIVED,
-                            POStatus.RECEIVED,
+                            POStatus.APPROVED, POStatus.ISSUED,
+                            POStatus.PARTIALLY_RECEIVED, POStatus.RECEIVED,
                         ),
                     ).exclude(purchase_order=self)
                 ),
                 Decimal("0.00"),
             )
-            if ordered_elsewhere + order_line.approved_base_quantity > requisition_line.approved_base_quantity:
+            if approved_elsewhere + order_line.approved_base_quantity > requisition_line.approved_base_quantity:
                 blockers.append(
-                    f"{order_line.item} exceeds the remaining approved requisition quantity."
+                    f"{order_line.item} exceeds approved quantity on {parent.requisition_number}."
                 )
         return blockers
 
@@ -1685,9 +1715,10 @@ class PurchaseOrder(BaseModel):
                 "delivery_due_date": self.delivery_due_date.isoformat() if self.delivery_due_date else None,
             },
         )
-        self.requisition.sync_fulfillment_status(
-            actor=self.sent_by.user if self.sent_by_id else None
-        )
+        for request in self._all_source_requisitions():
+            request.sync_fulfillment_status(
+                actor=self.sent_by.user if self.sent_by_id else None
+            )
 
     def acknowledge(self, acknowledged_by):
         if self.status not in (POStatus.ISSUED, POStatus.PARTIALLY_RECEIVED, POStatus.RECEIVED):
@@ -1858,9 +1889,15 @@ class PurchaseOrderItem(BaseModel):
     class Meta(BaseModel.Meta):
         constraints = [
             models.UniqueConstraint(
+                fields=("purchase_order", "requisition_item"),
+                condition=models.Q(requisition_item__isnull=False),
+                name="unique_po_line_source",
+            ),
+            models.UniqueConstraint(
                 fields=("purchase_order", "item", "unit"),
-                name="unique_purchase_order_item_unit",
-            )
+                condition=models.Q(requisition_item__isnull=True),
+                name="unique_legacy_po_item_unit",
+            ),
         ]
         ordering = ("item__name",)
 
@@ -1953,17 +1990,19 @@ class PurchaseOrderItem(BaseModel):
                 "LPO lines can only be changed while the LPO is draft."
             )
         if (
-            self.purchase_order_id
-            and self.item_id
+            self.purchase_order_id and self.item_id and not self.requisition_item_id
             and not self.purchase_order.requisition.items.filter(item=self.item).exists()
         ):
             raise ValidationError(
                 {"item": "This Article is not on the source requisition."}
             )
         if self.requisition_item_id:
-            if self.requisition_item.requisition_id != self.purchase_order.requisition_id:
+            source_id = self.requisition_item.requisition_id
+            if source_id != self.purchase_order.requisition_id and not (
+                self.purchase_order.pk and self.purchase_order.source_requisitions.filter(pk=source_id).exists()
+            ):
                 raise ValidationError(
-                    {"requisition_item": "The source line must belong to the LPO requisition."}
+                    {"requisition_item": "The source line must be attached to this LPO's requisitions."}
                 )
             if self.requisition_item.item_id != self.item_id:
                 raise ValidationError(
