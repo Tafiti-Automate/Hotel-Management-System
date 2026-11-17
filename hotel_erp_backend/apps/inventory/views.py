@@ -1341,6 +1341,30 @@ class StockCountViewSet(CreatedByModelMixin, ModelViewSet):
             return queryset.filter(store__branch_id=employee.branch_id)
         return queryset
 
+    def _require_count_entry(self, count):
+        if self.request.user.is_superuser or not self._is_store_keeper():
+            raise PermissionDenied("Only an assigned Store Keeper may edit a stocktake.")
+        if count.store_id not in set(assigned_store_ids(self.request.user)):
+            raise PermissionDenied("Stocktake is outside your assigned stores.")
+        if count.inventory_changes_applied or count.status not in (
+            StockCountStatus.DRAFT, StockCountStatus.IN_PROGRESS
+        ):
+            raise ValidationError("Submitted, approved, or booked stocktakes are locked.")
+
+    def perform_update(self, serializer):
+        self._require_count_entry(serializer.instance)
+        if ("store" in serializer.validated_data
+                and serializer.validated_data["store"].pk != serializer.instance.store_id):
+            raise ValidationError("Cannot move an existing stocktake to another store.")
+        if ("conducted_by" in serializer.validated_data
+                and serializer.validated_data["conducted_by"].pk != serializer.instance.conducted_by_id):
+            raise ValidationError("Cannot reassign the person conducting an existing count.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self._require_count_entry(instance)
+        instance.delete()
+
     def perform_create(self, serializer):
         store = serializer.validated_data["store"]
         if self._is_store_keeper() and store.pk not in set(assigned_store_ids(self.request.user)):
@@ -1356,12 +1380,14 @@ class StockCountViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"])
     def populate(self, request, pk=None):
         stock_count = self.get_object()
+        self._require_count_entry(stock_count)
         stock_count.populate_from_system_balances()
         return Response(self.get_serializer(stock_count).data)
 
     @action(detail=True, methods=["post"])
     def submit(self, request, pk=None):
         stock_count = self.get_object()
+        self._require_count_entry(stock_count)
         try:
             stock_count.submit()
         except DjangoValidationError as error:
@@ -1388,7 +1414,11 @@ class StockCountViewSet(CreatedByModelMixin, ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
+        if request.user.is_superuser or not self._is_store_keeper():
+            raise PermissionDenied("Only an assigned Store Keeper can cancel a stocktake.")
         stock_count = self.get_object()
+        if stock_count.store_id not in set(assigned_store_ids(request.user)):
+            raise PermissionDenied("Stocktake is outside your assigned stores.")
         try:
             stock_count.cancel()
         except DjangoValidationError as error:
