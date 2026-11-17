@@ -71,6 +71,25 @@ def test_finance_invoice_and_payment_records_are_scoped_to_property(role):
         assert str(forbidden) not in ids, endpoint
 
     if role == "Accounts Payable Clerk":
+        # Editing a legitimate record must not reassign it to another hotel's PO.
+        response = client.patch(
+            f"/api/v1/supplier-invoices/{invoices[0].pk}/",
+            {"purchase_order": str(invoices[1].purchase_order_id)},
+            format="json",
+        )
+        assert response.status_code == 403, response.data
+        invoices[0].refresh_from_db()
+        assert invoices[0].purchase_order_id != invoices[1].purchase_order_id
+
+        response = client.patch(
+            f"/api/v1/supplier-payments/{payments[0].pk}/",
+            {"invoice": str(invoices[1].pk)}, format="json",
+        )
+        assert response.status_code == 403, response.data
+        payments[0].refresh_from_db()
+        assert payments[0].invoice_id == invoices[0].pk
+
+    if role == "Accounts Payable Clerk":
         # Financially final documents must return a controlled 400, not a 500.
         own_invoice = invoices[0]
         own_invoice.status = SupplierInvoice.STATUS_PAID
