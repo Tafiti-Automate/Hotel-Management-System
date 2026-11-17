@@ -36,12 +36,13 @@ Compared frontend enterprise workbench `useBackendRows` collection names in `Ope
 1. Remove `StockCountItemViewSet` actions `submit`, `approve`, `reject` and `assign-store`: these methods were copied from other document types, and the returned StockCountItem object does not support those workflows.
 2. Remove the unrelated `assign-store` action from `StockCountViewSet`: it referenced StoreRequisition fields and statuses on a StockCount.
 3. Add `test_stocktake_route_safety.py` to assert the invalid routes are not published while the legitimate stock count `submit` action remains available.
-4. Earlier fixes already on this branch: Cost Controller read-only stocktake permissions with regression tests; supplier endpoint canonicalization with a frontend test; forest-green visual theme.
+4. Restrict stocktake approvals to assigned Financial Managers for their property, prohibit approval of one's own counts, and limit variance posting to assigned Store Keepers; add `test_stocktake_role_separation.py` regression tests.
+5. Earlier fixes already on this branch: Cost Controller read-only stocktake permissions with regression tests; supplier endpoint canonicalization with a frontend test; forest-green visual theme.
 
 ## Follow-up work — prioritized, not claimed complete
 
 **P0 security and accounting**
-- Explicit role/record permission review for stock count approval and variance application; ensure the count originator cannot unilaterally approve and post shrinkage, consistent with the reference separation-of-duties rule.
+- **Partly addressed:** role/branch separation for stock count approval and posting is now enforced. Complete the positive state-transition tests with real counts and verify all booked-count and ledger immutability rules.
 - Booked document immutability and fiscal-period lock audit across every mutation endpoint (GRNs, transfers, returns, adjustments, waste, invoices).
 - Full reconciliation tests: WAC, GRNI, GL debit-credit equality, returns and variance journals.
 
