@@ -333,6 +333,8 @@ class SupplierInvoice(BaseModel):
             raise ValidationError(errors)
 
     def perform_three_way_match(self, amount_tolerance=Decimal("0.01")):
+        if self.status not in (self.STATUS_DRAFT, self.STATUS_EXCEPTION):
+            raise ValidationError("Only draft or exception invoices may be matched. Approved and paid invoices are locked.")
         invoice_lines = list(
             self.items.select_related(
                 "purchase_order_item",
