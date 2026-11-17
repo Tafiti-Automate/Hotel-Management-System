@@ -182,7 +182,6 @@ export default function Sidebar() {
     ? String(app.data.locations[0].name || '')
     : ''
   const contextName = locationName || app.user.departmentName || app.currentBranch || app.user.branchName || 'Current workspace'
-  const workspaceTitle = app.activeModule === 'hr' ? 'Human Resources' : 'Hotel Operations'
 
   const toggleGroup = (heading: string) => {
     setCollapsedGroups((current) => {
