@@ -2762,14 +2762,56 @@ class SupplierReturn(BaseModel):
             raise ValidationError("Supplier return has already been applied.")
         with transaction.atomic():
             supplier_return = SupplierReturn.objects.select_for_update().get(pk=self.pk)
+            if supplier_return.inventory_changes_applied or supplier_return.status != SupplierReturnStatus.DRAFT:
+                raise ValidationError("Only a draft, unposted supplier return may be dispatched.")
+            if supplier_return.goods_receipt.purchase_order.supplier_id != supplier_return.supplier_id:
+                raise ValidationError("Return supplier does not match the original goods receipt.")
+            if supplier_return.goods_receipt.status != GoodsReceiptStatus.POSTED:
+                raise ValidationError("Goods must be received and posted before a stock return.")
+            if supplier_return.goods_receipt.purchase_order.store_id != supplier_return.store_id:
+                raise ValidationError("Returned goods must belong to the posted receiving store.")
             items = list(supplier_return.items.select_related("item").all())
             if not items:
                 raise ValidationError("Supplier return must include at least one item.")
+            requested = {}
             for line in items:
-                balance = InventoryBalance.objects.select_for_update().filter(item=line.item, store=supplier_return.store).first()
+                if line.base_quantity <= Decimal("0.00"):
+                    raise ValidationError("Supplier return line quantity must be positive.")
+                requested[line.item_id] = requested.get(line.item_id, Decimal("0.00")) + line.base_quantity
+            posted_receipts = {}
+            for receipt_line in supplier_return.goods_receipt.items.filter(
+                inventory_changes_applied=True, store_id=supplier_return.store_id
+            ).select_related("purchase_order_item"):
+                posted_receipts[receipt_line.item_id] = (
+                    posted_receipts.get(receipt_line.item_id, Decimal("0.00"))
+                    + receipt_line.inventory_post_quantity()
+                )
+            already_returned = {}
+            prior_returns = SupplierReturnItem.objects.filter(
+                supplier_return__goods_receipt_id=supplier_return.goods_receipt_id,
+                supplier_return__store_id=supplier_return.store_id,
+                supplier_return__inventory_changes_applied=True,
+            ).exclude(supplier_return_id=supplier_return.pk)
+            for previous in prior_returns:
+                already_returned[previous.item_id] = (
+                    already_returned.get(previous.item_id, Decimal("0.00"))
+                    + previous.base_quantity
+                )
+            for item_id, quantity in requested.items():
+                available = posted_receipts.get(item_id, Decimal("0.00")) - already_returned.get(
+                    item_id, Decimal("0.00")
+                )
+                if quantity > available:
+                    raise ValidationError(
+                        "Return quantity exceeds the remaining accepted, posted "
+                        "quantity on the referenced GRN."
+                    )
+                balance = InventoryBalance.objects.select_for_update().filter(
+                    item_id=item_id, store=supplier_return.store
+                ).first()
                 stock_on_hand = balance.quantity_in_stock if balance else Decimal("0.00")
-                if stock_on_hand < line.base_quantity:
-                    raise ValidationError(f"Insufficient stock to return {line.item}.")
+                if stock_on_hand < quantity:
+                    raise ValidationError("Insufficient stock on hand for the supplier return.")
             for line in items:
                 balance = InventoryBalance.objects.select_for_update().get(item=line.item, store=supplier_return.store)
                 balance.quantity_in_stock -= line.base_quantity
@@ -2793,18 +2835,33 @@ class SupplierReturn(BaseModel):
             self.dispatched_at = supplier_return.dispatched_at
 
     def acknowledge(self, *, acknowledged_by, credit_note_number="", replacement_expected_date=None):
-        if self.status != SupplierReturnStatus.POSTED:
-            raise ValidationError("The return must be dispatched before supplier acknowledgement.")
-        if not acknowledged_by:
-            raise ValidationError("Enter the supplier representative who acknowledged the return.")
-        self.supplier_acknowledged_at = timezone.now()
-        self.supplier_acknowledged_by = acknowledged_by
-        self.credit_note_number = credit_note_number
-        self.replacement_expected_date = replacement_expected_date
-        self.save(update_fields=[
-            "supplier_acknowledged_at", "supplier_acknowledged_by",
-            "credit_note_number", "replacement_expected_date", "updated_at",
-        ])
+        with transaction.atomic():
+            supplier_return = SupplierReturn.objects.select_for_update().get(pk=self.pk)
+            if supplier_return.status != SupplierReturnStatus.POSTED:
+                raise ValidationError("The return must be dispatched before supplier acknowledgement.")
+            if supplier_return.supplier_acknowledged_at:
+                raise ValidationError("Supplier acknowledgement has already been recorded.")
+            acknowledged_by = str(acknowledged_by or "").strip()
+            credit_note_number = str(credit_note_number or "").strip()
+            if not acknowledged_by:
+                raise ValidationError("Enter the supplier representative who acknowledged the return.")
+            if credit_note_number and SupplierReturn.objects.filter(
+                supplier_id=supplier_return.supplier_id,
+                credit_note_number__iexact=credit_note_number,
+            ).exclude(pk=supplier_return.pk).exists():
+                raise ValidationError("This supplier credit note reference is already recorded.")
+            supplier_return.supplier_acknowledged_at = timezone.now()
+            supplier_return.supplier_acknowledged_by = acknowledged_by
+            supplier_return.credit_note_number = credit_note_number
+            supplier_return.replacement_expected_date = replacement_expected_date
+            supplier_return.save(update_fields=[
+                "supplier_acknowledged_at", "supplier_acknowledged_by",
+                "credit_note_number", "replacement_expected_date", "updated_at",
+            ])
+            self.supplier_acknowledged_at = supplier_return.supplier_acknowledged_at
+            self.supplier_acknowledged_by = acknowledged_by
+            self.credit_note_number = credit_note_number
+            self.replacement_expected_date = replacement_expected_date
 
     def __str__(self):
         return self.return_no or f"Supplier return {self.id}"
