@@ -93,6 +93,10 @@ def test_finance_only_inventory_valuation_endpoint_and_property_scope(materials_
     url = f"/api/v1/fiscal-periods/{period.pk}/inventory-valuation-reconciliation/"
     assert client.get(url).status_code == 403
     user.groups.add(Group.objects.get(name="Financial Manager"))
+    # DRF/Django caches user permission checks after the first denied request.
+    # Rehydrate the test actor after a group change to test fresh authorization.
+    user = get_user_model().objects.get(pk=user.pk)
+    client.force_authenticate(user=user)
     response = client.get(url)
     assert response.status_code == 200, response.data
     assert response.data["gl_journals_posted"] is False
