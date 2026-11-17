@@ -7,8 +7,10 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from apps.finance.models import PaymentMethod, SupplierInvoice, SupplierPayment
+from apps.departments.models import Branch
+from apps.inventory.models import InventoryBalance, StockLedger, StoreLocation
 from apps.procurement.models import (
-    GoodsReceiptItem, GoodsReceiptNote, PurchaseOrder, PurchaseOrderItem,
+    GoodsInspection, GoodsInspectionItem, GoodsReceiptItem, GoodsReceiptNote, PurchaseOrder, PurchaseOrderItem,
     PurchaseRequisition, RequisitionItem,
 )
 from core.constants.choices import PRStatus
@@ -18,6 +20,10 @@ from tests.test_procurement import authorize_order_for_test, create_procurement_
 @pytest.mark.django_db
 def test_received_purchase_is_matched_approved_and_paid_in_two_independent_postings():
     requester, department, supplier, item = create_procurement_context()
+    branch = Branch.objects.create(name='PH2 end-to-end hotel property')
+    store = StoreLocation.objects.create(branch=branch, name='PH2 receiving warehouse')
+    requester.branch = branch
+    requester.save(update_fields=('branch', 'updated_at'))
     preparer = get_user_model().objects.create_user(
         username="ap-payment-preparer", employee_code="PH2-AP-PREP", password="test-pass-123"
     )
@@ -28,15 +34,16 @@ def test_received_purchase_is_matched_approved_and_paid_in_two_independent_posti
         username="ap-payment-poster", employee_code="PH2-AP-POST", password="test-pass-123"
     )
     pr = PurchaseRequisition.objects.create(
-        requester=requester, department=department, reason="End-to-end supplies",
+        requester=requester, department=department, branch=branch, reason="End-to-end supplies",
         status=PRStatus.APPROVED,
     )
     RequisitionItem.objects.create(
         requisition=pr, item=item, quantity=Decimal("10.00"),
         approved_quantity=Decimal("10.00"), estimated_unit_cost=Decimal("250.00"),
+        destination_store=store,
     )
     po = PurchaseOrder.objects.create(
-        requisition=pr, supplier=supplier, ordered_by=requester,
+        requisition=pr, supplier=supplier, ordered_by=requester, store=store,
         po_number="PO-PH2-PAYMENT-JOURNEY",
     )
     po_line = PurchaseOrderItem.objects.create(
@@ -46,11 +53,23 @@ def test_received_purchase_is_matched_approved_and_paid_in_two_independent_posti
     authorize_order_for_test(po)
     po.issue(sent_by=requester)
     grn = GoodsReceiptNote.objects.create(purchase_order=po, received_by=requester)
-    GoodsReceiptItem.objects.create(
+    grn_line = GoodsReceiptItem.objects.create(
         goods_receipt=grn, purchase_order_item=po_line,
         quantity_received=Decimal("10.00"), unit_cost=Decimal("250.00"),
-        inventory_changes_applied=True,
     )
+    inspection = GoodsInspection.objects.create(
+        goods_receipt=grn, inspected_by=requester,
+    )
+    GoodsInspectionItem.objects.create(
+        inspection=inspection, goods_receipt_item=grn_line,
+        quantity_received=Decimal("10.00"),
+        quantity_accepted=Decimal("10.00"), quantity_rejected=Decimal("0.00"),
+    )
+    grn.post_to_inventory(posted_by=requester)
+    grn.refresh_from_db()
+    assert grn.status == "posted"
+    assert InventoryBalance.objects.get(item=item, store=store).quantity_in_stock == Decimal("10.00")
+    assert StockLedger.objects.filter(reference_id=grn.pk).count() == 1
     invoice = SupplierInvoice.objects.create(
         supplier=supplier, purchase_order=po, invoice_number="PH2-SPLIT-INVOICE",
         subtotal=Decimal("2500.00"), due_date=timezone.localdate(),
