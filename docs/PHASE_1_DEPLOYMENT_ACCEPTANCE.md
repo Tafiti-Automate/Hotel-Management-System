@@ -9,6 +9,8 @@ A successful Django/Next.js CI run proves the source builds and tests pass in th
 
 The latest code-level audit found a critical inventory write issue: `POST inventory-balances/<id>/reconcile-reservation/` allowed IT administrators and did not validate the Store Keeper's store assignment. This action now denies IT/superusers and checks that the Store Keeper is assigned to the specific store. Automated regression coverage prevents accidental reintroduction.
 
+**Additional read-scope control:** Cost Controller and Financial Manager stock counts, count items and stock ledgers now respect the assigned hotel/property. A two-branch regression test asserts that each role can see its own records but cannot read the other property's evidence. Real deployment testing is still required.
+
 ## Controlled deployment validation
 
 Run these commands from the **deployed backend**, using the approved change-control process:
