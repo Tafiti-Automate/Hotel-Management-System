@@ -41,7 +41,7 @@ def test_finance_invoice_and_payment_records_are_scoped_to_property(role):
             requester=employee, department=department, branch=branch,
             reason=f"Test purchase in property {index}",
         )
-        po = PurchaseOrder.objects.create(requisition=request, supplier=supplier)
+        po = PurchaseOrder.objects.create(requisition=request, supplier=supplier, ordered_by=employee)
         invoice = SupplierInvoice.objects.create(
             supplier=supplier, purchase_order=po, invoice_number=f"PHASE2-{role}-{index}",
             due_date=timezone.localdate(), subtotal=Decimal("100.00"),
