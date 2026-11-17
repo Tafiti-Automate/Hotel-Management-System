@@ -68,6 +68,9 @@ ROLE_SPECS = {
             "employees": ["employee"],
             "inventory": [
                 "storerequisition", "storerequisitionitem", "storelocation", "inventorybalance",
+                # Stocktake variance review reads the frozen count and ledger snapshot.
+                # Only Store Keepers can enter/change the physical counts.
+                "stockcount", "stockcountitem", "stockledger",
             ],
         },
     },
