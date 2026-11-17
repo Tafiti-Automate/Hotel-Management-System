@@ -11,6 +11,7 @@ from apps.finance.models import (
     SupplierInvoice,
     SupplierInvoiceItem,
     SupplierPayment,
+    SupplierCreditNote,
 )
 
 
@@ -191,3 +192,34 @@ class SupplierPaymentSerializer(serializers.ModelSerializer):
             )
         return super().validate(attrs)
 
+
+
+class SupplierCreditNoteSerializer(serializers.ModelSerializer):
+    total_amount = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+    credit_reference = serializers.CharField(
+        source="supplier_return.credit_note_number", read_only=True,
+    )
+
+    class Meta:
+        model = SupplierCreditNote
+        fields = "__all__"
+        read_only_fields = (
+            "id", "status", "approved_at", "approved_by",
+            "posted_at", "posted_by", "created_at", "updated_at",
+            "created_by", "total_amount", "credit_reference",
+        )
+
+    def validate(self, attrs):
+        if self.instance and self.instance.status != SupplierCreditNote.STATUS_DRAFT and attrs:
+            raise serializers.ValidationError("Approved and posted supplier credits are locked.")
+        invoice = attrs.get("invoice", getattr(self.instance, "invoice", None))
+        supplier_return = attrs.get(
+            "supplier_return", getattr(self.instance, "supplier_return", None),
+        )
+        if invoice and supplier_return:
+            if (supplier_return.supplier_id != invoice.supplier_id or
+                    supplier_return.goods_receipt.purchase_order_id != invoice.purchase_order_id):
+                raise serializers.ValidationError(
+                    "Credit return must correspond to the same supplier and LPO as the invoice."
+                )
+        return attrs
