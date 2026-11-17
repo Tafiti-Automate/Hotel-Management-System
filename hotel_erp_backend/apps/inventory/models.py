@@ -917,6 +917,8 @@ class StockTransfer(BaseModel):
                     raise ValidationError(
                         f"Insufficient stock for {item.item} in {transfer.from_store}."
                     )
+                departure_wac = source_balance.weighted_average_cost
+                known_cost = departure_wac > Decimal("0")
                 source_balance.quantity_in_stock -= item.base_quantity
                 source_balance.save(update_fields=["quantity_in_stock", "updated_at"])
 
@@ -926,6 +928,10 @@ class StockTransfer(BaseModel):
                     quantity_out=item.base_quantity,
                     reference_type=LedgerReferenceType.STOCK_TRANSFER,
                     reference_id=transfer.id,
+                    unit_cost_snapshot=departure_wac if known_cost else None,
+                    total_cost_snapshot=(item.base_quantity * departure_wac).quantize(Decimal("0.0001")) if known_cost else None,
+                    wac_before=departure_wac if known_cost else None,
+                    wac_after=departure_wac if known_cost else None,
                     note=f"Transfer to {transfer.to_store}",
                     created_by=transfer.created_by,
                 )
@@ -946,20 +952,53 @@ class StockTransfer(BaseModel):
             transfer = StockTransfer.objects.select_for_update().get(pk=self.pk)
             if transfer.status != StockTransferStatus.IN_TRANSIT:
                 raise ValidationError("Only an in-transit transfer can be received.")
+            # The dispatch ledger stores source valuation as immutable
+            # evidence. Use it at receipt even if source WAC changed in transit.
+            dispatch_rows = list(StockLedger.objects.filter(
+                reference_type=LedgerReferenceType.STOCK_TRANSFER,
+                reference_id=transfer.id, store=transfer.from_store,
+                quantity_out__gt=Decimal("0"),
+            ))
             for item in transfer.items.select_related("item").all():
+                item_dispatch = [row for row in dispatch_rows if row.item_id == item.item_id]
+                priced = bool(item_dispatch) and all(
+                    row.unit_cost_snapshot is not None for row in item_dispatch
+                )
+                source_qty = sum((row.quantity_out for row in item_dispatch), Decimal("0"))
+                source_value = sum(
+                    (row.total_cost_snapshot or Decimal("0") for row in item_dispatch),
+                    Decimal("0"),
+                )
+                if priced and source_qty > 0:
+                    incoming_wac = (source_value / source_qty).quantize(Decimal("0.0001"))
+                else:
+                    incoming_wac = None
                 destination_balance, _ = InventoryBalance.objects.select_for_update().get_or_create(
                     item=item.item,
                     store=transfer.to_store,
                     defaults={"quantity_in_stock": Decimal("0.00")},
                 )
+                old_qty = destination_balance.quantity_in_stock
+                old_wac = destination_balance.weighted_average_cost
+                if incoming_wac is not None:
+                    new_qty = old_qty + item.base_quantity
+                    destination_balance.weighted_average_cost = (
+                        (old_qty * old_wac + item.base_quantity * incoming_wac) / new_qty
+                    ).quantize(Decimal("0.0001"))
                 destination_balance.quantity_in_stock += item.base_quantity
-                destination_balance.save(update_fields=["quantity_in_stock", "updated_at"])
+                destination_balance.save(update_fields=[
+                    "quantity_in_stock", "weighted_average_cost", "updated_at"
+                ])
                 StockLedger.objects.create(
                     item=item.item,
                     store=transfer.to_store,
                     quantity_in=item.base_quantity,
                     reference_type=LedgerReferenceType.STOCK_TRANSFER,
                     reference_id=transfer.id,
+                    unit_cost_snapshot=incoming_wac,
+                    total_cost_snapshot=(item.base_quantity * incoming_wac).quantize(Decimal("0.0001")) if incoming_wac is not None else None,
+                    wac_before=old_wac if incoming_wac is not None else None,
+                    wac_after=destination_balance.weighted_average_cost if incoming_wac is not None else None,
                     note=f"Transfer from {transfer.from_store}",
                     created_by=transfer.created_by,
                 )
