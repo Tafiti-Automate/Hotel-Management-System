@@ -125,7 +125,7 @@ ROLE_SPECS = {
             "approvals": ["purchaseorderapprovalworkflow"],
             "procurement": ["purchaseorder"],
             "materials_control": ["budgetoverride"],
-            "finance": ["suppliercreditnote"],
+            "finance": ["suppliercreditnote", "supplierpaymentreconciliation"],
         },
         "view": {
             "departments": ["branch", "department"],
@@ -142,7 +142,7 @@ ROLE_SPECS = {
     },
     "Accounts Payable Clerk": {
         "crud": {
-            "finance": ["supplierinvoice", "supplierinvoiceitem", "supplierpayment", "suppliercreditnote"],
+            "finance": ["supplierinvoice", "supplierinvoiceitem", "supplierpayment", "suppliercreditnote", "supplierpaymentreconciliation"],
         },
         "view": {
             "departments": ["branch", "department"],
