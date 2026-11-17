@@ -1,6 +1,7 @@
 import { itemStatus, type EntityKey, type Line, type Row } from './data'
 import { isTransportFailure, supplierQuotationMatches } from '../features/shared/mutationRecovery'
 import { ApiHttpError } from '../features/shared/httpError'
+import { resolveBackendResourcePath } from '../features/shared/backendResources'
 
 type ApiRecord = Record<string, unknown>
 type ApiListResult = { rows: ApiRecord[]; error: string | null }
@@ -401,7 +402,7 @@ function endpointUrl(path: string): string {
 
   const [base, query] = path.split('?')
   const cleanPath = base.replace(/^\/+|\/+$/g, '')
-  const url = `${apiRoot()}/${cleanPath}/`
+  const url = `${apiRoot()}/${resolveBackendResourcePath(cleanPath)}/`
   return query ? `${url}?${query}` : url
 }
 
