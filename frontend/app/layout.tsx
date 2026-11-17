@@ -12,6 +12,13 @@ import '../src/enterprise-foundation.css'
 import '../src/materials-control.css'
 import '../src/operational-blueprint.css'
 import '../src/mc-enterprise.css'
+/* UI V3 production layer. These are shared application assets, not route-local styles. */
+import '../src/reports-production.css'
+import '../src/report-view-production.css'
+import '../src/ui-v3.css'
+import '../src/ui-v3-runtime-fixes.css'
+/* The approved corporate shell is the final visual override. */
+import '../src/approved-hotel-gui.css'
 
 export const metadata: Metadata = {
   title: 'Hotel ERP',
