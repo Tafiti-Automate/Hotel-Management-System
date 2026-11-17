@@ -66,7 +66,7 @@ def test_grn_header_and_inspection_evidence_isolated_by_property(role):
     client.force_authenticate(user=user)
     for endpoint, expected, forbidden in (
         ("grns", receipts[0].pk, receipts[1].pk),
-        ("inspections", inspections[0].pk, inspections[1].pk),
+        ("goods-inspections", inspections[0].pk, inspections[1].pk),
     ):
         response = client.get(f"/api/v1/{endpoint}/")
         assert response.status_code == 200, response.data
