@@ -904,6 +904,10 @@ class StockTransfer(BaseModel):
 
         with transaction.atomic():
             transfer = StockTransfer.objects.select_for_update().get(pk=self.pk)
+            if transfer.status != StockTransferStatus.PENDING or transfer.inventory_changes_applied:
+                raise ValidationError("Only a pending, unposted transfer may be dispatched.")
+            if require_approval and not transfer.approved_by_id:
+                raise ValidationError("The transfer must be approved before dispatch.")
             items = list(transfer.items.select_related("item").all())
             if not items:
                 raise ValidationError("Add at least one item before dispatching the transfer.")
@@ -1122,6 +1126,8 @@ class StockAdjustment(BaseModel):
 
         with transaction.atomic():
             adjustment = StockAdjustment.objects.select_for_update().get(pk=self.pk)
+            if adjustment.status != StockAdjustmentStatus.APPROVED:
+                raise ValidationError("Only an approved, unapplied stock adjustment may be posted.")
             for item in adjustment.items.select_related("item").all():
                 balance, _ = InventoryBalance.objects.select_for_update().get_or_create(
                     item=item.item,
