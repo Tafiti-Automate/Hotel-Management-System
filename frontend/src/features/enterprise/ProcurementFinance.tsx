@@ -16,7 +16,7 @@ const APPROVALS = ['approvals','requisitions','requisition-items','cost-center-b
 const LPO_APPROVALS = ['purchase-orders/approval-inbox','purchase-order-items','cost-center-budgets','budget-overrides'] as const
 const BUYER = ['requisitions','requisition-items','supplier-item-prices','suppliers','purchase-orders'] as const
 const QUOTES = ['supplier-item-prices','supplier-price-quotes','suppliers','items','units'] as const
-const FINANCE = ['supplier-invoices','supplier-invoice-items','purchase-orders','purchase-order-items','grns','grn-items','supplier-returns'] as const
+const FINANCE = ['supplier-invoices','supplier-invoice-items','supplier-credit-notes','purchase-orders','purchase-order-items','grns','grn-items','supplier-returns'] as const
 const BUDGETS = ['cost-center-budgets','budget-overrides','branches','departments'] as const
 const CLOSE = ['fiscal-periods','gl-exports'] as const
 const btn = 'mc-action'
@@ -346,6 +346,10 @@ export function EnterprisePurchasingWorkbench() {
 export function EnterpriseInvoiceMatching() {
   const {user}=useApp()
   const canProcessInvoice = user.role.trim().toLowerCase() === 'accounts payable clerk' && !user.isSuperuser
+  const canApproveCredit = user.role.trim().toLowerCase() === 'financial manager' && !user.isSuperuser
+  const [creditReturnId,setCreditReturnId]=useState('')
+  const [creditSubtotal,setCreditSubtotal]=useState('')
+  const [creditTax,setCreditTax]=useState('0')
   const {data,loading,error,reload}=useBackendRows(FINANCE)
   const {busy,error:mutationError,run}=useOperation(reload)
   const [id,setId]=useState('')
@@ -356,7 +360,21 @@ export function EnterpriseInvoiceMatching() {
   const invoicesLines=(data['supplier-invoice-items']||[]).filter(row=>str(row.invoice)===id)
   const grnIds=(data.grns||[]).filter(row=>str(row.purchase_order)===str(po?.id)&&str(row.status)==='posted').map(row=>str(row.id))
   const accepted=(data['grn-items']||[]).filter(row=>grnIds.includes(str(row.goods_receipt)))
-  const returns=(data['supplier-returns']||[]).filter(row=>str(row.purchase_order)===str(po?.id))
+  const returns=(data['supplier-returns']||[]).filter(row=>grnIds.includes(str(row.goods_receipt)))
+  const credits=(data['supplier-credit-notes']||[]).filter(row=>str(row.invoice)===id)
+  const eligibleReturns=returns.filter(row=>str(row.status)==='posted' && !!str(row.credit_note_number) &&
+    !!str(row.supplier_acknowledged_at) && !(data['supplier-credit-notes']||[]).some(c=>str(c.supplier_return)===str(row.id)))
+  const makeCredit=async()=>{
+    if(!id||!creditReturnId||!(Number(creditSubtotal)>0)||Number(creditTax)<0)return
+    const ok=await run(()=>createBackendRecord('supplier-credit-notes',{
+      invoice:id,supplier_return:creditReturnId,subtotal:Number(creditSubtotal),tax_amount:Number(creditTax),
+    }),'Supplier credit prepared for Finance review')
+    if(ok){setCreditReturnId('');setCreditSubtotal('');setCreditTax('0')}
+  }
+  const creditAction=async(creditId:string,action:'approve'|'post')=>{
+    await run(()=>runBackendAction('supplier-credit-notes',creditId,action),
+      action==='approve'?'Supplier credit approved':'Supplier credit posted to AP')
+  }
   const invoiceQty=invoiceLineQty(invoicesLines)
   const receiptQty=accepted.reduce((sum,row)=>sum+dec(row.base_quantity),0)
   const match=async()=>{if(!id)return;await run(()=>runBackendAction('supplier-invoices',id,'match'),'3-way matching completed')}
@@ -403,6 +421,39 @@ export function EnterpriseInvoiceMatching() {
               <footer>Invoiced base units <strong>{amount(invoiceQty)}</strong></footer></div>
           </div>
           {str(invoice.match_notes)&&<div className="mc-alert">{str(invoice.match_notes)}</div>}
+          <div className="mc-dense-panel">
+            <header className="mc-panel-title">Supplier credit notes <span>{credits.length}</span></header>
+            <div className="mc-detail-meta">
+              <InfoLine label="Posted credits" value={'UGX '+amount(invoice.credited_amount)}/>
+              <InfoLine label="Open payable" value={'UGX '+amount(invoice.balance_due)}/>
+            </div>
+            {credits.map(credit=><div className="mc-match-row" key={str(credit.id)}>
+              <b>{str(credit.credit_reference||credit.id)} · UGX {amount(credit.total_amount)}</b>
+              <StatusPill status={credit.status}/>
+              {canApproveCredit && str(credit.status)==='draft' &&
+                <button type="button" className={affirmative} disabled={busy}
+                  onClick={()=>void creditAction(str(credit.id),'approve')}>Approve credit</button>}
+              {canProcessInvoice && str(credit.status)==='approved' &&
+                <button type="button" className={affirmative} disabled={busy}
+                  onClick={()=>void creditAction(str(credit.id),'post')}>Post approved credit</button>}
+            </div>)}
+            {!credits.length&&<p className="mc-muted">No financial supplier credits allocated to this invoice.</p>}
+            {canProcessInvoice && eligibleReturns.length>0 && <div className="mc-form-panel">
+              <label className="mc-field"><span>Acknowledged supplier return</span>
+                <select value={creditReturnId} onChange={e=>setCreditReturnId(e.target.value)}>
+                  <option value="">Select acknowledged return</option>
+                  {eligibleReturns.map(row=><option key={str(row.id)} value={str(row.id)}>
+                    {str(row.return_no||row.id)} · {str(row.credit_note_number)}
+                  </option>)}
+                </select>
+              </label>
+              <FormField label="Credit subtotal (UGX)" value={creditSubtotal} onChange={setCreditSubtotal} type="number" placeholder="Valued at returned LPO cost"/>
+              <FormField label="Credit VAT (UGX)" value={creditTax} onChange={setCreditTax} type="number"/>
+              <button type="button" className={affirmative}
+                disabled={busy||!creditReturnId||!(Number(creditSubtotal)>0)||Number(creditTax)<0}
+                onClick={()=>void makeCredit()}>Prepare supplier credit</button>
+            </div>}
+          </div>
           {canProcessInvoice ? <div className="mc-decision-bar">
             <ConfirmTransaction title="Run 3-way match?" description="Django compares invoice quantities, GRN receipts, pricing and supplier credits before recording a match decision."
               confirmLabel="Run matching" className={btn} disabled={busy||!['draft','exception'].includes(str(invoice.status))} busy={busy} onConfirm={match}>
