@@ -36,7 +36,7 @@ class Migration(migrations.Migration):
                 ("supplier", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to="vendors.supplier")),
                 ("item", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to="inventory.item")),
                 ("unit", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to="inventory.unitofmeasure", null=True, blank=True)),
-                ("created_by", models.ForeignKey(on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL, null=True, blank=True, related_name="created_supplierpricequoteproposals")),
+                ("created_by", models.ForeignKey(on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL, null=True, blank=True, related_name="created_%(class)ss")),
                 ("reviewed_by", models.ForeignKey(on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL, null=True, blank=True, related_name="reviewed_supplier_quotes")),
             ],
             options={"ordering":("-created_at",)},

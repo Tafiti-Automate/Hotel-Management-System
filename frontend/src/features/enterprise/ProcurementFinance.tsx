@@ -271,10 +271,6 @@ export function EnterpriseApprovalInbox() {
   </WorkspacePage>
 }
 
-}
-  </WorkspacePage>
-}
-
 export function EnterprisePurchasingWorkbench() {
   const {data,loading,error,reload}=useBackendRows(BUYER)
   const {busy,error:mutationError,run}=useOperation(reload)
