@@ -45,6 +45,7 @@ from core.constants.choices import (
     ApprovalStatus,
     GoodsInspectionStatus,
     GoodsReceiptStatus,
+    SupplierReturnStatus,
     POStatus,
     PRStatus,
     ProcurementSource,
@@ -2263,6 +2264,27 @@ class SupplierReturnViewSet(CreatedByModelMixin, ModelViewSet):
             raise PermissionDenied("The return must match your received GRN and its store.")
         serializer.save(returned_by=employee, created_by=self.request.user)
 
+
+    def _require_editable_return(self, instance):
+        self._require_receiving_owner(instance)
+        if instance.status != SupplierReturnStatus.DRAFT or instance.inventory_changes_applied:
+            raise ValidationError("Posted or acknowledged returns cannot be changed.")
+
+    def perform_update(self, serializer):
+        self._require_editable_return(serializer.instance)
+        receipt = serializer.validated_data.get("goods_receipt", serializer.instance.goods_receipt)
+        store = serializer.validated_data.get("store", serializer.instance.store)
+        if (
+            receipt.pk != serializer.instance.goods_receipt_id
+            or store.pk != serializer.instance.store_id
+            or "returned_by" in serializer.validated_data
+        ):
+            raise ValidationError("Cannot reassign an existing supplier return.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self._require_editable_return(instance)
+        instance.delete()
 
     @action(detail=True, methods=["post"])
     def apply(self, request, pk=None):
