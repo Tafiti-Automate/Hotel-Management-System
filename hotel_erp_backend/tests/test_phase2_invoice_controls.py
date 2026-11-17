@@ -8,7 +8,8 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.management import call_command
 from rest_framework.test import APIClient
 
-from apps.finance.models import SupplierInvoice
+from apps.finance.models import SupplierInvoice, SupplierPayment
+from apps.finance.serializers import SupplierPaymentSerializer
 
 
 @pytest.mark.parametrize("status", [
@@ -60,3 +61,15 @@ def test_ap_can_reach_invoice_match_action_without_blanket_403():
     client.force_authenticate(user=user)
     response = client.post(f"/api/v1/supplier-invoices/{uuid4()}/match/")
     assert response.status_code == 404
+
+
+@pytest.mark.parametrize("state", [
+    SupplierPayment.STATUS_POSTED, SupplierPayment.STATUS_CANCELLED,
+])
+def test_posted_or_cancelled_supplier_payment_cannot_be_repriced(state):
+    payment = SupplierPayment(status=state)
+    serializer = SupplierPaymentSerializer(
+        payment, data={"amount": "999999.00"}, partial=True
+    )
+    assert not serializer.is_valid()
+    assert "controlled reversal" in str(serializer.errors)
