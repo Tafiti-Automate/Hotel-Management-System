@@ -1,0 +1,103 @@
+"""Full approved-LPO -> received GRN -> invoice -> split-payment accounting journey."""
+from decimal import Decimal
+
+import pytest
+from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
+from django.utils import timezone
+
+from apps.finance.models import PaymentMethod, SupplierInvoice, SupplierPayment
+from apps.procurement.models import (
+    GoodsReceiptItem, GoodsReceiptNote, PurchaseOrder, PurchaseOrderItem,
+    PurchaseRequisition, RequisitionItem,
+)
+from core.constants.choices import PRStatus
+from tests.test_procurement import authorize_order_for_test, create_procurement_context
+
+
+@pytest.mark.django_db
+def test_received_purchase_is_matched_approved_and_paid_in_two_independent_postings():
+    requester, department, supplier, item = create_procurement_context()
+    preparer = get_user_model().objects.create_user(
+        username="ap-payment-preparer", employee_code="PH2-AP-PREP", password="test-pass-123"
+    )
+    approver = get_user_model().objects.create_user(
+        username="ap-invoice-approver", employee_code="PH2-AP-APP", password="test-pass-123"
+    )
+    poster = get_user_model().objects.create_user(
+        username="ap-payment-poster", employee_code="PH2-AP-POST", password="test-pass-123"
+    )
+    pr = PurchaseRequisition.objects.create(
+        requester=requester, department=department, reason="End-to-end supplies",
+        status=PRStatus.APPROVED,
+    )
+    RequisitionItem.objects.create(
+        requisition=pr, item=item, quantity=Decimal("10.00"),
+        approved_quantity=Decimal("10.00"), estimated_unit_cost=Decimal("250.00"),
+    )
+    po = PurchaseOrder.objects.create(
+        requisition=pr, supplier=supplier, ordered_by=requester,
+        po_number="PO-PH2-PAYMENT-JOURNEY",
+    )
+    po_line = PurchaseOrderItem.objects.create(
+        purchase_order=po, item=item, quantity=Decimal("10.00"),
+        unit_cost=Decimal("250.00"),
+    )
+    authorize_order_for_test(po)
+    po.issue(sent_by=requester)
+    grn = GoodsReceiptNote.objects.create(purchase_order=po, received_by=requester)
+    GoodsReceiptItem.objects.create(
+        goods_receipt=grn, purchase_order_item=po_line,
+        quantity_received=Decimal("10.00"), unit_cost=Decimal("250.00"),
+        inventory_changes_applied=True,
+    )
+    invoice = SupplierInvoice.objects.create(
+        supplier=supplier, purchase_order=po, invoice_number="PH2-SPLIT-INVOICE",
+        subtotal=Decimal("2500.00"), due_date=timezone.localdate(),
+        created_by=preparer,
+    )
+    invoice.perform_three_way_match()
+    assert invoice.status == SupplierInvoice.STATUS_MATCHED
+    assert invoice.amount_variance == Decimal("0.00")
+    with pytest.raises(ValidationError, match="registered the invoice"):
+        invoice.approve_for_payment(approved_by=preparer)
+    invoice.approve_for_payment(approved_by=approver)
+    assert invoice.status == SupplierInvoice.STATUS_APPROVED
+
+    method = PaymentMethod.objects.create(name="PH2 bank transfer")
+    payment_one = SupplierPayment.objects.create(
+        invoice=invoice, amount=Decimal("1000.00"),
+        payment_method=method, reference="PH2-PAY-1", created_by=preparer,
+    )
+    with pytest.raises(ValidationError, match="prepared the supplier payment"):
+        payment_one.post(posted_by=preparer)
+    payment_one.post(posted_by=poster)
+    invoice.refresh_from_db()
+    assert invoice.status == SupplierInvoice.STATUS_PARTIALLY_PAID
+    assert invoice.paid_amount == Decimal("1000.00")
+    assert invoice.balance_due == Decimal("1500.00")
+
+    overpayment = SupplierPayment.objects.create(
+        invoice=invoice, amount=Decimal("1500.01"),
+        payment_method=method, reference="PH2-PAY-OVER", created_by=preparer,
+    )
+    with pytest.raises(ValidationError, match="exceed"):
+        overpayment.post(posted_by=poster)
+    overpayment.refresh_from_db()
+    assert overpayment.status == SupplierPayment.STATUS_DRAFT
+
+    payment_two = SupplierPayment.objects.create(
+        invoice=invoice, amount=Decimal("1500.00"),
+        payment_method=method, reference="PH2-PAY-2", created_by=preparer,
+    )
+    payment_two.post(posted_by=poster)
+    invoice.refresh_from_db()
+    assert invoice.status == SupplierInvoice.STATUS_PAID
+    assert invoice.paid_amount == Decimal("2500.00")
+    assert invoice.balance_due == Decimal("0.00")
+    with pytest.raises(ValidationError, match="Only draft"):
+        payment_two.post(posted_by=poster)
+    with pytest.raises(ValidationError, match="locked"):
+        invoice.perform_three_way_match()
+    invoice.refresh_from_db()
+    assert invoice.status == SupplierInvoice.STATUS_PAID
