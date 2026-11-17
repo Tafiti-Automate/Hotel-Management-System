@@ -175,12 +175,15 @@ class SupplierInvoiceViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"], url_path="match")
     def match_invoice(self, request, pk=None):
         require_accounts_payable_action(request.user)
-        with transaction.atomic():
-            invoice = SupplierInvoice.objects.select_for_update().get(
-                pk=self.get_object().pk
-            )
-            PurchaseOrder.objects.select_for_update().get(pk=invoice.purchase_order_id)
-            invoice.perform_three_way_match()
+        try:
+            with transaction.atomic():
+                invoice = SupplierInvoice.objects.select_for_update().get(
+                    pk=self.get_object().pk
+                )
+                PurchaseOrder.objects.select_for_update().get(pk=invoice.purchase_order_id)
+                invoice.perform_three_way_match()
+        except DjangoValidationError as error:
+            raise ValidationError(getattr(error, "messages", str(error)))
         return Response(self.get_serializer(invoice).data)
 
     @action(detail=True, methods=["post"], url_path="approve-for-payment")
