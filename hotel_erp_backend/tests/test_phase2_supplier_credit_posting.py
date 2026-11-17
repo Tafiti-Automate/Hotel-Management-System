@@ -123,3 +123,61 @@ def test_credit_refuses_to_exceed_original_return_value_or_open_invoice(posted_r
     credit.approve(actor=reviewer)
     credit.post(actor=actor)
     assert invoice.credited_amount == Decimal("2000.00")
+
+
+@pytest.mark.django_db
+def test_supplier_credit_reverses_original_vat_without_excess_tax(posted_receipt):
+    employee, supplier, item, store, grn = posted_receipt
+    maker = get_user_model().objects.create_user(
+        username="credit-vat-maker", employee_code="PH2-VAT-MKR", password="test-pass-123",
+    )
+    finance = get_user_model().objects.create_user(
+        username="credit-vat-finance", employee_code="PH2-VAT-FIN", password="test-pass-123",
+    )
+    poster = get_user_model().objects.create_user(
+        username="credit-vat-poster", employee_code="PH2-VAT-PST", password="test-pass-123",
+    )
+    invoice = SupplierInvoice.objects.create(
+        supplier=supplier, purchase_order=grn.purchase_order,
+        invoice_number="PH2-VAT-INVOICE", subtotal=Decimal("7000.00"),
+        tax_amount=Decimal("1260.00"), due_date=timezone.localdate(),
+    )
+    invoice.perform_three_way_match()
+    invoice.approve_for_payment(approved_by=finance)
+    returned = make_return(posted_receipt, "2")
+    returned.apply_inventory_changes(dispatched_by=employee)
+    returned.acknowledge(acknowledged_by="Supplier VAT team",
+                         credit_note_number="PH2-VAT-CREDIT")
+    credit = SupplierCreditNote.objects.create(
+        invoice=invoice, supplier_return=returned,
+        subtotal=Decimal("2000.00"), tax_amount=Decimal("360.01"),
+        created_by=maker,
+    )
+    with pytest.raises(ValidationError, match="proportional input VAT"):
+        credit.approve(actor=finance)
+    credit.tax_amount = Decimal("360.00")
+    credit.save(update_fields=("tax_amount", "updated_at"))
+    credit.approve(actor=finance)
+    credit.post(actor=poster)
+    invoice.refresh_from_db()
+    assert invoice.balance_due == Decimal("5900.00")
+
+    today = timezone.localdate()
+    period = FiscalPeriod.objects.create(
+        branch=store.branch, name="Supplier credit VAT GL",
+        start_date=today.replace(day=1), end_date=today,
+    )
+    GLAccountMapping.objects.create(
+        branch=store.branch, source_type=GLAccountMapping.SOURCE_INVOICE,
+        debit_account="INVENTORY-1400", credit_account="AP-2100",
+        tax_account="INPUT-VAT-1500",
+    )
+    period.close(finance, "VAT credit reconciled against approved supplier return.")
+    exported = GLExport.generate(period, finance)
+    rows = list(csv.DictReader(io.StringIO(exported.payload)))
+    reversals = [row for row in rows if row["source"] == "supplier_credit_note"]
+    assert len(reversals) == 3
+    assert sum(Decimal(row["debit"]) for row in reversals) == Decimal("2360.00")
+    assert sum(Decimal(row["credit"]) for row in reversals) == Decimal("2360.00")
+    vat_row = next(row for row in reversals if row["account"] == "INPUT-VAT-1500")
+    assert Decimal(vat_row["credit"]) == Decimal("360.00")
