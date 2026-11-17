@@ -37,12 +37,13 @@ Compared frontend enterprise workbench `useBackendRows` collection names in `Ope
 2. Remove the unrelated `assign-store` action from `StockCountViewSet`: it referenced StoreRequisition fields and statuses on a StockCount.
 3. Add `test_stocktake_route_safety.py` to assert the invalid routes are not published while the legitimate stock count `submit` action remains available.
 4. Restrict stocktake approvals to assigned Financial Managers for their property, prohibit approval of one's own counts, and limit variance posting to assigned Store Keepers; add `test_stocktake_role_separation.py` regression tests.
-5. Earlier fixes already on this branch: Cost Controller read-only stocktake permissions with regression tests; supplier endpoint canonicalization with a frontend test; forest-green visual theme.
+5. Lock stocktake headers and count lines against updates/deletion after submission, protect the frozen theoretical quantity as a server-owned field, and add `test_stocktake_immutability.py`.
+6. Earlier fixes already on this branch: Cost Controller read-only stocktake permissions with regression tests; supplier endpoint canonicalization with a frontend test; forest-green visual theme.
 
 ## Follow-up work — prioritized, not claimed complete
 
 **P0 security and accounting**
-- **Partly addressed:** role/branch separation for stock count approval and posting is now enforced. Complete the positive state-transition tests with real counts and verify all booked-count and ledger immutability rules.
+- **Partly addressed:** role/branch separation for stock count approval and posting is now enforced. Complete positive state-transition tests with real counts; server-side header/line edits are now locked after submission, but verify all booking, journal and reversal pathways.
 - Booked document immutability and fiscal-period lock audit across every mutation endpoint (GRNs, transfers, returns, adjustments, waste, invoices).
 - Full reconciliation tests: WAC, GRNI, GL debit-credit equality, returns and variance journals.
 
