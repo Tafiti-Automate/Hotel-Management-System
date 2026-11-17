@@ -15,7 +15,6 @@ const roleNavigation: Record<string, NavGroup[]> = {
       { route: 'workflow-stores', label: 'My requests', icon: 'assignment' },
       { route: 'incoming-pickup', label: 'Confirm pickup', icon: 'fact_check' },
       { route: 'waste-new', label: 'Record waste', icon: 'delete_sweep' },
-      { route: 'stocktake-sheet', label: 'Blind stocktake', icon: 'fact_check' },
     ] },
   ],
   supervisor: [
@@ -25,7 +24,6 @@ const roleNavigation: Record<string, NavGroup[]> = {
       { route: 'workflow-stores', label: 'My requests', icon: 'assignment' },
       { route: 'incoming-pickup', label: 'Confirm pickup', icon: 'fact_check' },
       { route: 'waste-new', label: 'Record waste', icon: 'delete_sweep' },
-      { route: 'stocktake-sheet', label: 'Blind stocktake', icon: 'fact_check' },
     ] },
   ],
   'department head': [
