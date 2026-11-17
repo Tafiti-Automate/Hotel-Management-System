@@ -1004,6 +1004,72 @@ class FiscalPeriod(BaseModel):
             ),
         }
 
+    def inventory_gl_journal_preview(self):
+        """Read-only proposed journal entries. No financial postings occur."""
+        from apps.inventory.models import StockLedger
+        from core.constants.choices import LedgerReferenceType
+        sources = {
+            LedgerReferenceType.STOCK_ISSUE: GLAccountMapping.SOURCE_CONSUMPTION,
+            LedgerReferenceType.POS_DEPLETION: GLAccountMapping.SOURCE_POS_COGS,
+            LedgerReferenceType.WASTE: GLAccountMapping.SOURCE_WASTE,
+            LedgerReferenceType.STOCK_COUNT: GLAccountMapping.SOURCE_VARIANCE,
+            LedgerReferenceType.STOCK_ADJUSTMENT: GLAccountMapping.SOURCE_VARIANCE,
+        }
+        configured = {m.source_type: m for m in GLAccountMapping.objects.filter(
+            branch=self.branch, is_active=True
+        )}
+        movements = StockLedger.objects.filter(
+            store__branch=self.branch,
+            created_at__date__range=(self.start_date, self.end_date),
+        ).values("pk", "created_at", "reference_type", "reference_id",
+                 "quantity_in", "quantity_out", "unit_cost_snapshot", "total_cost_snapshot")
+        draft, blockers, excluded = [], [], {}
+        debits = credits = Decimal("0.00")
+        for movement in movements.iterator():
+            source = movement["reference_type"]
+            if source not in sources:
+                excluded[source] = excluded.get(source, 0) + 1
+                continue
+            amount = movement["total_cost_snapshot"]
+            if amount is None or movement["unit_cost_snapshot"] is None:
+                blockers.append(f"Missing historical cost for {source} movement {movement['pk']}.")
+                continue
+            amount = amount.quantize(Decimal("0.01"))
+            if amount <= 0:
+                blockers.append(f"Nonpositive GL amount for {source} movement {movement['pk']}.")
+                continue
+            mapping = configured.get(sources[source])
+            if mapping is None:
+                blockers.append(f"Missing active GL mapping for {sources[source]}.")
+                continue
+            if mapping.debit_account == mapping.credit_account:
+                blockers.append(f"Conflicting debit and credit accounts for {sources[source]}.")
+                continue
+            outgoing = movement["quantity_out"] > 0
+            dr = mapping.debit_account if outgoing else mapping.credit_account
+            cr = mapping.credit_account if outgoing else mapping.debit_account
+            common = {
+                "date": movement["created_at"].date().isoformat(),
+                "source": source,
+                "reference": str(movement["reference_id"]),
+                "movement_id": str(movement["pk"]),
+            }
+            draft.append({**common, "account": dr, "debit": str(amount), "credit": "0.00"})
+            draft.append({**common, "account": cr, "debit": "0.00", "credit": str(amount)})
+            debits += amount
+            credits += amount
+        return {
+            "period_id": str(self.pk), "branch_id": str(self.branch_id),
+            "ready_for_finance_review": not blockers,
+            "blockers": list(dict.fromkeys(blockers)),
+            "draft_rows": draft if not blockers else [],
+            "candidate_row_count": len(draft),
+            "debit_total": str(debits), "credit_total": str(credits),
+            "excluded_source_counts": dict(sorted(excluded.items())),
+            "posted": False,
+            "note": "Preview only: no GL journal posted. Invoice-side receipts/credits and transfers are excluded to avoid double counting.",
+        }
+
     def close(self, actor, note):
         if self.status == self.STATUS_CLOSED:
             raise ValidationError("This fiscal period is already closed.")
@@ -1028,10 +1094,18 @@ class GLAccountMapping(BaseModel):
     SOURCE_INVOICE = "supplier_invoice"
     SOURCE_EXPENSE = "expense"
     SOURCE_PAYMENT = "supplier_payment"
+    SOURCE_CONSUMPTION = "stock_consumption"
+    SOURCE_POS_COGS = "pos_cogs"
+    SOURCE_WASTE = "stock_waste"
+    SOURCE_VARIANCE = "stock_variance"
     SOURCE_CHOICES = (
         (SOURCE_INVOICE, "Supplier invoices"),
         (SOURCE_EXPENSE, "Expenses"),
         (SOURCE_PAYMENT, "Supplier payments (AP debit / bank clearing credit)"),
+        (SOURCE_CONSUMPTION, "Department stock consumption"),
+        (SOURCE_POS_COGS, "POS cost of goods sold"),
+        (SOURCE_WASTE, "Waste and spoilage expense"),
+        (SOURCE_VARIANCE, "Physical counts and stock adjustments"),
     )
 
     branch = models.ForeignKey(
