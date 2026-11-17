@@ -15,3 +15,8 @@ def test_stock_count_item_does_not_expose_invalid_document_actions(action):
 def test_stock_count_document_keeps_its_workflow_actions():
     url = f"/api/v1/stock-counts/{uuid4()}/submit/"
     assert resolve(url).url_name == "stock-count-submit"
+
+
+def test_stock_count_has_no_requisition_assign_store_action():
+    with pytest.raises(Resolver404):
+        resolve(f"/api/v1/stock-counts/{uuid4()}/assign-store/")
