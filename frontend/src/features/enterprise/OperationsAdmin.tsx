@@ -21,7 +21,8 @@ async function verifyReturnLedger(type:'supplier'|'department',app:ReturnType<ty
     const incomplete=Boolean(result.is_truncated)
     const msg=`${result.count} recorded return lines checked. ${problems} inventory-ledger mismatch(es).`+
       (incomplete?' Results limited to the first 1,000 lines; narrow the report in a future full export.':'')
-    app.showWorkflowAlert('Return stock reconciliation',msg,problems||incomplete?'warning':'success')
+    if(problems||incomplete)app.showWorkflowAlert('Return stock reconciliation',msg,'warning')
+    else app.showToast('Return stock reconciliation passed · '+msg)
   }catch(error){app.showWorkflowAlert('Return reconciliation unavailable',errorMessage(error),'failure')}
 }
 
