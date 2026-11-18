@@ -816,6 +816,13 @@ class FiscalPeriodViewSet(CreatedByModelMixin, ModelViewSet):
         self._require_finance()
         return Response(self.get_object().inventory_gl_journal_preview())
 
+    @action(detail=True, methods=["get"], url_path="grni-reconciliation")
+    def grni_reconciliation(self, request, pk=None):
+        """Finance-only documentary reconciliation; never posts a journal."""
+        self._require_finance()
+        from apps.materials_control.grni import grni_reconciliation
+        return Response(grni_reconciliation(self.get_object()))
+
     @action(detail=True, methods=["get"], url_path="inventory-valuation-reconciliation")
     def inventory_valuation_reconciliation(self, request, pk=None):
         self._require_finance()

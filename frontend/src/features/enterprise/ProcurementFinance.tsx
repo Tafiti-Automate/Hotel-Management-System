@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import EnterpriseTable, { type EnterpriseColumn } from '../../components/EnterpriseTable'
 import ConfirmTransaction from '../../components/ConfirmTransaction'
 import {
-  createBackendRecord, errorMessage, runBackendAction, updateBackendRecord,
+  createBackendRecord, errorMessage, readBackendPayload, runBackendAction, updateBackendRecord,
   downloadControlledPurchaseOrder, downloadGLExport,
 } from '../../lib/api'
 import { useApp } from '../../state/AppContext'
@@ -581,11 +581,49 @@ export function EnterpriseBudgetMatrix() {
   </WorkspacePage>
 }
 
+type GrniReview = {
+  as_of_date: string
+  order_count: number
+  received_value: string
+  matched_invoice_value: string
+  unmatched_receipt_value: string
+  requires_manual_review: boolean
+  posted: boolean
+  note: string
+  orders: Array<{
+    purchase_order_id: string
+    lpo_number: string
+    supplier: string
+    department: string
+    posted_receipt_value: string
+    matched_invoice_value: string
+    unmatched_receipt_value: string
+    requires_review: boolean
+    warnings: string[]
+  }>
+}
+
 export function EnterprisePeriodClose() {
   const {data,loading,error,reload}=useBackendRows(CLOSE)
   const {busy,error:mutationError,run}=useOperation(reload)
   const [selected,setSelected]=useState('')
   const [note,setNote]=useState('')
+  const [grniRevision, setGrniRevision] = useState(0)
+  const [grni, setGrni] = useState<GrniReview | null>(null)
+  const [grniLoading, setGrniLoading] = useState(false)
+  const [grniError, setGrniError] = useState('')
+  useEffect(() => {
+    if (!selected) { setGrni(null); return }
+    let active = true
+    setGrni(null)
+    setGrniLoading(true)
+    setGrniError('')
+    void readBackendPayload('fiscal-periods/' + encodeURIComponent(selected) + '/grni-reconciliation/')
+      .then((payload) => { if (active) setGrni(payload as unknown as GrniReview) })
+      .catch((cause) => { if (active) setGrniError(errorMessage(cause)) })
+      .finally(() => { if (active) setGrniLoading(false) })
+    return () => { active = false }
+  }, [selected, grniRevision])
   const periods=data['fiscal-periods']||[]
   const period=periods.find(row=>str(row.id)===selected)
   const checklist=(period?.checklist||{}) as Record<string,unknown>
@@ -595,7 +633,7 @@ export function EnterprisePeriodClose() {
     ['Unmatched invoices','unresolved_invoices'],['Unprocessed POS imports','unresolved_pos_imports'],
   ] as const
   const canClose=Boolean(checklist.can_close)&&str(period?.status)==='open'&&note.trim().length>0
-  const close=async()=>run(()=>runBackendAction('fiscal-periods',selected,'close',{note}),'Fiscal period closed and locked')
+  const close=async()=>{ const ok=await run(()=>runBackendAction('fiscal-periods',selected,'close',{note}),'Fiscal period closed and locked'); if(ok) setGrniRevision(x=>x+1) }
   const generate=async()=>run(()=>runBackendAction('fiscal-periods',selected,'generate-gl-export'),'GL journal exported')
   const exports=(data['gl-exports']||[]).filter(row=>str(row.period)===selected)
   return <WorkspacePage section="Finance / Fiscal control" title="Month-end closing wizard"
@@ -613,13 +651,43 @@ export function EnterprisePeriodClose() {
           <Icon name={dec(checklist[key])>0?'warning':'check_circle'} size={18}/>
           <span>{label}</span><strong>{str(checklist[key]??'—')}</strong></div>)}</div>
         <div className="mc-alert mc-muted">{str(checklist.blockers)|| (Array.isArray(checklist.blockers)?checklist.blockers.join(' · '):'') || 'Checklist is read directly from Django fiscal-period controls.'}</div>
-        <header className="mc-panel-title">Step 2 · Lock fiscal month</header>
+        <header className="mc-panel-title">Step 2 · Goods Received Not Invoiced reconciliation</header>
+        <div className="mc-alert mc-muted">
+          Finance-only documentary comparison against posted GRNs and matched supplier invoices.
+          This is not an accounting journal or confirmation of an external GL posting.
+        </div>
+        {grniLoading && <div className="mc-alert mc-muted" role="status">Retrieving GRNI reconciliation…</div>}
+        {grniError && <div className="mc-alert" role="alert">{grniError}</div>}
+        {grni && <>
+          <div className="mc-compact-metrics">
+            <div><span>GRNs valued</span><strong>{amount(grni.received_value)}</strong></div>
+            <div><span>Matched invoices</span><strong>{amount(grni.matched_invoice_value)}</strong></div>
+            <div><span>Unmatched GRNI exposure</span><strong>{amount(grni.unmatched_receipt_value)}</strong></div>
+          </div>
+          {grni.requires_manual_review && <div className="mc-alert" role="alert">
+            Finance must resolve supplier return, invoice allocation or historical posting exceptions before treating these values as complete.
+          </div>}
+          <div className="mc-detail-lines"><table>
+            <thead><tr><th>LPO</th><th>Supplier / Cost Center</th><th className="mc-num">Received</th><th className="mc-num">Matched</th><th className="mc-num">Unmatched</th></tr></thead>
+            <tbody>{grni.orders.map(row=><tr key={row.purchase_order_id}>
+              <td>{row.lpo_number}</td><td>{row.supplier}<small style={{display:'block'}}>{row.department}</small>
+                {row.warnings.length>0&&<small role="status" style={{display:'block'}}>{row.warnings.join('; ')}</small>}
+              </td>
+              <td className="mc-num">{amount(row.posted_receipt_value)}</td>
+              <td className="mc-num">{amount(row.matched_invoice_value)}</td>
+              <td className="mc-num">{amount(row.unmatched_receipt_value)}</td>
+            </tr>)}</tbody>
+          </table></div>
+          {!grni.orders.length && <div className="mc-empty-state">No posted GRNs fall in this period.</div>}
+          <div className="mc-alert mc-muted">{grni.note}</div>
+        </>}
+        <header className="mc-panel-title">Step 3 · Lock fiscal month</header>
         <FormField label="Mandatory closing note" value={note} onChange={setNote} placeholder="Close-out reference and financial signoff"/>
         <ConfirmTransaction title={'Close '+str(period.name)+'?'} description="Closing locks the accounting period. Django independently checks every blocker again."
           confirmLabel="Lock fiscal period" className={affirmative} busy={busy} disabled={!canClose||busy} onConfirm={close}>
           <Icon name="lock" size={16}/> Close fiscal period
         </ConfirmTransaction>
-        <header className="mc-panel-title">Step 3 · General ledger export</header>
+        <header className="mc-panel-title">Step 4 · General ledger export</header>
         <div className="mc-decision-bar"><button className={btn} disabled={busy||str(period.status)!=='closed'} onClick={()=>void generate()}>
           <Icon name="file_download" size={16}/> Generate GL CSV</button>
           {exports.map(row=><button className={btn} key={str(row.id)} onClick={()=>void downloadGLExport(str(row.id))}>
