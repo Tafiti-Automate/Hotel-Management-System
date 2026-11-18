@@ -206,7 +206,7 @@ def test_requisition_only_orders_the_unavailable_stock_and_keeps_approved_quanti
     ).status_code == 200
     decision = head.post(
         f"/api/v1/store-requisitions/{request_id}/department-approve/",
-        {"items": [{"id": line_id, "approved_quantity": "28.0000"}]}, format="json",
+        {"items": [{"id": line_id, "approved_quantity": "28.0000", "reason": "Approved operational requirement"}]}, format="json",
     )
     assert decision.status_code == 200, decision.data
     purchase = keeper.post(
