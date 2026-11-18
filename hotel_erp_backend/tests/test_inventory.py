@@ -782,14 +782,14 @@ def test_adjustment_and_count_cannot_reduce_stock_below_reserved_quantity():
     StockAdjustmentItem.objects.create(stock_adjustment=adjustment, item=item, quantity_change=Decimal("-30.00"))
     adjustment.submit()
     adjustment.approve(approved_by=employee)
-    with pytest.raises(ValidationError, match="below 15.00 reserved"):
+    with pytest.raises(ValidationError, match="below 15.0000 reserved"):
         adjustment.apply()
 
     stock_count = StockCount.objects.create(store=store, conducted_by=employee)
     StockCountItem.objects.create(stock_count=stock_count, item=item, system_quantity=Decimal("40.00"), physical_quantity=Decimal("10.00"))
     stock_count.submit()
     stock_count.approve(approved_by=employee)
-    with pytest.raises(ValidationError, match="below 15.00 reserved"):
+    with pytest.raises(ValidationError, match="below 15.0000 reserved"):
         stock_count.apply_variances()
 
 
