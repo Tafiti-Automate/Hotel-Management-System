@@ -31,6 +31,8 @@ import '../src/approved-hotel-gui.css'
 import '../src/hospitality-precision.css'
 /* Final approved five-screen visual foundation, shared by every role. */
 import '../src/hotel-evergreen-unified.css'
+/* Phase 1: canonical semantic tokens and opt-in shared controls; page-specific rules follow. */
+import '../src/design-foundation.css'
 /* Page-scoped final fixes: Department Requisitions master/detail + Article selector. */
 import '../src/department-requisitions-fix.css'
 import '../src/market-lists.css'

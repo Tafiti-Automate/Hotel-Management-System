@@ -1,0 +1,161 @@
+/*
+ * Phase 1 / Hotel ERP design foundation.
+ *
+ * Precedence: legacy page CSS -> approved evergreen palette -> semantic foundation
+ * -> page-specific styles -> print styles.
+ *
+ * Keep this layer additive: existing Django permissions, mutations, receipt locks,
+ * GRN print layout and legacy screen geometry remain unchanged. Migrate one screen
+ * at a time to the opt-in .ds-* components below.
+ */
+.application-root.screen-app {
+  /* Canonical aliases resolve to the approved evergreen palette. */
+  --ds-canvas: var(--hp-canvas);
+  --ds-surface: var(--hp-surface);
+  --ds-surface-muted: var(--hp-surface-muted);
+  --ds-text: var(--hp-text);
+  --ds-text-muted: var(--hp-text-muted);
+  --ds-border: var(--hp-border);
+  --ds-border-strong: var(--hp-border-strong);
+  --ds-primary: var(--hp-emerald-text);
+  --ds-primary-soft: var(--hp-emerald-bg);
+  --ds-success: var(--good);
+  --ds-success-soft: var(--good-soft);
+  --ds-warning: var(--warn);
+  --ds-warning-soft: var(--warn-soft);
+  --ds-danger: var(--bad);
+  --ds-danger-soft: var(--bad-soft);
+  --ds-info: var(--hp-sky-text);
+  --ds-info-soft: var(--hp-sky-bg);
+  --ds-font: var(--font-sans);
+  --ds-font-numeric: var(--font-mono);
+  --ds-space-1: 4px;
+  --ds-space-2: 8px;
+  --ds-space-3: 12px;
+  --ds-space-4: 16px;
+  --ds-space-6: 24px;
+  --ds-space-8: 32px;
+  --ds-radius-control: var(--hp-radius-control);
+  --ds-radius-panel: var(--hp-radius-card);
+  --ds-focus: #32866a;
+  --ds-table-row-height: 44px;
+  --ds-breakpoint-mobile: 680px; /* Documentation only: CSS media queries use literal values. */
+}
+
+/* Shared, opt-in workspace primitives. These do not replace existing selectors. */
+.application-root.screen-app .ds-workspace {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: var(--ds-space-4);
+  color: var(--ds-text);
+}
+.application-root.screen-app .ds-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--ds-space-3);
+}
+.application-root.screen-app .ds-panel {
+  min-width: 0;
+  padding: var(--ds-space-4);
+  color: var(--ds-text);
+  background: var(--ds-surface);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-panel);
+}
+.application-root.screen-app .ds-field {
+  display: grid;
+  gap: var(--ds-space-2);
+}
+.application-root.screen-app .ds-field > label {
+  color: var(--ds-text-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.application-root.screen-app .ds-field :is(input, select, textarea) {
+  min-width: 0;
+  width: 100%;
+  color: var(--ds-text);
+  background: var(--ds-surface);
+  border: 1px solid var(--ds-border-strong);
+  border-radius: var(--ds-radius-control);
+}
+.application-root.screen-app .ds-number {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+.application-root.screen-app .ds-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+.application-root.screen-app .ds-table-scroll table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.application-root.screen-app .ds-table-scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--ds-surface);
+  border-bottom: 1px solid var(--ds-border-strong);
+}
+.application-root.screen-app .ds-table-scroll :is(th, td) {
+  padding: var(--ds-space-2) var(--ds-space-3);
+  font-variant-numeric: tabular-nums;
+}
+.application-root.screen-app .ds-table-scroll [data-sticky="start"] {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: var(--ds-surface);
+}
+.application-root.screen-app .ds-table-scroll thead [data-sticky="start"] {
+  z-index: 4;
+}
+.application-root.screen-app .ds-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  padding: 3px 8px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.application-root.screen-app .ds-status[data-tone="success"] { color: var(--ds-success); background: var(--ds-success-soft); }
+.application-root.screen-app .ds-status[data-tone="warning"] { color: var(--ds-warning); background: var(--ds-warning-soft); }
+.application-root.screen-app .ds-status[data-tone="danger"] { color: var(--ds-danger); background: var(--ds-danger-soft); }
+.application-root.screen-app .ds-status[data-tone="info"] { color: var(--ds-info); background: var(--ds-info-soft); }
+.application-root.screen-app .ds-status[data-tone="neutral"] { color: var(--ds-text-muted); background: var(--ds-surface-muted); }
+
+/* Visible focus throughout authenticated workspace (including native controls). */
+.application-root.screen-app :is(
+  .neo-workspace, .neo-header, .neo-sidebar, [role="dialog"]
+) :is(button, a, input, select, textarea, [role="button"], [tabindex]):focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: 3px;
+}
+
+/* Dark values inherit the existing approved palette; only focus contrast differs. */
+.application-root.mode-dark.screen-app { --ds-focus: #83dbc0; }
+
+@media (max-width: 680px) {
+  .application-root.screen-app .ds-workspace { gap: var(--ds-space-3); }
+  .application-root.screen-app .ds-panel { padding: var(--ds-space-3); }
+  .application-root.screen-app .ds-page-header { flex-direction: column; align-items: stretch; }
+  .application-root.screen-app .ds-table-scroll { scrollbar-width: thin; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .application-root.screen-app .ds-workspace *,
+  .application-root.screen-app .ds-workspace *::before,
+  .application-root.screen-app .ds-workspace *::after {
+    scroll-behavior: auto;
+    animation-duration: .01ms;
+    transition-duration: .01ms;
+  }
+}
