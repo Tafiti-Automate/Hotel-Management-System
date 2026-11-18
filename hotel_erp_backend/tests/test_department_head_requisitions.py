@@ -692,8 +692,8 @@ def test_department_return_requires_signed_issue_assigned_keeper_and_no_overcred
     assert checked.status_code == 200, checked.data
     registered = [r for r in checked.data["results"] if r["reference"] == created.data["return_no"]]
     assert len(registered) == 1
-    assert registered[0]["quantity"] == "2.0000"
-    assert registered[0]["ledger_quantity"] == "2.0000"
+    assert Decimal(registered[0]["quantity"]) == Decimal("2.0000")
+    assert Decimal(registered[0]["ledger_quantity"]) == Decimal("2.0000")
     assert registered[0]["reconciled"] is True
     assert InventoryBalance.objects.get(
         item=ctx["item"], store=ctx["store"]
