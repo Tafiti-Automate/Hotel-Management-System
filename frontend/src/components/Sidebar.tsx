@@ -42,6 +42,7 @@ const roleNavigation: Record<string, NavGroup[]> = {
       { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
       { route: 'grn-posting', label: 'Post received GRNs', icon: 'move_to_inbox' },
       { route: 'receiving-return-new', label: 'Return to supplier', icon: 'assignment_return' },
+      { route: 'department-returns-new', label: 'Department returns', icon: 'assignment_return' },
       { route: 'transfer-dispatch', label: 'Transfer fulfillment', icon: 'local_shipping' },
       { route: 'workflow-stores', label: 'Issue requests', icon: 'inventory' },
       { route: 'store-transfers', label: 'Transfers', icon: 'sync_alt' },
