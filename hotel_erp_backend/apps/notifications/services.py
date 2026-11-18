@@ -10,7 +10,7 @@ from apps.inventory.models import InventoryBatch, StoreKeeperAssignment
 from apps.notifications.models import Notification
 
 
-def notify_employee(employee, *, title, message, created_by=None):
+def notify_employee(employee, *, title, message, created_by=None, deduplication_key=""):
     """Create a personal alert only for an active employee account."""
     if (
         employee is None
@@ -18,6 +18,13 @@ def notify_employee(employee, *, title, message, created_by=None):
         or not employee.user.is_active
     ):
         return None
+    if deduplication_key:
+        notification, _ = Notification.objects.get_or_create(
+            employee=employee,
+            deduplication_key=deduplication_key,
+            defaults={"title": title, "message": message, "created_by": created_by},
+        )
+        return notification
     return Notification.objects.create(
         employee=employee,
         title=title,
@@ -111,6 +118,7 @@ def notify_storekeepers_for_expiring_batch(batch, *, created_by=None):
             assignment.employee,
             batch,
             created_by=created_by,
+            deduplication_key=deduplication_key,
         )
         if notification:
             notifications.append(notification)
@@ -175,6 +183,7 @@ def notify_roles(
     department=None,
     created_by=None,
     exclude_employee=None,
+    deduplication_key="",
 ):
     """Notify active employees holding one of the supplied roles in scope."""
     employees = Employee.objects.select_related("user").filter(
