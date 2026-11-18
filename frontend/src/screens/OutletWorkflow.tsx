@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { Icon } from '../components/Icon'
+import ConfirmTransaction from '../components/ConfirmTransaction'
 import { createBackendRecord, errorMessage, readBackendPayload, runBackendAction } from '../lib/api'
 import type { Row } from '../lib/data'
 import { useApp } from '../state/AppContext'
@@ -230,7 +231,15 @@ export function IncomingPickup() {
           </tbody></table></div>
           {candidate.received_by ? <p className="bp-confirmed">Signed by {sid(candidate.received_by_name) || 'requesting supervisor'}.</p>
             : <div className="bp-handover"><label><input type="checkbox" checked={agreed} disabled={!ready || busy} onChange={(event) => setAgreed(event.target.checked)} /> I have physically checked the articles and quantities shown above.</label>
-              <button type="button" className="bp-primary" disabled={!ready || !agreed || busy || !items.length} onClick={() => void acknowledge()}>{busy ? 'Confirming…' : 'Confirm & sign receipt'}</button>
+              <ConfirmTransaction
+                title={'Sign pickup for issue ' + sid(candidate.issue_no) + '?'}
+                description={'Confirm that you physically collected all ' + items.length + ' article line(s) listed on this issue. Your signature clears virtual transit, records department consumption and cannot be submitted twice.'}
+                confirmLabel="Sign physical pickup"
+                className="bp-primary"
+                disabled={!ready || !agreed || busy || !items.length}
+                busy={busy}
+                onConfirm={acknowledge}
+              >{busy ? 'Confirming…' : 'Confirm & sign receipt'}</ConfirmTransaction>
               {!ready && <p className="bp-muted">Awaiting posting by the assigned Storekeeper. Stock cannot be acknowledged earlier.</p>}
             </div>}
         </>}
