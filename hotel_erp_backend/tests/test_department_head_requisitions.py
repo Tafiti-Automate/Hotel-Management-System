@@ -277,3 +277,154 @@ def test_unrelated_roles_cannot_create_department_requisitions(workflow):
             format="json",
         )
         assert denied.status_code == 403, (role, denied.data)
+
+
+@pytest.mark.django_db
+def test_connected_eight_role_shortage_partial_receipts_and_signed_completion(workflow):
+    """API journey: eight roles, 20 locally available, 8 purchased in two drops.
+
+    The PO is pre-issued as a controlled fixture; this test validates the
+    cross-module handoff, NOT the independent commercial approval sequence.
+    """
+    from apps.procurement.models import PurchaseOrder, PurchaseOrderItem, RequisitionItem
+    from apps.vendors.models import Supplier
+    from core.constants.choices import POStatus, LedgerReferenceType
+    from apps.inventory.models import StockLedger
+
+    ctx = workflow
+    supervisor = ctx["supervisor"][2]
+    head = ctx["head"][2]
+    keeper = ctx["keeper"][2]
+    cost = ctx["cost"][2]
+
+    def extra(role, suffix):
+        user = get_user_model().objects.create_user(
+            username=f"wf-e2e-{suffix}", employee_code=f"WFE2E-{suffix}",
+            password="test-pass-123",
+        )
+        user.groups.add(Group.objects.get_or_create(name=role)[0])
+        employee = Employee.objects.create(
+            user=user, department=ctx["department"], branch=ctx["branch"],
+            designation=role, is_active=True,
+        )
+        client = APIClient()
+        client.force_authenticate(user)
+        return client, employee
+
+    buyer, buyer_employee = extra("Procurement Manager", "BUY")
+    finance, _ = extra("Financial Manager", "FIN")
+    gm, _ = extra("General Manager", "GM")
+    receiver, _ = extra("Receiving Clerk", "RCV")
+    ap, _ = extra("Accounts Payable Clerk", "AP")
+
+    request_id, line_id = _create_supervisor_draft(ctx, "28.0000")
+    for forbidden in (head, keeper, cost, buyer, finance, gm, receiver, ap):
+        response = forbidden.post(
+            "/api/v1/store-requisitions/",
+            {"purpose": "Forbidden", "store": str(ctx["store"].pk)}, format="json",
+        )
+        assert response.status_code == 403, response.data
+    assert supervisor.post(
+        f"/api/v1/store-requisitions/{request_id}/submit/", {}, format="json",
+    ).status_code == 200
+    approved = head.post(
+        f"/api/v1/store-requisitions/{request_id}/department-approve/",
+        {"items": [{"id": line_id, "approved_quantity": "28.0000"}]},
+        format="json",
+    )
+    assert approved.status_code == 200, approved.data
+    handoff = {
+        "reason": "Eight bottles cannot be fulfilled from Stores",
+        "items": [{"id": line_id, "approved_quantity": "28.0000"}],
+    }
+    for forbidden in (supervisor, head, cost, buyer, finance, gm, receiver, ap):
+        response = forbidden.post(
+            f"/api/v1/store-requisitions/{request_id}/send-to-procurement/",
+            handoff, format="json",
+        )
+        assert response.status_code in (403, 404), (response.status_code, response.data)
+    purchase = keeper.post(
+        f"/api/v1/store-requisitions/{request_id}/send-to-procurement/",
+        handoff, format="json",
+    )
+    assert purchase.status_code == 200, purchase.data
+    req = StoreRequisition.objects.get(pk=request_id)
+    purchase_line = RequisitionItem.objects.get(requisition=req.procurement_requisition)
+    assert purchase_line.quantity == Decimal("8.0000")
+    assert req.status == StoreRequisitionStatus.AWAITING_PROCUREMENT
+
+    # Dispatch in-stock goods without waiting for purchasing, then sign pickup.
+    local_issue = keeper.post(
+        f"/api/v1/store-requisitions/{request_id}/dispatch-transfer/",
+        {"quantities": {line_id: "20.0000"}}, format="json",
+    )
+    assert local_issue.status_code == 201, local_issue.data
+    assert StoreRequisition.objects.get(pk=request_id).status != StoreRequisitionStatus.COMPLETED
+    first_signed = supervisor.post(
+        f"/api/v1/stock-issues/{local_issue.data['id']}/acknowledge/",
+        {}, format="json",
+    )
+    assert first_signed.status_code == 200, first_signed.data
+    assert StoreRequisition.objects.get(pk=request_id).status != StoreRequisitionStatus.COMPLETED
+
+    supplier = Supplier.objects.create(
+        name="E2E Partial Delivery Supplier", email="e2e-partial@example.com",
+        phone="+256700000099", address="Kampala", tin_number="E2E-TIN-9",
+        registration_number="E2E-REG-9",
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=req.procurement_requisition, supplier=supplier,
+        ordered_by=buyer_employee, store=ctx["store"],
+    )
+    po_line = PurchaseOrderItem.objects.create(
+        purchase_order=order, requisition_item=purchase_line,
+        item=ctx["item"], unit=ctx["unit"], quantity=Decimal("8.0000"),
+        unit_cost=Decimal("2500.00"), destination_store=ctx["store"],
+    )
+    order.status = POStatus.ISSUED
+    order.save(update_fields=["status", "updated_at"])
+
+    for number, amount in enumerate(("3.0000", "5.0000"), start=1):
+        arrived = receiver.post(
+            f"/api/v1/purchase-orders/{order.pk}/receive-delivery/",
+            {"supplier_invoice_no": f"E2E-INV-{number}",
+             "lines": [{"purchase_order_item": str(po_line.pk),
+                        "quantity_received": amount}]},
+            format="json",
+        )
+        assert arrived.status_code == 201, arrived.data
+        grn_id = arrived.data["id"]
+        assert receiver.post(
+            f"/api/v1/grns/{grn_id}/post-to-inventory/", {}, format="json",
+        ).status_code == 403
+        posted = keeper.post(
+            f"/api/v1/grns/{grn_id}/post-to-inventory/", {}, format="json",
+        )
+        assert posted.status_code == 200, posted.data
+        assert StockLedger.objects.filter(
+            reference_id=grn_id,
+            reference_type=LedgerReferenceType.GRN_RECEIPT,
+        ).exists()
+        assert StoreRequisition.objects.get(pk=request_id).status != StoreRequisitionStatus.COMPLETED
+        dispatched = keeper.post(
+            f"/api/v1/store-requisitions/{request_id}/dispatch-transfer/",
+            {"quantities": {line_id: amount}}, format="json",
+        )
+        assert dispatched.status_code == 201, dispatched.data
+        assert StoreRequisition.objects.get(pk=request_id).status != StoreRequisitionStatus.COMPLETED
+        signed = supervisor.post(
+            f"/api/v1/stock-issues/{dispatched.data['id']}/acknowledge/",
+            {}, format="json",
+        )
+        assert signed.status_code == 200, signed.data
+
+    req.refresh_from_db()
+    original = StoreRequisitionItem.objects.get(pk=line_id)
+    assert original.base_quantity_requested == Decimal("28.0000")
+    assert original.hod_approved_quantity == Decimal("28.0000")
+    assert original.quantity_approved == Decimal("28.0000")
+    assert original.quantity_issued == Decimal("28.0000")
+    assert req.status == StoreRequisitionStatus.COMPLETED
+    assert DepartmentConsumption.objects.filter(
+        stock_issue_item__issue__requisition=req,
+    ).count() == 3
