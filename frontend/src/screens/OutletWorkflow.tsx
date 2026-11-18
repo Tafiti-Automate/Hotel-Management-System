@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { Icon } from '../components/Icon'
 import ConfirmTransaction from '../components/ConfirmTransaction'
+import WorkflowPrerequisite from '../components/WorkflowPrerequisite'
 import { createBackendRecord, errorMessage, readBackendPayload, runBackendAction } from '../lib/api'
 import type { Row } from '../lib/data'
 import { useApp } from '../state/AppContext'
@@ -254,6 +255,7 @@ export function IncomingPickup() {
       </section>
       <section className="bp-panel">
         {!candidate ? <div className="bp-empty">Select an issue voucher to check the item list.</div> : <>
+          <WorkflowPrerequisite domain="stock_issue" record={{...candidate, status: ready ? 'in_transit' : candidate.fulfillment_status || 'packed'}} action="acknowledge"/>
           <div className="bp-panel-title"><div><span className="bp-eyebrow">Issue voucher</span><h2>{sid(candidate.issue_no)}</h2><p>{sid(candidate.store_name)} · {sid(candidate.issue_date)}</p></div><span className={candidate.received_by ? 'bp-state done' : 'bp-state'}>{candidate.received_by ? 'Received' : candidate.fulfillment_status === 'in_transit' ? 'In transit · awaiting signature' : candidate.inventory_changes_applied ? 'Posted by Stores' : 'Prepared'}</span><button className="bp-quiet" type="button" disabled={!items.length} onClick={()=>{if(!printIssueVoucher(candidate,items,app.user.name)) app.showWorkflowAlert('Issue voucher cannot print','Select a voucher with articles and allow pop-ups in your browser.','warning')}}><Icon name="print" size={16}/> Print voucher</button></div>
           <div className="bp-table-scroll"><table className="bp-grid"><thead><tr><th>Article</th><th>Issued quantity</th><th>Unit</th></tr></thead><tbody>
             {items.map((line) => <tr key={sid(line.id)}><td><strong>{sid(line.item_name)}</strong></td><td>{sid(line.base_quantity)}</td><td>{sid(line.unit_name)}</td></tr>)}

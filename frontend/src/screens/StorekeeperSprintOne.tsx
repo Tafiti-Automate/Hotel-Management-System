@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Icon } from '../components/Icon'
 import ConfirmTransaction from '../components/ConfirmTransaction'
+import WorkflowPrerequisite from '../components/WorkflowPrerequisite'
 import { escapeHtml } from '../features/shared/html'
 import { createBackendRecord, errorMessage, readBackendRecords, runBackendAction } from '../lib/api'
 import { useApp } from '../state/AppContext'
@@ -114,6 +115,8 @@ export function GrnPostingConsole() {
               <p>PO {selected.lpo_number} · {selected.supplier_name}</p></div>
             <span className={selected.fiscal_period_status === 'open' ? 'bp-state ready' : 'bp-state'}>{selected.fiscal_period_name} · {selected.fiscal_period_status}</span>
           </div>
+          <WorkflowPrerequisite domain="goods_receipt" record={selected} action="post"/>
+          {selected.fiscal_period_status !== 'open' && <div className="mc-workflow-prerequisite" role="status"><Icon name="info" size={17}/><div><strong>GRN posting blocked by fiscal control</strong><p>The selected fiscal period is not open. No stock is posted.</p><small>Next: Ask Finance to review the fiscal period; never bypass a closed period.</small></div></div>}
           <div className="sk-grn-meta">
             <span><small>Received on</small><strong>{selected.received_date}</strong></span>
             <span><small>Receiving Clerk</small><strong>{selected.received_by_name}</strong></span>

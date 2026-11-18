@@ -1019,24 +1019,30 @@ function AdjustmentPanel({ app, data, form, setForm, busy, execute }: any) {
 
 function CountPanel({ app, data, form, setForm, busy, execute }: any) {
   const countLines = data.countItems.filter((r: Row) => id(r.stock_count) === id(form.count))
+  const chosenCount = data.counts.find((r: Row) => id(r.id) === id(form.count))
+  const status = id(chosenCount?.status)
+  const editable = ['draft', 'in_progress'].includes(status)
   return <Panel title="Stock count" note="Record and reconcile physical counts.">
     <Field label="Store"><Select value={form.store} change={(v) => setForm({ ...form, store: v })} rows={app.data.locations} /></Field>
     <Field label="Conducted by"><Select value={form.employee} change={(v) => setForm({ ...form, employee: v })} rows={app.data.employees} /></Field>
     <Action disabled={busy || !form.store || !form.employee} click={() => execute(() => createBackendRecord('stock-counts', { store: form.store, conducted_by: form.employee, note: '' }), 'Stock count opened')}>Open stock count</Action>
     <Rule />
     <Field label="Stock count"><Select value={form.count} change={(v) => setForm({ count: v })} rows={data.counts.filter((r: Row) => !r.inventory_changes_applied)} label={(r) => `${id(r.count_no)} · ${r.status}`} /></Field>
-    {data.counts.find((r: Row)=>id(r.id)===id(form.count))&&<WorkflowPrerequisite domain="stock_count" record={data.counts.find((r: Row)=>id(r.id)===id(form.count))} action="apply"/>}
+    {chosenCount&&<WorkflowPrerequisite domain="stock_count" record={chosenCount} action={editable ? 'submit' : 'apply'}/>}
     <Action disabled={busy || !form.count} click={() => execute(() => runBackendAction('stock-counts', id(form.count), 'populate'), 'System balances loaded')}>Populate count sheet</Action>
-    <Field label="Count line"><Select value={form.countLine} change={(v) => { const line = countLines.find((r: Row) => id(r.id) === v); setForm({ ...form, countLine: v, physical: line?.physical_quantity }) }} rows={countLines} label={(r) => `${itemName(app, r.item)} · system ${r.system_quantity}`} /></Field>
+    <Field label="Count line"><Select value={form.countLine} change={(v) => { const line = countLines.find((r: Row) => id(r.id) === v); setForm({ ...form, countLine: v, physical: '' }) }} rows={countLines} label={(r) => itemName(app, r.item)} /></Field>
+    <div className="mc-workflow-prerequisite" role="status"><Icon name="info" size={17}/><div><strong>Blind count entry</strong><p>Enter a fresh physical count. Theoretical quantities are intentionally hidden on this form.</p><small>Next: Save each verified physical quantity before submitting.</small></div></div>
     <Field label="Physical quantity"><Input type="number" value={form.physical} change={(v) => setForm({ ...form, physical: v })} /></Field>
-    <Action disabled={busy || !form.countLine} click={() => execute(() => updateBackendRecord('stock-count-items', id(form.countLine), { physical_quantity: num(form.physical) }), 'Physical count saved')}>Save physical count</Action>
-    <Action disabled={busy || !form.count} click={() => execute(() => runBackendAction('stock-counts', id(form.count), 'submit'), 'Stock count submitted')}>Submit count</Action>
-    <Action disabled={busy || !form.count} click={() => execute(() => runBackendAction('stock-counts', id(form.count), 'approve'), 'Variance approved')}>Approve variance</Action>
-    <Action tone="good" disabled={busy || !form.count} click={() => execute(() => runBackendAction('stock-counts', id(form.count), 'apply'), 'Count variances posted')}>Apply variance</Action>
+    <Action disabled={busy || !editable || !form.countLine || id(form.physical).trim()==='' || !Number.isFinite(Number(form.physical)) || Number(form.physical)<0} click={() => execute(() => updateBackendRecord('stock-count-items', id(form.countLine), { physical_quantity: num(form.physical) }), 'Physical count saved')}>Save physical count</Action>
+    <Action disabled={busy || !editable || !form.count} click={() => execute(() => runBackendAction('stock-counts', id(form.count), 'submit'), 'Stock count submitted')}>Submit count</Action>
+    <Action disabled={busy || status !== 'submitted' || !form.count} click={() => execute(() => runBackendAction('stock-counts', id(form.count), 'approve'), 'Variance approved')}>Approve variance</Action>
+    <Action tone="good" disabled={busy || status !== 'approved' || !form.count} click={() => execute(() => runBackendAction('stock-counts', id(form.count), 'apply'), 'Count variances posted')}>Apply variance</Action>
   </Panel>
 }
 
 function ReturnPanel({ app, data, form, setForm, busy, execute }: any) {
+  const selectedReturn = data.returns.find((r: Row) => id(r.id) === id(form.return))
+  const recordedLines = data.returnItems.filter((r: Row) => id(r.store_return) === id(form.return))
   return <Panel title="Store return" note="Record returned items.">
     <Field label="Department"><Select value={form.department} change={(v) => setForm({ ...form, department: v })} rows={app.data.departments} /></Field>
     <Field label="Store"><Select value={form.store} change={(v) => setForm({ ...form, store: v })} rows={app.data.locations} /></Field>
@@ -1045,10 +1051,12 @@ function ReturnPanel({ app, data, form, setForm, busy, execute }: any) {
     <Action disabled={busy || !form.department || !form.store || !form.employee} click={() => execute(() => createBackendRecord('store-returns', { department: form.department, store: form.store, received_by: form.employee, reason: form.reason || '' }), 'Store return created')}>Create return</Action>
     <Rule />
     <Field label="Return"><Select value={form.return} change={(v) => setForm({ return: v })} rows={data.returns.filter((r: Row) => !r.inventory_changes_applied)} label={(r) => id(r.return_no)} /></Field>
+    {selectedReturn&&<WorkflowPrerequisite domain="department_return" record={selectedReturn} action="apply"/>}
+    {selectedReturn&&!recordedLines.length&&<Hint>Add at least one physical returned article before posting. Django validates signed issue evidence again.</Hint>}
     <Field label="Article"><Select value={form.item} change={(v) => setForm({ ...form, item: v })} rows={app.data.items} /></Field>
     <Field label="Quantity"><Input type="number" value={form.quantity} change={(v) => setForm({ ...form, quantity: v })} /></Field>
-    <Action disabled={busy || !form.return || !form.item} click={() => execute(() => createBackendRecord('store-return-items', { store_return: form.return, item: form.item, unit: null, quantity: num(form.quantity), condition_note: '' }), 'Return line added')}>Add returned Article</Action>
-    <Action tone="good" disabled={busy || !form.return} click={() => execute(() => runBackendAction('store-returns', id(form.return), 'apply'), 'Returned stock restored')}>Post store return</Action>
+    <Action disabled={busy || !selectedReturn || selectedReturn.inventory_changes_applied || !form.item || !(num(form.quantity)>0)} click={() => execute(() => createBackendRecord('store-return-items', { store_return: form.return, item: form.item, unit: null, quantity: num(form.quantity), condition_note: '' }), 'Return line added')}>Add returned Article</Action>
+    <Action tone="good" disabled={busy || !selectedReturn || selectedReturn.inventory_changes_applied || !recordedLines.length} click={() => execute(() => runBackendAction('store-returns', id(form.return), 'apply'), 'Returned stock restored')}>Post store return</Action>
   </Panel>
 }
 

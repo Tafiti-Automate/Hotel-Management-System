@@ -13,7 +13,7 @@ test('blocked procurement and stores actions explain the next prerequisite acces
     ['supplier_invoice',{status:'exception'},'approve',/match/i],
     ['stock_count',{status:'submitted'},'submit',/locked/i],
     ['supplier_return',{status:'posted'},'apply',/cannot/i],
-    ['department_return',{inventory_changes_applied:true},'apply',/already posted/i],
+    ['department_return',{inventory_changes_applied:true},'apply',/already been posted/i],
   ]) {
     const html = render({domain,record,action})
     assert.match(html,/role="status"/)
