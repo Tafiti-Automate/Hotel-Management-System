@@ -7,6 +7,7 @@ import { createBackendRecord, errorMessage, readBackendRecords, runBackendAction
 import type { Row } from '../lib/data'
 import { money } from '../lib/theme'
 import { useApp } from '../state/AppContext'
+import { explainWorkflowAction } from '../features/shared/workflowIntelligence'
 
 type FinanceTab = 'invoices' | 'payments' | 'expenses' | 'banking' | 'methods'
 const financePaths = {
@@ -105,6 +106,12 @@ export default function FinanceWorkbench() {
   const approvalQueue = scopedData.invoices.filter((row) => ['matched', 'pending_approval', 'awaiting_approval'].includes(invoiceStatus(row)))
   const outstandingPayable = scopedData.invoices.reduce((total, row) => total + number(row.balance_due), 0)
   const paymentQueue = scopedData.payments.filter((row) => !['posted', 'paid', 'completed'].includes(invoiceStatus(row)))
+  const selectedPayment = scopedData.payments.find((row) => sid(row.id) === sid(form.payment))
+  const authorizeGuidance = explainWorkflowAction('supplier_payment', selectedPayment, 'authorize')
+  const releaseGuidance = explainWorkflowAction('supplier_payment', selectedPayment, 'release')
+  const showPrerequisite = (reason: string, next: string) => {
+    app.showWorkflowAlert('Complete the previous step first', reason + '\nNext: ' + next, 'warning')
+  }
 
   return <div className="enterprise-workspace finance-workbench" style={{ maxWidth: 1440, margin: '0 auto' }}>
     <section className="workbench-hero" style={{ ...card, padding: 20, marginBottom: 15, display: 'flex', alignItems: 'center', gap: 13 }}>
@@ -117,13 +124,14 @@ export default function FinanceWorkbench() {
       summary="Invoices, matching, payments and expenses."
       activeKey={paymentPathActive}
       onSelect={openPaymentStep}
+      onBlocked={(step) => showPrerequisite(step.blockedReason || 'Complete the preceding step.', step.nextAction || 'Review the workflow.')}
       steps={[
         { key: 'invoice', label: 'Register invoice', actor: 'Finance', description: 'Select a received LPO and enter the supplier invoice.', icon: 'request_page' },
         { key: 'match', label: 'Three-way match', actor: 'Finance', description: 'Compare LPO, accepted GRN and invoice values.', icon: 'difference' },
         { key: 'approve', label: 'Approve invoice', actor: 'Authorised approver', description: 'Release only a matched invoice for payment.', icon: 'approval' },
         { key: 'payment', label: 'Create payment', actor: 'Finance', description: 'Record method, amount, date and bank reference.', icon: 'payments' },
-        { key: 'authorize', label: 'Authorize', actor: 'Financial Manager', description: 'Approve a submitted instruction independently.', icon: 'approval' },
-        { key: 'release', label: 'Release to bank', actor: 'Independent approver', description: 'Record release for external execution. This is NOT payment settlement.', icon: 'outbox' },
+        { key: 'authorize', label: 'Authorize', actor: 'Financial Manager', description: 'Approve a submitted instruction independently.', icon: 'approval', blockedReason: authorizeGuidance.allowed ? undefined : authorizeGuidance.message, nextAction: authorizeGuidance.next },
+        { key: 'release', label: 'Release to bank', actor: 'Independent approver', description: 'Record release for external execution. This is NOT payment settlement.', icon: 'outbox', blockedReason: releaseGuidance.allowed ? undefined : releaseGuidance.message, nextAction: releaseGuidance.next },
       ]}
     />}
     <section className="finance-kpi-grid" aria-label="Finance operational metrics">
