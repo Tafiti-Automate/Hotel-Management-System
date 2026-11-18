@@ -61,7 +61,7 @@ test('Storekeeper owns supplier return and Receiving Clerk has no posting access
   assert.match(storeRole, /"supplierreturn", "supplierreturnitem"/)
   assert.doesNotMatch(receivingRole, /"supplierreturn", "supplierreturnitem"/)
   assert.ok(procurement.includes("'receiving clerk': ['receipt', 'inspect']"))
-  const returnScreen = readFileSync(new URL('../../enterprise/OperationsAdmin.tsx', import.meta.url), 'utf8')
+  const returnScreen = readFileSync(new URL('../enterprise/OperationsAdmin.tsx', import.meta.url), 'utf8')
   assert.ok(returnScreen.includes('section="Stores / Supplier returns"'))
   assert.match(returnScreen, /Post supplier return/)
   assert.match(returnScreen, /supplier-return-items/)
