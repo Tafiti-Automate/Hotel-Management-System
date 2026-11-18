@@ -1,25 +1,60 @@
+import { useEffect, useId, useRef } from 'react'
 import { useApp } from '../state/AppContext'
 import { Icon } from './Icon'
+import './toast-feedback.css'
 
 export default function ConfirmDialog() {
   const app = useApp()
-  if (!app.confirm) return null
+  const target = app.confirm
+  const titleId = useId()
+  const messageId = useId()
+  const cancelRef = useRef<HTMLButtonElement>(null)
+  const deleteRef = useRef<HTMLButtonElement>(null)
+  const previousFocus = useRef<HTMLElement | null>(null)
 
-  return (
-    <div className="confirm-backdrop" onClick={app.closeConfirm} style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(16,17,33,.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div className="confirm-dialog" onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 380, background: 'var(--surface)', borderRadius: 18, boxShadow: 'var(--shadow)', padding: 24, animation: 'pop .18s ease' }}>
-        <div className="confirm-icon" style={{ width: 46, height: 46, borderRadius: 13, background: 'var(--bad-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-          <Icon name="delete" size={24} color="var(--bad)" />
-        </div>
-        <div className="confirm-title" style={{ fontSize: 17, fontWeight: 800, color: 'var(--text)' }}>Delete record?</div>
-        <p className="confirm-message" style={{ margin: '8px 0 20px', fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-          You are about to delete <b style={{ color: 'var(--text)' }}>{app.confirm.name}</b>. This action cannot be undone.
-        </p>
-        <div className="confirm-actions" style={{ display: 'flex', gap: 10 }}>
-          <button onClick={app.closeConfirm} className="hover-surface2" style={{ flex: 1, height: 42, border: '1px solid var(--border)', cursor: 'pointer', background: 'var(--surface)', color: 'var(--text)', borderRadius: 11, font: 'inherit', fontSize: 13.5, fontWeight: 700 }}>Cancel</button>
-          <button onClick={app.doDelete} className="hover-bright" style={{ flex: 1, height: 42, border: 'none', cursor: 'pointer', background: 'var(--bad)', color: '#fff', borderRadius: 11, font: 'inherit', fontSize: 13.5, fontWeight: 700 }}>Delete</button>
-        </div>
+  useEffect(() => {
+    if (!target) return
+    previousFocus.current = document.activeElement as HTMLElement | null
+    cancelRef.current?.focus()
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        if (!app.confirmBusy) app.closeConfirm()
+      }
+      if (event.key !== 'Tab') return
+      const available = [cancelRef.current, deleteRef.current].filter(
+        (button): button is HTMLButtonElement => Boolean(button && !button.disabled),
+      )
+      if (!available.length) return
+      if (event.shiftKey && document.activeElement === available[0]) {
+        event.preventDefault()
+        available[available.length - 1].focus()
+      } else if (!event.shiftKey && document.activeElement === available[available.length - 1]) {
+        event.preventDefault()
+        available[0].focus()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      previousFocus.current?.focus()
+    }
+  }, [target, app.confirmBusy, app.closeConfirm])
+
+  if (!target) return null
+  return <div className="mc-confirm-backdrop" onMouseDown={(event) => {
+    if (event.target === event.currentTarget && !app.confirmBusy) app.closeConfirm()
+  }}>
+    <section className="mc-confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={messageId} aria-busy={app.confirmBusy}>
+      <span className="mc-confirm-icon" aria-hidden="true"><Icon name="delete" size={25}/></span>
+      <h2 id={titleId}>Delete record?</h2>
+      <p id={messageId}>Delete <strong>{target.name}</strong>? This action cannot be undone. Records used in approved or posted transactions may be protected.</p>
+      <div className="mc-confirm-actions">
+        <button ref={cancelRef} type="button" onClick={app.closeConfirm} disabled={app.confirmBusy}>Keep record</button>
+        <button ref={deleteRef} type="button" className="mc-confirm-danger" onClick={app.doDelete} disabled={app.confirmBusy}>
+          {app.confirmBusy ? 'Deleting…' : 'Delete record'}
+        </button>
       </div>
-    </div>
-  )
+    </section>
+  </div>
 }

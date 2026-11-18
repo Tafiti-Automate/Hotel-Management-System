@@ -53,6 +53,7 @@ interface AppState {
   form: FormTarget | null
   formSaving: boolean
   confirm: ConfirmTarget | null
+  confirmBusy: boolean
   detail: DetailTarget | null
   reportId: string | null
   toast: string | null
@@ -219,6 +220,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const didInitialSync = useRef(false)
   const logoutRequest = useRef<Promise<void> | null>(null)
   const saveFormRequest = useRef<Promise<void> | null>(null)
+  const deleteRequest = useRef<Promise<void> | null>(null)
 
   const storedUser = getStoredUser()
   const initialUser = toUser(storedUser)
@@ -248,6 +250,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     form: null,
     formSaving: false,
     confirm: null,
+    confirmBusy: false,
     detail: null,
     reportId: null,
     toast: null,
@@ -318,6 +321,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       form: null,
       formSaving: false,
       confirm: null,
+      confirmBusy: false,
       detail: null,
       reportId: null,
       toast: null,
@@ -554,19 +558,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const doDelete = useCallback(() => {
     const target = state.confirm
-    if (!target) return
+    if (!target || deleteRequest.current) return
     const row = dataRef.current[target.entity].find((record) => record.id === target.id)
     const backendId = String(row?.apiId || target.id)
     const recordName = cfg[target.entity].singular || 'Record'
-    patch({ confirm: null })
-    void deleteBackendRecord(target.entity, backendId)
+    patch({ confirmBusy: true })
+    const request = deleteBackendRecord(target.entity, backendId)
       .then(async () => {
-        await refreshData(true)
-        showToast(`${recordName} removed successfully`)
+        // The server has accepted deletion. Refresh failures are not deletion
+        // failures; do not invite the operator to repeat an irreversible action.
+        patch({ confirm: null })
+        showToast(`${recordName} deleted successfully`)
+        try {
+          await refreshData(true)
+        } catch {
+          showWorkflowAlert('Refresh required', 'The record was deleted, but the list could not refresh. Reload the workspace before continuing.', 'warning')
+        }
       })
       .catch((error) => {
-        showWorkflowAlert(`${recordName} removal failed`, errorMessage(error))
+        // Leave the confirmation available so the operator can review the
+        // backend reason or cancel. No success is shown on a rejected DELETE.
+        showWorkflowAlert(`${recordName} could not be deleted`, errorMessage(error))
       })
+      .finally(() => {
+        deleteRequest.current = null
+        patch({ confirmBusy: false })
+      })
+    deleteRequest.current = request
   }, [patch, refreshData, showToast, showWorkflowAlert, state.confirm])
 
   const approveReq = useCallback((comments = '') => {
@@ -614,6 +632,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const requestDelete = useCallback((id: string) => {
     setState((s) => {
       const row = dataRef.current[s.route as EntityKey]?.find((x) => x.id === id)
+      if (s.confirmBusy) return s
       return { ...s, confirm: { entity: s.route as EntityKey, id, name: (row && (row.name || row.id)) || id } }
     })
   }, [])
@@ -743,7 +762,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     closeForm: () => patch({ form: null }),
     saveForm,
     requestDelete,
-    closeConfirm: () => patch({ confirm: null }),
+    closeConfirm: () => { if (!deleteRequest.current) patch({ confirm: null }) },
     doDelete,
     openDetail: (entity, id, from) => patch({ route: 'detail', detail: { entity, id, from } }),
     backFromDetail: () => patch({ route: (state.detail && state.detail.from) || 'requisitions', detail: null }),

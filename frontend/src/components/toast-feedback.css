@@ -1,0 +1,29 @@
+/* Shared, non-blocking action status and deliberate destructive confirmation. */
+.mc-feedback-toast {
+  position: fixed; top: 76px; right: max(18px, env(safe-area-inset-right));
+  z-index: 125; width: min(390px, calc(100vw - 32px));
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 15px 13px 15px 15px; background: var(--surface);
+  color: var(--text); border: 1px solid var(--border);
+  border-left: 4px solid var(--good); border-radius: 12px;
+  box-shadow: 0 16px 44px rgba(7, 36, 26, .16); font: inherit;
+}
+.mc-feedback-toast-icon { flex: none; color: var(--good); margin-top: 2px; }
+.mc-feedback-toast-copy { min-width: 0; display: grid; gap: 3px; flex: 1; }
+.mc-feedback-toast-copy strong { font-size: 13px; line-height: 1.3; font-weight: 750; }
+.mc-feedback-toast-copy span { color: var(--text-muted); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.mc-feedback-toast > button { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 7px; background: transparent; color: var(--text-muted); cursor: pointer; }
+.mc-feedback-toast > button:hover { background: var(--surface-2, rgba(0,0,0,.05)); color: var(--text); }
+.mc-confirm-backdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 20px; background: rgba(9,24,25,.52); backdrop-filter: blur(2px); }
+.mc-confirm-dialog { width: min(430px, 100%); border: 1px solid var(--border); border-radius: 16px; background: var(--surface); box-shadow: 0 25px 70px rgba(0,0,0,.27); padding: 25px; color: var(--text); }
+.mc-confirm-icon { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 12px; color: var(--bad); background: var(--bad-soft); margin-bottom: 15px; }
+.mc-confirm-dialog h2 { font-size: 19px; line-height: 1.25; margin: 0 0 10px; font-weight: 760; }
+.mc-confirm-dialog p { color: var(--text-muted); line-height: 1.6; font-size: 13.5px; margin: 0 0 22px; overflow-wrap: anywhere; }
+.mc-confirm-dialog p strong { color: var(--text); }
+.mc-confirm-actions { display: flex; gap: 10px; }
+.mc-confirm-actions button { flex: 1; min-height: 44px; padding: 9px 13px; border-radius: 9px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.mc-confirm-actions button.mc-confirm-danger { border-color: var(--bad); background: var(--bad); color: white; }
+.mc-confirm-actions button:disabled { opacity: .62; cursor: progress; }
+.mc-confirm-actions button:focus-visible, .mc-feedback-toast button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 520px) { .mc-feedback-toast { top: auto; bottom: max(22px, env(safe-area-inset-bottom)); right: 16px; } .mc-confirm-dialog { padding: 20px; } }
+@media (prefers-reduced-motion: no-preference) { .mc-feedback-toast { animation: mc-feedback-appear .2s ease-out; } @keyframes mc-feedback-appear { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } } }
