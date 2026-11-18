@@ -65,3 +65,126 @@ def test_stock_count_surplus_reverses_mapping_direction(materials_context):
     rows = period.inventory_gl_journal_preview()["draft_rows"]
     assert rows[0]["account"] == "STOCK" and rows[0]["debit"] == "60.00"
     assert rows[1]["account"] == "VARIANCE" and rows[1]["credit"] == "60.00"
+
+@pytest.mark.django_db
+def test_closed_period_export_includes_historical_inventory_gl_without_supplier_receipt_double_count(materials_context):
+    import csv
+    import io
+    from uuid import uuid4
+    from core.constants.choices import LedgerReferenceType
+
+    user, _employee, _department, branch, store, _unit, item = materials_context
+    today = timezone.localdate()
+    period = FiscalPeriod.objects.create(
+        branch=branch, name="Balanced stock GL export",
+        start_date=today.replace(day=1), end_date=today,
+    )
+    for source in (LedgerReferenceType.POS_DEPLETION, LedgerReferenceType.WASTE,
+                   LedgerReferenceType.GRN_RECEIPT):
+        inbound = source == LedgerReferenceType.GRN_RECEIPT
+        StockLedger.objects.create(
+            item=item, store=store, reference_type=source, reference_id=uuid4(),
+            quantity_in=Decimal("1") if inbound else Decimal("0"),
+            quantity_out=Decimal("0") if inbound else Decimal("1"),
+            unit_cost_snapshot=Decimal("125.0000"),
+            total_cost_snapshot=Decimal("125.0000"),
+            wac_before=Decimal("125.0000"), wac_after=Decimal("125.0000"),
+        )
+    GLAccountMapping.objects.create(
+        branch=branch, source_type=GLAccountMapping.SOURCE_POS_COGS,
+        debit_account="COGS-5100", credit_account="STOCK-1400",
+    )
+    GLAccountMapping.objects.create(
+        branch=branch, source_type=GLAccountMapping.SOURCE_WASTE,
+        debit_account="WASTE-5200", credit_account="STOCK-1400",
+    )
+    period.close(user, "Posted consumption and expense journals reconciled.")
+    export = GLExport.generate(period, user)
+    rows = list(csv.DictReader(io.StringIO(export.payload)))
+    assert export.row_count == 4
+    assert {row["source"] for row in rows} == {
+        LedgerReferenceType.POS_DEPLETION, LedgerReferenceType.WASTE,
+    }
+    assert sum(Decimal(row["debit"]) for row in rows) == Decimal("250.00")
+    assert sum(Decimal(row["credit"]) for row in rows) == Decimal("250.00")
+    assert {row["account"] for row in rows} == {"COGS-5100", "WASTE-5200", "STOCK-1400"}
+    assert all(row["description"].startswith("Inventory movement ") for row in rows)
+    assert GLExport.generate(period, user).pk == export.pk
+    assert GLExport.objects.filter(period=period).count() == 1
+
+
+@pytest.mark.django_db
+def test_missing_stock_valuation_refuses_partial_financial_export(materials_context):
+    from uuid import uuid4
+    from django.core.exceptions import ValidationError
+    from core.constants.choices import LedgerReferenceType
+
+    user, _employee, _department, branch, store, _unit, item = materials_context
+    today = timezone.localdate()
+    period = FiscalPeriod.objects.create(
+        branch=branch, name="Missing stock cost GL export",
+        start_date=today.replace(day=1), end_date=today,
+    )
+    GLAccountMapping.objects.create(
+        branch=branch, source_type=GLAccountMapping.SOURCE_WASTE,
+        debit_account="WASTE-5200", credit_account="STOCK-1400",
+    )
+    StockLedger.objects.create(
+        item=item, store=store, reference_type=LedgerReferenceType.WASTE,
+        reference_id=uuid4(), quantity_out=Decimal("1"),
+    )
+    period.close(user, "No unresolved operational documents.")
+    with pytest.raises(ValidationError, match="Missing historical cost"):
+        GLExport.generate(period, user)
+    assert GLExport.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_finance_only_gl_export_download_and_list(materials_context):
+    from django.contrib.auth import get_user_model
+    from django.contrib.auth.models import Group
+    from django.core.management import call_command
+    from rest_framework.test import APIClient
+    from apps.employees.models import Employee
+
+    original_user, _employee, department, branch, _store, _unit, _item = materials_context
+    call_command("setup_hotel_roles", verbosity=0)
+    today = timezone.localdate()
+    period = FiscalPeriod.objects.create(
+        branch=branch, name="Private financial evidence",
+        start_date=today.replace(day=1), end_date=today,
+    )
+    export = GLExport.objects.create(
+        period=period, generated_by=original_user,
+        row_count=1, checksum="a" * 64,
+        payload="date,source,reference,department,description,account,debit,credit\\n",
+    )
+    finance_user = get_user_model().objects.create_user(
+        username="finance-download-acceptance",
+        employee_code="GL-FIN-READ", password="test-password",
+    )
+    finance_user.groups.add(Group.objects.get(name="Financial Manager"))
+    Employee.objects.create(
+        user=finance_user, branch=branch, department=department,
+        designation="Financial Manager",
+    )
+    operational = get_user_model().objects.create_user(
+        username="store-download-not-allowed",
+        employee_code="GL-STORE-DENY", password="test-password",
+    )
+    operational.groups.add(Group.objects.get(name="Store Keeper"))
+    Employee.objects.create(
+        user=operational, branch=branch, department=department,
+        designation="Store Keeper",
+    )
+    client = APIClient()
+    client.force_authenticate(user=operational)
+    assert client.get("/api/v1/gl-exports/").status_code == 403
+    assert client.get(f"/api/v1/gl-exports/{export.pk}/").status_code == 403
+    assert client.get(f"/api/v1/gl-exports/{export.pk}/download/").status_code == 403
+
+    client.force_authenticate(user=finance_user)
+    assert client.get("/api/v1/gl-exports/").status_code == 200
+    response = client.get(f"/api/v1/gl-exports/{export.pk}/download/")
+    assert response.status_code == 200
+    assert response["X-Content-SHA256"] == export.checksum

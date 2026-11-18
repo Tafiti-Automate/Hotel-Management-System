@@ -873,6 +873,10 @@ class GLExportViewSet(ReadOnlyModelViewSet):
     ordering_fields = ("generated_at", "row_count")
 
     def get_queryset(self):
+        # Exports expose supplier invoice, banking and inventory GL accounts.
+        # Property scope alone is not authorization to read Finance journals.
+        if not has_role(self.request.user, "finance"):
+            raise PermissionDenied("Only the Financial Manager can access GL exports.")
         return hotel_scope(super().get_queryset(), self.request.user, "period__branch")
 
     @action(detail=True, methods=["get"])

@@ -1021,14 +1021,23 @@ class FiscalPeriod(BaseModel):
         movements = StockLedger.objects.filter(
             store__branch=self.branch,
             created_at__date__range=(self.start_date, self.end_date),
-        ).values("pk", "created_at", "reference_type", "reference_id",
-                 "quantity_in", "quantity_out", "unit_cost_snapshot", "total_cost_snapshot")
+        ).order_by("created_at", "pk").values(
+            "pk", "created_at", "reference_type", "reference_id",
+            "quantity_in", "quantity_out", "unit_cost_snapshot", "total_cost_snapshot"
+        )
         draft, blockers, excluded = [], [], {}
         debits = credits = Decimal("0.00")
         for movement in movements.iterator():
             source = movement["reference_type"]
             if source not in sources:
                 excluded[source] = excluded.get(source, 0) + 1
+                continue
+            # Every journal entry must correspond to one genuine stock
+            # movement, not a zero-quantity or bidirectional adjustment.
+            inbound = movement["quantity_in"] > 0
+            outbound = movement["quantity_out"] > 0
+            if inbound == outbound or movement["quantity_in"] < 0 or movement["quantity_out"] < 0:
+                blockers.append(f"Invalid stock movement direction for {source} movement {movement['pk']}.")
                 continue
             amount = movement["total_cost_snapshot"]
             if amount is None or movement["unit_cost_snapshot"] is None:
@@ -1042,10 +1051,10 @@ class FiscalPeriod(BaseModel):
             if mapping is None:
                 blockers.append(f"Missing active GL mapping for {sources[source]}.")
                 continue
-            if mapping.debit_account == mapping.credit_account:
-                blockers.append(f"Conflicting debit and credit accounts for {sources[source]}.")
+            if not mapping.debit_account or not mapping.credit_account or mapping.debit_account == mapping.credit_account:
+                blockers.append(f"Invalid debit and credit accounts for {sources[source]}.")
                 continue
-            outgoing = movement["quantity_out"] > 0
+            outgoing = outbound
             dr = mapping.debit_account if outgoing else mapping.credit_account
             cr = mapping.credit_account if outgoing else mapping.debit_account
             common = {
@@ -1164,9 +1173,13 @@ class GLExport(BaseModel):
         ordering = ("-generated_at",)
 
     @classmethod
+    @transaction.atomic
     def generate(cls, period, actor):
         from apps.finance.models import Expense, SupplierInvoice, SupplierCreditNote, SupplierPayment
 
+        # Revalidate the persisted period under a lock. Export creation must
+        # not rely on a potentially stale period object from a browser view.
+        period = FiscalPeriod.objects.select_for_update().get(pk=period.pk)
         if period.status != FiscalPeriod.STATUS_CLOSED:
             raise ValidationError("Close the fiscal period before generating its GL export.")
 
@@ -1284,11 +1297,27 @@ class GLExport(BaseModel):
             add_entry(expense.date, "expense", ref, "",
                       description, mapping.credit_account, 0, expense.amount)
 
+        # Every stock consumption, POS COGS, waste and physical variance
+        # requires an independently balanced historical-cost journal.
+        # Purchase receipts, supplier credits and transfers deliberately stay
+        # excluded: supplier invoice/credit rows above already account for
+        # those assets and liabilities, and transfers do not create P&L.
+        inventory = period.inventory_gl_journal_preview()
+        if not inventory["ready_for_finance_review"]:
+            raise ValidationError({"inventory_gl": inventory["blockers"]})
+        for line in inventory["draft_rows"]:
+            add_entry(
+                line["date"], line["source"], line["reference"], "",
+                f"Inventory movement {line['movement_id']}",
+                line["account"], line["debit"], line["credit"],
+            )
+
         if debit_total != credit_total:
             raise ValidationError("Unbalanced GL export cannot be generated.")
 
-        # No historical monetary valuation is held on StockLedger. Do not
-        # fabricate stock/COGS journal amounts using present-day unit prices.
+        # Historical cost snapshots are the only source of stock valuation.
+        # The CSV is an export for authorized Finance review/import, NOT a
+        # declaration that an external accounting system has booked it.
         output = io.StringIO()
         writer = csv.writer(output)
         writer.writerow(["date", "source", "reference", "department", "description",
