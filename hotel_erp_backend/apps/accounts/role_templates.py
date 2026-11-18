@@ -90,6 +90,7 @@ ROLE_SPECS = {
                 "stocktransfer", "stocktransferitem",
                 "stockcount", "stockcountitem",
                 "stockadjustment", "stockadjustmentitem",
+                "storereturn", "storereturnitem",
             ],
             "procurement": ["supplierreturn", "supplierreturnitem"],
         },
