@@ -51,7 +51,11 @@ export function printReturnNote(kind: ReturnKind, record: DocumentRow, lines: Do
   return true
 }
 
-export function exportReturnRegister(kind: ReturnKind, records: DocumentRow[], lines: DocumentRow[]): void {
+export function exportReturnRegister(kind: ReturnKind, records: DocumentRow[], lines: DocumentRow[],
+  items: DocumentRow[], stores: DocumentRow[], targets: DocumentRow[]): void {
+  const articleNames = new Map(items.map(row => [value(row.id), value(row.name)]))
+  const storeNames = new Map(stores.map(row => [value(row.id), value(row.name)]))
+  const targetNames = new Map(targets.map(row => [value(row.id), value(row.name)]))
   const columns = ['Return number','Date','Status','Store','Department / supplier','Article','Quantity (base)','Reason / condition','Supplier credit note','Inventory posted']
   const csvLines = [columns.map(safeCsv).join(',')]
   for (const record of records) {
@@ -59,7 +63,9 @@ export function exportReturnRegister(kind: ReturnKind, records: DocumentRow[], l
     for (const line of documentLines.length ? documentLines : [{}]) {
       csvLines.push([
         record.return_no, record.return_date, record.status || (record.inventory_changes_applied ? 'posted' : 'draft'),
-        record.store, record[kind === 'supplier' ? 'supplier' : 'department'], line.item,
+        storeNames.get(value(record.store)) || 'Store unavailable',
+        targetNames.get(value(record[kind === 'supplier' ? 'supplier' : 'department'])) || 'Name unavailable',
+        articleNames.get(value(line.item)) || 'Article unavailable',
         line.base_quantity || line.quantity || '', line.condition_note || line.reason || record.reason,
         record.credit_note_number || '', record.inventory_changes_applied ? 'Yes' : 'No',
       ].map(safeCsv).join(','))
