@@ -184,6 +184,35 @@ export function InternalRequestBuilder() {
   </div>
 }
 
+function printIssueVoucher(issue: Row, lines: Row[], preparedFor: string): boolean {
+  if (!lines.length) return false
+  const escapeHtml = (value: unknown) => sid(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  const signed = Boolean(issue.signed_at && issue.received_by)
+  const rows = lines.map((line, index) =>
+    '<tr><td>' + (index + 1) + '</td><td>' + escapeHtml(line.item_name || 'Article unavailable') +
+    '</td><td>' + escapeHtml(line.base_quantity) + '</td><td>' + escapeHtml(line.unit_name) + '</td></tr>'
+  ).join('')
+  const html = '<!doctype html><html><head><meta charset="utf-8"><title>Stock Issue Voucher ' +
+    escapeHtml(issue.issue_no) + '</title><style>@page{size:A4 portrait;margin:15mm}body{font:12px Arial,sans-serif;color:#18352c}header{border-bottom:3px solid #166446;padding-bottom:12px}h1{font-size:21px}table{border-collapse:collapse;width:100%;margin:20px 0}td,th{border:1px solid #a7bcb1;padding:9px;text-align:left}th{background:#ecf3ee}.meta{line-height:1.9}.sig{display:grid;grid-template-columns:1fr 1fr;gap:45px;margin-top:65px}.sig div{padding-top:7px;border-top:1px solid #496a59}small{color:#577063}</style></head><body><header><h1>STOCK ISSUE / DEPARTMENT PICKUP VOUCHER</h1><small>Hotel ERP · Materials & Cost Control</small></header>' +
+    '<section class="meta"><b>Issue no.:</b> ' + escapeHtml(issue.issue_no) +
+    '<br><b>Issue date:</b> ' + escapeHtml(issue.issue_date) +
+    '<br><b>Issuing store:</b> ' + escapeHtml(issue.store_name) +
+    '<br><b>Status:</b> ' + (signed ? 'Signed and received' : 'Awaiting physical handover') +
+    '<br><b>Signed receiver:</b> ' + escapeHtml(issue.received_by_name || 'Not signed') +
+    '</section><table><thead><tr><th>#</th><th>Article</th><th>Quantity</th><th>Unit</th></tr></thead><tbody>' + rows +
+    '</tbody></table><section class="sig"><div>Issued by Storekeeper<br>Name / signature: ____________________<br>Date: __________</div>' +
+    '<div>Received by Department<br>Name / signature: ____________________<br>Date: __________</div></section><p><small>Printed by ' +
+    escapeHtml(preparedFor) + ' · ' + escapeHtml(new Date().toLocaleString('en-UG')) +
+    '. Blank signature fields are not digital signatures. Electronic pickup is authoritative in the system.</small></p></body></html>'
+  const popup = window.open('', '_blank')
+  if (!popup) return false
+  popup.document.write(html)
+  popup.document.close()
+  popup.focus()
+  popup.print()
+  return true
+}
+
 export function IncomingPickup() {
   const { app, data, loading, error, setError, load } = useOutletWorkflow()
   const [busy, setBusy] = useState(false)
@@ -225,7 +254,7 @@ export function IncomingPickup() {
       </section>
       <section className="bp-panel">
         {!candidate ? <div className="bp-empty">Select an issue voucher to check the item list.</div> : <>
-          <div className="bp-panel-title"><div><span className="bp-eyebrow">Issue voucher</span><h2>{sid(candidate.issue_no)}</h2><p>{sid(candidate.store_name)} · {sid(candidate.issue_date)}</p></div><span className={candidate.received_by ? 'bp-state done' : 'bp-state'}>{candidate.received_by ? 'Received' : candidate.fulfillment_status === 'in_transit' ? 'In transit · awaiting signature' : candidate.inventory_changes_applied ? 'Posted by Stores' : 'Prepared'}</span></div>
+          <div className="bp-panel-title"><div><span className="bp-eyebrow">Issue voucher</span><h2>{sid(candidate.issue_no)}</h2><p>{sid(candidate.store_name)} · {sid(candidate.issue_date)}</p></div><span className={candidate.received_by ? 'bp-state done' : 'bp-state'}>{candidate.received_by ? 'Received' : candidate.fulfillment_status === 'in_transit' ? 'In transit · awaiting signature' : candidate.inventory_changes_applied ? 'Posted by Stores' : 'Prepared'}</span><button className="bp-quiet" type="button" disabled={!items.length} onClick={()=>{if(!printIssueVoucher(candidate,items,app.user.name)) app.showWorkflowAlert('Issue voucher cannot print','Select a voucher with articles and allow pop-ups in your browser.','warning')}}><Icon name="print" size={16}/> Print voucher</button></div>
           <div className="bp-table-scroll"><table className="bp-grid"><thead><tr><th>Article</th><th>Issued quantity</th><th>Unit</th></tr></thead><tbody>
             {items.map((line) => <tr key={sid(line.id)}><td><strong>{sid(line.item_name)}</strong></td><td>{sid(line.base_quantity)}</td><td>{sid(line.unit_name)}</td></tr>)}
           </tbody></table></div>
