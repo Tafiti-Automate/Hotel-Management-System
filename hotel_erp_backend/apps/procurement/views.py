@@ -4,6 +4,7 @@ import json
 import logging
 import smtplib
 
+from django.contrib.auth.models import Group
 from django.http import Http404, HttpResponse
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import models, transaction
