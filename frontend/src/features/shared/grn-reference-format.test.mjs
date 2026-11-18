@@ -52,3 +52,17 @@ test('no fabricated ordered values, supplier price or financial amount in blind 
   assert.doesNotMatch(template, /NATIONAL WATER AND SEWERAGE CORP/i)
   assert.doesNotMatch(template, /1,038,400\.00/)
 })
+
+
+test('Receiving Clerk can reach supplier returns and form blocks unsafe submissions', () => {
+  const roleTemplates = readFileSync(new URL('../../../../hotel_erp_backend/apps/accounts/role_templates.py', import.meta.url), 'utf8')
+  const receivingRole = roleTemplates.slice(roleTemplates.indexOf('"Receiving Clerk": {'))
+  assert.match(receivingRole, /"supplierreturn", "supplierreturnitem"/)
+  assert.match(procurement, /'receiving clerk': \['receipt', 'inspect', 'return'\]/)
+  const returnPanel = procurement.slice(procurement.indexOf('function ReturnPanel('), procurement.indexOf('function StageTable('))
+  assert.match(returnPanel, /rows=\{postedReceipts\}/)
+  assert.match(returnPanel, /selectedItemInReceipt/)
+  assert.match(returnPanel, /quantityValid/)
+  assert.match(returnPanel, /draftHasLines/)
+  assert.doesNotMatch(returnPanel, /returned_by: form\.employee/)
+})
