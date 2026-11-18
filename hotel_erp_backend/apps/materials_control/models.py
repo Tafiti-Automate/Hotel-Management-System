@@ -1009,6 +1009,9 @@ class FiscalPeriod(BaseModel):
         from core.constants.choices import LedgerReferenceType
         sources = {
             LedgerReferenceType.STOCK_ISSUE: GLAccountMapping.SOURCE_CONSUMPTION,
+            # Department returns reverse previously recognized consumption
+            # at the return's immutable historical stock valuation.
+            LedgerReferenceType.STORE_RETURN: GLAccountMapping.SOURCE_CONSUMPTION,
             LedgerReferenceType.POS_DEPLETION: GLAccountMapping.SOURCE_POS_COGS,
             LedgerReferenceType.WASTE: GLAccountMapping.SOURCE_WASTE,
             LedgerReferenceType.STOCK_COUNT: GLAccountMapping.SOURCE_VARIANCE,
