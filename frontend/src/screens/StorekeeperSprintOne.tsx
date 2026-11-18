@@ -28,9 +28,9 @@ type PickRequest = {
   status: string; required_date: string; lines: PickLine[]
 }
 const ident = (value: unknown) => String(value ?? '')
-const qty = (value: unknown) => Number(value || 0).toLocaleString('en-UG', { maximumFractionDigits: 2 })
+const qty = (value: unknown) => Number(value || 0).toLocaleString('en-UG', { maximumFractionDigits: 4 })
 const validQuantity = (raw: string, ceiling: number, physical: number) => {
-  if (!raw.trim() || !/^\d+(?:\.\d{1,2})?$/.test(raw.trim())) return false
+  if (!raw.trim() || !/^\d+(?:\.\d{1,4})?$/.test(raw.trim())) return false
   const number = Number(raw)
   return Number.isFinite(number) && number >= 0 && number <= ceiling && number <= physical
 }
@@ -147,8 +147,8 @@ export function GrnPostingConsole() {
   </div>
 }
 
-function printBatch(type: 'picking' | 'packing', selected: PickRequest[], valueFor: (req: PickRequest, line: PickLine) => string) {
-  if (!selected.length) return
+function printBatch(type: 'picking' | 'packing', selected: PickRequest[], valueFor: (req: PickRequest, line: PickLine) => string): boolean {
+  if (!selected.length) return false
   const lines = selected.flatMap((req) => req.lines.map((line) => ({
     request: req.reference, department: req.department, store: req.store,
     bin: line.bin || 'Unassigned', sku: line.sku, article: line.article,
@@ -174,11 +174,12 @@ function printBatch(type: 'picking' | 'packing', selected: PickRequest[], valueF
   <tbody>${rows.map((row) => '<tr>' + row.map((column) => '<td>' + clean(column) + '</td>').join('') + '</tr>').join('')}</tbody></table>
   <div class="sig"><div>Storekeeper signature / date</div><div>Supervisor signature / date</div></div></body></html>`
   const popup = window.open('', '_blank')
-  if (!popup) return
+  if (!popup) return false
   popup.document.write(html)
   popup.document.close()
   popup.focus()
   popup.print()
+  return true
 }
 
 export function TransferDispatchConsole() {
@@ -247,8 +248,8 @@ export function TransferDispatchConsole() {
         <input className="sk-filter" aria-label="Search requisitions" placeholder="Filter store, request or department…" value={search} onChange={(event) => setSearch(event.target.value)} /></div>
       <div className="sk-batch-actions">
         <label><input type="checkbox" aria-label="Select all visible requisitions" checked={filtered.length > 0 && filtered.every((row) => selected.includes(row.id))} onChange={(event) => setSelected((current) => event.target.checked ? Array.from(new Set([...current, ...filtered.map((row) => row.id)])) : current.filter((id) => !filtered.some((row) => row.id === id)))} /> Select visible</label>
-        <button className="bp-quiet" type="button" disabled={!chosen.length || busy} onClick={() => printBatch('picking', chosen, valueFor)}><Icon name="print" size={16} /> Picking list</button>
-        <button className="bp-quiet" type="button" disabled={!chosen.length || busy} onClick={() => printBatch('packing', chosen, valueFor)}><Icon name="print" size={16} /> Packing list</button>
+        <button className="bp-quiet" type="button" disabled={!chosen.length || busy} onClick={() => { if (!printBatch('picking', chosen, valueFor)) app.showWorkflowAlert('Unable to print picking list', 'Allow pop-up windows for this hotel system, then retry printing.') }}><Icon name="print" size={16} /> Picking list</button>
+        <button className="bp-quiet" type="button" disabled={!chosen.length || busy} onClick={() => { if (!printBatch('packing', chosen, valueFor)) app.showWorkflowAlert('Unable to print packing list', 'Allow pop-up windows for this hotel system, then retry printing.') }}><Icon name="print" size={16} /> Packing list</button>
       </div>
       {loading && <div className="bp-empty">Loading assigned Storekeeper requests…</div>}
       {!loading && !filtered.length && <div className="bp-empty">No approved requisitions are awaiting dispatch.</div>}
@@ -267,7 +268,7 @@ export function TransferDispatchConsole() {
               <td><strong>{line.article}</strong><small>{line.sku}</small></td>
               <td>{qty(line.outstanding)}</td>
               <td>{qty(line.physical_soh)}</td>
-              <td><input aria-label={'Issue quantity for ' + line.article + ' / ' + req.reference} type="number" min="0" step="0.01" max={Math.min(Number(line.outstanding), Number(line.physical_soh))} value={raw} onChange={(event) => setLineQuantity(req.id, line.id, event.target.value)} className={correct ? '' : 'sk-invalid-input'} />{!correct && <small role="alert">Must be within approved and physical stock limits.</small>}</td>
+              <td><input aria-label={'Issue quantity for ' + line.article + ' / ' + req.reference} type="number" min="0" step="0.0001" max={Math.min(Number(line.outstanding), Number(line.physical_soh))} value={raw} onChange={(event) => setLineQuantity(req.id, line.id, event.target.value)} className={correct ? '' : 'sk-invalid-input'} />{!correct && <small role="alert">Must be within approved and physical stock limits.</small>}</td>
               <td>{line.unit}</td>
             </tr>
           })}</tbody>
