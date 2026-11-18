@@ -17,6 +17,8 @@ import '../src/enterprise-redesign.css'
 import '../src/enterprise-foundation.css'
 import '../src/materials-control.css'
 import '../src/operational-blueprint.css'
+/* Restore the base department request, summary and responsive workspace grids. */
+import '../src/responsive.css'
 import '../src/mc-enterprise.css'
 /* UI V3 production layer. These are shared application assets, not route-local styles. */
 import '../src/reports-production.css'
@@ -29,6 +31,8 @@ import '../src/approved-hotel-gui.css'
 import '../src/hospitality-precision.css'
 /* Final approved five-screen visual foundation, shared by every role. */
 import '../src/hotel-evergreen-unified.css'
+/* Page-scoped final fixes: Department Requisitions master/detail + Article selector. */
+import '../src/department-requisitions-fix.css'
 
 export const metadata: Metadata = {
   title: 'Hotel ERP',
