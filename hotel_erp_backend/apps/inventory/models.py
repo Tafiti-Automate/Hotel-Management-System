@@ -1660,10 +1660,9 @@ class StoreRequisition(BaseModel):
     def create_procurement_requisition(self, created_by=None, reason=""):
         """Create the Store Keeper predecessor document sent to Procurement.
 
-        The client workflow does not procure only the calculated stock shortage.
-        The Store Keeper confirms a quantity for each Department-request line and
-        sends those confirmed quantities to Procurement. The original Department
-        quantity remains immutable for audit.
+        Procure only the remaining shortage after considering currently
+        available store stock. The original requested, HOD-approved and
+        Storekeeper-confirmed quantities remain unchanged for audit.
         """
         if self.status != StoreRequisitionStatus.SUBMITTED:
             raise ValidationError("Only an HOD-approved Department request can be sent to Procurement.")
@@ -1690,9 +1689,22 @@ class StoreRequisition(BaseModel):
                     f"Enter a note if none of the HOD-approved quantity for {line.item} will be forwarded."
                 )
             if quantity > 0:
-                decided_lines.append((line, quantity))
+                available_balance = InventoryBalance.objects.filter(
+                    item=line.item, store=self.store,
+                ).first()
+                available = (
+                    available_balance.available_quantity if available_balance
+                    else Decimal("0.0000")
+                )
+                outstanding = max(Decimal("0.0000"), quantity - line.quantity_issued)
+                shortfall = max(Decimal("0.0000"), outstanding - available)
+                if shortfall > 0:
+                    decided_lines.append((line, shortfall, available))
         if not decided_lines:
-            raise ValidationError("Confirm at least one item quantity before forwarding to Procurement.")
+            raise ValidationError(
+                "No purchase shortage remains after available store stock. "
+                "Use the internal requisition approval and issue process."
+            )
 
         purchase = PurchaseRequisition.objects.create(
             request_type=RequisitionType.DEPARTMENT,
@@ -1709,7 +1721,7 @@ class StoreRequisition(BaseModel):
             ),
             created_by=created_by,
         )
-        for line, quantity in decided_lines:
+        for line, quantity, available in decided_lines:
             RequisitionItem.objects.create(
                 requisition=purchase,
                 item=line.item,
@@ -1720,7 +1732,8 @@ class StoreRequisition(BaseModel):
                 description=(
                     f"Department requested {line.base_quantity_requested}; "
                     f"HOD approved {line.department_approved_limit}; "
-                    f"Store Keeper forwarded {quantity}. "
+                    f"Store Keeper confirmed {line.quantity_approved}; "
+                    f"Available at handoff {available}; shortage ordered {quantity}. "
                     f"{line.storekeeper_comment or ''}"
                 ).strip(),
                 destination_type=RequisitionItem.DESTINATION_STORE,
