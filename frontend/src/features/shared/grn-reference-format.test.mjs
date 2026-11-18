@@ -54,15 +54,15 @@ test('no fabricated ordered values, supplier price or financial amount in blind 
 })
 
 
-test('Receiving Clerk can reach supplier returns and form blocks unsafe submissions', () => {
+test('Storekeeper owns supplier return and Receiving Clerk has no posting access', () => {
   const roleTemplates = readFileSync(new URL('../../../../hotel_erp_backend/apps/accounts/role_templates.py', import.meta.url), 'utf8')
+  const storeRole = roleTemplates.slice(roleTemplates.indexOf('"Store Keeper": {'), roleTemplates.indexOf('"Procurement Manager": {'))
   const receivingRole = roleTemplates.slice(roleTemplates.indexOf('"Receiving Clerk": {'))
-  assert.match(receivingRole, /"supplierreturn", "supplierreturnitem"/)
-  assert.match(procurement, /'receiving clerk': \['receipt', 'inspect', 'return'\]/)
-  const returnPanel = procurement.slice(procurement.indexOf('function ReturnPanel('), procurement.indexOf('function StageTable('))
-  assert.match(returnPanel, /rows=\{postedReceipts\}/)
-  assert.match(returnPanel, /selectedItemInReceipt/)
-  assert.match(returnPanel, /quantityValid/)
-  assert.match(returnPanel, /draftHasLines/)
-  assert.doesNotMatch(returnPanel, /returned_by: form\.employee/)
+  assert.match(storeRole, /"supplierreturn", "supplierreturnitem"/)
+  assert.doesNotMatch(receivingRole, /"supplierreturn", "supplierreturnitem"/)
+  assert.match(procurement, /'receiving clerk': \\['receipt', 'inspect'\\]/)
+  const returnScreen = readFileSync(new URL('../../enterprise/OperationsAdmin.tsx', import.meta.url), 'utf8')
+  assert.match(returnScreen, /section="Stores \\/ Supplier returns"/)
+  assert.match(returnScreen, /Post supplier return/)
+  assert.match(returnScreen, /supplier-return-items/)
 })
