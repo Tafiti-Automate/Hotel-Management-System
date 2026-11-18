@@ -567,3 +567,117 @@ def test_connected_eight_role_shortage_partial_receipts_and_signed_completion(wo
     assert SupplierPayment.objects.filter(
         invoice=invoice, status=SupplierPayment.STATUS_POSTED,
     ).count() == 2
+
+
+@pytest.mark.django_db
+def test_department_return_requires_signed_issue_assigned_keeper_and_no_overcredit(workflow):
+    """Stock can only return from a real completed departmental handover."""
+    ctx = workflow
+    supervisor = ctx["supervisor"][2]
+    keeper = ctx["keeper"][2]
+    request_id, line_id = _create_supervisor_draft(ctx, "5.0000")
+    assert supervisor.post(
+        f"/api/v1/store-requisitions/{request_id}/submit/", {}, format="json"
+    ).status_code == 200
+    head = ctx["head"][2].post(
+        f"/api/v1/store-requisitions/{request_id}/department-approve/",
+        {"items": [{"id": line_id, "approved_quantity": "5.0000"}]},
+        format="json",
+    )
+    assert head.status_code == 200, head.data
+    cost = ctx["cost"][2].post(
+        f"/api/v1/store-requisitions/{request_id}/cost-control-approve/",
+        {"items": [{"id": line_id, "approved_quantity": "5.0000"}]},
+        format="json",
+    )
+    assert cost.status_code == 200, cost.data
+
+    before = InventoryBalance.objects.get(
+        item=ctx["item"], store=ctx["store"]
+    ).quantity_in_stock
+    # No physical handover has been signed: no return can be raised.
+    rejected = keeper.post(
+        "/api/v1/store-returns/",
+        {"department": str(ctx["department"].pk),
+         "store": str(ctx["store"].pk), "reason": "Unused sealed bottles"},
+        format="json",
+    )
+    assert rejected.status_code == 400, rejected.data
+
+    dispatched = keeper.post(
+        f"/api/v1/store-requisitions/{request_id}/dispatch-transfer/",
+        {"quantities": {line_id: "5.0000"}}, format="json",
+    )
+    assert dispatched.status_code == 201, dispatched.data
+    assert supervisor.post(
+        f"/api/v1/stock-issues/{dispatched.data['id']}/acknowledge/",
+        {}, format="json",
+    ).status_code == 200
+
+    for client in (supervisor, ctx["head"][2], ctx["cost"][2]):
+        denied = client.post(
+            "/api/v1/store-returns/",
+            {"department": str(ctx["department"].pk),
+             "store": str(ctx["store"].pk), "reason": "Unauthorized"},
+            format="json",
+        )
+        assert denied.status_code == 403, denied.data
+
+    created = keeper.post(
+        "/api/v1/store-returns/",
+        {"department": str(ctx["department"].pk),
+         "store": str(ctx["store"].pk), "reason": "Unused sealed bottles"},
+        format="json",
+    )
+    assert created.status_code == 201, created.data
+    return_id = created.data["id"]
+    assert str(created.data["received_by"]) == str(ctx["keeper"][1].pk)
+    first_line = keeper.post(
+        "/api/v1/store-return-items/",
+        {"store_return": return_id, "item": str(ctx["item"].pk),
+         "unit": str(ctx["unit"].pk), "quantity": "2.0000"},
+        format="json",
+    )
+    assert first_line.status_code == 201, first_line.data
+    assert supervisor.post(
+        f"/api/v1/store-returns/{return_id}/apply/", {}, format="json"
+    ).status_code in (403, 404)
+    applied = keeper.post(
+        f"/api/v1/store-returns/{return_id}/apply/", {}, format="json",
+    )
+    assert applied.status_code == 200, applied.data
+    assert InventoryBalance.objects.get(
+        item=ctx["item"], store=ctx["store"]
+    ).quantity_in_stock == before - Decimal("3.0000")
+    assert keeper.post(
+        f"/api/v1/store-returns/{return_id}/apply/", {}, format="json"
+    ).status_code == 400
+    assert keeper.patch(
+        f"/api/v1/store-return-items/{first_line.data['id']}/",
+        {"quantity": "3.0000"}, format="json",
+    ).status_code == 400
+    assert keeper.delete(
+        f"/api/v1/store-returns/{return_id}/"
+    ).status_code == 400
+
+    excessive = keeper.post(
+        "/api/v1/store-returns/",
+        {"department": str(ctx["department"].pk),
+         "store": str(ctx["store"].pk), "reason": "Over-return attempt"},
+        format="json",
+    )
+    assert excessive.status_code == 201, excessive.data
+    extra_line = keeper.post(
+        "/api/v1/store-return-items/",
+        {"store_return": excessive.data["id"], "item": str(ctx["item"].pk),
+         "unit": str(ctx["unit"].pk), "quantity": "3.0001"},
+        format="json",
+    )
+    assert extra_line.status_code == 201, extra_line.data
+    assert keeper.post(
+        f"/api/v1/store-returns/{excessive.data['id']}/apply/",
+        {}, format="json",
+    ).status_code == 400
+    assert InventoryBalance.objects.get(
+        item=ctx["item"], store=ctx["store"]
+    ).quantity_in_stock == before - Decimal("3.0000")
