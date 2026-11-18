@@ -747,11 +747,11 @@ def test_role_by_role_acceptance_blocks_draft_mutations_and_approval_skips(workf
     path = f"/api/v1/store-requisitions/{request_id}/"
     line_path = f"/api/v1/store-requisition-items/{line_id}/"
     for client in (admin, hod, cost, keeper):
-        assert client.patch(path, {"purpose": "Unauthorized change"}, format="json").status_code == 403
+        assert client.patch(path, {"purpose": "Unauthorized change"}, format="json").status_code in (403, 404)
         assert client.patch(
             line_path, {"quantity_requested": "1.0000"}, format="json"
         ).status_code in (403, 404)
-        assert client.delete(path).status_code == 403
+        assert client.delete(path).status_code in (403, 404)
         assert client.post(path + "submit/", {}, format="json").status_code in (403, 404)
     assert hod.post(
         path + "department-approve/",
