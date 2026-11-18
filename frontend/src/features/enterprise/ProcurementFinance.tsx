@@ -416,7 +416,7 @@ export function EnterpriseInvoiceMatching() {
     actions={<button className={btn} onClick={()=>void reload()}><Icon name="refresh" size={16}/> Refresh</button>}>
     <StateMessage loading={loading} error={error||mutationError}/>
     {invoice&&<WorkflowPrerequisite domain="supplier_invoice" record={invoice} action={str(invoice.status)==='matched'?'approve':'match'}/>}
-    {invoice&&['draft','exception'].includes(str(invoice.status))&&!accepted.length&&<div className="mc-workflow-prerequisite" role="status"><Icon name="info" size={17}/><div><strong>Posted GRN needed</strong><p>Invoice matching requires recorded receiving evidence.</p><small>Next: Ask Stores to post the accepted GRN and retry matching.</small></div></div>
+    {invoice&&['draft','exception'].includes(str(invoice.status))&&!accepted.length&&<div className="mc-workflow-prerequisite" role="status"><Icon name="info" size={17}/><div><strong>Posted GRN needed</strong><p>Invoice matching requires recorded receiving evidence.</p><small>Next: Ask Stores to post the accepted GRN and retry matching.</small></div></div>}
     {!loading&&!error&&<div className="mc-split mc-invoice-layout">
       <EnterpriseTable<ApiRow> label="Supplier invoice register" rows={invoices} columns={cols}
         onOpen={row=>setId(str(row.id))}/>

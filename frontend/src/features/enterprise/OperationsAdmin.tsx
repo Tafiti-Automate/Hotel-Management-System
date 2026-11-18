@@ -528,7 +528,7 @@ export function EnterpriseDepartmentReturn() {
     subtitle="Accept unused goods only against signed departmental issues. The Storekeeper posts accepted quantities back to stock; the server checks unreturned issued balances.">
     <StateMessage loading={loading} error={error||mutationError}/>
     {printed&&<WorkflowPrerequisite domain="department_return" record={printed} action="apply"/>}
-    {draft&&lines.length===0&&<div className="mc-workflow-prerequisite" role="status"><Icon name="info" size={17}/><div><strong>Return needs article lines</strong><p>This draft has no recorded quantities.</p><small>Next: Add an article and its physical return quantity.</small></div></div>
+    {draft&&lines.length===0&&<div className="mc-workflow-prerequisite" role="status"><Icon name="info" size={17}/><div><strong>Return needs article lines</strong><p>This draft has no recorded quantities.</p><small>Next: Add an article and its physical return quantity.</small></div></div>}
     {!loading&&!error&&<div className="mc-split mc-admin-split">
       <EnterpriseTable<ApiRow> label="Department return register" rows={returns} columns={[
         {id:'ref',label:'Return',value:r=>str(r.return_no)},
@@ -638,7 +638,7 @@ export function EnterpriseSupplierReturn() {
     subtitle="The assigned Storekeeper returns stock from a posted GRN. Finance separately manages supplier credit approval.">
     <StateMessage loading={loading} error={error||mutationError}/>
     {selectedDraft&&<WorkflowPrerequisite domain="supplier_return" record={selectedDraft} action="apply"/>}
-    {selectedDraft&&returnLines.length===0&&<div className="mc-workflow-prerequisite" role="status"><Icon name="info" size={17}/><div><strong>No articles to dispatch</strong><p>This supplier return has no recorded article quantities.</p><small>Next: Add accepted GRN articles and confirm available stock.</small></div></div>
+    {selectedDraft&&returnLines.length===0&&<div className="mc-workflow-prerequisite" role="status"><Icon name="info" size={17}/><div><strong>No articles to dispatch</strong><p>This supplier return has no recorded article quantities.</p><small>Next: Add accepted GRN articles and confirm available stock.</small></div></div>}
     {!loading&&!error&&<div className="mc-split mc-admin-split">
       <EnterpriseTable<ApiRow> label="Supplier returns" rows={data['supplier-returns']||[]} columns={[
         {id:'return',label:'Return reference',value:r=>str(r.return_no)},
