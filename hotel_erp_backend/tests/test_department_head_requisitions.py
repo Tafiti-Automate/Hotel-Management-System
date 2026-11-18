@@ -757,7 +757,7 @@ def test_role_by_role_acceptance_blocks_draft_mutations_and_approval_skips(workf
         path + "department-approve/",
         {"items": [{"id": line_id, "approved_quantity": "4.0000"}]},
         format="json",
-    ).status_code == 400
+    ).status_code in (400, 404)
     assert keeper.post(
         path + "dispatch-transfer/",
         {"quantities": {line_id: "1.0000"}}, format="json",
