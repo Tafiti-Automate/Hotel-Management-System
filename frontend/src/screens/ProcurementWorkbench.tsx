@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Icon } from '../components/Icon'
 import ConfirmTransaction from '../components/ConfirmTransaction'
+import WorkflowPrerequisite from '../components/WorkflowPrerequisite'
 import { HelpLabel } from '../components/HelpLabel'
 import LpoPreviewModal from '../components/LpoPreviewModal'
 import GrnReferenceDocument from '../components/GrnReferenceDocument'
@@ -1502,6 +1503,7 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, items, ite
       <LpoSummary order={order} lines={lines} names={names} />
       <Action disabled={busy} onClick={() => run(() => downloadControlledPurchaseOrder(id(order.id)), `${id(order.next_print_classification) || 'Controlled'} LPO downloaded`, { ...form })}>Download {id(order.next_print_classification) || 'controlled'} LPO</Action>
       <ReadOnlyValue label="Supplier email" value={registeredSupplierEmail || 'No supplier email registered'} />
+      <WorkflowPrerequisite domain="purchase_order" record={order} action="issue" />
       <Action tone="good" disabled={busy || !registeredSupplierEmail} onClick={() => run(async () => { const result = await runBackendAction('purchase-orders', id(order.id), 'issue'); setLpoQueue('history'); return result }, 'LPO emailed to supplier and lead time started', (result: unknown) => ({ order: id((result as Row).id) }))}>Email LPO to Supplier</Action>
     </>}
 
