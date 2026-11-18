@@ -2487,3 +2487,83 @@ def test_blind_receiving_reveals_lpo_quantities_only_after_locked_grn_and_preser
         f"/api/v1/grns/{receipt.pk}/variance-note/",
         {"note": "not mine"}, format="json",
     ).status_code == 404
+
+
+@pytest.mark.django_db
+def test_procurement_review_and_allocate_saves_full_requisition_atomically():
+    """One action replaces per-line quantity/save and supplier/save clicks."""
+    employee, department, supplier, first_item = create_procurement_context()
+    buyer = employee.user
+    buyer.groups.add(Group.objects.get_or_create(name="Procurement Manager")[0])
+    client = APIClient()
+    client.force_authenticate(buyer)
+    another_item = Item.objects.create(
+        category=first_item.category, name="Bulk review paper", sku="BULK-PAPER-01",
+        unit="each", base_unit=first_item.base_unit,
+        reorder_level=Decimal("1.00"),
+    )
+    first_quote = SupplierItemPrice.objects.create(
+        supplier=supplier, item=first_item, unit=first_item.base_unit,
+        unit_price=Decimal("3500.00"), lead_time_days=2,
+    )
+    second_quote = SupplierItemPrice.objects.create(
+        supplier=supplier, item=another_item, unit=another_item.base_unit,
+        unit_price=Decimal("4000.00"), lead_time_days=2,
+    )
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee, department=department,
+        reason="One-click processing of two approved articles",
+        status=PRStatus.APPROVED,
+    )
+    first = RequisitionItem.objects.create(
+        requisition=requisition, item=first_item,
+        quantity=Decimal("9.0000"), approved_quantity=Decimal("9.0000"),
+    )
+    second = RequisitionItem.objects.create(
+        requisition=requisition, item=another_item,
+        quantity=Decimal("5.0000"), approved_quantity=Decimal("5.0000"),
+    )
+    endpoint = f"/api/v1/requisitions/{requisition.pk}/review-and-allocate/"
+    lines = [
+        {"line_id": str(first.pk), "approved_quantity": "8.0000",
+         "quantity": "8.0000", "supplier_price": str(first_quote.pk),
+         "reason": "One unit held back"},
+        {"line_id": str(second.pk), "approved_quantity": "5.0000",
+         "quantity": "5.0000", "supplier_price": str(second_quote.pk)},
+    ]
+    # If any article fails, the entire review must roll back.
+    failed = client.post(endpoint, {"lines": [lines[0], {
+        **lines[1], "supplier_price": str(first_quote.pk),
+    }]}, format="json")
+    assert failed.status_code == 400, failed.data
+    first.refresh_from_db()
+    second.refresh_from_db()
+    assert first.approved_quantity == Decimal("9.0000")
+    assert not first.procurement_supplier_price_id
+    assert not second.procurement_supplier_price_id
+
+    saved = client.post(endpoint, {"lines": lines}, format="json")
+    assert saved.status_code == 200, saved.data
+    assert saved.data["ready_for_lpo"] is True
+    assert saved.data["allocated_lines"] == 2
+    first.refresh_from_db()
+    second.refresh_from_db()
+    assert first.approved_quantity == Decimal("8.0000")
+    assert first.procurement_quantity == Decimal("8.0000")
+    assert second.procurement_quantity == Decimal("5.0000")
+    assert first.procurement_supplier_price_id == first_quote.pk
+    assert second.procurement_supplier_price_id == second_quote.pk
+    assert requisition.history.filter(action="procurement_bulk_allocation").exists() or (
+        RequisitionHistory.objects.filter(
+            requisition=requisition, action="procurement_bulk_allocation",
+        ).exists()
+    )
+
+    # Server validation still blocks increasing the approved quantity.
+    increased = client.post(endpoint, {"lines": [
+        {**lines[0], "approved_quantity": "9.0000"},
+        lines[1],
+    ]}, format="json")
+    assert increased.status_code == 400, increased.data
+    first.refresh_from_db()
+    assert first.approved_quantity == Decimal("8.0000")
