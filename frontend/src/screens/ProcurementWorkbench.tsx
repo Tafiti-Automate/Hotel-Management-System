@@ -416,7 +416,7 @@ export default function ProcurementWorkbench() {
     'procurement officer': ['quote', 'lpo'],
     'financial manager': ['lpo'],
     'general manager': ['lpo'],
-    'receiving clerk': ['receipt'],
+    'receiving clerk': ['receipt', 'inspect', 'return'],
   }
   const allowedStages = app.user.isSuperuser || role === 'system administrator' ? null : roleStages[role]
   const tabs: Array<[Stage, string, string]> = ([
@@ -1551,20 +1551,26 @@ function ReturnPanel({ data, form, setForm, busy, run, receiptLabel, names, empl
   const receiptItems = data.receiptItems.filter((row: Row) => id(row.goods_receipt) === id(form.receipt))
   const supplierReturn = data.returns.find((row: Row) => id(row.id) === id(form.return))
   const returnReceiptItems = data.receiptItems.filter((row: Row) => id(row.goods_receipt) === id(supplierReturn?.goods_receipt))
+  const postedReceipts = data.receipts.filter((row: Row) => id(row.status) === 'posted')
+  const availableArticles = [...new Map(returnReceiptItems.map((line: Row) => [id(line.item), { id: line.item, name: names.items.get(id(line.item)) || id(line.item) }])).values()]
+  const selectedItemInReceipt = availableArticles.some((item: Row) => id(item.id) === id(form.item))
+  const quantityValid = Number.isFinite(Number(form.quantity)) && num(form.quantity) > 0 && /^\\d+(?:\\.\\d{1,4})?$/.test(id(form.quantity).trim())
+  const draftHasLines = data.returnItems.some((line: Row) => id(line.supplier_return) === id(form.return))
   return <Panel title="Supplier return" note="Record supplier returns.">
-    <Field label="Original GRN"><Select value={form.receipt} onChange={(v) => setForm({ receipt: v })} rows={data.receipts} label={receiptLabel} /></Field>
+    <Field label="Original GRN"><Select value={form.receipt} onChange={(v) => setForm({ ...form, receipt: v, return: '', item: '', quantity: '' })} rows={postedReceipts} label={receiptLabel} /></Field>
     <Field label="Store"><Select value={form.store} onChange={(v) => setForm({ ...form, store: v })} rows={stores} /></Field>
-    <Field label="Returned by"><Select value={form.employee} onChange={(v) => setForm({ ...form, employee: v })} rows={employees} /></Field>
+    <Hint>The signed-in Receiving Clerk is recorded as the return author. Only posted GRNs are eligible.</Hint>
     <Field label="Reason"><Input value={form.reason} onChange={(v) => setForm({ ...form, reason: v })} /></Field>
-    <Action disabled={busy || !form.receipt || !form.store || !form.employee || !order?.supplier} onClick={() => run(() => createBackendRecord('supplier-returns', { supplier: order.supplier, goods_receipt: form.receipt, store: form.store, returned_by: form.employee, reason: form.reason, return_date: new Date().toISOString().slice(0, 10) }), 'Supplier return created')}>Create return</Action>
+    <Action disabled={busy || id(receipt?.status) !== 'posted' || !form.store || !order?.supplier || !id(form.reason).trim()} onClick={() => run(() => createBackendRecord('supplier-returns', { supplier: order.supplier, goods_receipt: form.receipt, store: form.store, reason: form.reason, return_date: new Date().toISOString().slice(0, 10) }), 'Supplier return created')}>Create return</Action>
     {!receiptItems.length && form.receipt && <Hint>This GRN has no delivered lines.</Hint>}
     <Divider />
-    <Field label="Draft return"><Select value={form.return} onChange={(v) => setForm({ return: v })} rows={data.returns.filter((r: Row) => id(r.status) === 'draft')} label={(row: Row) => id(row.return_no)} /></Field>
-    <Field label="Article"><Select value={form.item} onChange={(v) => setForm({ ...form, item: v })} rows={returnReceiptItems.map((r: Row) => ({ id: r.item, name: names.items.get(id(r.item)) || id(r.item) }))} /></Field>
+    <Field label="Draft return"><Select value={form.return} onChange={(v) => setForm({ ...form, return: v, item: '', quantity: '' })} rows={data.returns.filter((r: Row) => id(r.status) === 'draft')} label={(row: Row) => id(row.return_no)} /></Field>
+    <Field label="Article"><Select value={form.item} onChange={(v) => setForm({ ...form, item: v })} rows={availableArticles} /></Field>
     <Field label="Unit"><Select value={form.unit} onChange={(v) => setForm({ ...form, unit: v })} rows={appRows(names.units)} optional /></Field>
     <Field label="Return quantity"><Input type="number" value={form.quantity} onChange={(v) => setForm({ ...form, quantity: v })} /></Field>
-    <Action disabled={busy || !form.return || !form.item} onClick={() => run(() => createBackendRecord('supplier-return-items', { supplier_return: form.return, item: form.item, unit: form.unit || null, quantity: num(form.quantity), reason: form.reason || 'Supplier return' }), 'Return line added')}>Add return line</Action>
-    <Action tone="good" disabled={busy || !form.return} onClick={() => run(() => runBackendAction('supplier-returns', id(form.return), 'apply'), 'Supplier return posted')}>Apply inventory return</Action>
+    {!quantityValid && form.quantity !== undefined && form.quantity !== '' && <Hint>Return quantity must be positive with no more than four decimal places.</Hint>}
+    <Action disabled={busy || !form.return || !selectedItemInReceipt || !quantityValid} onClick={() => run(() => createBackendRecord('supplier-return-items', { supplier_return: form.return, item: form.item, unit: form.unit || null, quantity: num(form.quantity), reason: form.reason || 'Supplier return' }), 'Return line added')}>Add return line</Action>
+    <Action tone="good" disabled={busy || !form.return || !draftHasLines} onClick={() => run(() => runBackendAction('supplier-returns', id(form.return), 'apply'), 'Supplier return posted')}>Apply inventory return</Action>
     <Divider />
     <Field label="Dispatched return"><Select value={form.postedReturn} onChange={(v) => setForm({ postedReturn: v })} rows={data.returns.filter((r: Row) => id(r.status) === 'posted' && !r.supplier_acknowledged_at)} label={(row: Row) => id(row.return_no)} /></Field>
     <Field label="Supplier representative"><Input value={form.acknowledgedBy} onChange={(v) => setForm({ ...form, acknowledgedBy: v })} /></Field>
