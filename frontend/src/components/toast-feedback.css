@@ -55,3 +55,10 @@
 }
 .mc-alert-actions button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 @media (max-width: 520px) { .mc-alert-dialog { padding: 20px; } .mc-alert-actions button { width: 100%; } }
+
+/* Readable, non-blocking action feedback in both appearance modes. */
+.mc-feedback-toast { overflow: hidden; }
+.mc-feedback-toast-progress { position: absolute; bottom: 0; left: 0; width: 100%; height: 3px; background: var(--good); transform-origin: left; animation: mc-toast-progress linear forwards; }
+@keyframes mc-toast-progress { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { .mc-feedback-toast-progress { animation: none; } }
+.mode-dark .mc-feedback-toast { box-shadow: 0 18px 45px rgba(0,0,0,.45); }
