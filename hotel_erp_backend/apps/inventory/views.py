@@ -1454,6 +1454,25 @@ class DepartmentConsumptionViewSet(CreatedByModelMixin, ModelViewSet):
     ordering_fields = ("consumed_on", "quantity", "unit_cost", "created_at")
 
 
+def _require_department_return_keeper(user, store):
+    """Only a real, active Store Keeper assigned to the issuing property."""
+    employee = getattr(user, "employee_profile", None)
+    if (
+        not user.is_authenticated or user.is_superuser
+        or user.groups.filter(name="System Administrator").exists()
+        or not user.groups.filter(name="Store Keeper").exists()
+        or not employee or not employee.is_active or not employee.branch_id
+        or store.branch_id != employee.branch_id
+        or not store.is_active
+        or not StoreKeeperAssignment.objects.filter(
+            employee=employee, store=store, is_active=True,
+            store__is_active=True,
+        ).exists()
+    ):
+        raise PermissionDenied("Only the assigned Storekeeper can manage this department return.")
+    return employee
+
+
 class StoreReturnViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = StoreReturn.objects.select_related("department", "store", "received_by")
     serializer_class = StoreReturnSerializer
@@ -1461,11 +1480,62 @@ class StoreReturnViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("return_no", "department__name", "store__name", "reason")
     ordering_fields = ("return_no", "return_date", "created_at")
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        employee = getattr(user, "employee_profile", None)
+        if (
+            not user.is_authenticated or user.is_superuser
+            or user.groups.filter(name="System Administrator").exists()
+            or not user.groups.filter(name="Store Keeper").exists()
+            or not employee or not employee.is_active or not employee.branch_id
+        ):
+            return queryset.none()
+        assigned = StoreKeeperAssignment.objects.filter(
+            employee=employee, is_active=True, store__is_active=True,
+            store__branch_id=employee.branch_id,
+        ).values_list("store_id", flat=True)
+        return queryset.filter(store_id__in=assigned)
+
+    def perform_create(self, serializer):
+        store = serializer.validated_data["store"]
+        employee = _require_department_return_keeper(self.request.user, store)
+        if not str(serializer.validated_data.get("reason") or "").strip():
+            raise ValidationError({"reason": "Record why the department is returning the goods."})
+        if not StockIssue.objects.filter(
+            store=store,
+            requisition__department=serializer.validated_data["department"],
+            fulfillment_status=StockIssue.STATUS_COMPLETED,
+            signed_at__isnull=False,
+        ).exists():
+            raise ValidationError("This department has no signed stock issue from the selected store.")
+        serializer.save(received_by=employee)
+
+    def perform_update(self, serializer):
+        current = serializer.instance
+        _require_department_return_keeper(self.request.user, current.store)
+        if current.inventory_changes_applied:
+            raise ValidationError("Posted department returns cannot be edited.")
+        if any(key in serializer.validated_data for key in ("store", "department", "received_by")):
+            raise ValidationError("A return's store, department and receiving employee cannot be reassigned.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        _require_department_return_keeper(self.request.user, instance.store)
+        if instance.inventory_changes_applied:
+            raise ValidationError("Posted department returns cannot be deleted.")
+        instance.delete()
+
     @action(detail=True, methods=["post"])
     def apply(self, request, pk=None):
         store_return = self.get_object()
+        _require_department_return_keeper(request.user, store_return.store)
+        # Lock the fiscal period for the physical inventory movement.
+        from apps.inventory.stores_fulfillment import require_open_period
         try:
-            store_return.apply_inventory_changes()
+            with transaction.atomic():
+                require_open_period(store_return.store.branch_id, timezone.localdate())
+                store_return.apply_inventory_changes()
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
         return Response(self.get_serializer(store_return).data)
@@ -1477,6 +1547,45 @@ class StoreReturnItemViewSet(CreatedByModelMixin, ModelViewSet):
     filterset_fields = ("store_return", "item", "unit")
     search_fields = ("store_return__return_no", "item__name", "item__sku")
     ordering_fields = ("quantity", "base_quantity", "created_at")
+
+    def get_queryset(self):
+        user = self.request.user
+        employee = getattr(user, "employee_profile", None)
+        if (
+            not user.is_authenticated or user.is_superuser
+            or user.groups.filter(name="System Administrator").exists()
+            or not user.groups.filter(name="Store Keeper").exists()
+            or not employee or not employee.is_active or not employee.branch_id
+        ):
+            return super().get_queryset().none()
+        assigned = StoreKeeperAssignment.objects.filter(
+            employee=employee, is_active=True, store__is_active=True,
+            store__branch_id=employee.branch_id,
+        ).values_list("store_id", flat=True)
+        return super().get_queryset().filter(store_return__store_id__in=assigned)
+
+    def _editable(self, store_return):
+        _require_department_return_keeper(self.request.user, store_return.store)
+        if store_return.inventory_changes_applied:
+            raise ValidationError("Posted department return lines are immutable.")
+
+    def perform_create(self, serializer):
+        self._editable(serializer.validated_data["store_return"])
+        serializer.save(created_by=self.request.user)
+
+    def perform_update(self, serializer):
+        current = serializer.instance
+        self._editable(current.store_return)
+        if (
+            "store_return" in serializer.validated_data
+            and serializer.validated_data["store_return"].pk != current.store_return_id
+        ):
+            raise ValidationError("Department return lines cannot be reassigned to another document.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self._editable(instance.store_return)
+        instance.delete()
 
 
 class StockCountViewSet(CreatedByModelMixin, ModelViewSet):
