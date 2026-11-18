@@ -320,6 +320,7 @@ def test_dispatch_refuses_unconfigured_or_closed_fiscal_period(ctx):
     request = StoreRequisition.objects.create(
         requested_by=ctx["se"], department=ctx["department"],
         store=ctx["main"], purpose="Fiscal lock test", status="approved",
+        department_approved_by=ctx["he"], department_approved_at=timezone.now(),
     )
     line = StoreRequisitionItem.objects.create(
         requisition=request, item=ctx["item"], unit=ctx["unit"],
