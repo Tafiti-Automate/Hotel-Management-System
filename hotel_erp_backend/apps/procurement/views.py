@@ -2548,21 +2548,26 @@ class SupplierReturnViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("return_no", "supplier__name", "goods_receipt__purchase_order__po_number", "reason")
     ordering_fields = ("return_no", "return_date", "status", "created_at")
 
-    def _require_receiving_owner(self, supplier_return=None):
+    def _require_storekeeper_owner(self, supplier_return=None, *, store=None):
+        from apps.inventory.models import StoreKeeperAssignment
         user = self.request.user
         employee = getattr(user, "employee_profile", None)
         if (
             user.is_superuser
-            or not user_has_role(user, "Receiving Clerk")
+            or not user_has_role(user, "Store Keeper")
             or user_has_role(user, "System Administrator")
             or not employee or not employee.is_active or not employee.branch_id
         ):
-            raise PermissionDenied("Only an active Receiving Clerk may process supplier returns.")
-        if supplier_return is not None and (
-            supplier_return.goods_receipt.received_by_id != employee.pk
-            or supplier_return.store.branch_id != employee.branch_id
+            raise PermissionDenied("Only an assigned Store Keeper may process supplier returns.")
+        target_store = store or (supplier_return.store if supplier_return is not None else None)
+        if target_store is not None and (
+            target_store.branch_id != employee.branch_id
+            or not StoreKeeperAssignment.objects.filter(
+                employee=employee, store=target_store, is_active=True,
+                store__is_active=True,
+            ).exists()
         ):
-            raise PermissionDenied("Return belongs to a different receiving assignment.")
+            raise PermissionDenied("Supplier return belongs to a store outside your active assignment.")
         return employee
 
     def get_queryset(self):
@@ -2573,31 +2578,32 @@ class SupplierReturnViewSet(CreatedByModelMixin, ModelViewSet):
             return queryset
         if not employee or not employee.is_active or not employee.branch_id:
             return queryset.none()
-        if user_has_role(user, "Receiving Clerk"):
-            return queryset.filter(
-                goods_receipt__received_by=employee,
-                store__branch_id=employee.branch_id,
-            )
+        if user_has_role(user, "Store Keeper"):
+            from apps.inventory.models import StoreKeeperAssignment
+            assigned = StoreKeeperAssignment.objects.filter(
+                employee=employee, is_active=True, store__is_active=True,
+            ).values_list("store_id", flat=True)
+            return queryset.filter(store_id__in=assigned, store__branch_id=employee.branch_id)
         branch = employee.branch
         if getattr(branch, "hotel_id", None):
             return queryset.filter(store__branch__hotel_id=branch.hotel_id)
         return queryset.filter(store__branch_id=branch.pk)
 
     def perform_create(self, serializer):
-        employee = self._require_receiving_owner()
         receipt = serializer.validated_data["goods_receipt"]
         store = serializer.validated_data["store"]
+        employee = self._require_storekeeper_owner(store=store)
         if (
-            receipt.received_by_id != employee.pk
-            or store.branch_id != employee.branch_id
+            receipt.status != GoodsReceiptStatus.POSTED
             or receipt.purchase_order.store_id != store.pk
+            or receipt.purchase_order.requisition.branch_id != employee.branch_id
         ):
-            raise PermissionDenied("The return must match your received GRN and its store.")
+            raise ValidationError("Return requires a posted GRN belonging to the assigned source store.")
         serializer.save(returned_by=employee, created_by=self.request.user)
 
 
     def _require_editable_return(self, instance):
-        self._require_receiving_owner(instance)
+        self._require_storekeeper_owner(instance)
         if instance.status != SupplierReturnStatus.DRAFT or instance.inventory_changes_applied:
             raise ValidationError("Posted or acknowledged returns cannot be changed.")
 
@@ -2620,7 +2626,7 @@ class SupplierReturnViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"])
     def apply(self, request, pk=None):
         supplier_return = self.get_object()
-        self._require_receiving_owner(supplier_return)
+        self._require_storekeeper_owner(supplier_return)
         try:
             supplier_return.apply_inventory_changes(
                 dispatched_by=getattr(request.user, "employee_profile", None)
@@ -2632,7 +2638,7 @@ class SupplierReturnViewSet(CreatedByModelMixin, ModelViewSet):
     @action(detail=True, methods=["post"])
     def acknowledge(self, request, pk=None):
         supplier_return = self.get_object()
-        self._require_receiving_owner(supplier_return)
+        self._require_storekeeper_owner(supplier_return)
         try:
             supplier_return.acknowledge(
                 acknowledged_by=str(request.data.get("acknowledged_by", "")).strip(),
@@ -2659,9 +2665,13 @@ class SupplierReturnItemViewSet(CreatedByModelMixin, ModelViewSet):
             return queryset
         if not employee or not employee.is_active or not employee.branch_id:
             return queryset.none()
-        if user_has_role(user, "Receiving Clerk"):
+        if user_has_role(user, "Store Keeper"):
+            from apps.inventory.models import StoreKeeperAssignment
+            assigned = StoreKeeperAssignment.objects.filter(
+                employee=employee, is_active=True, store__is_active=True,
+            ).values_list("store_id", flat=True)
             return queryset.filter(
-                supplier_return__goods_receipt__received_by=employee,
+                supplier_return__store_id__in=assigned,
                 supplier_return__store__branch_id=employee.branch_id,
             )
         branch = employee.branch
@@ -2670,18 +2680,12 @@ class SupplierReturnItemViewSet(CreatedByModelMixin, ModelViewSet):
         return queryset.filter(supplier_return__store__branch_id=branch.pk)
 
     def _require_draft_return(self, supplier_return):
-        user = self.request.user
-        employee = getattr(user, "employee_profile", None)
-        if (
-            user.is_superuser or user_has_role(user, "System Administrator")
-            or not user_has_role(user, "Receiving Clerk")
-            or not employee or not employee.is_active
-            or supplier_return.goods_receipt.received_by_id != employee.pk
-            or supplier_return.store.branch_id != employee.branch_id
-        ):
-            raise PermissionDenied("Only the assigned Receiving Clerk may edit this return.")
+        employee = SupplierReturnViewSet._require_storekeeper_owner(
+            self, supplier_return
+        )
         if supplier_return.status != SupplierReturnStatus.DRAFT or supplier_return.inventory_changes_applied:
             raise ValidationError("Posted supplier return items are locked.")
+        return employee
 
     def perform_create(self, serializer):
         self._require_draft_return(serializer.validated_data["supplier_return"])
