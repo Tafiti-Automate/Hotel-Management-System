@@ -1450,7 +1450,7 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                     created_by=request.user if request.user.is_authenticated else None,
                 )
                 for receipt_item, rejected, rejection_reason, order_line in receipt_items:
-                    rejected_base = (rejected * order_line.conversion_factor).quantize(Decimal("0.01"))
+                    rejected_base = (rejected * order_line.conversion_factor).quantize(Decimal("0.0001"))
                     GoodsInspectionItem.objects.create(
                         inspection=inspection,
                         goods_receipt_item=receipt_item,
@@ -1562,7 +1562,7 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                         requisition_line.approved_base_quantity - ordered_elsewhere,
                         Decimal("0.00"),
                     )
-                    requested_base = line.item.quantity_in_base_units(quantity, line.unit).quantize(Decimal("0.01"))
+                    requested_base = line.item.quantity_in_base_units(quantity, line.unit).quantize(Decimal("0.0001"))
                     if requested_base > available_base:
                         raise ValidationError({
                             "quantity": (

@@ -394,7 +394,7 @@ class InventoryBalanceSerializer(serializers.ModelSerializer):
         max_digits=15, decimal_places=4, read_only=True
     )
     is_below_reorder = serializers.BooleanField(read_only=True)
-    available_quantity = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    available_quantity = serializers.DecimalField(max_digits=14, decimal_places=4, read_only=True)
     reserved_allocations = serializers.SerializerMethodField()
     calculated_reserved_quantity = serializers.SerializerMethodField()
     reservation_variance = serializers.SerializerMethodField()
@@ -619,8 +619,8 @@ class StockTransferItemSerializer(serializers.ModelSerializer):
 
 class StockTransferSerializer(serializers.ModelSerializer):
     total_quantity = serializers.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         read_only=True,
     )
 
@@ -687,7 +687,7 @@ class StockAdjustmentSerializer(serializers.ModelSerializer):
         )
 
 class ReorderRuleSerializer(serializers.ModelSerializer):
-    current_stock = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    current_stock = serializers.DecimalField(max_digits=14, decimal_places=4, read_only=True)
     needs_reorder = serializers.BooleanField(read_only=True)
 
     class Meta:
@@ -704,7 +704,7 @@ class ReorderRuleSerializer(serializers.ModelSerializer):
 
 
 class StoreRequisitionItemSerializer(serializers.ModelSerializer):
-    outstanding_quantity = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    outstanding_quantity = serializers.DecimalField(max_digits=14, decimal_places=4, read_only=True)
     category_name = serializers.CharField(source="item.category.name", read_only=True)
     item_name = serializers.CharField(source="item.name", read_only=True)
     shortage_quantity = serializers.SerializerMethodField()
@@ -996,7 +996,7 @@ class StoreReturnSerializer(serializers.ModelSerializer):
 
 
 class StockCountItemSerializer(serializers.ModelSerializer):
-    variance = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    variance = serializers.DecimalField(max_digits=14, decimal_places=4, read_only=True)
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

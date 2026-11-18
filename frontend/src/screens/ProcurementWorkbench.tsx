@@ -977,7 +977,7 @@ function GoodsReceiptDocument({ receipt, lines, hotel, propertyName, preparedBy,
     const destinations = Array.from(new Set(directDepartments))
     return destinations.length ? destinations.join(', ') : 'Direct delivery'
   })()
-  const formatQty = (value: unknown) => num(value).toLocaleString('en-UG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const formatQty = (value: unknown) => num(value).toLocaleString('en-UG', { minimumFractionDigits: 2, maximumFractionDigits: 4 })
   const documentDate = (value: unknown) => {
     const raw = id(value).trim()
     if (!raw) return '—'
@@ -1299,7 +1299,7 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, items, ite
       return <div key={`${approvalStage}-${id(orderLine.id)}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(150px,1.2fr) 95px 115px 120px minmax(150px,1fr) 105px', gap: 8, alignItems: 'center', padding: '10px 11px', borderBottom: '1px solid var(--border)', fontSize: 11 }}>
         <strong style={{ color: 'var(--text)' }}>{names.items.get(id(orderLine.item)) || id(orderLine.item)}</strong>
         <span style={{ color: 'var(--text-muted)' }}>Previous {upstream}</span>
-        <input type="number" min="0" max={upstream} step="0.01" disabled={rejectedEarlier} value={decisionQuantity(orderLine, approvalStage)} onChange={(event) => setDecisionQuantity(orderLine, approvalStage, event.target.value)} style={{ ...control, height: 34, opacity: rejectedEarlier ? .65 : 1 }} />
+        <input type="number" min="0" max={upstream} step="0.0001" disabled={rejectedEarlier} value={decisionQuantity(orderLine, approvalStage)} onChange={(event) => setDecisionQuantity(orderLine, approvalStage, event.target.value)} style={{ ...control, height: 34, opacity: rejectedEarlier ? .65 : 1 }} />
         <span style={{ color: 'var(--text-muted)' }}><small style={{ display: 'block', color: 'var(--text-faint)' }}>Unit price</small>{money(orderLine.unit_cost)}</span>
         <input disabled={rejectedEarlier || quantity >= upstream} value={reason} onChange={(event) => setDecisionReason(orderLine, approvalStage, event.target.value)} placeholder={quantity < upstream ? 'Reason required' : 'No change'} style={{ ...control, height: 34, opacity: rejectedEarlier || quantity >= upstream ? .65 : 1 }} />
         {rejectedEarlier ? <span style={{ color: 'var(--bad)', fontWeight: 750 }}>Rejected earlier</span> : quantity === 0 ? <button type="button" onClick={() => { setDecisionQuantity(orderLine, approvalStage, upstream); setDecisionReason(orderLine, approvalStage, '') }} style={{ ...secondary, height: 30, justifyContent: 'center' }}>Keep item</button> : <button type="button" onClick={() => { setDecisionQuantity(orderLine, approvalStage, 0); setDecisionReason(orderLine, approvalStage, '') }} style={{ ...secondary, height: 30, justifyContent: 'center', color: 'var(--bad)', borderColor: 'rgba(220,38,38,.35)' }}>Reject item</button>}
@@ -1504,7 +1504,7 @@ function LpoSummary({ order, lines, names, quantityValue, quantityMax, onQuantit
       const maximum = quantityMax ? quantityMax(row) : undefined
       return <div key={id(row.id)} style={{ padding: '9px 11px', display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) .6fr .7fr .8fr', gap: 8, alignItems: 'center', borderTop: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 10.8 }}>
         <strong style={{ color: 'var(--text)' }}>{names.items.get(id(row.item)) || id(row.item)}</strong>
-        {onQuantityChange ? <input type="number" min="0.01" max={maximum} step="0.01" value={shownQuantity} onChange={(event) => onQuantityChange(row, event.target.value)} aria-label={`Quantity for ${names.items.get(id(row.item)) || id(row.item)}`} style={{ ...control, height: 34, minWidth: 0 }} /> : <span>{id(row.approved_quantity ?? row.quantity)}</span>}
+        {onQuantityChange ? <input type="number" min="0.0001" max={maximum} step="0.0001" value={shownQuantity} onChange={(event) => onQuantityChange(row, event.target.value)} aria-label={`Quantity for ${names.items.get(id(row.item)) || id(row.item)}`} style={{ ...control, height: 34, minWidth: 0 }} /> : <span>{id(row.approved_quantity ?? row.quantity)}</span>}
         <span>{money(row.unit_cost)}</span>
         <span>{money(shownQuantity * num(row.unit_cost))}</span>
       </div>

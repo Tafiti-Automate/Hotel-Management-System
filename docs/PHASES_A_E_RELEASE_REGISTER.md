@@ -13,7 +13,7 @@ The reference requires seven invariants: segregation of duties, store assets ver
 | Transfer bypass | Legacy `/stock-transfers/{id}/apply/` and misattached `assign-store` action removed. Model-level `dispatch(require_approval=False)` now still requires prior approval; compatibility booking requires approved + in-transit. | Run approved, rejected, duplicate, cross-property and two-store actor tests in staging |
 | Transfer document locking | API headers and lines cannot be changed after approval/dispatch; status/approver/receipt fields are server-owned. | Independently approve cross-property business rules before enabling inter-property movement |
 | Stock adjustments | Assigned Store Keeper drafts/edits lines and submits; Financial Manager independently approves/rejects; assigned keeper posts once during an open period. Cost Controller reviews evidence. Booking amount uses historical known WAC, not store-entered unit-cost claims. | Test real role accounts and reconcile stock ledger to GL |
-| Four-decimal base units | Conversion factors and cost snapshots already support four decimals, but multiple quantity columns remain at two decimals. | **OPEN — cross-app schema migration, serializers, rounding, historical data checks and reconciliation** |
+| Four-decimal base units | Conversion factors and cost snapshots already support four decimals, but multiple quantity columns remain at two decimals. | **IMPLEMENTED IN CODE / AWAITING STAGING SIGN-OFF** — widened 58 quantity columns across inventory, procurement, sales, finance and materials-control; updated conversions, posting calculations, serializers and selected frontend quantity views. Historical monetary figures are not altered. Production migration and data reconciliation remain gated on a verified backup. |
 | Closed-period and booked-document controls | Existing signals, blocked stock ledger edits and fiscal close checks; strengthened in earlier phases. | Verify every reversal, old-dated write path and correct handling of approved corrections under concurrency |
 
 ## Phase B — Procurement
@@ -57,3 +57,35 @@ Do not treat a balanced GL preview or CSV as proof that SunSystems/SAP/Sage/Quic
 4. Collect independent Store, Purchasing, Cost Control, Finance and management UAT signoff before declaring feature or Oracle-equivalence completion.
 
 **Important:** The user requested completion of all five phases. The changes in this increment are foundational controls and testing—not an assertion that all five phases are complete.
+
+
+## Four-decimal schema migration safety and reconciliation (Phase A)
+
+The migration batch updates numeric base quantities from `DECIMAL(12,2)` to
+`DECIMAL(14,4)`, preserving the existing **ten integer digits**. Invoice
+quantity variance is widened from `DECIMAL(15,2)` to `DECIMAL(17,4)`,
+preserving thirteen integer digits. Monetary amounts and GL journal cents
+retain their original two-decimal schema; WAC and historical valuation snapshots
+retain four decimals. The migrations are **schema-only** and do not recalculate
+historical quantities or prices.
+
+**Required before deployment to a real hotel database:**
+
+1. Perform and verify a restore-capable Neon/PostgreSQL snapshot, including
+   migrations state and financial/stock tables. Do not run blindly in production.
+2. Audit per-store/article opening stock and reservations, recorded stock-ledger
+   movement totals, unmatched GRNs, transfers in transit, inventory batches and
+   stocktakes. Export opening/closing stock valuations for comparison.
+3. Test these five migration files against a restored staging database and then
+   rerun the full branch suite and role permission synchronization.
+4. Reconcile opening stock + recorded receipts - booked issues +/- transfers and
+   adjustments = closing stock for each store/article at four-decimal precision;
+   compare balances and inventory cost snapshots before and after migration.
+5. Release only with Finance and Store Keeper signoff. **Decimals already rounded
+   in older two-place database columns cannot be reconstructed by widening them.**
+
+Files: `inventory/0034_four_decimal_quantities.py`,
+`procurement/0035_four_decimal_quantities.py`,
+`sales/0003_four_decimal_quantities.py`,
+`finance/0008_four_decimal_quantities.py`, and
+`materials_control/0007_four_decimal_quantities.py`.

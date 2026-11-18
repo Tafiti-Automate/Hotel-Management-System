@@ -820,13 +820,13 @@ class RequisitionItem(BaseModel):
         blank=True,
     )
     quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         validators=[validate_positive_decimal],
     )
     approved_quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         null=True,
         blank=True,
         validators=[validate_non_negative_decimal],
@@ -871,8 +871,8 @@ class RequisitionItem(BaseModel):
         blank=True,
     )
     procurement_quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         null=True,
         blank=True,
         validators=[validate_non_negative_decimal],
@@ -1493,7 +1493,7 @@ class PurchaseOrder(BaseModel):
                     raise ValidationError(
                         f"Record a reason for reducing {line.item} from {upstream}."
                     )
-                approved_base = line.item.quantity_in_base_units(approved_quantity, line.unit).quantize(Decimal("0.01"))
+                approved_base = line.item.quantity_in_base_units(approved_quantity, line.unit).quantize(Decimal("0.0001"))
                 PurchaseOrderItem.objects.filter(pk=line.pk).update(
                     **{
                         quantity_field: approved_quantity,
@@ -1797,73 +1797,73 @@ class PurchaseOrderItem(BaseModel):
         blank=True,
     )
     quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         validators=[validate_positive_decimal],
     )
     base_quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         default=Decimal("0.00"),
     )
     procurement_quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         null=True,
         blank=True,
         validators=[validate_non_negative_decimal],
         help_text="Quantity requested by Procurement before Finance review.",
     )
     procurement_base_quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         null=True,
         blank=True,
         validators=[validate_non_negative_decimal],
     )
     purchasing_approved_quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         null=True,
         blank=True,
         validators=[validate_non_negative_decimal],
         help_text="Purchasing Manager approved quantity; blank means the Procurement draft quantity was retained.",
     )
     purchasing_approved_base_quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         null=True,
         blank=True,
         validators=[validate_non_negative_decimal],
     )
     purchasing_reduction_reason = models.TextField(blank=True)
     finance_approved_quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         null=True,
         blank=True,
         validators=[validate_non_negative_decimal],
         help_text="Finance-approved quantity; blank means Finance retained the Purchasing Manager quantity.",
     )
     finance_approved_base_quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         null=True,
         blank=True,
         validators=[validate_non_negative_decimal],
     )
     finance_reduction_reason = models.TextField(blank=True)
     management_approved_quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         null=True,
         blank=True,
         validators=[validate_non_negative_decimal],
         help_text="General Manager approved quantity; blank means the Finance-approved quantity was retained.",
     )
     management_approved_base_quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         null=True,
         blank=True,
         validators=[validate_non_negative_decimal],
@@ -1953,7 +1953,7 @@ class PurchaseOrderItem(BaseModel):
             previous = type(self).objects.only("base_quantity").get(pk=self.pk)
             candidate_base = self.item.quantity_in_base_units(
                 self.quantity, self.unit
-            ).quantize(Decimal("0.01"))
+            ).quantize(Decimal("0.0001"))
             if candidate_base > previous.base_quantity:
                 raise ValidationError(
                     "LPO quantities can only be retained or reduced after the line is created."
@@ -1964,7 +1964,7 @@ class PurchaseOrderItem(BaseModel):
             ).first()
         self.base_quantity = self.item.quantity_in_base_units(
             self.quantity, self.unit
-        ).quantize(Decimal("0.01"))
+        ).quantize(Decimal("0.0001"))
         # Before the LPO is submitted, Procurement is still editing its own
         # request.  Capture that latest draft as the immutable Finance baseline.
         if self.purchase_order_id and self.purchase_order.editable:
@@ -2276,13 +2276,13 @@ class GoodsReceiptItem(BaseModel):
         help_text="Use instead of a store when accepted goods go directly to a department.",
     )
     quantity_received = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         validators=[validate_positive_decimal],
     )
     base_quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         default=Decimal("0.00"),
     )
     unit_cost = models.DecimalField(
@@ -2319,7 +2319,7 @@ class GoodsReceiptItem(BaseModel):
         self.item = self.purchase_order_item.item
         self.base_quantity = (
             self.quantity_received * self.purchase_order_item.conversion_factor
-        ).quantize(Decimal("0.01"))
+        ).quantize(Decimal("0.0001"))
         planned_line = self.purchase_order_item
         if planned_line.destination_type == RequisitionItem.DESTINATION_WORKSPACE:
             self.store = None
@@ -2570,7 +2570,7 @@ class VendorQuotationItem(BaseModel):
         null=True,
         blank=True,
     )
-    quantity = models.DecimalField(max_digits=12, decimal_places=2, validators=[validate_positive_decimal])
+    quantity = models.DecimalField(max_digits=14, decimal_places=4, validators=[validate_positive_decimal])
     unit_price = models.DecimalField(max_digits=15, decimal_places=2, validators=[validate_positive_decimal])
     delivery_days = models.PositiveIntegerField(default=0)
     selected = models.BooleanField(default=False)
@@ -2666,9 +2666,9 @@ class GoodsInspectionItem(BaseModel):
         on_delete=models.PROTECT,
         related_name="inspection_items",
     )
-    quantity_received = models.DecimalField(max_digits=12, decimal_places=2, validators=[validate_positive_decimal])
-    quantity_accepted = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
-    quantity_rejected = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    quantity_received = models.DecimalField(max_digits=14, decimal_places=4, validators=[validate_positive_decimal])
+    quantity_accepted = models.DecimalField(max_digits=14, decimal_places=4, default=Decimal("0.00"))
+    quantity_rejected = models.DecimalField(max_digits=14, decimal_places=4, default=Decimal("0.00"))
     rejection_reason = models.TextField(blank=True)
 
     class Meta(BaseModel.Meta):
@@ -2898,8 +2898,8 @@ class SupplierReturnItem(BaseModel):
     supplier_return = models.ForeignKey(SupplierReturn, on_delete=models.CASCADE, related_name="items")
     item = models.ForeignKey("inventory.Item", on_delete=models.PROTECT, related_name="supplier_return_items")
     unit = models.ForeignKey("inventory.UnitOfMeasure", on_delete=models.PROTECT, related_name="supplier_return_items", null=True, blank=True)
-    quantity = models.DecimalField(max_digits=12, decimal_places=2, validators=[validate_positive_decimal])
-    base_quantity = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    quantity = models.DecimalField(max_digits=14, decimal_places=4, validators=[validate_positive_decimal])
+    base_quantity = models.DecimalField(max_digits=14, decimal_places=4, default=Decimal("0.00"))
     reason = models.TextField(blank=True)
 
     def save(self, *args, **kwargs):

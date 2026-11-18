@@ -254,13 +254,13 @@ class SaleItem(BaseModel):
         blank=True,
     )
     quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         validators=[validate_positive_decimal],
     )
     base_quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         default=Decimal("0.00"),
         validators=[validate_positive_decimal],
     )

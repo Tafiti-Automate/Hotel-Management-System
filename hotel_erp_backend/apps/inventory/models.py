@@ -140,13 +140,13 @@ class Item(BaseModel):
         blank=True,
     )
     reorder_level = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         validators=[validate_non_negative_decimal],
     )
     maximum_level = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         null=True,
         blank=True,
         validators=[validate_non_negative_decimal],
@@ -243,7 +243,7 @@ class Item(BaseModel):
         return configured.conversion_factor
 
     def quantity_in_base_units(self, quantity, unit=None):
-        return (quantity or Decimal("0.00")) * self.conversion_factor_for_unit(unit)
+        return ((quantity or Decimal("0.00")) * self.conversion_factor_for_unit(unit)).quantize(Decimal("0.0001"))
 
 
 class ItemUnitPrice(BaseModel):
@@ -438,14 +438,14 @@ class InventoryBalance(BaseModel):
         related_name="inventory_balances",
     )
     quantity_in_stock = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         default=Decimal("0.00"),
         validators=[validate_non_negative_decimal],
     )
     quantity_reserved = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         default=Decimal("0.00"),
         validators=[validate_non_negative_decimal],
     )
@@ -458,8 +458,8 @@ class InventoryBalance(BaseModel):
         help_text="Warehouse aisle / shelf / bin for picking order.",
     )
     reorder_level = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         default=Decimal("0.00"),
         validators=[validate_non_negative_decimal],
     )
@@ -519,8 +519,8 @@ class SupplierItemPrice(BaseModel):
         validators=[validate_non_negative_decimal],
     )
     minimum_order_quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         default=Decimal("1.00"),
         validators=[validate_positive_decimal],
     )
@@ -610,7 +610,7 @@ class SupplierPriceQuoteProposal(BaseModel):
     currency = models.CharField(max_length=10, default="UGX")
     unit_price = models.DecimalField(max_digits=15, decimal_places=2, validators=[validate_positive_decimal])
     discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.00"), validators=[validate_non_negative_decimal])
-    fixed_order_quantity = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("1.00"), validators=[validate_positive_decimal])
+    fixed_order_quantity = models.DecimalField(max_digits=14, decimal_places=4, default=Decimal("1.00"), validators=[validate_positive_decimal])
     valid_from = models.DateField(default=timezone.localdate)
     valid_to = models.DateField(null=True, blank=True)
     is_preferred = models.BooleanField(default=False)
@@ -685,14 +685,14 @@ class StockLedger(BaseModel):
         blank=True,
     )
     quantity_in = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         default=Decimal("0.00"),
         validators=[validate_non_negative_decimal],
     )
     quantity_out = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         default=Decimal("0.00"),
         validators=[validate_non_negative_decimal],
     )
@@ -781,13 +781,13 @@ class InventoryBatch(BaseModel):
         related_name="inventory_batches",
     )
     quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         validators=[validate_positive_decimal],
     )
     remaining_quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         validators=[validate_non_negative_decimal],
     )
     unit_cost = models.DecimalField(
@@ -1062,13 +1062,13 @@ class StockTransferItem(BaseModel):
         blank=True,
     )
     quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         validators=[validate_positive_decimal],
     )
     base_quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         default=Decimal("0.00"),
         validators=[validate_positive_decimal],
     )
@@ -1227,7 +1227,7 @@ class StockAdjustmentItem(BaseModel):
         null=True,
         blank=True,
     )
-    quantity_change = models.DecimalField(max_digits=12, decimal_places=2)
+    quantity_change = models.DecimalField(max_digits=14, decimal_places=4)
     unit_cost = models.DecimalField(
         max_digits=15,
         decimal_places=2,
@@ -1271,13 +1271,13 @@ class ReorderRule(BaseModel):
         help_text="Leave blank to use this rule as the default for all stores.",
     )
     minimum_level = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         validators=[validate_non_negative_decimal],
     )
     reorder_quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         validators=[validate_positive_decimal],
     )
     preferred_supplier = models.ForeignKey(
@@ -1973,32 +1973,32 @@ class StoreRequisitionItem(BaseModel):
         blank=True,
     )
     quantity_requested = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         validators=[validate_positive_decimal],
     )
     base_quantity_requested = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         default=Decimal("0.00"),
     )
     hod_approved_quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         null=True,
         blank=True,
         validators=[validate_non_negative_decimal],
         help_text="Quantity approved by the Department Head; requester quantity remains unchanged.",
     )
     quantity_approved = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         default=Decimal("0.00"),
         validators=[validate_non_negative_decimal],
     )
     quantity_issued = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         default=Decimal("0.00"),
         validators=[validate_non_negative_decimal],
     )
@@ -2294,13 +2294,13 @@ class StockIssueItem(BaseModel):
         blank=True,
     )
     quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         validators=[validate_positive_decimal],
     )
     base_quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         default=Decimal("0.00"),
     )
     dispatched_unit_cost = models.DecimalField(
@@ -2359,8 +2359,8 @@ class DepartmentConsumption(BaseModel):
         related_name="department_consumption",
     )
     quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         validators=[validate_positive_decimal],
     )
     unit_cost = models.DecimalField(
@@ -2480,8 +2480,8 @@ class StoreReturnItem(BaseModel):
         null=True,
         blank=True,
     )
-    quantity = models.DecimalField(max_digits=12, decimal_places=2, validators=[validate_positive_decimal])
-    base_quantity = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    quantity = models.DecimalField(max_digits=14, decimal_places=4, validators=[validate_positive_decimal])
+    base_quantity = models.DecimalField(max_digits=14, decimal_places=4, default=Decimal("0.00"))
     condition_note = models.TextField(blank=True)
 
     def save(self, *args, **kwargs):
@@ -2606,8 +2606,8 @@ class StockCount(BaseModel):
 class StockCountItem(BaseModel):
     stock_count = models.ForeignKey(StockCount, on_delete=models.CASCADE, related_name="items")
     item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="stock_count_items")
-    system_quantity = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"), validators=[validate_non_negative_decimal])
-    physical_quantity = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"), validators=[validate_non_negative_decimal])
+    system_quantity = models.DecimalField(max_digits=14, decimal_places=4, default=Decimal("0.00"), validators=[validate_non_negative_decimal])
+    physical_quantity = models.DecimalField(max_digits=14, decimal_places=4, default=Decimal("0.00"), validators=[validate_non_negative_decimal])
     note = models.TextField(blank=True)
 
     class Meta(BaseModel.Meta):

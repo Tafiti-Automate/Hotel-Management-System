@@ -10,7 +10,7 @@ import '../department-supply.css'
 
 type Payload={requests:Row[];lines:Row[];stores:Row[];balances:Row[];items:Row[];units:Row[];issues:Row[];issueItems:Row[];grns:Row[];grnItems:Row[]}
 const blank:Payload={requests:[],lines:[],stores:[],balances:[],items:[],units:[],issues:[],issueItems:[],grns:[],grnItems:[]}
-const id=(v:unknown)=>String(v??''); const n=(v:unknown)=>Number(v||0); const q=(v:unknown)=>n(v).toLocaleString('en-UG',{maximumFractionDigits:2})
+const id=(v:unknown)=>String(v??''); const n=(v:unknown)=>Number(v||0); const q=(v:unknown)=>n(v).toLocaleString('en-UG',{maximumFractionDigits:4})
 const when=(v:unknown)=>{const d=new Date(id(v));return !id(v)||Number.isNaN(d.getTime())?'—':d.toLocaleString('en-UG',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}
 const label=(s:unknown)=>({draft:'Draft',pending_department_approval:'Awaiting HOD',submitted:'Awaiting Cost Control',approved:'Approved · Stores',rejected:'Rejected',partially_issued:'Partially issued',issued:'Issued'}[id(s)]||id(s).replace(/_/g,' '))
 

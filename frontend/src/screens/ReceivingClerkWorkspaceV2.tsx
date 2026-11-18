@@ -7,7 +7,7 @@ import { useApp } from '../state/AppContext'
 
 const id = (value: unknown) => String(value ?? '')
 const n = (value: unknown) => Number(value || 0)
-const q = (value: unknown) => n(value).toLocaleString('en-UG', { maximumFractionDigits: 2 })
+const q = (value: unknown) => n(value).toLocaleString('en-UG', { maximumFractionDigits: 4 })
 const receiptStatus = (value: unknown) => id(value) === 'posted' ? 'Posted to SOH' : 'Awaiting Stores'
 
 export default function ReceivingClerkWorkspaceV2() {
@@ -246,8 +246,8 @@ function Receive({ order, lines, app, busy, act, back, receiptRecorded }: { orde
             return <tr key={id(line.id)}>
               <td><strong>{id(item?.name || line.item_name || line.item)}</strong><small>{id(item?.sku || line.item_sku)}</small></td>
               <td><span title="Ordered quantity concealed during blind receiving">***</span></td>
-              <td><input type="number" min="0" step="0.01" inputMode="decimal" placeholder="Count" aria-label={'Counted quantity for ' + id(item?.name || line.item_name)} value={values[id(line.id)] || ''} onChange={(event) => setValues({ ...values, [id(line.id)]: event.target.value })} /></td>
-              <td><input type="number" min="0" step="0.01" inputMode="decimal" aria-label={'Rejected quantity for ' + id(item?.name || line.item_name)} value={rejected[id(line.id)] || ''} onChange={(event) => setRejected({ ...rejected, [id(line.id)]: event.target.value })} /></td>
+              <td><input type="number" min="0" step="0.0001" inputMode="decimal" placeholder="Count" aria-label={'Counted quantity for ' + id(item?.name || line.item_name)} value={values[id(line.id)] || ''} onChange={(event) => setValues({ ...values, [id(line.id)]: event.target.value })} /></td>
+              <td><input type="number" min="0" step="0.0001" inputMode="decimal" aria-label={'Rejected quantity for ' + id(item?.name || line.item_name)} value={rejected[id(line.id)] || ''} onChange={(event) => setRejected({ ...rejected, [id(line.id)]: event.target.value })} /></td>
               <td><input type="text" placeholder="If rejected" aria-label={'Rejection reason for ' + id(item?.name || line.item_name)} value={rejectionReasons[id(line.id)] || ''} onChange={(event) => setRejectionReasons({ ...rejectionReasons, [id(line.id)]: event.target.value })} /></td>
               <td><input aria-label={`Batch number for ${id(item?.name || line.item_name)}`} required={Boolean(item?.batchTracking) && n(values[id(line.id)]) > 0} placeholder={item?.batchTracking ? 'Required' : 'Optional'} value={trace.batch_number} onChange={(event) => setTrace('batch_number', event.target.value)} /></td>
               <td><input aria-label={`Expiry date for ${id(item?.name || line.item_name)}`} required={Boolean(item?.expiryTracking) && n(values[id(line.id)]) > 0} type="date" min={new Date().toISOString().slice(0, 10)} value={trace.expiry_date} onChange={(event) => setTrace('expiry_date', event.target.value)} /></td>

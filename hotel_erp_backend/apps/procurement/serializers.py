@@ -260,27 +260,27 @@ class PurchaseRequisitionSerializer(serializers.ModelSerializer):
 class RequisitionItemSerializer(serializers.ModelSerializer):
     estimated_total = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     requested_base_quantity = serializers.DecimalField(
-        max_digits=12,
+        max_digits=14,
         decimal_places=4,
         read_only=True,
     )
     approved_base_quantity = serializers.DecimalField(
-        max_digits=12,
+        max_digits=14,
         decimal_places=4,
         read_only=True,
     )
     ordered_quantity = serializers.DecimalField(
-        max_digits=12,
+        max_digits=14,
         decimal_places=4,
         read_only=True,
     )
     received_quantity = serializers.DecimalField(
-        max_digits=12,
+        max_digits=14,
         decimal_places=4,
         read_only=True,
     )
     remaining_order_quantity = serializers.DecimalField(
-        max_digits=12,
+        max_digits=14,
         decimal_places=4,
         read_only=True,
     )
@@ -635,8 +635,8 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
         decimal_places=2,
         read_only=True,
     )
-    approved_quantity = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
-    approved_base_quantity = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    approved_quantity = serializers.DecimalField(max_digits=14, decimal_places=4, read_only=True)
+    approved_base_quantity = serializers.DecimalField(max_digits=14, decimal_places=4, read_only=True)
     previously_received_quantity = serializers.SerializerMethodField()
     outstanding_quantity = serializers.SerializerMethodField()
 
@@ -684,12 +684,12 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
             ),
             Decimal("0.00"),
         )
-        return f"{received:.2f}"
+        return f"{received:.4f}"
 
     def get_outstanding_quantity(self, instance):
         approved = instance.approved_quantity or Decimal("0.00")
         received = Decimal(self.get_previously_received_quantity(instance))
-        return f"{max(approved - received, Decimal('0.00')):.2f}"
+        return f"{max(approved - received, Decimal('0.00')):.4f}"
 
     def validate(self, attrs):
         order = attrs.get("purchase_order") or getattr(self.instance, "purchase_order", None)
@@ -847,8 +847,8 @@ class GoodsReceiptItemSerializer(serializers.ModelSerializer):
     unit_abbreviation = serializers.CharField(source="purchase_order_item.unit.abbreviation", read_only=True)
     ordered_quantity = serializers.DecimalField(
         source="purchase_order_item.approved_quantity",
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         read_only=True,
     )
     accepted_quantity = serializers.SerializerMethodField()
@@ -878,8 +878,8 @@ class GoodsReceiptItemSerializer(serializers.ModelSerializer):
             value = getattr(inspection_item, field)
         factor = instance.purchase_order_item.conversion_factor
         if factor <= Decimal("0.00"):
-            return "0.00"
-        return f"{value / factor:.2f}"
+            return "0.0000"
+        return f"{value / factor:.4f}"
 
     def get_accepted_quantity(self, instance):
         return self._inspection_quantity(instance, "quantity_accepted")

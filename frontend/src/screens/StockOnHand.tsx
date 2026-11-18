@@ -11,7 +11,7 @@ const num = (value: unknown) => {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : 0
 }
-const qty = (value: unknown) => num(value).toLocaleString('en-UG', { maximumFractionDigits: 2 })
+const qty = (value: unknown) => num(value).toLocaleString('en-UG', { maximumFractionDigits: 4 })
 
 function updatedAt(value: unknown) {
   const raw = id(value)

@@ -96,11 +96,11 @@ class WasteRecord(BaseModel):
         blank=True,
     )
     quantity = models.DecimalField(
-        max_digits=12, decimal_places=2, validators=[validate_positive_decimal]
+        max_digits=14, decimal_places=4, validators=[validate_positive_decimal]
     )
     base_quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         default=Decimal("0.00"),
         validators=[validate_non_negative_decimal],
     )
@@ -135,7 +135,7 @@ class WasteRecord(BaseModel):
         if self.item_id:
             self.base_quantity = self.item.quantity_in_base_units(
                 self.quantity, self.unit
-            ).quantize(Decimal("0.01"))
+            ).quantize(Decimal("0.0001"))
         if self.reason_code == "other" and not self.note.strip():
             raise ValidationError({"note": "Describe the reason when Other is selected."})
 
@@ -143,7 +143,7 @@ class WasteRecord(BaseModel):
         if self.item_id:
             self.base_quantity = self.item.quantity_in_base_units(
                 self.quantity, self.unit
-            ).quantize(Decimal("0.01"))
+            ).quantize(Decimal("0.0001"))
         super().save(*args, **kwargs)
 
     def submit(self, actor):
@@ -236,7 +236,7 @@ class Recipe(BaseModel):
         "inventory.StoreLocation", on_delete=models.PROTECT, related_name="recipes"
     )
     yield_quantity = models.DecimalField(
-        max_digits=12, decimal_places=2, validators=[validate_positive_decimal]
+        max_digits=14, decimal_places=4, validators=[validate_positive_decimal]
     )
     yield_unit = models.CharField(max_length=40, default="Portions")
     target_food_cost_percent = models.DecimalField(
@@ -565,13 +565,12 @@ class POSImportBatch(BaseModel):
                 for item_id, required in expanded.items():
                     demand[item_id] = demand.get(item_id, Decimal("0.0000")) + required
 
-            # Inventory balances and the stock ledger are intentionally held at
-            # two decimal places. Aggregate the full recipe demand first, then
-            # normalize once so many small POS sales are not rounded line by line.
+            # Inventory balances and the stock ledger hold four-decimal base quantities.
+            # Aggregate recipe demand before normalizing to avoid repeated line rounding.
             demand = {
-                item_id: quantity.quantize(Decimal("0.01"))
+                item_id: quantity.quantize(Decimal("0.0001"))
                 for item_id, quantity in demand.items()
-                if quantity.quantize(Decimal("0.01")) > 0
+                if quantity.quantize(Decimal("0.0001")) > 0
             }
 
             balances = {
@@ -668,7 +667,7 @@ class POSSaleLine(BaseModel):
     external_name = models.CharField(max_length=180, blank=True)
     external_reference = models.CharField(max_length=120)
     quantity = models.DecimalField(
-        max_digits=12, decimal_places=2, validators=[validate_positive_decimal]
+        max_digits=14, decimal_places=4, validators=[validate_positive_decimal]
     )
     net_sales = models.DecimalField(
         max_digits=15,

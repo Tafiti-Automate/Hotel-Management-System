@@ -276,7 +276,7 @@ class SupplierInvoice(BaseModel):
         max_length=30, choices=STATUS_CHOICES, default=STATUS_DRAFT
     )
     quantity_variance = models.DecimalField(
-        max_digits=15, decimal_places=2, default=Decimal("0.00")
+        max_digits=17, decimal_places=4, default=Decimal("0.00")
     )
     amount_variance = models.DecimalField(
         max_digits=15, decimal_places=2, default=Decimal("0.00")
@@ -524,13 +524,13 @@ class SupplierInvoiceItem(BaseModel):
         blank=True,
     )
     quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         validators=[validate_positive_decimal],
     )
     base_quantity = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         default=Decimal("0.00"),
         validators=[validate_non_negative_decimal],
     )
@@ -623,7 +623,7 @@ class SupplierInvoiceItem(BaseModel):
             self.unit = self.purchase_order_item.unit
         self.base_quantity = self.item.quantity_in_base_units(
             self.quantity, self.unit
-        ).quantize(Decimal("0.01"))
+        ).quantize(Decimal("0.0001"))
         if not self.description:
             self.description = self.item.name
         self.full_clean()

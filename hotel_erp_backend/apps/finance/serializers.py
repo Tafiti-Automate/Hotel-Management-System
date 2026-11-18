@@ -130,13 +130,13 @@ class SupplierInvoiceSerializer(serializers.ModelSerializer):
 class SupplierInvoiceItemSerializer(serializers.ModelSerializer):
     line_subtotal = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     accepted_base_quantity = serializers.DecimalField(
-        max_digits=12, decimal_places=2, read_only=True
+        max_digits=14, decimal_places=4, read_only=True
     )
     previously_matched_base_quantity = serializers.DecimalField(
-        max_digits=12, decimal_places=2, read_only=True
+        max_digits=14, decimal_places=4, read_only=True
     )
     invoiceable_base_quantity = serializers.DecimalField(
-        max_digits=12, decimal_places=2, read_only=True
+        max_digits=14, decimal_places=4, read_only=True
     )
 
     class Meta:
