@@ -181,6 +181,33 @@ function InvoicePanel({ data, form, setForm, busy, execute, orderLabel, invoiceL
   </Panel>
 }
 
+function printPaymentInstruction(payment: Row, invoices: Row[], supplierNames: Map<string,string>, operator: string): boolean {
+  const invoice = invoices.find(row => sid(row.id) === sid(payment.invoice))
+  const escapeHtml = (value: unknown) => sid(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+  const pairs: Array<[string,unknown]> = [
+    ['Payment reference', payment.reference],
+    ['Invoice number', invoice?.invoice_number || 'Invoice unavailable'],
+    ['Supplier', supplierNames.get(sid(invoice?.supplier)) || 'Supplier unavailable'],
+    ['Amount', money(payment.amount)],
+    ['Payment date', payment.payment_date],
+    ['Payment method', payment.payment_method],
+    ['Status', sid(payment.status).replaceAll('_',' ')],
+    ['Finance authorization', payment.approved_at || 'Not yet authorized'],
+    ['Bank release', payment.released_at || 'Not yet released'],
+  ]
+  const html = '<!doctype html><html><head><meta charset="utf-8"><title>Supplier Payment Instruction ' +
+    escapeHtml(payment.reference) + '</title><style>@page{size:A4;margin:17mm}body{font:12px Arial,sans-serif;color:#17372a}header{border-bottom:3px solid #176d46;padding-bottom:12px}h1{font-size:22px}.row{display:flex;border-bottom:1px solid #d5e1da;padding:11px 4px;gap:12px}.row b{width:175px}.warning{padding:13px;border:2px solid #a56027;margin:24px 0;font-weight:bold}.sign{display:grid;grid-template-columns:1fr 1fr;gap:35px;margin-top:70px}.sign div{border-top:1px solid #668274;padding-top:8px}small{color:#5b7768}</style></head><body><header><h1>SUPPLIER PAYMENT INSTRUCTION</h1><small>Hotel ERP · Accounts Payable / Finance · Controlled copy</small></header>' +
+    pairs.map(([label,value]) => '<div class="row"><b>' + escapeHtml(label) + '</b><span>' + escapeHtml(value || '—') + '</span></div>').join('') +
+    '<div class="warning">NOT A PAYMENT CONFIRMATION OR REMITTANCE ADVICE. A released instruction does not prove a bank transfer or settle the supplier invoice.</div>' +
+    '<section class="sign"><div>Finance authorized by<br>Signature: __________________ Date: _________</div><div>Bank release officer<br>Signature: __________________ Date: _________</div></section>' +
+    '<p><small>Printed by: ' + escapeHtml(operator) + ' · ' + escapeHtml(new Date().toLocaleString('en-UG')) +
+    '. The ERP audit record, not this printed sheet, is authoritative for recorded workflow actions.</small></p></body></html>'
+  const popup = window.open('', '_blank')
+  if (!popup) return false
+  popup.document.write(html); popup.document.close(); popup.focus(); popup.print()
+  return true
+}
+
 function PaymentPanel({ data, form, setForm, busy, execute, invoiceLabel, role }: any) {
   const payable = data.invoices.filter((row: Row) => ['approved', 'partially_paid'].includes(sid(row.status)))
   const activeRole = sid(role).trim().toLowerCase()
@@ -188,6 +215,8 @@ function PaymentPanel({ data, form, setForm, busy, execute, invoiceLabel, role }
   const finance = activeRole === 'financial manager'
   const releaseOfficer = finance || activeRole === 'general manager'
   const payment = data.payments.find((row: Row) => sid(row.id) === sid(form.payment))
+  const app = useApp()
+  const suppliers = new Map(app.data.suppliers.map((row: Row) => [sid(row.id), sid(row.name)]))
   return <Panel title="Supplier payment instructions" note="Prepare, independently authorize and release payment instructions. A released instruction is NOT a completed bank transfer or a settled invoice.">
     <Field label="Approved invoice"><Select value={form.invoice} change={(v) => setForm({ invoice: v })} rows={payable} label={invoiceLabel} /></Field>
     <Two><Field label="Amount"><Input type="number" value={form.amount} change={(v) => setForm({ ...form, amount: v })} /></Field><Field label="Payment date"><Input type="date" value={form.date} change={(v) => setForm({ ...form, date: v })} /></Field></Two>
@@ -204,6 +233,10 @@ function PaymentPanel({ data, form, setForm, busy, execute, invoiceLabel, role }
     {ap && <Action disabled={busy || !payment || sid(payment.status) !== 'draft'} click={() => execute(() => runBackendAction('supplier-payments', sid(form.payment), 'submit'), 'Payment submitted for independent Finance authorization')}>Submit payment instruction</Action>}
     {finance && <Action tone="good" disabled={busy || !payment || sid(payment.status) !== 'submitted'} click={() => execute(() => runBackendAction('supplier-payments', sid(form.payment), 'authorize'), 'Payment authorized; awaiting independent release')}>Authorize payment</Action>}
     {releaseOfficer && <Action disabled={busy || !payment || sid(payment.status) !== 'approved'} click={() => execute(() => runBackendAction('supplier-payments', sid(form.payment), 'release'), 'Payment instruction released; bank transfer is not yet confirmed')}>Release for bank execution</Action>}
+    <button type="button" disabled={!payment} style={{ ...secondary, marginTop: 9 }} onClick={()=>{
+      if(payment && !printPaymentInstruction(payment, data.invoices, suppliers, app.user.name))
+        app.showWorkflowAlert('Payment instruction cannot print','Select a payment and allow browser pop-ups.','warning')
+    }}><Icon name="print" size={16}/> Print payment instruction</button>
     <div style={{fontSize:11,color:'var(--warn)',marginTop:12}}>Bank or mobile-money execution is not connected. Do not consider an instruction paid merely because it was released.</div>
   </Panel>
 }
