@@ -2450,8 +2450,9 @@ class StoreReturn(BaseModel):
 
         Unsigned dispatches are not returnable. Aggregate previously posted
         returns by original department/store/article to prevent phantom stock.
-        This does not reverse consumption accounting; financial treatment of
-        returns remains a separate, independently approved control.
+        Valuation is allocated oldest-signed-issue first from the actual issue
+        cost, not today's catalogue price. Finance reviews the balancing
+        reversal in the inventory GL preview before period export.
         """
         from django.db.models import Sum
 
@@ -2479,13 +2480,14 @@ class StoreReturn(BaseModel):
             for line in items:
                 if line.base_quantity <= 0:
                     raise ValidationError("Department return quantities must be positive.")
-                signed = StockIssueItem.objects.filter(
+                signed_issues = list(StockIssueItem.objects.filter(
                     issue__store_id=store_return.store_id,
                     issue__requisition__department_id=store_return.department_id,
                     issue__fulfillment_status=StockIssue.STATUS_COMPLETED,
                     issue__signed_at__isnull=False,
                     item_id=line.item_id,
-                ).aggregate(q=Sum("base_quantity"))["q"] or Decimal("0")
+                ).order_by("issue__signed_at", "issue_id", "pk"))
+                signed = sum((issued.base_quantity for issued in signed_issues), Decimal("0"))
                 already_returned = StoreReturnItem.objects.filter(
                     store_return__store_id=store_return.store_id,
                     store_return__department_id=store_return.department_id,
@@ -2498,24 +2500,72 @@ class StoreReturn(BaseModel):
                         f"only {max(Decimal('0'), signed - already_returned)} "
                         "of signed, unreturned departmental issues remain."
                     )
+                # Replay prior returns against signed issues in deterministic
+                # chronological order. This prevents revaluing the same
+                # returned quantity using today's stock average.
+                skip = already_returned
+                required = line.base_quantity
+                historical_value = Decimal("0")
+                for issued in signed_issues:
+                    if skip >= issued.base_quantity:
+                        skip -= issued.base_quantity
+                        continue
+                    available = issued.base_quantity - skip
+                    skip = Decimal("0")
+                    used = min(available, required)
+                    if used <= 0:
+                        continue
+                    recorded_cost = issued.dispatched_unit_cost
+                    if recorded_cost <= 0:
+                        recorded_cost = DepartmentConsumption.objects.filter(
+                            stock_issue_item_id=issued.pk,
+                        ).values_list("unit_cost", flat=True).first() or Decimal("0")
+                    if recorded_cost <= 0:
+                        raise ValidationError(
+                            f"{line.item}: the signed issue has no historical unit cost. "
+                            "Finance must resolve valuation before stock can be returned."
+                        )
+                    historical_value += used * recorded_cost
+                    required -= used
+                    if required == 0:
+                        break
+                if required != 0:
+                    raise ValidationError("Returned quantities cannot exceed signed issue evidence.")
+                unit_return_cost = (historical_value / line.base_quantity).quantize(Decimal("0.0001"))
+                if unit_return_cost <= 0:
+                    raise ValidationError(f"{line.item}: historical return cost must be positive.")
+                line._return_cost = unit_return_cost
             for line in items:
                 balance, _ = InventoryBalance.objects.select_for_update().get_or_create(
                     item=line.item,
                     store=store_return.store,
                     defaults={"quantity_in_stock": Decimal("0.00")},
                 )
+                previous_qty = balance.quantity_in_stock
+                previous_wac = balance.weighted_average_cost
                 balance.quantity_in_stock += line.base_quantity
-                balance.save(update_fields=["quantity_in_stock", "updated_at"])
+                # Reintroduce the original signed issue valuation into the
+                # moving average instead of applying the current WAC to a
+                # historical expense reversal.
+                balance.weighted_average_cost = (
+                    (
+                        previous_qty * previous_wac
+                        + line.base_quantity * line._return_cost
+                    ) / balance.quantity_in_stock
+                ).quantize(Decimal("0.0001"))
+                balance.save(update_fields=[
+                    "quantity_in_stock", "weighted_average_cost", "updated_at"
+                ])
                 StockLedger.objects.create(
                     item=line.item,
                     store=store_return.store,
                     quantity_in=line.base_quantity,
                     reference_type=LedgerReferenceType.STORE_RETURN,
                     reference_id=store_return.id,
-                    unit_cost_snapshot=balance.weighted_average_cost if balance.weighted_average_cost > 0 else None,
-                    total_cost_snapshot=(line.base_quantity * balance.weighted_average_cost).quantize(Decimal("0.0001")) if balance.weighted_average_cost > 0 else None,
-                    wac_before=balance.weighted_average_cost if balance.weighted_average_cost > 0 else None,
-                    wac_after=balance.weighted_average_cost if balance.weighted_average_cost > 0 else None,
+                    unit_cost_snapshot=line._return_cost,
+                    total_cost_snapshot=(line.base_quantity * line._return_cost).quantize(Decimal("0.0001")),
+                    wac_before=previous_wac,
+                    wac_after=balance.weighted_average_cost,
                     note=f"Signed departmental issue return {store_return.return_no}: {store_return.reason}",
                     created_by=store_return.created_by,
                 )
