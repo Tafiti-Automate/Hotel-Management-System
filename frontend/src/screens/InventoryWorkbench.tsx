@@ -970,19 +970,42 @@ function TransferPanel({ app, data, form, setForm, busy, execute }: any) {
   </Panel>
 }
 
+function printStockAdjustment(record: Row, lines: Row[], articles: Row[], operator: string): boolean {
+  if (!lines.length) return false
+  const safe=(v:unknown)=>id(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+  const labels=new Map(articles.map(row=>[id(row.id),id(row.name)]))
+  const body=lines.map((line,n)=>'<tr><td>'+(n+1)+'</td><td>'+safe(labels.get(id(line.item))||'Article unavailable')+'</td><td>'+
+    safe(line.quantity_change)+'</td><td>'+safe(line.reason||record.reason)+'</td></tr>').join('')
+  const html='<!doctype html><html><head><meta charset="utf-8"><title>Stock adjustment '+safe(record.reference||record.adjustment_no)+
+    '</title><style>@page{size:A4 portrait;margin:16mm}body{font:12px Arial;color:#193b29}h1{font-size:21px;border-bottom:3px solid #126140;padding-bottom:12px}table{width:100%;border-collapse:collapse;margin:20px 0}th,td{padding:9px;border:1px solid #a9bcb0;text-align:left}th{background:#e9f1ea}.sign{display:grid;grid-template-columns:1fr 1fr;gap:35px;margin-top:65px}.sign div{border-top:1px solid #576d5e;padding-top:8px}small{color:#53705c}</style></head><body><h1>STOCK ADJUSTMENT / AUTHORIZATION NOTE</h1><p>Reference: '+safe(record.reference||record.adjustment_no||record.id)+
+    '<br>Status: '+safe(record.status)+'<br>Reason: '+safe(record.reason)+'<br>Created: '+safe(record.created_at)+
+    '</p><table><thead><tr><th>#</th><th>Article</th><th>Signed quantity change</th><th>Reason</th></tr></thead><tbody>'+body+'</tbody></table>'+
+    '<p>Posting is only authoritative when the ERP adjustment status is applied. This paper is supporting evidence, not authorization.</p><section class="sign"><div>Prepared by Storekeeper<br>Signature: ______________ Date: ______</div><div>Authorized by Finance<br>Signature: ______________ Date: ______</div></section><p><small>Printed by '+
+    safe(operator)+' · '+safe(new Date().toLocaleString('en-UG'))+'</small></p></body></html>'
+  const popup=window.open('','_blank')
+  if(!popup)return false
+  popup.document.write(html);popup.document.close();popup.focus();popup.print()
+  return true
+}
+
 function AdjustmentPanel({ app, data, form, setForm, busy, execute }: any) {
   const isKeeper = String(app.user.role || '').toLowerCase() === 'store keeper'
   const isFinance = String(app.user.role || '').toLowerCase() === 'financial manager'
   const adjustment = data.adjustments.find((r: Row) => id(r.id) === id(form.adjustment))
+  const adjustmentLines=data.adjustmentItems.filter((r:Row)=>id(r.stock_adjustment)===id(form.adjustment))
   return <Panel title="Controlled stock adjustment" note={isFinance ? 'Independent Finance authorization. Stock corrections cannot be changed here.' : 'Store Keeper drafts and posts only Finance-approved stock corrections.'}>
     <Field label="Store"><Select value={form.store} change={(v) => setForm({ ...form, store: v })} rows={app.data.locations} /></Field>
     <Field label="Reference"><Input value={form.reference} change={(v) => setForm({ ...form, reference: v })} /></Field>
     <Field label="Reason"><Input value={form.reason} change={(v) => setForm({ ...form, reason: v })} /></Field>
     <Action disabled={!isKeeper || busy || !form.store} click={() => execute(() => createBackendRecord('stock-adjustments', { store: form.store, reference: form.reference || '', reason: form.reason || '', note: '', status: 'draft' }), 'Adjustment created')}>Create adjustment</Action>
     <Rule />
-    <Field label="Adjustment"><Select value={form.adjustment} change={(v) => setForm({ adjustment: v })} rows={data.adjustments.filter((r: Row) => !['applied', 'cancelled'].includes(id(r.status)))} label={(r) => `${id(r.reference) || `Adjustment ${id(r.id).slice(0, 8)}`} · ${r.status}`} /></Field>
+    <Field label="Adjustment"><Select value={form.adjustment} change={(v) => setForm({ adjustment: v })} rows={data.adjustments} label={(r) => `${id(r.reference) || `Adjustment ${id(r.id).slice(0, 8)}`} · ${r.status}`} /></Field>
     <Field label="Article"><Select value={form.item} change={(v) => setForm({ ...form, item: v })} rows={app.data.items} /></Field>
     <Field label="Quantity change (+ / −)"><Input type="number" value={form.quantity} change={(v) => setForm({ ...form, quantity: v })} /></Field>
+    <button type="button" style={{padding:'9px 12px',border:'1px solid var(--border)',borderRadius:8,background:'var(--surface)',color:'var(--text)',cursor:'pointer'}} disabled={!adjustment||!adjustmentLines.length} onClick={()=>{
+      if(!printStockAdjustment(adjustment,adjustmentLines,app.data.items,app.user.name))
+        app.showWorkflowAlert('Adjustment note could not print','Select an adjustment with recorded article lines and enable browser pop-ups.','warning')
+    }}><Icon name="print" size={16}/> Print adjustment / approval note</button>
     <Action disabled={!isKeeper || busy || !form.adjustment || !form.item || id(adjustment?.status) !== 'draft'} click={() => execute(() => createBackendRecord('stock-adjustment-items', { stock_adjustment: form.adjustment, item: form.item, unit: null, quantity_change: num(form.quantity), reason: form.reason || '' }), 'Adjustment line added')}>Add adjustment line</Action>
     <Action disabled={!isKeeper || busy || !form.adjustment || id(adjustment?.status) !== 'draft'} click={() => execute(() => runBackendAction('stock-adjustments', id(form.adjustment), 'submit'), 'Stock adjustment submitted')}>Submit adjustment</Action>
     <Action disabled={!isFinance || busy || !form.adjustment || id(adjustment?.status) !== 'pending'} click={() => execute(() => runBackendAction('stock-adjustments', id(form.adjustment), 'approve'), 'Stock adjustment approved')}>Approve adjustment</Action>
