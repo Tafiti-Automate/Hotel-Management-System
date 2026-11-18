@@ -303,9 +303,25 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
     ordering_fields = ("requisition_number", "status", "created_at", "expected_date")
 
     def get_permissions(self):
-        if self.action in ("workspace", "store_purchase_requests", "cancel_store_purchase_request"):
+        if self.action in ("workspace", "store_purchase_requests", "cancel_store_purchase_request", "market_lists", "market_list_submit"):
             return [IsAuthenticated()]
         return super().get_permissions()
+
+    @action(detail=False, methods=["get", "post"], url_path="market-lists")
+    def market_lists(self, request):
+        from apps.procurement.market_lists import market_lists
+        try:
+            return market_lists(request)
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+
+    @action(detail=True, methods=["post"], url_path="submit-market-list")
+    def market_list_submit(self, request, pk=None):
+        from apps.procurement.market_lists import submit_market_list
+        try:
+            return submit_market_list(request, self.get_object())
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
 
     def _store_purchase_employee(self, request):
         if not user_has_role(request.user, "System Administrator", "Store Keeper"):

@@ -24,6 +24,7 @@ const StockOnHand = lazy(() => import('./StockOnHand'))
 const StoreInventory = lazy(() => import('./StoreInventory'))
 const StoreAnalysis = lazy(() => import('./StoreAnalysis'))
 const DepartmentRequisitions = lazy(() => import('./DepartmentRequisitions'))
+const MarketLists = lazy(() => import('./MarketLists'))
 const StorePurchaseRequests = lazy(() => import('./StorePurchaseRequests'))
 const InventoryCatalogue = lazy(() => import('./InventoryCatalogue'))
 const ArticleManagement = lazy(() => import('./ArticleManagement'))
@@ -119,6 +120,7 @@ export default function AppShell() {
     : departmentSupplyRoles.has(role)
       ? <DepartmentSupplyWorkspace />
       : <InventoryWorkbench />
+  else if (route === 'market-lists') content = <MarketLists />
   else if (route === 'stock-on-hand') content = <StockOnHand />
   else if (route === 'store-transfers') content = <InventoryWorkbench initialTab="transfers" />
   else if (route === 'store-inventory') content = <StoreInventory />

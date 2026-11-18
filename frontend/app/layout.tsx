@@ -33,6 +33,7 @@ import '../src/hospitality-precision.css'
 import '../src/hotel-evergreen-unified.css'
 /* Page-scoped final fixes: Department Requisitions master/detail + Article selector. */
 import '../src/department-requisitions-fix.css'
+import '../src/market-lists.css'
 
 export const metadata: Metadata = {
   title: 'Hotel ERP',

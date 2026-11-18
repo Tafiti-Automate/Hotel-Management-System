@@ -585,53 +585,96 @@ export function EnterpriseStocktakeVariance() {
   </WorkspacePage>
 }
 
-type MenuSale = { sku:string; article:string; quantity:number; sales:number; margin:number|null; profit:number|null }
-type EngineGroup = 'Stars'|'Plowhorses'|'Puzzles'|'Dogs'
-const engineeringGroups:EngineGroup[] = ['Stars','Plowhorses','Puzzles','Dogs']
+type EngineGroup = 'Stars' | 'Plowhorses' | 'Puzzles' | 'Dogs'
+const engineeringGroups: EngineGroup[] = ['Stars', 'Plowhorses', 'Puzzles', 'Dogs']
+type MenuCategory = 'Star' | 'Plowhorse' | 'Puzzle' | 'Dog' | 'Unclassified'
+type MenuSale = {
+  sku: string
+  article: string
+  quantity: number
+  sales: number
+  margin: number | null
+  profit: number | null
+  contribution: number | null
+  classification: MenuCategory
+}
+const categoryNames: Record<Exclude<MenuCategory, 'Unclassified'>, EngineGroup> = {
+  Star: 'Stars', Plowhorse: 'Plowhorses', Puzzle: 'Puzzles', Dog: 'Dogs',
+}
+
 export function EnterpriseMenuEngineering() {
-  const [report,setReport]=useState<ApiRow[]>([])
-  const [busy,setBusy]=useState(true)
-  const [error,setError]=useState('')
-  const reload=async()=>{
-    setBusy(true);setError('')
-    try{
-      const result=await fetchOperationalReport('menuEngineering',{})
-      setReport(Array.isArray(result.results)?result.results as ApiRow[]:[])
-    }catch(reason){setError(errorMessage(reason))}
-    finally{setBusy(false)}
+  const [report, setReport] = useState<ApiRow[]>([])
+  const [subtitle, setSubtitle] = useState('')
+  const [notice, setNotice] = useState('')
+  const [busy, setBusy] = useState(true)
+  const [error, setError] = useState('')
+  const reload = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      const result = await fetchOperationalReport('menuEngineering', {})
+      setReport(Array.isArray(result.results) ? result.results as ApiRow[] : [])
+      setSubtitle(str(result.subtitle || ''))
+      setNotice(str(result.notice || ''))
+    } catch (reason) { setError(errorMessage(reason)) }
+    finally { setBusy(false) }
   }
-  useEffect(()=>{void reload()},[])
-  const positions=report.map(row=>({
-    sku:str(row.sku), article:str(row.article), quantity:dec(row.quantity),
-    sales:dec(row.sales), profit:row.profit==null?null:dec(row.profit),
-    margin:row.margin_percent==null?null:dec(row.margin_percent),
-  })) as MenuSale[]
-  const valid=positions.filter(item=>item.margin!==null)
-  const median=(numbers:number[]):number=>{if(!numbers.length)return 0;const ordered=[...numbers].sort((a,b)=>a-b);return ordered[Math.floor(ordered.length/2)]}
-  const popularThreshold=median(valid.map(r=>r.quantity))
-  const marginThreshold=median(valid.map(r=>r.margin??0))
-  const classify=(r:MenuSale):EngineGroup=>{
-    const popular=r.quantity>=popularThreshold, profitable=(r.margin??0)>=marginThreshold
-    return popular?(profitable?'Stars':'Plowhorses'):(profitable?'Puzzles':'Dogs')
+  useEffect(() => { void reload() }, [])
+
+  // The Django report classifies recipes once, using transaction-date COGS.
+  // Never silently reclassify the same figures with browser-only median/margin
+  // rules; that would contradict financial evidence and downloaded reports.
+  const positions: MenuSale[] = report.map((row) => ({
+    sku: str(row.sku),
+    article: str(row.article),
+    quantity: dec(row.quantity),
+    sales: dec(row.sales),
+    profit: row.profit == null ? null : dec(row.profit),
+    margin: row.margin_percent == null ? null : dec(row.margin_percent),
+    contribution: row.unit_contribution == null ? null : dec(row.unit_contribution),
+    classification: (['Star', 'Plowhorse', 'Puzzle', 'Dog'].includes(str(row.classification))
+      ? str(row.classification) : 'Unclassified') as MenuCategory,
+  }))
+  const valid = positions.filter((r) =>
+    r.classification !== 'Unclassified' && r.contribution !== null
+  )
+  const popularityThreshold = valid.length
+    ? valid.reduce((sum, row) => sum + row.quantity, 0) / valid.length : 0
+  const contributionThreshold = valid.length
+    ? valid.reduce((sum, row) => sum + (row.contribution ?? 0), 0) / valid.length : 0
+  const maxQuantity = Math.max(1, popularityThreshold, ...valid.map((r) => r.quantity))
+  const minContribution = Math.min(0, contributionThreshold, ...valid.map((r) => r.contribution ?? 0))
+  const maxContribution = Math.max(1, contributionThreshold, ...valid.map((r) => r.contribution ?? 0))
+  const position = (value: number, threshold: number, min: number, max: number, low: number, middle: number, high: number) => {
+    if (value < threshold) return low + (value - min) / Math.max(0.0001, threshold - min) * (middle - low)
+    return middle + (value - threshold) / Math.max(0.0001, max - threshold) * (high - middle)
   }
-  const maxQuantity=Math.max(1,...valid.map(r=>r.quantity))
-  const allMargins=valid.map(r=>r.margin??0)
-  const minMargin=Math.min(0,...allMargins),maxMargin=Math.max(1,100,...allMargins)
-  const point=(r:MenuSale)=>({
-    x:8+(r.quantity/maxQuantity)*83,
-    y:90-((r.margin??0)-minMargin)/(maxMargin-minMargin)*80,
+  const point = (row: MenuSale) => ({
+    x: position(row.quantity, popularityThreshold, 0, maxQuantity, 8, 49, 91),
+    y: 100 - position(row.contribution ?? 0, contributionThreshold, minContribution, maxContribution, 10, 50, 90),
   })
+  const unclassified = positions.filter((row) => row.classification === 'Unclassified')
+
   return <WorkspacePage section="F&B / Management analysis" title="Menu engineering"
-    subtitle="Posted POS sales and immutable transaction-date recipe costs."
-    actions={<button className={btn} onClick={()=>void reload()}><Icon name="refresh" size={16}/> Refresh</button>}>
+    subtitle="Posted POS sales, immutable recipe cost snapshots and authoritative four-quadrant classification."
+    actions={<button className={btn} onClick={() => void reload()} disabled={busy}><Icon name="refresh" size={16}/> Refresh</button>}>
     <StateMessage loading={busy} error={error}/>
-    {!busy&&!error&&<>
-      <div className="mc-compact-metrics">{engineeringGroups.map(group=><div key={group}><span>{group}</span>
-        <strong>{valid.filter(r=>classify(r)===group).length}</strong></div>)}</div>
+    {!busy && !error && <>
+      <div className="mc-compact-metrics">
+        {engineeringGroups.map((group) =>
+          <div key={group}><span>{group}</span><strong>
+            {valid.filter((row) => categoryNames[row.classification as Exclude<MenuCategory, 'Unclassified'>] === group).length}
+          </strong></div>
+        )}
+      </div>
       <section className="mc-dense-panel mc-menu-engineering">
-        <header className="mc-panel-title">Popularity × Profitability <span>{valid.length} recipes with posted COGS</span></header>
+        <header className="mc-panel-title">
+          Popularity × Contribution per portion
+          <span>{valid.length} fully costed recipes · {unclassified.length} unclassified</span>
+        </header>
         <div className="mc-menu-chart">
-          <svg viewBox="0 0 100 100" role="img" aria-label="Menu engineering quadrants by sales quantity and estimated margin">
+          <svg viewBox="0 0 100 100" role="img"
+            aria-label="Menu engineering quadrants using Django classified sold quantities and contribution per portion">
             <rect x="8" y="10" width="41" height="40" fill="#e6f2ed"/>
             <rect x="49" y="10" width="42" height="40" fill="#e8f3f5"/>
             <rect x="8" y="50" width="41" height="40" fill="#f7eeeb"/>
@@ -642,27 +685,35 @@ export function EnterpriseMenuEngineering() {
             <text x="70" y="14" fontSize="3.5" fill="#376779">Stars</text>
             <text x="11" y="87" fontSize="3.5" fill="#915f58">Dogs</text>
             <text x="64" y="87" fontSize="3.5" fill="#9b722e">Plowhorses</text>
-            {valid.map(r=>{const dot=point(r);return <circle key={r.sku} cx={dot.x} cy={dot.y}
-              r="1.7" fill="#125f71" stroke="#fff" strokeWidth=".4">
-                <title>{r.article} · {r.quantity} sold · {r.margin?.toFixed(1)}% estimated margin</title>
-              </circle>})}
-            <text x="49" y="97" fontSize="3" textAnchor="middle" fill="#5b747e">Popularity · Sold quantity</text>
-            <text transform="translate(3,50) rotate(-90)" fontSize="3" textAnchor="middle" fill="#5b747e">Historical gross margin %</text>
+            {valid.map((row) => {
+              const dot = point(row)
+              return <circle key={row.sku} cx={dot.x} cy={dot.y}
+                r="1.7" fill="#125f71" stroke="#fff" strokeWidth=".4">
+                <title>{row.article} · {row.classification} · {row.quantity} portions · {row.contribution?.toFixed(2)} contribution / portion</title>
+              </circle>
+            })}
+            <text x="49" y="97" fontSize="3" textAnchor="middle" fill="#5b747e">Popularity · portions sold</text>
+            <text transform="translate(3,50) rotate(-90)" fontSize="3" textAnchor="middle" fill="#5b747e">Historical unit contribution</text>
           </svg>
         </div>
-        <div className="mc-alert mc-muted">Profitability uses costs captured when POS sales posted to stock, not today's WAC. Recipes with unvalued historical transactions are excluded from quadrants.</div>
+        <div className="mc-alert mc-muted">
+          {subtitle || 'Each quadrant is based on priced POS quantities and frozen historical recipe COGS.'}
+          {' '}No estimates from current WAC are used for missing historic costs.
+        </div>
+        {notice && <div className="mc-alert" role="status">{notice}</div>}
       </section>
       <EnterpriseTable<ApiRow> label="Menu engineering classifications"
-        rows={valid.map(r=>({...r,id:r.sku,classification:classify(r)}))}
+        rows={report.map((row) => ({ ...row, id: row.sku }))}
         columns={[
-          {id:'article',label:'Menu article',value:r=>str(r.article)},
-          {id:'classification',label:'Classification',value:r=>str(r.classification),render:r=><StatusPill status={r.classification}/>},
-          {id:'quantity',label:'Sold quantity',value:r=>dec(r.quantity),numeric:true},
-          {id:'sales',label:'Sales UGX',value:r=>dec(r.sales),render:r=><span className="mc-num">{amount(r.sales)}</span>,numeric:true},
-          {id:'profit',label:'Historical gross profit UGX',value:r=>dec(r.profit),render:r=><span className={dec(r.profit)<0?'mc-cost-over':'mc-cost-ok'}>{amount(r.profit)}</span>,numeric:true},
-          {id:'margin',label:'Historical gross margin %',value:r=>dec(r.margin),render:r=><span className="mc-num">{dec(r.margin).toFixed(1)}%</span>,numeric:true},
+          {id:'article',label:'Menu article',value:row=>str(row.article)},
+          {id:'classification',label:'Classification',value:row=>str(row.classification),render:row=><StatusPill status={str(row.classification)}/>},
+          {id:'quantity',label:'Sold quantity',value:row=>dec(row.quantity),numeric:true},
+          {id:'unit_contribution',label:'Contribution / portion',value:row=>dec(row.unit_contribution),render:row=><span className="mc-num">{row.unit_contribution == null ? 'Unknown' : amount(row.unit_contribution)}</span>,numeric:true},
+          {id:'sales',label:'Sales UGX',value:row=>dec(row.sales),render:row=><span className="mc-num">{amount(row.sales)}</span>,numeric:true},
+          {id:'profit',label:'Historical gross profit',value:row=>dec(row.profit),render:row=><span className={row.profit != null && dec(row.profit)<0 ? 'mc-cost-over':'mc-cost-ok'}>{row.profit == null ? 'Unknown' : amount(row.profit)}</span>,numeric:true},
+          {id:'margin_percent',label:'Historical margin %',value:row=>dec(row.margin_percent),render:row=><span className="mc-num">{row.margin_percent == null ? 'Unknown' : dec(row.margin_percent).toFixed(1) + '%'}</span>,numeric:true},
         ]}/>
-      {valid.length===0&&<div className="mc-alert">Profitability classification requires sales and valued stock for the relevant menu articles.</div>}
+      {valid.length === 0 && <div className="mc-alert">Menu classification requires priced POS sales and frozen recipe COGS. Missing values are not inferred.</div>}
     </>}
   </WorkspacePage>
 }

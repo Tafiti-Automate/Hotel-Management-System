@@ -85,7 +85,7 @@ function normalizeSupplierPrice(entry: Row): Row {
     status: activeLabel(entry.status ?? entry.is_active),
   }
 }
-function isProcurementHandoffSource(value: unknown) { return ['store_purchase', 'store_requisition', 'store_shortage'].includes(id(value)) }
+function isProcurementHandoffSource(value: unknown) { return ['store_purchase', 'store_requisition', 'store_shortage', 'market_list'].includes(id(value)) }
 function currentApprovalStep(order: Row): Row | undefined {
   const steps = Array.isArray(order.approval_steps) ? order.approval_steps as Row[] : []
   return steps.find((step) => id(step.status) === 'pending')

@@ -38,6 +38,74 @@ from apps.sales.models import Sale, SaleItem
 from core.constants.choices import LedgerReferenceType
 
 
+def classify_menu_recipes(grouped):
+    """Deterministic four-quadrant classification; never invent unknown costs.
+
+    Revenue and frozen COGS are aggregated at the recipe level before calculating
+    contribution per portion. All arithmetic uses Decimal, not binary floats.
+    """
+    entries = list(grouped)
+    valid = [
+        row for row in entries
+        if row["unpriced"] == 0 and row["sales"] > 0 and row["quantity"] > 0
+    ]
+    count = len(valid)
+    popularity = (
+        sum((row["quantity"] for row in valid), Decimal("0")) / count
+        if count else None
+    )
+    contribution = (
+        sum(((row["sales"] - row["cogs"]) / row["quantity"] for row in valid), Decimal("0")) / count
+        if count else None
+    )
+    actions = {
+        "Star": "Maintain quality and visibility",
+        "Plowhorse": "Improve portion cost or selling price",
+        "Puzzle": "Promote a high-contribution dish",
+        "Dog": "Review recipe, price or menu placement",
+        "Unclassified": "Resolve missing cost or invalid sales data",
+    }
+    rows = []
+    for row in sorted(entries, key=lambda entry: (entry["article"], entry["sku"])):
+        priced = row in valid
+        profit = row["sales"] - row["cogs"] if priced else None
+        per_portion = profit / row["quantity"] if priced else None
+        margin = (profit / row["sales"]) * Decimal("100") if priced else None
+        if not priced:
+            category = "Unclassified"
+        elif row["quantity"] >= popularity and per_portion >= contribution:
+            category = "Star"
+        elif row["quantity"] >= popularity:
+            category = "Plowhorse"
+        elif per_portion >= contribution:
+            category = "Puzzle"
+        else:
+            category = "Dog"
+        rows.append({
+            "sku": row["sku"], "article": row["article"],
+            "classification": category,
+            "quantity": str(row["quantity"].quantize(Decimal("0.0001"))),
+            "sales": str(row["sales"].quantize(Decimal("0.01"))),
+            "cogs": str(row["cogs"].quantize(Decimal("0.01"))) if priced else None,
+            "profit": str(profit.quantize(Decimal("0.01"))) if priced else None,
+            "unit_contribution": str(per_portion.quantize(Decimal("0.01"))) if priced else None,
+            "margin_percent": str(margin.quantize(Decimal("0.01"))) if priced else None,
+            "transactions": row["transactions"],
+            "unpriced_transactions": row["unpriced"],
+            "recommended_action": actions[category],
+        })
+    return rows, {
+        "eligible_recipes": count, "unclassified_recipes": len(entries) - count,
+        "popularity_threshold": (
+            str(popularity.quantize(Decimal("0.0001"))) if popularity is not None else "N/A"
+        ),
+        "unit_contribution_threshold": (
+            str(contribution.quantize(Decimal("0.01"))) if contribution is not None else "N/A"
+        ),
+    }
+
+
+
 REPORT_ROLE_ACCESS = {
     "departmentRequests": {"Requester", "Department Head", "Store Keeper", "General Manager"},
     "storeIssues": {"Requester", "Department Head", "Store Keeper", "General Manager"},
@@ -963,7 +1031,13 @@ class MaterialsAnalysisReportView(ReportAPIView):
         )
 
     def menu_profitability(self, request):
-        """Recipe-level POS net sales and frozen, transaction-date cost of goods."""
+        """Oracle-style menu matrix using posted POS sales and frozen recipe COGS.
+
+        Popularity = sold portions; profitability = contribution per portion.
+        Thresholds are the arithmetic mean across *priced* recipes in the
+        permitted outlet/date scope. Unpriced recipes never get a misleading
+        Star/Plowhorse/Puzzle/Dog label.
+        """
         from apps.materials_control.models import POSSaleLine
 
         lines = apply_store_scope(
@@ -982,7 +1056,7 @@ class MaterialsAnalysisReportView(ReportAPIView):
             recipe = line.mapping.recipe
             row = grouped.setdefault(str(recipe.pk), {
                 "sku": recipe.code, "article": recipe.name,
-                "quantity": Decimal("0.00"), "sales": Decimal("0.00"),
+                "quantity": Decimal("0.0000"), "sales": Decimal("0.00"),
                 "cogs": Decimal("0.00"), "unpriced": 0, "transactions": 0,
             })
             row["quantity"] += line.quantity
@@ -992,35 +1066,34 @@ class MaterialsAnalysisReportView(ReportAPIView):
                 row["unpriced"] += 1
             else:
                 row["cogs"] += line.cost_of_goods_sold
-        rows = []
-        for row in sorted(grouped.values(), key=lambda entry: entry["article"]):
-            priced = row["unpriced"] == 0 and row["sales"] > 0
-            profit = row["sales"] - row["cogs"] if priced else None
-            margin = ((profit / row["sales"]) * Decimal("100")).quantize(
-                Decimal("0.01")
-            ) if priced else None
-            rows.append({
-                "sku": row["sku"], "article": row["article"],
-                "quantity": decimal_string(row["quantity"]),
-                "sales": decimal_string(row["sales"]),
-                "cogs": decimal_string(row["cogs"]) if priced else None,
-                "profit": decimal_string(profit) if priced else None,
-                "margin_percent": decimal_string(margin) if priced else None,
-                "transactions": row["transactions"],
-                "unpriced_transactions": row["unpriced"],
-            })
+
+        rows, statistics = classify_menu_recipes(grouped.values())
         return analysis_response(
             "Menu Engineering",
-            "Posted POS popularity and frozen recipe COGS; unknown costs remain unclassified.",
+            (
+                "Four-quadrant POS menu matrix. Popularity threshold: "
+                f"{statistics['popularity_threshold']} portions; unit contribution "
+                f"threshold: {statistics['unit_contribution_threshold']} "
+                f"(each calculated from {statistics['eligible_recipes']} fully costed recipes)."
+            ),
             [
-                {"key":"article","label":"Recipe"},
-                {"key":"sku","label":"Recipe code"},
-                {"key":"quantity","label":"Sold quantity","kind":"number"},
-                {"key":"sales","label":"Net POS sales","kind":"money"},
-                {"key":"cogs","label":"Posted recipe cost","kind":"money"},
-                {"key":"profit","label":"Gross profit","kind":"money"},
-                {"key":"margin_percent","label":"Margin %","kind":"number"},
-            ], rows,
+                {"key": "article", "label": "Recipe"},
+                {"key": "sku", "label": "Recipe code"},
+                {"key": "classification", "label": "Menu classification"},
+                {"key": "quantity", "label": "Sold portions", "kind": "number"},
+                {"key": "unit_contribution", "label": "Contribution / portion", "kind": "money"},
+                {"key": "sales", "label": "Net POS sales", "kind": "money"},
+                {"key": "cogs", "label": "Frozen recipe COGS", "kind": "money"},
+                {"key": "profit", "label": "Gross contribution", "kind": "money"},
+                {"key": "margin_percent", "label": "Margin %", "kind": "number"},
+                {"key": "recommended_action", "label": "Suggested action"},
+            ],
+            rows,
+            notice=(
+                f"{statistics['unclassified_recipes']} unclassified recipe(s) have missing "
+                "historical COGS or non-positive sales/quantity; they are excluded "
+                "from both thresholds. This is an operational decision aid, not a GL posting."
+            ) if statistics["unclassified_recipes"] else "",
         )
 
     def sales_statistics(self, request, report_kind):

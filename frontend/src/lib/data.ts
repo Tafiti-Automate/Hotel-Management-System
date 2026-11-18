@@ -474,7 +474,7 @@ export const reports: ReportCard[] = [
   { id: 'salesTaxAnalysis', title: 'Sales Tax Analysis', desc: 'Tax-reporting availability for recorded sales.', icon: 'receipt_long', grp: 'Sales Analysis', source: 'backend' },
   { id: 'salesActivity', title: 'Sales per Activity Type', desc: 'Sales grouped by the configured article business type.', icon: 'category', grp: 'Sales Analysis', source: 'backend' },
   { id: 'articlePotentialUsage', title: 'Article Potential Usage', desc: 'Available stock position for sale or operational use.', icon: 'inventory', grp: 'Sales Analysis', source: 'backend' },
-  { id: 'menuEngineering', title: 'Menu Engineering', desc: 'Sales-mix ranking by article and revenue.', icon: 'restaurant_menu', grp: 'Sales Analysis', source: 'backend' },
+  { id: 'menuEngineering', title: 'Menu Engineering', desc: 'Oracle-style four-quadrant recipe popularity and contribution analysis.', icon: 'restaurant_menu', grp: 'Sales Analysis', source: 'backend' },
   { id: 'requirementsUsage', title: 'Requirements based on Usage', desc: 'Current replenishment needs from live stock thresholds.', icon: 'insights', grp: 'Sales Analysis', source: 'backend' },
   { id: 'costOfSalesLocation', title: 'Cost of Sales Location Summary', desc: 'Sales, collections and balances by store.', icon: 'storefront', grp: 'Result', source: 'backend' },
   { id: 'warehouseStatistics', title: 'Warehouse Statistics', desc: 'Live stock position, value and reorder exposure by store.', icon: 'warehouse', grp: 'Result', source: 'backend' },

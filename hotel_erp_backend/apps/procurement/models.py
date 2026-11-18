@@ -205,7 +205,14 @@ class PurchaseRequisition(BaseModel):
     def editable(self):
         return self.status in (PRStatus.DRAFT, PRStatus.REJECTED, PRStatus.RETURNED)
 
-    def submit(self, actor=None):
+    def submit(self, actor=None, *, market_list_validated=False):
+        if self.procurement_source == ProcurementSource.MARKET_LIST and not market_list_validated:
+            raise ValidationError("Use the controlled Daily Market List submission workflow.")
+        if self.procurement_source == ProcurementSource.MARKET_LIST and (
+            not self.items.exists()
+            or self.items.filter(estimated_unit_cost__lte=0).exists()
+        ):
+            raise ValidationError("A Market List requires valid approved catalogue price estimates before approval.")
         if not self.editable:
             raise ValidationError(
                 "Only draft, rejected, or returned requisitions can be submitted."

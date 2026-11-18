@@ -32,6 +32,7 @@ const roleNavigation: Record<string, NavGroup[]> = {
       { route: 'workflow-stores', label: 'Department request approvals', icon: 'approval' },
       { route: 'waste-control', label: 'Waste review', icon: 'delete_sweep' },
       { route: 'purchasing-pr-new', label: 'New purchase requisition', icon: 'add_shopping_cart' },
+      { route: 'market-lists', label: 'Daily Market Lists', icon: 'restaurant' },
       { route: 'recipes-production', label: 'Recipe costing', icon: 'menu_book' },
     ] },
     { heading: 'Insights', items: [{ route: 'reports', label: 'Reports', icon: 'bar_chart' }] },

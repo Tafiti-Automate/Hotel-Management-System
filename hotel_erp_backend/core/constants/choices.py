@@ -46,6 +46,7 @@ class ProcurementSource(models.TextChoices):
     STORE_PURCHASE = "store_purchase", "Store purchase request"
     STORE_SHORTAGE = "store_shortage", "Store shortage (legacy)"
     MANUAL = "manual", "Manual procurement"
+    MARKET_LIST = "market_list", "Daily perishable Market List"
     CAPITAL_ASSET = "capital_asset", "Capital asset"
     EMERGENCY = "emergency", "Emergency purchase"
     PROJECT = "project", "Project purchase"
