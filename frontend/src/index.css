@@ -6832,3 +6832,34 @@ html[data-theme="dark"] .screen-app .app-content {
     right: calc(-50% + 14px);
   }
 }
+
+
+/* Theme-aware notification and Procurement surfaces. */
+:root[data-theme="dark"] :is(.neo-notification-panel, .neo-profile-menu, .neo-context-dropdown, .procurement-queue-card, .procurement-detail-panel, .lpo-summary-card, .procurement-queue-tabs) {
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
+}
+:root[data-theme="dark"] :is(.neo-notification-panel, .neo-profile-menu, .procurement-workbench) :is(button, input, select, textarea) {
+  color: var(--text);
+  border-color: var(--border);
+}
+:root[data-theme="dark"] :is(.neo-notification-item, .procurement-queue-tab, .supplier-allocation-line, .supplier-quote-choice):hover {
+  background: color-mix(in srgb, var(--accent) 13%, var(--surface)) !important;
+}
+:root[data-theme="dark"] .neo-notification-item:not(.is-read) {
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface)) !important;
+}
+:root[data-theme="dark"] :is(.procurement-queue-tab.is-active, .supplier-allocation-line.is-active, .supplier-quote-choice.is-selected) {
+  background: color-mix(in srgb, var(--accent) 19%, var(--surface)) !important;
+  color: var(--text) !important;
+  border-color: var(--accent) !important;
+}
+:root[data-theme="dark"] .procurement-workbench :is(input, select, textarea) {
+  background-color: var(--surface-2) !important;
+  color: var(--text) !important;
+  border-color: var(--border-2) !important;
+}
+:root[data-theme="dark"] .procurement-workbench :is(input, textarea)::placeholder { color: var(--text-faint); }
+:root[data-theme="dark"] :is(.neo-notification-panel, .procurement-detail-panel) :is(small, time) { color: var(--text-muted); }
+:root[data-theme="dark"] :is(.neo-notification-panel, .procurement-detail-panel) :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

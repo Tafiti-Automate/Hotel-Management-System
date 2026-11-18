@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useApp } from '../state/AppContext'
 import { Icon } from './Icon'
 import { Avatar } from './Avatar'
@@ -22,6 +22,7 @@ export default function Header() {
   const [notifications, setNotifications] = useState<NotificationRecord[]>([])
   const [notificationsLoading, setNotificationsLoading] = useState(true)
   const [notificationsError, setNotificationsError] = useState('')
+  const notificationRequest = useRef(0)
   const [propertyMenuOpen, setPropertyMenuOpen] = useState(false)
   const [period, setPeriod] = useState<FiscalPeriodContext | null>(null)
   const [periodError, setPeriodError] = useState(false)
@@ -42,14 +43,17 @@ export default function Header() {
     : periodError ? 'Period unavailable' : 'Checking period…'
 
   const loadNotifications = useCallback(async (withLoading = true) => {
+    const request = ++notificationRequest.current
     if (withLoading) setNotificationsLoading(true)
-    setNotificationsError('')
     try {
-      setNotifications(await fetchNotifications())
+      const next = await fetchNotifications()
+      if (request !== notificationRequest.current) return
+      setNotifications(next)
+      setNotificationsError('')
     } catch (error) {
-      setNotificationsError(errorMessage(error))
+      if (request === notificationRequest.current && withLoading) setNotificationsError(errorMessage(error))
     } finally {
-      setNotificationsLoading(false)
+      if (request === notificationRequest.current) setNotificationsLoading(false)
     }
   }, [app.user.id])
 
@@ -64,10 +68,23 @@ export default function Header() {
   }, [app.apiStatus, selectedBranchId])
 
   useEffect(() => {
+    notificationRequest.current += 1
+    setNotifications([])
+    if (app.apiStatus !== 'live') return
     void loadNotifications()
-    const timer = window.setInterval(() => void loadNotifications(false), 60_000)
-    return () => window.clearInterval(timer)
-  }, [loadNotifications])
+    const refreshIfVisible = () => {
+      if (document.visibilityState === 'visible') void loadNotifications(false)
+    }
+    const timer = window.setInterval(refreshIfVisible, 45_000)
+    document.addEventListener('visibilitychange', refreshIfVisible)
+    window.addEventListener('focus', refreshIfVisible)
+    return () => {
+      notificationRequest.current += 1
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', refreshIfVisible)
+      window.removeEventListener('focus', refreshIfVisible)
+    }
+  }, [app.apiStatus, loadNotifications])
 
   useEffect(() => {
     const onShortcut = (event: KeyboardEvent) => {
@@ -85,13 +102,30 @@ export default function Header() {
   }, [])
 
   const readNotification = async (notification: NotificationRecord) => {
-    if (notification.is_read) return
-    setNotifications((rows) => rows.map((row) => row.id === notification.id ? { ...row, is_read: true } : row))
-    try {
-      await markNotificationRead(notification.id)
-    } catch (error) {
-      setNotifications((rows) => rows.map((row) => row.id === notification.id ? { ...row, is_read: false } : row))
-      setNotificationsError(errorMessage(error))
+    if (!notification.is_read) {
+      setNotifications((rows) => rows.map((row) => row.id === notification.id ? { ...row, is_read: true } : row))
+      try {
+        await markNotificationRead(notification.id)
+      } catch (error) {
+        setNotifications((rows) => rows.map((row) => row.id === notification.id ? { ...row, is_read: false } : row))
+        setNotificationsError(errorMessage(error))
+        return
+      }
+    }
+    // Notifications do not yet carry typed document deep links. Navigate to
+    // the correct role workspace instead of guessing a record URL.
+    const message = `${notification.title} ${notification.message}`.toLowerCase()
+    const role = app.user.role.toLowerCase()
+    const target = /lpo|purchase order|quotation|procurement|supplier award/.test(message)
+      ? ['procurement manager', 'procurement officer', 'financial manager', 'general manager'].includes(role)
+        ? 'workflow-procure' : null
+      : /goods receipt|grn|receiving/.test(message)
+        ? role === 'receiving clerk' ? 'workflow-procure' : role === 'store keeper' ? 'grn-posting' : null
+      : /requisition|department request|pickup|store issue/.test(message)
+        ? 'workflow-stores' : null
+    if (target) {
+      setNotificationsOpen(false)
+      app.navTo(target, target === 'workflow-procure' ? 'Procurement' : 'Stores')
     }
   }
 

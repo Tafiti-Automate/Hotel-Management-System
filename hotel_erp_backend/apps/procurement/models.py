@@ -1593,10 +1593,8 @@ class PurchaseOrder(BaseModel):
         decide completes that stage, and the actual decision-maker is recorded.
         """
         return (
-            # The client-facing title is Purchasing Manager; internally this
-            # continues to use the existing Procurement Manager security group
-            # so no established permissions or user assignments are broken.
-            (1, "Purchasing Manager Approval", self._fixed_role_group("Procurement Manager")),
+            # Use the actual operational role title consistently.
+            (1, "Procurement Manager Approval", self._fixed_role_group("Procurement Manager")),
             (2, "Financial Manager Approval", self._fixed_role_group("Financial Manager")),
             (3, "General Manager Final Approval", self._fixed_role_group("General Manager")),
         )
@@ -1672,7 +1670,7 @@ class PurchaseOrder(BaseModel):
                 new_status=POStatus.PENDING_APPROVAL,
                 metadata={
                     "revision": order.revision,
-                    "route": ["Purchasing Manager", "Financial Manager", "General Manager"],
+                    "route": ["Procurement Manager", "Financial Manager", "General Manager"],
                 },
             )
             try:
@@ -1680,7 +1678,7 @@ class PurchaseOrder(BaseModel):
                 notify_roles(
                     ["Procurement Manager"],
                     branch=order.requisition.branch,
-                    title=f"LPO {order.lpo_number} requires Purchasing Manager approval",
+                    title=f"LPO {order.lpo_number} requires Procurement Manager approval",
                     message="Review the LPO and approve or reject it before Finance review.",
                     created_by=order.ordered_by.user if order.ordered_by_id else None,
                 )

@@ -1911,6 +1911,18 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                 raise PermissionDenied(
                     f"This stage requires the {step.approver_role.name} role."
                 )
+            # Prefer maker-checker when another active Manager exists at
+            # the same property. Single-manager properties retain access.
+            if step.stage == 1 and order.ordered_by_id == employee.pk:
+                another_approver = Employee.objects.filter(
+                    is_active=True, user__is_active=True,
+                    user__groups=step.approver_role,
+                    branch_id=employee.branch_id,
+                ).exclude(pk=employee.pk).exists()
+                if another_approver:
+                    raise PermissionDenied(
+                        "You prepared this LPO. Another assigned Procurement Manager must approve Level 1."
+                    )
             return step
         raise PermissionDenied("This approval stage has no assigned role or employee.")
 

@@ -1402,7 +1402,7 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, items, ite
     return runBackendAction('purchase-orders', id(order.id), 'submit-for-approval')
   }
   const panelTitle = lpoQueue === 'prepare' ? 'LPO Preparation'
-    : lpoQueue === 'purchasing' ? 'Level 1 · Purchasing Manager'
+    : lpoQueue === 'purchasing' ? 'Level 1 · Procurement Manager'
       : lpoQueue === 'finance' ? 'Level 2 · Financial Manager'
       : lpoQueue === 'management' ? 'Level 3 · General Manager'
         : lpoQueue === 'approved' ? 'Approved LPO'
@@ -1457,14 +1457,14 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, items, ite
         onQuantityChange={setDraftQuantity}
         totalOverride={draftTotal}
       />
-      <Action tone="good" disabled={busy || !draftQuantitiesValid} onClick={() => run(() => saveDraftQuantitiesAndSubmit(), 'LPO sent to Purchasing Manager')}>Send for Level 1 Approval</Action>
+      <Action tone="good" disabled={busy || !draftQuantitiesValid} onClick={() => run(async () => { const result = await saveDraftQuantitiesAndSubmit(); setLpoQueue('purchasing'); return result }, 'LPO submitted for Procurement Manager approval', { order: id(order.id) })}>Submit for Level 1 Approval</Action>
     </>}
 
     {lpoQueue === 'purchasing' && order && <>
       <LpoSummary order={order} lines={lines} names={names} />
-      {!canDecidePurchasing && <div style={{ padding: '10px 11px', borderRadius: 7, background: 'var(--warn-soft)', color: 'var(--warn)', fontSize: 11.3, fontWeight: 700 }}>Awaiting Purchasing Manager decision</div>}
+      {!canDecidePurchasing && <div style={{ padding: '10px 11px', borderRadius: 7, background: 'var(--warn-soft)', color: 'var(--warn)', fontSize: 11.3, fontWeight: 700 }}>Awaiting Procurement Manager decision</div>}
       {canDecidePurchasing && <>
-        {quantityReview('purchasing', 'Purchasing Manager')}
+        {quantityReview('purchasing', 'Procurement Manager')}
         <ConfirmTransaction title="Confirm Level 1 LPO approval" description="Approve the reviewed LPO quantities and advance this purchase order to the next authorised workflow stage." confirmLabel="Confirm approval" className="ds-btn ds-btn-primary" disabled={busy || !currentApproval || !approvalDecisionsValid('purchasing')} busy={busy} onConfirm={() => run(() => reviewAndApprove('purchasing'), 'Level 1 approved and sent to Financial Manager')}>Approve LPO</ConfirmTransaction>
         {!form.showReject ? <Action tone="danger" disabled={busy} onClick={() => setForm({ ...form, showReject: true })}>Reject entire LPO</Action> : <><Field label="Rejection reason *"><Input value={form.approvalComments || ''} onChange={(v) => setForm({ ...form, approvalComments: v })} /></Field><Action tone="danger" disabled={busy || !id(form.approvalComments).trim()} onClick={() => run(() => runBackendAction('purchase-orders', id(order.id), 'reject', { comments: form.approvalComments }), 'LPO rejected')}>Confirm full rejection</Action></>}
       </>}
@@ -1535,7 +1535,7 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, items, ite
   </Panel>
 }
 
-function friendlyLpoStatus(status: string, steps: Row[]) { if (status === 'pending_approval') { const pending = steps.find((step) => id(step.status) === 'pending'); if (/(purchasing manager|procurement manager|purchasing)/i.test(id(pending?.stage_name))) return 'Level 1 · Purchasing Manager'; if (/finance/i.test(id(pending?.stage_name))) return 'Level 2 · Financial Manager'; if (/(general manager|management)/i.test(id(pending?.stage_name))) return 'Level 3 · General Manager'; return 'Awaiting Approval' } if (status === 'approved') return 'Approved · Print & Send'; if (status === 'issued') return 'Not Received'; if (status === 'partially_received') return 'Partially Received'; if (status === 'received') return 'Received'; return status.replace(/_/g, ' ') }
+function friendlyLpoStatus(status: string, steps: Row[]) { if (status === 'pending_approval') { const pending = steps.find((step) => id(step.status) === 'pending'); if (/(purchasing manager|procurement manager|purchasing)/i.test(id(pending?.stage_name))) return 'Level 1 · Procurement Manager'; if (/finance/i.test(id(pending?.stage_name))) return 'Level 2 · Financial Manager'; if (/(general manager|management)/i.test(id(pending?.stage_name))) return 'Level 3 · General Manager'; return 'Awaiting Approval' } if (status === 'approved') return 'Approved · Print & Send'; if (status === 'issued') return 'Not Received'; if (status === 'partially_received') return 'Partially Received'; if (status === 'received') return 'Received'; return status.replace(/_/g, ' ') }
 
 function LpoSummary({ order, lines, names, quantityValue, quantityMax, onQuantityChange, totalOverride }: { order: Row; lines: Row[]; names: Record<string, Map<string, string>>; quantityValue?: (row: Row) => number; quantityMax?: (row: Row) => number; onQuantityChange?: (row: Row, value: unknown) => void; totalOverride?: number }) {
   const approvalSteps = Array.isArray(order.approval_steps) ? order.approval_steps as Row[] : []
@@ -1563,7 +1563,7 @@ function LpoSummary({ order, lines, names, quantityValue, quantityMax, onQuantit
         const tone = rawStatus === 'approved' ? 'good' : rawStatus === 'rejected' ? 'bad' : waiting ? 'muted' : 'warn'
         return <div key={`${id(step.stage_name)}-${id(step.stage)}`} className={`lpo-approval-step tone-${tone}`}>
           <span className="lpo-approval-node"><Icon name={rawStatus==='approved'?'check':rawStatus==='rejected'?'close':waiting?'schedule':'hourglass_top'} size={13} /></span>
-          <span className="lpo-approval-copy"><strong>{id(step.stage_name)}</strong><small>{displayStatus.replace(/_/g,' ')}</small></span>
+          <span className="lpo-approval-copy"><strong>{id(step.stage_name).replace(/Purchasing Manager/gi, 'Procurement Manager')}</strong><small>{displayStatus.replace(/_/g,' ')}</small></span>
           {index < approvalSteps.length - 1 && <span className="lpo-approval-connector" aria-hidden="true" />}
         </div>
       })}</div></div>
@@ -1738,7 +1738,7 @@ function StageTable({ stage, lpoQueue, data, names, role, onSelect }: { stage: S
   let title = ''
   if (stage === 'request') { rows = data.requisitionItems; title = 'Requisition lines' }
   if (stage === 'lpo') {
-    if (lpoQueue === 'purchasing') { rows = role === 'procurement manager' ? (Array.isArray(data.approvalQueueOrders) ? data.approvalQueueOrders : data.orders.filter((row) => id(row.status) === 'pending_approval' && isPurchasingApproval(row))) : []; title = 'Level 1 · Purchasing Manager' }
+    if (lpoQueue === 'purchasing') { rows = role === 'procurement manager' ? (Array.isArray(data.approvalQueueOrders) ? data.approvalQueueOrders : data.orders.filter((row) => id(row.status) === 'pending_approval' && isPurchasingApproval(row))) : []; title = 'Level 1 · Procurement Manager' }
     if (lpoQueue === 'finance') { rows = Array.isArray(data.approvalQueueOrders) && role === 'financial manager' ? data.approvalQueueOrders : data.orders.filter((row) => id(row.status) === 'pending_approval' && isFinanceApproval(row)); title = 'Level 2 · Financial Manager' }
     if (lpoQueue === 'management') { rows = Array.isArray(data.approvalQueueOrders) ? data.approvalQueueOrders : data.orders.filter((row) => id(row.status) === 'pending_approval' && isManagementApproval(row)); title = 'Level 3 · General Manager' }
     if (lpoQueue === 'approved') { rows = data.orders.filter((row) => id(row.status) === 'approved'); title = 'Approved to Send' }
