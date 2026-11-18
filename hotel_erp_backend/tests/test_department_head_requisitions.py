@@ -556,16 +556,30 @@ def test_connected_eight_role_shortage_partial_receipts_and_signed_completion(wo
             f"/api/v1/supplier-payments/{payment_id}/post/",
             {}, format="json",
         ).status_code == 400
-        posted_payment = ap_checker.post(
-            f"/api/v1/supplier-payments/{payment_id}/post/",
-            {}, format="json",
+        submitted = ap.post(
+            f"/api/v1/supplier-payments/{payment_id}/submit/", {}, format="json",
         )
-        assert posted_payment.status_code == 200, posted_payment.data
+        assert submitted.status_code == 200, submitted.data
+        assert ap_checker.post(
+            f"/api/v1/supplier-payments/{payment_id}/authorize/", {}, format="json",
+        ).status_code == 403
+        approved = finance.post(
+            f"/api/v1/supplier-payments/{payment_id}/authorize/", {}, format="json",
+        )
+        assert approved.status_code == 200, approved.data
+        assert finance.post(
+            f"/api/v1/supplier-payments/{payment_id}/release/", {}, format="json",
+        ).status_code == 400
+        released = gm.post(
+            f"/api/v1/supplier-payments/{payment_id}/release/", {}, format="json",
+        )
+        assert released.status_code == 200, released.data
+        assert released.data["status"] == SupplierPayment.STATUS_RELEASED
     invoice.refresh_from_db()
-    assert invoice.status == SupplierInvoice.STATUS_PAID
-    assert invoice.balance_due == Decimal("0.00")
+    assert invoice.status == SupplierInvoice.STATUS_APPROVED
+    assert invoice.balance_due == Decimal("20000.00")
     assert SupplierPayment.objects.filter(
-        invoice=invoice, status=SupplierPayment.STATUS_POSTED,
+        invoice=invoice, status=SupplierPayment.STATUS_RELEASED,
     ).count() == 2
 
 
