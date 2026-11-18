@@ -2446,13 +2446,58 @@ class StoreReturn(BaseModel):
         super().save(*args, **kwargs)
 
     def apply_inventory_changes(self):
+        """Post an authenticated, traceable departmental return exactly once.
+
+        Unsigned dispatches are not returnable. Aggregate previously posted
+        returns by original department/store/article to prevent phantom stock.
+        This does not reverse consumption accounting; financial treatment of
+        returns remains a separate, independently approved control.
+        """
+        from django.db.models import Sum
+
         if self.inventory_changes_applied:
             raise ValidationError("Store return has already been applied.")
         with transaction.atomic():
-            store_return = StoreReturn.objects.select_for_update().get(pk=self.pk)
-            items = list(store_return.items.select_related("item").all())
+            store_return = StoreReturn.objects.select_for_update().select_related(
+                "store", "department",
+            ).get(pk=self.pk)
+            if store_return.inventory_changes_applied:
+                raise ValidationError("Store return has already been applied.")
+            if not store_return.reason.strip():
+                raise ValidationError("A documented reason is required for a department return.")
+            if not store_return.store.is_active:
+                raise ValidationError("Department returns require an active destination store.")
+            # Serialize returns for the same store, even when different drafts
+            # would otherwise race to claim the same signed issue quantities.
+            StoreLocation.objects.select_for_update().get(pk=store_return.store_id)
+            items = list(store_return.items.select_related("item", "unit"))
             if not items:
                 raise ValidationError("Store return must include at least one item.")
+            item_ids = [item.item_id for item in items]
+            if len(item_ids) != len(set(item_ids)):
+                raise ValidationError("Combine duplicate return Articles into a single line.")
+            for line in items:
+                if line.base_quantity <= 0:
+                    raise ValidationError("Department return quantities must be positive.")
+                signed = StockIssueItem.objects.filter(
+                    issue__store_id=store_return.store_id,
+                    issue__requisition__department_id=store_return.department_id,
+                    issue__fulfillment_status=StockIssue.STATUS_COMPLETED,
+                    issue__signed_at__isnull=False,
+                    item_id=line.item_id,
+                ).aggregate(q=Sum("base_quantity"))["q"] or Decimal("0")
+                already_returned = StoreReturnItem.objects.filter(
+                    store_return__store_id=store_return.store_id,
+                    store_return__department_id=store_return.department_id,
+                    store_return__inventory_changes_applied=True,
+                    item_id=line.item_id,
+                ).aggregate(q=Sum("base_quantity"))["q"] or Decimal("0")
+                if line.base_quantity > signed - already_returned:
+                    raise ValidationError(
+                        f"{line.item}: cannot return {line.base_quantity}; "
+                        f"only {max(Decimal('0'), signed - already_returned)} "
+                        "of signed, unreturned departmental issues remain."
+                    )
             for line in items:
                 balance, _ = InventoryBalance.objects.select_for_update().get_or_create(
                     item=line.item,
@@ -2467,7 +2512,9 @@ class StoreReturn(BaseModel):
                     quantity_in=line.base_quantity,
                     reference_type=LedgerReferenceType.STORE_RETURN,
                     reference_id=store_return.id,
-                    note=f"Department return {store_return.return_no}",
+                    unit_cost_snapshot=balance.weighted_average_cost if balance.weighted_average_cost > 0 else None,
+                    total_cost_snapshot=(line.base_quantity * balance.weighted_average_cost).quantize(Decimal("0.0001")) if balance.weighted_average_cost > 0 else None,
+                    note=f"Signed departmental issue return {store_return.return_no}: {store_return.reason}",
                     created_by=store_return.created_by,
                 )
             store_return.inventory_changes_applied = True
