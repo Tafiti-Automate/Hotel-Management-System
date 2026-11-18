@@ -1059,6 +1059,99 @@ function RfqComparisonPanel({ requisitionId, revision, busy, run, retainForm }: 
   </section>
 }
 
+type FastAllocationDecision = { approved: string; supplierPrice: string; quantity: string; reason: string }
+function QuickAllocationReview({ requisition, lines, supplierItems, names, busy, run, onContinueToLpo, allAllocated }: {
+  requisition: Row
+  lines: Row[]
+  supplierItems: Row[]
+  names: Record<string, Map<string, string>>
+  busy: boolean
+  run: (operation: () => Promise<unknown>, success: string, nextForm?: Row) => Promise<unknown>
+  onContinueToLpo: (requisitionId: string) => void
+  allAllocated: boolean
+}) {
+  const [decisions, setDecisions] = useState<Record<string, FastAllocationDecision>>({})
+  const [dirty, setDirty] = useState(false)
+  useEffect(() => {
+    const initial: Record<string, FastAllocationDecision> = {}
+    for (const line of lines) {
+      const approved = id(line.approved_quantity ?? line.quantity)
+      const available = supplierItems.filter(price => id(price.articleId) === id(line.item) && id(price.status) === 'Active')
+        .sort((a, b) => num(a.basePrice || a.price) - num(b.basePrice || b.price))
+      const chosen = available.find(price => id(price.id) === id(line.procurement_supplier_price))
+      initial[id(line.id)] = {
+        approved,
+        supplierPrice: id(chosen?.id || available[0]?.id),
+        quantity: id(line.procurement_quantity ?? line.remaining_order_quantity ?? line.approved_base_quantity ?? approved),
+        reason: '',
+      }
+    }
+    setDecisions(initial)
+    setDirty(false)
+  }, [requisition.id, lines, supplierItems])
+  const update = (lineId: string, field: keyof FastAllocationDecision, value: string) => {
+    setDecisions(old => ({ ...old, [lineId]: { ...old[lineId], [field]: value } }))
+    setDirty(true)
+  }
+  const active = lines.filter(line => num(line.approved_quantity ?? line.quantity) > 0 && !id(line.rejection_stage))
+  const entries = lines.map(line => {
+    const choice = decisions[id(line.id)]
+    const offers = supplierItems.filter(price => id(price.articleId) === id(line.item) && id(price.status) === 'Active')
+      .sort((a,b) => num(a.basePrice || a.price) - num(b.basePrice || b.price))
+    const approved = choice?.approved ?? ''
+    const amount = choice?.quantity ?? ''
+    const current = num(line.approved_quantity ?? line.quantity)
+    const hasValidNumber = (value: string) => /^\d+(?:\.\d{1,4})?$/.test(value)
+    const good = Boolean(choice) && hasValidNumber(approved) && num(approved) >= 0 && num(approved) <= current
+      && (num(approved) >= current || Boolean(choice.reason.trim()))
+      && (num(approved) === 0 || (hasValidNumber(amount) && num(amount) > 0 && num(amount) <= num(approved)
+        && offers.some(price => id(price.id) === choice.supplierPrice)))
+    return { line, choice, offers, current, good }
+  })
+  const valid = entries.length > 0 && entries.every(entry => entry.good)
+    && entries.some(entry => num(entry.choice?.approved) > 0)
+  return <section style={{ border: '1px solid var(--border)', borderRadius: 9, overflow: 'hidden', marginBottom: 14 }}>
+    <div style={{ padding: '12px 13px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
+      <strong style={{ display: 'block', fontSize: 13 }}>Quick review · all articles in one place</strong>
+      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Quantities and active Cost Controller supplier prices are prefilled. Adjust only exceptions, then save all allocations once.</span>
+    </div>
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 740, fontSize: 11 }}>
+        <thead><tr>{['Article','Approved quantity','Supplier quotation','Order quantity','Reason if reduced'].map(label =>
+          <th key={label} style={{ padding: 9, textAlign: 'left', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>{label}</th>)}</tr></thead>
+        <tbody>{entries.map(({ line, choice, offers, current, good }) =>
+          <tr key={id(line.id)} style={{ background: good ? 'transparent' : 'var(--warn-soft)' }}>
+            <td style={{ padding: 8, minWidth: 125, borderBottom: '1px solid var(--border)' }}><strong>{names.items.get(id(line.item)) || id(line.item)}</strong></td>
+            <td style={{ padding: 8, borderBottom: '1px solid var(--border)' }}><input aria-label={'Approved quantity ' + id(line.id)} type="number" min="0" max={current} step="0.0001" style={{ ...control, width: 90 }} value={choice?.approved ?? ''} onChange={event => update(id(line.id), 'approved', event.target.value)} /></td>
+            <td style={{ padding: 8, borderBottom: '1px solid var(--border)' }}><select aria-label={'Supplier quotation ' + id(line.id)} style={{ ...control, minWidth: 175 }} disabled={num(choice?.approved) === 0} value={choice?.supplierPrice || ''} onChange={event => update(id(line.id), 'supplierPrice', event.target.value)}>
+              <option value="">Select offer</option>{offers.map(price => <option key={id(price.id)} value={id(price.id)}>{names.suppliers.get(id(price.supplierId)) || id(price.supplierId)} · {money(price.basePrice || price.price)}</option>)}
+            </select></td>
+            <td style={{ padding: 8, borderBottom: '1px solid var(--border)' }}><input aria-label={'Order quantity ' + id(line.id)} type="number" min="0" step="0.0001" max={num(choice?.approved)} disabled={num(choice?.approved) === 0} style={{ ...control, width: 90 }} value={num(choice?.approved) === 0 ? '0' : choice?.quantity ?? ''} onChange={event => update(id(line.id), 'quantity', event.target.value)} /></td>
+            <td style={{ padding: 8, borderBottom: '1px solid var(--border)' }}><input aria-label={'Reduction reason ' + id(line.id)} style={{ ...control, minWidth: 135 }} disabled={num(choice?.approved) >= current} value={choice?.reason || ''} placeholder={num(choice?.approved) < current ? 'Required' : 'No change'} onChange={event => update(id(line.id), 'reason', event.target.value)} /></td>
+          </tr>)}</tbody>
+      </table>
+    </div>
+    <div style={{ padding: 12, display: 'flex', gap: 9, justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 11, color: valid ? 'var(--text-muted)' : 'var(--warn)' }}>{valid ? `${active.length} article(s) ready for review` : 'Complete supplier offers, quantities and required reduction reasons.'}</span>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <Action tone="good" disabled={busy || !valid} onClick={() => run(
+          () => runBackendAction('requisitions', id(requisition.id), 'review-and-allocate', {
+            lines: entries.map(({line, choice}) => ({
+              line_id: id(line.id), approved_quantity: choice?.approved,
+              quantity: num(choice?.approved) === 0 ? '0' : choice?.quantity,
+              supplier_price: num(choice?.approved) === 0 ? '' : choice?.supplierPrice,
+              reason: choice?.reason || '',
+            })),
+          }),
+          'All article quantities and supplier allocations saved',
+          { requisition: id(requisition.id) },
+        )}>Save all decisions</Action>
+        {allAllocated && !dirty && <Action tone="good" disabled={busy} onClick={() => onContinueToLpo(id(requisition.id))}>Prepare LPO</Action>}
+      </div>
+    </div>
+  </section>
+}
+
 function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplierItems, items, itemUnits, onContinueToLpo }: any) {
   const requisitions = data.requisitions.filter((row: Row) => isProcurementHandoffSource(row.procurement_source) && ['approved','partially_ordered'].includes(id(row.status)))
   const selectedRequisition = requisitions.find((row: Row) => id(row.id) === id(form.requisition))
@@ -1124,6 +1217,8 @@ function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplier
       run={run}
       retainForm={form}
     />
+    <QuickAllocationReview requisition={selectedRequisition} lines={reqLines} supplierItems={supplierItems} names={names} busy={busy} run={run} allAllocated={allAllocated} onContinueToLpo={onContinueToLpo} />
+    <details style={{ marginBottom: 13 }}><summary style={{ cursor: 'pointer', fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 700 }}>Advanced · edit individual supplier decisions</summary><div style={{ marginTop: 12 }}>
     <SectionLabel>Items</SectionLabel>
     <div style={{ display: 'grid', gap: 6, marginBottom: 14 }}>
       {reqLines.map((line: Row) => {
@@ -1184,6 +1279,7 @@ function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplier
       </>}
     </>}
 
+    </div></details>
     <Divider />
     <details style={{ marginBottom: allAllocated ? 12 : 0 }}>
       <summary style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: 11.5, fontWeight: 700 }}>Other actions</summary>
