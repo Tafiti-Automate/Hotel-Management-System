@@ -238,6 +238,15 @@ function PaymentPanel({ data, form, setForm, busy, execute, invoiceLabel, role }
       <strong>Current status: {sid(payment.status).replaceAll('_',' ')}</strong>
       <div style={{color:'var(--text-muted)',marginTop:4}}>Payment request {sid(payment.reference)} · {money(payment.amount)}. This invoice remains outstanding until independently verified settlement is implemented.</div>
     </div>}
+    {payment && (ap || finance || releaseOfficer) && (() => {
+      const actionName = ap ? 'submit' : finance && sid(payment.status) === 'submitted' ? 'authorize' : 'release'
+      const guidance = explainWorkflowAction('supplier_payment', payment, actionName)
+      if (guidance.allowed) return null
+      return <div className="mc-workflow-prerequisite" role="status" aria-live="polite">
+        <Icon name="info" size={17}/>
+        <div><strong>Why the next action is unavailable</strong><p>{guidance.message}</p><small>Next: {guidance.next}</small></div>
+      </div>
+    })()}
     {ap && <Action disabled={busy || !payment || sid(payment.status) !== 'draft'} click={() => execute(() => runBackendAction('supplier-payments', sid(form.payment), 'submit'), 'Payment submitted for independent Finance authorization')}>Submit payment instruction</Action>}
     {finance && <Action tone="good" disabled={busy || !payment || sid(payment.status) !== 'submitted'} click={() => execute(() => runBackendAction('supplier-payments', sid(form.payment), 'authorize'), 'Payment authorized; awaiting independent release')}>Authorize payment</Action>}
     {releaseOfficer && <Action disabled={busy || !payment || sid(payment.status) !== 'approved'} click={() => execute(() => runBackendAction('supplier-payments', sid(form.payment), 'release'), 'Payment instruction released; bank transfer is not yet confirmed')}>Release for bank execution</Action>}
