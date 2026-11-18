@@ -33,8 +33,8 @@ def _positive_decimal(value, *, allow_zero=False):
         raise ValidationError("Enter a valid base-unit quantity.") from error
     if not number.is_finite() or number < 0 or (number == 0 and not allow_zero):
         raise ValidationError("Quantities must be finite and non-negative.")
-    if number.as_tuple().exponent < -2:
-        raise ValidationError("Quantities support at most two decimal places.")
+    if number.as_tuple().exponent < -4:
+        raise ValidationError("Quantities support at most four decimal places.")
     return number
 
 
