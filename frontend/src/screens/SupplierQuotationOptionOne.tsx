@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { currencyMoney } from '../lib/theme'
-import { businessDate, comparableQuote, rankedQuotes, type ComparedQuote } from '../lib/quotationComparison'
+import { businessDate, comparableQuote, rankedQuotes } from '../lib/quotationComparison'
 import type { Row } from '../lib/data'
 import { useApp } from '../state/AppContext'
 
@@ -169,7 +169,7 @@ export default function SupplierQuotationOptionOne() {
       setSelectedQuoteId('')
       return
     }
-    if (!selectedQuoteId || !filteredQuotes.some((quote) => text(quote.id) === selectedQuoteId)) {
+    if (!selectedQuoteId || !filteredQuotes.some((row) => text(row.quote.id) === selectedQuoteId)) {
       setSelectedQuoteId(text(recommendedQuote?.id || filteredQuotes[0].quote.id))
     }
   }, [filteredQuotes, recommendedQuote, selectedQuoteId])
