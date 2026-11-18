@@ -21,3 +21,18 @@
 @media(max-width:1380px){.quote-v2-layout{grid-template-columns:280px minmax(0,1fr)}.quote-v2-decision{grid-column:2;display:grid;grid-template-columns:minmax(0,1.3fr) minmax(230px,.7fr)}.quote-v2-note{grid-column:1/-1}}
 @media(max-width:1060px){.quote-v2-pagehead{align-items:flex-start;flex-direction:column}.quote-v2-filters{width:100%;justify-content:flex-start}.quote-v2-filters select{flex:1 1 150px}.quote-v2-layout{grid-template-columns:250px minmax(0,1fr)}.quote-v2-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:780px){.quote-v2{min-height:0}.quote-v2-layout{display:flex;flex-direction:column}.quote-v2-explorer{max-height:330px}.quote-v2-decision{display:flex}.quote-v2-selected-top{align-items:flex-start;flex-wrap:wrap}.quote-v2-selected-actions{width:100%;justify-content:flex-start}.quote-v2-summary-grid{grid-template-columns:1fr 1fr}}
+
+
+/* Supplier quotation comparison: normalized price and untruncated eligibility. */
+.application-root.screen-app .quote-v2-table {min-width:1180px;font-size:11px}
+.application-root.screen-app .quote-v2-table th {font-size:10px!important;white-space:nowrap}
+.application-root.screen-app .quote-v2-table :is(th,td){padding:10px 11px!important}
+.application-root.screen-app .quote-v2-table :is(th,td):nth-child(6){min-width:235px;white-space:normal}
+.application-root.screen-app .quote-v2-table tr.is-selected td{background:color-mix(in srgb,var(--accent-soft) 62%,var(--surface))!important}
+.application-root.screen-app .quote-v2-table tr.is-selected td:first-child{box-shadow:inset 4px 0 0 var(--accent)!important}
+.application-root.screen-app .quote-v2-table td:first-child,.application-root.screen-app .quote-v2-table th:first-child{position:sticky;left:0;z-index:3;background:var(--surface)}
+.application-root.screen-app .quote-v2-table th:first-child{z-index:4;background:var(--surface-2)}
+.application-root.screen-app .quote-v2-validity{display:inline-block;white-space:normal;overflow:visible;text-overflow:clip;font-size:10px;line-height:1.4}
+.application-root.screen-app .quote-v2-uom small,.application-root.screen-app .quote-v2-base-hint,.application-root.screen-app .quote-v2-ineligible{display:block;color:var(--text-muted);font-size:10px;line-height:1.4;margin-top:3px}
+.application-root.screen-app .quote-v2-ineligible{color:var(--bad)}
+.application-root.screen-app .quote-v2-selection-reason{padding:10px 12px;font-size:11px;line-height:1.5;color:var(--text-muted);background:var(--surface-2);border-top:1px solid var(--border)}

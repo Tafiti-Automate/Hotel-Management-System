@@ -512,10 +512,25 @@ class SupplierItemPriceSerializer(serializers.ModelSerializer):
         return attrs
 
     def get_is_lowest(self, obj):
-        if not obj.is_active:
+        today = timezone.localdate()
+        if (
+            not obj.is_active
+            or not obj.quotation_valid_until
+            or obj.quotation_valid_until < today
+            or obj.effective_from > today
+        ):
             return False
-        candidates = SupplierItemPrice.objects.filter(item=obj.item, is_active=True).select_related("item", "unit")
-        return obj.base_unit_price == min(price.base_unit_price for price in candidates)
+        candidates = SupplierItemPrice.objects.filter(
+            item=obj.item,
+            is_active=True,
+            currency=obj.currency,
+            quotation_valid_until__gte=today,
+            effective_from__lte=today,
+        ).select_related("item", "unit")
+        return obj.base_unit_price == min(
+            (price.base_unit_price for price in candidates),
+            default=None,
+        )
 
     @transaction.atomic
     def update(self, instance, validated_data):
