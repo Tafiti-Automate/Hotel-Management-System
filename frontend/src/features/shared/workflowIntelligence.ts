@@ -4,7 +4,7 @@
  * Never automatically execute an approval, posting, or bank operation.
  */
 export type WorkflowRecord = { status?: unknown; [key: string]: unknown }
-export type WorkflowDomain = 'purchase_order' | 'goods_receipt' | 'supplier_invoice' | 'supplier_payment' | 'stock_issue' | 'stock_adjustment'
+export type WorkflowDomain = 'purchase_order' | 'goods_receipt' | 'supplier_invoice' | 'supplier_payment' | 'stock_issue' | 'stock_adjustment' | 'store_requisition' | 'supplier_return' | 'department_return' | 'stock_count'
 export type WorkflowDecision = {
   allowed: boolean
   message: string
@@ -30,7 +30,25 @@ export function explainWorkflowAction(domain: WorkflowDomain, record: WorkflowRe
         return blocked('Only draft LPOs can be submitted.', 'Review the current approval stage and act from its queue.')
       }
       break
+    case 'store_requisition':
+      if (action === 'submit') {
+        if (current === 'draft') return ready('The requisition may be submitted after confirming quantities and store.')
+        return blocked('Only draft requisitions may be submitted.', 'Review the current approval stage, or open a new draft.')
+      }
+      if (action === 'department_approve') {
+        if (current === 'submitted') return ready('The Department Head may review the submitted request.')
+        return blocked('Department approval requires a submitted requisition.', 'Ask the originating department to submit its draft.')
+      }
+      if (action === 'dispatch') {
+        if (['approved', 'partially_approved', 'partially_issued'].includes(current)) return ready('The Storekeeper may pick approved outstanding quantities.')
+        return blocked('Stock cannot be dispatched against an unapproved requisition.', 'Resolve outstanding department and Stores approvals.')
+      }
+      break
     case 'goods_receipt':
+      if (action === 'receive') {
+        if (['issued', 'partially_received'].includes(current)) return ready('Blind receiving is available for an issued LPO.')
+        return blocked('Receiving requires an issued LPO.', 'Ask Procurement to complete LPO approval and issue it to the supplier.')
+      }
       if (action === 'post') {
         if (current === 'posted') return blocked('This GRN is already posted.', 'Open the posted GRN or stock ledger instead.')
         if (current !== 'inspected' && current !== 'approved')
@@ -40,6 +58,10 @@ export function explainWorkflowAction(domain: WorkflowDomain, record: WorkflowRe
       }
       break
     case 'supplier_invoice':
+      if (action === 'match') {
+        if (['draft', 'exception'].includes(current)) return ready('Matching checks the LPO, accepted GRN and invoice on the server.')
+        return blocked('Only draft or exception invoices can be matched again.', 'Review the locked invoice evidence or approval history.')
+      }
       if (action === 'approve') {
         if (current === 'matched') return ready('The invoice can be sent for approval.')
         return blocked('This invoice cannot be approved until the LPO, accepted GRN and invoice match.',
@@ -66,7 +88,41 @@ export function explainWorkflowAction(domain: WorkflowDomain, record: WorkflowRe
         'Release does not prove that the supplier received funds.',
         'Obtain verified external bank settlement evidence and reconcile the transaction.')
       break
+    case 'supplier_return':
+      if (action === 'apply') {
+        if (current === 'draft' && !record.inventory_changes_applied) return ready('Unposted supplier return lines can be dispatched after the server verifies original receipts and stock.')
+        return blocked('This supplier return cannot be posted again.', 'Select a draft supplier return and complete its article lines.')
+      }
+      if (action === 'acknowledge') {
+        if (current === 'posted' && !record.supplier_acknowledged_at) return ready('Record supplier acknowledgement for the dispatched return.')
+        return blocked('Acknowledgement requires a posted return and cannot be duplicated.', 'Dispatch goods first, or open the existing acknowledgement.')
+      }
+      break
+    case 'department_return':
+      if (action === 'apply') {
+        if (!record.inventory_changes_applied) return ready('Unposted departmental returns require signed issue evidence and quantities.')
+        return blocked('This department return has already been posted.', 'Open its printed return note and inventory ledger.')
+      }
+      break
+    case 'stock_count':
+      if (action === 'submit') {
+        if (['draft', 'in_progress'].includes(current)) return ready('Sync physical counts before submitting for review.')
+        return blocked('The physical count is locked after submission.', 'Open the review or variance report.')
+      }
+      if (action === 'approve') {
+        if (current === 'submitted') return ready('An independent reviewer may approve the submitted count.')
+        return blocked('Stocktake approval requires submitted physical counts.', 'Finish and submit the blind count sheet.')
+      }
+      if (action === 'apply') {
+        if (current === 'approved' && !record.inventory_changes_applied) return ready('Apply an approved stocktake after final server checks.')
+        return blocked('Stock variances require approval and cannot post twice.', 'Obtain independent approval or inspect the completed ledger.')
+      }
+      break
     case 'stock_issue':
+      if (action === 'dispatch') {
+        if (['approved', 'partially_approved', 'partially_issued'].includes(current)) return ready('Pick within approved outstanding stock and physical SOH.')
+        return blocked('Only approved requests may be dispatched.', 'Complete department and Storekeeper approval.')
+      }
       if (action === 'acknowledge') {
         if (current === 'in_transit') return ready('The department may sign the physical pickup after checking all articles.')
         return blocked('The Storekeeper must dispatch the posted stock before departmental pickup.',

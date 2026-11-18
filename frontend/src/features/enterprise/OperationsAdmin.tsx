@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import EnterpriseTable, { type EnterpriseColumn } from '../../components/EnterpriseTable'
 import ConfirmTransaction from '../../components/ConfirmTransaction'
+import WorkflowPrerequisite from '../../components/WorkflowPrerequisite'
 import {
   createBackendRecord, errorMessage, runBackendAction, updateBackendRecord, fetchOperationalReport, readBackendPayload,
 } from '../../lib/api'
@@ -249,6 +250,8 @@ export function EnterpriseStocktakeSheet() {
     subtitle="Shelf-ordered counts · no theoretical quantity revealed to counters · offline draft saved locally."
     actions={<><button className={btn} disabled={!count||!items.length} onClick={printBlindCount}><Icon name="print" size={15}/> Print blind count sheet</button><button className={btn} disabled={loading} onClick={()=>void reload()}><Icon name="refresh" size={15}/> Refresh</button></>}>
     <StateMessage loading={loading} error={error||mutationError}/>
+    {count&&<WorkflowPrerequisite domain="stock_count" record={count} action="submit"/>}
+    {count&&editable&&unsynced&&<div className="mc-workflow-prerequisite" role="status"><Icon name="info" size={17}/><div><strong>Unsynced physical counts</strong><p>Changes on this device are not yet saved to the server.</p><small>Next: Sync saved counts before submitting.</small></div></div>}
     {!loading&&!error&&<label className="mc-field mc-picker"><span>Count session</span><select value={id} onChange={e=>setChosenId(e.target.value)}>
       <option value="">Choose assigned count sheet</option>{(data['stock-counts']||[]).map(row=><option value={str(row.id)} key={str(row.id)}>{str(row.count_no)} · {str(row.store_name||row.store)} · {str(row.status)}</option>)}
     </select></label>}
@@ -442,6 +445,8 @@ export function EnterpriseBlindReceiving() {
     subtitle="Enter physical quantities independently. Supplier rates and PO ordered quantities are intentionally hidden."
     actions={<span className="mc-confidential"><Icon name="visibility_off" size={14}/> Commercial values masked</span>}>
     <StateMessage loading={loading} error={error||mutationError}/>
+    {order&&<WorkflowPrerequisite domain="goods_receipt" record={order} action="receive"/>}
+    {order&&(!invoice.trim()||!payload.length||invalid)&&<div className="mc-workflow-prerequisite" role="status"><Icon name="info" size={17}/><div><strong>Receiving details required</strong><p>{invalid?'Correct rejected quantities and provide reasons.':!invoice.trim()?'Enter the supplier invoice reference.':'Count at least one article with valid quantities.'}</p><small>Next: Complete the blind count; approved order quantities stay masked.</small></div></div>}
     {!loading&&!error&&<label className="mc-field mc-picker"><span>Scheduled supplier delivery</span><select value={id} onChange={e=>{setChosenId(e.target.value);setCounts({})}}>
       <option value="">Select issued PO</option>{(data['purchase-orders']||[]).filter(row=>['issued','partially_received'].includes(str(row.status))).map(row=><option value={str(row.id)} key={str(row.id)}>{str(row.lpo_number||row.po_number)} · {str(row.supplier_name||row.supplier)}</option>)}
     </select></label>}
@@ -522,6 +527,8 @@ export function EnterpriseDepartmentReturn() {
   return <WorkspacePage section="Stores / Returns" title="Department returns"
     subtitle="Accept unused goods only against signed departmental issues. The Storekeeper posts accepted quantities back to stock; the server checks unreturned issued balances.">
     <StateMessage loading={loading} error={error||mutationError}/>
+    {printed&&<WorkflowPrerequisite domain="department_return" record={printed} action="apply"/>}
+    {draft&&lines.length===0&&<div className="mc-workflow-prerequisite" role="status"><Icon name="info" size={17}/><div><strong>Return needs article lines</strong><p>This draft has no recorded quantities.</p><small>Next: Add an article and its physical return quantity.</small></div></div>
     {!loading&&!error&&<div className="mc-split mc-admin-split">
       <EnterpriseTable<ApiRow> label="Department return register" rows={returns} columns={[
         {id:'ref',label:'Return',value:r=>str(r.return_no)},
@@ -630,6 +637,8 @@ export function EnterpriseSupplierReturn() {
   return <WorkspacePage section="Stores / Supplier returns" title="Return to supplier"
     subtitle="The assigned Storekeeper returns stock from a posted GRN. Finance separately manages supplier credit approval.">
     <StateMessage loading={loading} error={error||mutationError}/>
+    {selectedDraft&&<WorkflowPrerequisite domain="supplier_return" record={selectedDraft} action="apply"/>}
+    {selectedDraft&&returnLines.length===0&&<div className="mc-workflow-prerequisite" role="status"><Icon name="info" size={17}/><div><strong>No articles to dispatch</strong><p>This supplier return has no recorded article quantities.</p><small>Next: Add accepted GRN articles and confirm available stock.</small></div></div>
     {!loading&&!error&&<div className="mc-split mc-admin-split">
       <EnterpriseTable<ApiRow> label="Supplier returns" rows={data['supplier-returns']||[]} columns={[
         {id:'return',label:'Return reference',value:r=>str(r.return_no)},

@@ -24,6 +24,25 @@ test('payment submission, approval and release are guided without claiming settl
   assert.equal(explainWorkflowAction('supplier_payment', { status: 'released' }, 'settle').allowed, false)
 })
 
+test('requisitions, receiving, returns, stocktakes and matching show safe next steps', () => {
+  assert.equal(explainWorkflowAction('store_requisition',{status:'draft'},'submit').allowed,true)
+  assert.equal(explainWorkflowAction('store_requisition',{status:'submitted'},'department_approve').allowed,true)
+  assert.equal(explainWorkflowAction('store_requisition',{status:'draft'},'dispatch').allowed,false)
+  assert.equal(explainWorkflowAction('goods_receipt',{status:'draft'},'receive').allowed,false)
+  assert.equal(explainWorkflowAction('goods_receipt',{status:'issued'},'receive').allowed,true)
+  assert.equal(explainWorkflowAction('supplier_return',{status:'draft'},'apply').allowed,true)
+  assert.equal(explainWorkflowAction('supplier_return',{status:'posted'},'apply').allowed,false)
+  assert.equal(explainWorkflowAction('supplier_return',{status:'posted'},'acknowledge').allowed,true)
+  assert.equal(explainWorkflowAction('department_return',{inventory_changes_applied:true},'apply').allowed,false)
+  assert.equal(explainWorkflowAction('stock_count',{status:'draft'},'submit').allowed,true)
+  assert.equal(explainWorkflowAction('stock_count',{status:'submitted'},'submit').allowed,false)
+  assert.equal(explainWorkflowAction('stock_count',{status:'submitted'},'approve').allowed,true)
+  assert.equal(explainWorkflowAction('stock_count',{status:'submitted'},'apply').allowed,false)
+  assert.equal(explainWorkflowAction('stock_count',{status:'approved'},'apply').allowed,true)
+  assert.equal(explainWorkflowAction('supplier_invoice',{status:'draft'},'match').allowed,true)
+  assert.equal(explainWorkflowAction('supplier_invoice',{status:'approved'},'match').allowed,false)
+})
+
 test('receiving, inventory and invoice matching never auto-override safeguards', () => {
   assert.equal(explainWorkflowAction('goods_receipt', { status: 'draft' }, 'post').allowed, false)
   assert.equal(explainWorkflowAction('supplier_invoice', { status: 'exception' }, 'approve').allowed, false)

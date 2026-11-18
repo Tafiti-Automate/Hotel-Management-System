@@ -931,6 +931,7 @@ function IssuePanel({ app, data, form, setForm, busy, execute }: any) {
     <SectionLabel>Issue voucher</SectionLabel>
     <Field label="Approved department request"><Select value={form.request} change={(v) => setForm({ request: v })} rows={approved} label={(r) => `${id(r.requisition_no)} · ${departmentName(app, r.department)}`} /></Field>
     {!approved.length && <Hint>No approved department requests are ready for picking.</Hint>}
+    {request&&<WorkflowPrerequisite domain="stock_issue" record={request} action="dispatch"/>}
     {request && <RequestSummary request={request} lines={requestLines} data={data} app={app} showAvailability showOperationalContext />}
     {request && (app.user.isSuperuser || ['administrator', 'system administrator', 'store keeper'].includes(id(app.user.role).toLowerCase())) && <button type="button" disabled={busy} onClick={() => execute(() => runBackendAction('store-requisitions', id(request.id), 'cancel'), 'Request cancelled and outstanding stock reservations released')} style={{ ...secondary, width: '100%', justifyContent: 'center', marginBottom: 12, color: 'var(--bad)', borderColor: 'rgba(220,38,38,.3)' }}><Icon name="cancel" size={17} color="var(--bad)" />Cancel request and release reservation</button>}
     <Field label="Issued by"><Select value={form.employee} change={(v) => setForm({ ...form, employee: v })} rows={app.data.employees} /></Field>
@@ -1024,6 +1025,7 @@ function CountPanel({ app, data, form, setForm, busy, execute }: any) {
     <Action disabled={busy || !form.store || !form.employee} click={() => execute(() => createBackendRecord('stock-counts', { store: form.store, conducted_by: form.employee, note: '' }), 'Stock count opened')}>Open stock count</Action>
     <Rule />
     <Field label="Stock count"><Select value={form.count} change={(v) => setForm({ count: v })} rows={data.counts.filter((r: Row) => !r.inventory_changes_applied)} label={(r) => `${id(r.count_no)} · ${r.status}`} /></Field>
+    {data.counts.find((r: Row)=>id(r.id)===id(form.count))&&<WorkflowPrerequisite domain="stock_count" record={data.counts.find((r: Row)=>id(r.id)===id(form.count))} action="apply"/>}
     <Action disabled={busy || !form.count} click={() => execute(() => runBackendAction('stock-counts', id(form.count), 'populate'), 'System balances loaded')}>Populate count sheet</Action>
     <Field label="Count line"><Select value={form.countLine} change={(v) => { const line = countLines.find((r: Row) => id(r.id) === v); setForm({ ...form, countLine: v, physical: line?.physical_quantity }) }} rows={countLines} label={(r) => `${itemName(app, r.item)} · system ${r.system_quantity}`} /></Field>
     <Field label="Physical quantity"><Input type="number" value={form.physical} change={(v) => setForm({ ...form, physical: v })} /></Field>

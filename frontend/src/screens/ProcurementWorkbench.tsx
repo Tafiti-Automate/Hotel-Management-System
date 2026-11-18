@@ -1504,7 +1504,7 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, items, ite
       <Action disabled={busy} onClick={() => run(() => downloadControlledPurchaseOrder(id(order.id)), `${id(order.next_print_classification) || 'Controlled'} LPO downloaded`, { ...form })}>Download {id(order.next_print_classification) || 'controlled'} LPO</Action>
       <ReadOnlyValue label="Supplier email" value={registeredSupplierEmail || 'No supplier email registered'} />
       <WorkflowPrerequisite domain="purchase_order" record={order} action="issue" />
-      <Action tone="good" disabled={busy || !registeredSupplierEmail} onClick={() => run(async () => { const result = await runBackendAction('purchase-orders', id(order.id), 'issue'); setLpoQueue('history'); return result }, 'LPO emailed to supplier and lead time started', (result: unknown) => ({ order: id((result as Row).id) }))}>Email LPO to Supplier</Action>
+      <Action tone="good" disabled={busy || !registeredSupplierEmail || id(order.status) !== 'approved'} onClick={() => run(async () => { const result = await runBackendAction('purchase-orders', id(order.id), 'issue'); setLpoQueue('history'); return result }, 'LPO emailed to supplier and lead time started', (result: unknown) => ({ order: id((result as Row).id) }))}>Email LPO to Supplier</Action>
     </>}
 
     {lpoQueue === 'history' && order && <>
