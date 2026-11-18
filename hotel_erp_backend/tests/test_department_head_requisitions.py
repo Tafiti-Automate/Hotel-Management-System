@@ -619,7 +619,27 @@ def test_department_return_requires_signed_issue_assigned_keeper_and_no_overcred
         item=ctx["item"], store=ctx["store"],
     ).update(weighted_average_cost=Decimal("3200.0000"))
 
-    for client in (supervisor, ctx["head"][2], ctx["cost"][2]):
+    remote_branch = Branch.objects.create(name="Separate Hotel Return Property")
+    remote_user = get_user_model().objects.create_user(
+        username="return-remote-keeper", employee_code="RET-REMOTE",
+    )
+    remote_user.groups.add(Group.objects.get_or_create(name="Store Keeper")[0])
+    remote_employee = Employee.objects.create(
+        user=remote_user, department=ctx["department"],
+        branch=remote_branch, designation="Store Keeper", is_active=True,
+    )
+    # Even a mistakenly assigned remote keeper cannot cross property borders.
+    StoreKeeperAssignment.objects.create(
+        store=ctx["store"], employee=remote_employee, is_active=True,
+    )
+    remote_client = APIClient()
+    remote_client.force_authenticate(remote_user)
+    admin_user = get_user_model().objects.create_user(
+        username="return-it-admin", employee_code="RET-ADMIN", is_superuser=True,
+    )
+    admin_client = APIClient()
+    admin_client.force_authenticate(admin_user)
+    for client in (supervisor, ctx["head"][2], ctx["cost"][2], remote_client, admin_client):
         denied = client.post(
             "/api/v1/store-returns/",
             {"department": str(ctx["department"].pk),
