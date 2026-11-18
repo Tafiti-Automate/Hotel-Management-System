@@ -73,9 +73,9 @@ function getLines(
   lines: Row[], comparison: GrnReferenceDocumentProps['comparison'], items: Row[],
 ) {
   const byPo = new Map(lines.map(line => [str(line.purchase_order_item), line]))
-  const rows = comparison?.lines
+  const rows: Row[] = comparison?.lines
     ? comparison.lines.map((detail) => ({
-        ...byPo.get(detail.purchase_order_item),
+        ...(byPo.get(detail.purchase_order_item) ?? {}),
         purchase_order_item: detail.purchase_order_item,
         item_name: detail.article,
         item_sku: detail.sku,
