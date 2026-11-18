@@ -76,7 +76,6 @@ ROLE_SPECS = {
                 "stockcount", "stockcountitem", "stockledger",
                 "stockadjustment", "stockadjustmentitem",
             ],
-            "procurement": ["supplierreturn", "supplierreturnitem"],
             "procurement": ["vendorquotation", "vendorquotationitem"],
         },
     },
@@ -92,6 +91,7 @@ ROLE_SPECS = {
                 "stockcount", "stockcountitem",
                 "stockadjustment", "stockadjustmentitem",
             ],
+            "procurement": ["supplierreturn", "supplierreturnitem"],
         },
         "view": {
             "departments": ["department", "branch"],
