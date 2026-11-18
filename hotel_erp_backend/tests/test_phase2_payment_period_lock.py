@@ -99,6 +99,7 @@ def test_supplier_payment_instruction_never_marks_invoice_paid_before_bank_settl
         return user, api
 
     preparer, ap = operator("Accounts Payable Clerk", "PREP")
+    another_clerk, another_ap = operator("Accounts Payable Clerk", "OTHER")
     approver, finance = operator("Financial Manager", "FIN")
     releaser, gm = operator("General Manager", "GM")
     invoice = SupplierInvoice.objects.create(
@@ -112,6 +113,9 @@ def test_supplier_payment_instruction_never_marks_invoice_paid_before_bank_settl
         reference="SAFE-PAY-001", created_by=preparer,
     )
     url = f"/api/v1/supplier-payments/{payment.pk}/"
+    assert another_ap.patch(url, {"amount": "1.00"}, format="json").status_code == 403
+    assert another_ap.delete(url).status_code == 403
+    assert another_ap.post(url + "submit/", {}, format="json").status_code == 400
     assert ap.post(url + "post/", {}, format="json").status_code in (400, 403)
     assert ap.post(url + "authorize/", {}, format="json").status_code == 403
     assert ap.post(url + "submit/", {}, format="json").status_code == 200
