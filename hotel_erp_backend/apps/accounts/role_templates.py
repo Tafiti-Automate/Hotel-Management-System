@@ -181,6 +181,7 @@ ROLE_SPECS = {
         "crud": {"procurement": [
             "goodsreceiptitem", "goodsreceiptnote", "goodsinspection",
             "goodsinspectionitem", "procurementattachment",
+            "supplierreturn", "supplierreturnitem",
         ]},
         "view": {
             "departments": ["branch", "department"],
