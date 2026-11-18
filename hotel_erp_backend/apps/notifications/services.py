@@ -209,6 +209,7 @@ def notify_roles(
             title=title,
             message=message,
             created_by=created_by,
+            deduplication_key=deduplication_key,
         )
         if notification:
             notifications.append(notification)
