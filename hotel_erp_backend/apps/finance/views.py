@@ -284,6 +284,26 @@ class SupplierPaymentViewSet(CreatedByModelMixin, ModelViewSet):
             return [IsAuthenticated()]
         return super().get_permissions()
 
+    @staticmethod
+    def _notify_payment_step(payment, roles, title, stage):
+        from apps.notifications.services import notify_roles
+        order = payment.invoice.purchase_order
+        branch = order.requisition.branch
+        # Dispatch only after the financial state transaction has committed.
+        def send():
+            notify_roles(
+                roles,
+                title=title,
+                message=(
+                    f"Payment {payment.reference} for invoice {payment.invoice.invoice_number} "
+                    f"is {stage}. Open the Accounts Payable payment centre."
+                ),
+                branch=branch if not getattr(branch, "hotel_id", None) else None,
+                hotel=branch.hotel if getattr(branch, "hotel_id", None) else None,
+                deduplication_key=f"ap-payment:{payment.pk}:{stage}",
+            )
+        transaction.on_commit(send)
+
     def perform_create(self, serializer):
         require_accounts_payable_action(self.request.user)
         require_finance_property(
@@ -324,6 +344,8 @@ class SupplierPaymentViewSet(CreatedByModelMixin, ModelViewSet):
         payment = self.get_object()
         try:
             payment.submit(actor=request.user)
+            self._notify_payment_step(payment, ["Financial Manager"],
+                "Supplier payment awaiting Finance authorization", "submitted")
         except DjangoValidationError as error:
             raise ValidationError(getattr(error, "messages", str(error)))
         return Response(self.get_serializer(payment).data)
@@ -339,6 +361,8 @@ class SupplierPaymentViewSet(CreatedByModelMixin, ModelViewSet):
         require_finance_property(user, payment.invoice.purchase_order)
         try:
             payment.authorize(actor=user)
+            self._notify_payment_step(payment, ["General Manager"],
+                "Authorized payment awaiting independent release", "approved")
         except DjangoValidationError as error:
             raise ValidationError(getattr(error, "messages", str(error)))
         return Response(self.get_serializer(payment).data)
@@ -354,6 +378,8 @@ class SupplierPaymentViewSet(CreatedByModelMixin, ModelViewSet):
         require_finance_property(user, payment.invoice.purchase_order)
         try:
             payment.release(actor=user)
+            self._notify_payment_step(payment, ["Accounts Payable Clerk"],
+                "Supplier payment instruction released; bank settlement pending", "released")
         except DjangoValidationError as error:
             raise ValidationError(getattr(error, "messages", str(error)))
         return Response(self.get_serializer(payment).data)
