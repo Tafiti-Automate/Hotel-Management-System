@@ -635,11 +635,17 @@ class SupplierInvoiceItem(BaseModel):
 
 class SupplierPayment(BaseModel):
     STATUS_DRAFT = "draft"
-    STATUS_POSTED = "posted"
+    STATUS_POSTED = "posted"  # Historical settled transactions only.
+    STATUS_SUBMITTED = "submitted"
+    STATUS_APPROVED = "approved"
+    STATUS_RELEASED = "released"  # Sent for bank execution; NOT paid.
     STATUS_CANCELLED = "cancelled"
     STATUS_CHOICES = (
         (STATUS_DRAFT, "Draft"),
-        (STATUS_POSTED, "Posted"),
+        (STATUS_SUBMITTED, "Awaiting finance approval"),
+        (STATUS_APPROVED, "Authorized for bank release"),
+        (STATUS_RELEASED, "Bank execution pending - not settled"),
+        (STATUS_POSTED, "Settled (legacy or verified)"),
         (STATUS_CANCELLED, "Cancelled"),
     )
 
@@ -669,6 +675,11 @@ class SupplierPayment(BaseModel):
         max_length=20, choices=STATUS_CHOICES, default=STATUS_DRAFT
     )
     note = models.TextField(blank=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    released_at = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="approved_supplier_payments")
+    released_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="released_supplier_payments")
     posted_at = models.DateTimeField(null=True, blank=True)
     posted_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -680,6 +691,67 @@ class SupplierPayment(BaseModel):
 
     class Meta(BaseModel.Meta):
         ordering = ("-payment_date", "-created_at")
+
+    def submit(self, actor):
+        """Prepare an instruction for Finance; no bank movement or paid status."""
+        with transaction.atomic():
+            payment = type(self).objects.select_for_update().select_related("invoice").get(pk=self.pk)
+            invoice = SupplierInvoice.objects.select_for_update().get(pk=payment.invoice_id)
+            if payment.status != self.STATUS_DRAFT:
+                raise ValidationError("Only draft supplier payments may be submitted.")
+            if payment.created_by_id != actor.pk:
+                raise ValidationError("Only the originating Accounts Payable Clerk may submit the payment.")
+            if invoice.status not in (SupplierInvoice.STATUS_APPROVED, SupplierInvoice.STATUS_PARTIALLY_PAID):
+                raise ValidationError("Invoice must be approved before a payment can be submitted.")
+            if not payment.reference.strip() or payment.amount <= 0:
+                raise ValidationError("Payment requires a positive amount and a reference.")
+            from django.db.models import Sum
+            reserved = type(self).objects.filter(
+                invoice=invoice, status__in=(
+                    self.STATUS_SUBMITTED, self.STATUS_APPROVED, self.STATUS_RELEASED
+                )
+            ).exclude(pk=payment.pk).aggregate(total=Sum("amount"))["total"] or Decimal("0")
+            if payment.amount + reserved > invoice.balance_due:
+                raise ValidationError("Payment request exceeds invoice balance after outstanding instructions.")
+            from apps.materials_control.models import FiscalPeriod
+            branch = invoice.purchase_order.requisition.branch
+            if branch and FiscalPeriod.objects.filter(
+                branch=branch, start_date__lte=payment.payment_date,
+                end_date__gte=payment.payment_date, status=FiscalPeriod.STATUS_CLOSED
+            ).exists():
+                raise ValidationError("Cannot submit a payment within a closed fiscal period.")
+            payment.status = self.STATUS_SUBMITTED
+            payment.submitted_at = timezone.now()
+            payment.save(update_fields=("status", "submitted_at", "updated_at"))
+            self.status, self.submitted_at = payment.status, payment.submitted_at
+
+    def authorize(self, actor):
+        """Finance approval cannot be performed by the payment preparer."""
+        with transaction.atomic():
+            payment = type(self).objects.select_for_update().get(pk=self.pk)
+            if payment.status != self.STATUS_SUBMITTED:
+                raise ValidationError("Only submitted payments may be approved.")
+            if payment.created_by_id == actor.pk:
+                raise ValidationError("The payment preparer cannot approve their own payment.")
+            payment.status = self.STATUS_APPROVED
+            payment.approved_by = actor
+            payment.approved_at = timezone.now()
+            payment.save(update_fields=("status", "approved_by", "approved_at", "updated_at"))
+            self.status, self.approved_by, self.approved_at = payment.status, actor, payment.approved_at
+
+    def release(self, actor):
+        """Record release for external banking; it is not a settlement event."""
+        with transaction.atomic():
+            payment = type(self).objects.select_for_update().get(pk=self.pk)
+            if payment.status != self.STATUS_APPROVED:
+                raise ValidationError("Only independently approved payments may be released.")
+            if actor.pk in (payment.created_by_id, payment.approved_by_id):
+                raise ValidationError("Payment preparation, approval and release must be segregated.")
+            payment.status = self.STATUS_RELEASED
+            payment.released_by = actor
+            payment.released_at = timezone.now()
+            payment.save(update_fields=("status", "released_by", "released_at", "updated_at"))
+            self.status, self.released_by, self.released_at = payment.status, actor, payment.released_at
 
     def post(self, posted_by=None):
         with transaction.atomic():
