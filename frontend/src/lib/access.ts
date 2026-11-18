@@ -41,7 +41,7 @@ const routePermissions: Record<string, string[]> = {
   supplierReturns: ['procurement.view_supplierreturn'],
   'workflow-procure': ['procurement.view_purchaserequisition', 'inventory.view_supplieritemprice', 'procurement.view_purchaseorder', 'procurement.view_goodsreceiptnote'],
   approvals: ['approvals.view_approvalworkflow'],
-  'workflow-pay': ['finance.view_supplierinvoice', 'finance.view_supplierpayment', 'finance.view_expense', 'finance.view_cashflow'],
+  'workflow-pay': ['finance.view_supplierinvoice', 'finance.view_supplierpayment'],
   'waste-control': ['materials_control.view_wasterecord'],
   'recipes-production': ['materials_control.view_recipe', 'materials_control.view_recipeingredient'],
   'pos-control': ['materials_control.view_posplumapping', 'materials_control.view_posimportbatch'],
