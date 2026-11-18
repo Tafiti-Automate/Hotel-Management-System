@@ -1088,7 +1088,9 @@ function QuickAllocationReview({ requisition, lines, supplierItems, names, busy,
     }
     setDecisions(initial)
     setDirty(false)
-  }, [requisition.id, lines, supplierItems])
+  // Reset edited values only when the selected document or server decisions
+  // change; the supplier catalogue array is rebuilt on parent renders.
+  }, [requisition.id, lines.map(line => [id(line.id), id(line.approved_quantity), id(line.procurement_supplier_price), id(line.procurement_quantity)].join(':')).join('|')])
   const update = (lineId: string, field: keyof FastAllocationDecision, value: string) => {
     setDecisions(old => ({ ...old, [lineId]: { ...old[lineId], [field]: value } }))
     setDirty(true)
