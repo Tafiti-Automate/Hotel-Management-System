@@ -62,3 +62,19 @@
 @keyframes mc-toast-progress { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 @media (prefers-reduced-motion: reduce) { .mc-feedback-toast-progress { animation: none; } }
 .mode-dark .mc-feedback-toast { box-shadow: 0 18px 45px rgba(0,0,0,.45); }
+
+/* State-driven, persistent guidance next to restricted workflow actions. */
+.mc-workflow-prerequisite {
+  display: flex; align-items: flex-start; gap: 10px;
+  margin: 10px 0; padding: 12px 13px; border: 1px solid var(--border);
+  border-left: 3px solid var(--warn); border-radius: 9px;
+  background: var(--surface-2); color: var(--text); line-height: 1.5;
+}
+.mc-workflow-prerequisite > svg { flex: none; margin-top: 1px; color: var(--warn); }
+.mc-workflow-prerequisite strong { display: block; font-size: 12.5px; }
+.mc-workflow-prerequisite p { margin: 3px 0; font-size: 12.5px; }
+.mc-workflow-prerequisite small { display: block; font-size: 12px; color: var(--text-muted); }
+.workflow-path-step.is-blocked { opacity: .83; border-color: var(--border); }
+.workflow-path-step.is-blocked .workflow-path-number { color: var(--warn); }
+.workflow-path-next { display: block; color: var(--text-muted); font-size: 11px; line-height: 1.4; margin-top: 5px; }
+.mode-dark .mc-workflow-prerequisite { background: var(--surface); border-color: var(--border); border-left-color: var(--warn); }
