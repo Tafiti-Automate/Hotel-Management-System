@@ -52,6 +52,7 @@ from core.constants.choices import (
     RequisitionType,
 )
 from apps.procurement.serializers import (
+    can_view_commercial_data,
     GoodsInspectionItemSerializer,
     GoodsInspectionSerializer,
     GoodsReceiptItemSerializer,
