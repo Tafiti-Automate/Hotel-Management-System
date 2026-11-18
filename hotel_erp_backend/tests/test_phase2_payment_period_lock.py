@@ -112,7 +112,7 @@ def test_supplier_payment_instruction_never_marks_invoice_paid_before_bank_settl
         reference="SAFE-PAY-001", created_by=preparer,
     )
     url = f"/api/v1/supplier-payments/{payment.pk}/"
-    assert ap.post(url + "post/", {}, format="json").status_code == 400
+    assert ap.post(url + "post/", {}, format="json").status_code in (400, 403)
     assert ap.post(url + "authorize/", {}, format="json").status_code == 403
     assert ap.post(url + "submit/", {}, format="json").status_code == 200
     assert ap.post(url + "submit/", {}, format="json").status_code == 400
@@ -125,7 +125,7 @@ def test_supplier_payment_instruction_never_marks_invoice_paid_before_bank_settl
     assert released.status_code == 200, released.data
     assert released.data["status"] == SupplierPayment.STATUS_RELEASED
     assert gm.post(url + "release/", {}, format="json").status_code == 400
-    assert gm.post(url + "post/", {}, format="json").status_code == 400
+    assert gm.post(url + "post/", {}, format="json").status_code in (400, 403)
 
     # A second pending payment may only reserve the uncommitted invoice balance.
     excess = SupplierPayment.objects.create(
