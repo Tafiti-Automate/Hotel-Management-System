@@ -535,6 +535,18 @@ def test_requisition_creates_purchase_order_from_selected_supplier_quote():
     assert order_item.quantity == Decimal("4.00")
     assert order_item.unit_cost == Decimal("8000.00")
 
+    # LPO review must expose business labels to Procurement users even when
+    # their account cannot fetch the full inventory item or supplier catalogue.
+    from apps.procurement.serializers import PurchaseOrderItemSerializer
+    line_payload = PurchaseOrderItemSerializer(order_item).data
+    order_payload = PurchaseOrderSerializer(order).data
+    assert line_payload["item_name"] == item.name
+    assert line_payload["item_sku"] == item.sku
+    assert line_payload["unit_name"] == (
+        order_item.unit.name if order_item.unit_id else None
+    )
+    assert order_payload["supplier_name"] == supplier.name
+
 
 @pytest.mark.django_db
 def test_document_number_migration_repairs_existing_collisions_and_legacy_values():
