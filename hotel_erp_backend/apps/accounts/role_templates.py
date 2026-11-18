@@ -173,7 +173,7 @@ ROLE_SPECS = {
             "inventory": ["item", "unitofmeasure"],
             "procurement": ["purchaseorderitem", "purchaseorderactivity", "vendorquotation", "vendorquotationitem"],
             "vendors": ["supplier"],
-            "finance": ["supplierinvoice", "expense"],
+            "finance": ["supplierinvoice", "supplierpayment", "expense"],
             "materials_control": [
                 "costcenterbudget", "budgetoverride", "fiscalperiod", "glexport", "glaccountmapping",
                 "wasterecord", "recipe", "posimportbatch",
