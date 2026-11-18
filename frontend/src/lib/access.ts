@@ -97,7 +97,7 @@ const strictRoleRoutes: Record<string, Set<string>> = {
   'procurement officer': new Set([ 'purchasing-workbench', 'purchasing-quotes', 'purchasing-order-detail','dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
   'financial manager': new Set([ 'finance-invoice-matching', 'finance-budgets', 'finance-period-close', 'purchasing-order-detail', 'stocktake-variance','dashboard', 'detail', 'workflow-procure', 'approval-inbox', 'workflow-pay', 'finance-governance', 'reports', 'reportview', 'menu-engineering']),
   'accounts payable clerk': new Set([ 'finance-invoice-matching','dashboard', 'detail', 'workflow-pay', 'reports', 'reportview']),
-  'general manager': new Set([ 'purchasing-order-detail','dashboard', 'detail', 'workflow-procure', 'approval-inbox', 'reports', 'reportview', 'menu-engineering']),
+  'general manager': new Set([ 'workflow-pay', 'purchasing-order-detail','dashboard', 'detail', 'workflow-procure', 'approval-inbox', 'reports', 'reportview', 'menu-engineering']),
   'receiving clerk': new Set([ 'receiving-po-detail','dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
 }
 
