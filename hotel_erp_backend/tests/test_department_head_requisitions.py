@@ -281,12 +281,14 @@ def test_unrelated_roles_cannot_create_department_requisitions(workflow):
 
 @pytest.mark.django_db
 def test_connected_eight_role_shortage_partial_receipts_and_signed_completion(workflow):
-    """API journey: eight roles, 20 locally available, 8 purchased in two drops.
-
-    The PO is pre-issued as a controlled fixture; this test validates the
-    cross-module handoff, NOT the independent commercial approval sequence.
+    """Eight-role API journey: 3 RFQs -> supplier award -> three LPO approvals
+    -> supplier dispatch -> split GRNs -> signed department fulfillment.
     """
-    from apps.procurement.models import PurchaseOrder, PurchaseOrderItem, RequisitionItem
+    from datetime import timedelta
+    from django.test import override_settings
+    from apps.procurement.models import (
+        PurchaseOrder, RequisitionItem, VendorQuotation, VendorQuotationItem,
+    )
     from apps.vendors.models import Supplier
     from core.constants.choices import POStatus, LedgerReferenceType
     from apps.inventory.models import StockLedger
@@ -372,17 +374,85 @@ def test_connected_eight_role_shortage_partial_receipts_and_signed_completion(wo
         phone="+256700000099", address="Kampala", tin_number="E2E-TIN-9",
         registration_number="E2E-REG-9",
     )
-    order = PurchaseOrder.objects.create(
-        requisition=req.procurement_requisition, supplier=supplier,
-        ordered_by=buyer_employee, store=ctx["store"],
+    quotations = []
+    for index, price in enumerate(("2500.00", "3000.00", "4000.00"), start=1):
+        vendor = supplier if index == 1 else Supplier.objects.create(
+            name=f"E2E comparison vendor {index}",
+            email=f"e2e-comparison-{index}@example.com",
+            phone=f"+2567000000{index:02d}", address="Kampala",
+            tin_number=f"E2E-RFQ-TIN-{index}",
+            registration_number=f"E2E-RFQ-REG-{index}",
+        )
+        quotation = VendorQuotation.objects.create(
+            requisition=req.procurement_requisition, supplier=vendor,
+            valid_until=timezone.localdate() + timedelta(days=14),
+            payment_terms="Net 30",
+        )
+        VendorQuotationItem.objects.create(
+            quotation=quotation, requisition_item=purchase_line,
+            quantity=Decimal("8.0000"), unit=ctx["unit"],
+            unit_price=Decimal(price),
+        )
+        quotations.append(quotation)
+
+    with override_settings(
+        PROCUREMENT_QUOTATION_THRESHOLD=Decimal("100.00"),
+        PROCUREMENT_MIN_QUOTATIONS=3,
+    ):
+        report = buyer.get(
+            f"/api/v1/quotations/comparison/?requisition={req.procurement_requisition_id}"
+        )
+        assert report.status_code == 200, report.data
+        assert report.data["qualified_quotation_count"] == 3
+        assert report.data["competitive_sourcing_ready"] is True
+        assert finance.post(
+            f"/api/v1/quotations/{quotations[0].pk}/award/",
+            {"selection_reason": "Unauthorized finance award"}, format="json",
+        ).status_code == 403
+        award = buyer.post(
+            f"/api/v1/quotations/{quotations[0].pk}/award/",
+            {"selection_reason": "Lowest compliant comparable offer"},
+            format="json",
+        )
+        assert award.status_code == 200, award.data
+
+    order = req.procurement_requisition.create_purchase_order(
+        ordered_by=buyer_employee, store=ctx["store"], created_by=buyer_employee.user,
     )
-    po_line = PurchaseOrderItem.objects.create(
-        purchase_order=order, requisition_item=purchase_line,
-        item=ctx["item"], unit=ctx["unit"], quantity=Decimal("8.0000"),
-        unit_cost=Decimal("2500.00"), destination_store=ctx["store"],
+    assert order.supplier_id == supplier.pk
+    po_line = order.items.get()
+    assert po_line.quantity == Decimal("8.0000")
+    assert po_line.unit_cost == Decimal("2500.00")
+    assert order.status == POStatus.DRAFT
+
+    # The three-role sequence is a real API decision, not a forced model status.
+    blocked = buyer.post(
+        f"/api/v1/purchase-orders/{order.pk}/issue/", {}, format="json",
     )
-    order.status = POStatus.ISSUED
-    order.save(update_fields=["status", "updated_at"])
+    assert blocked.status_code == 400, blocked.data
+    submit = buyer.post(
+        f"/api/v1/purchase-orders/{order.pk}/submit-for-approval/",
+        {}, format="json",
+    )
+    assert submit.status_code == 200, submit.data
+    assert finance.post(
+        f"/api/v1/purchase-orders/{order.pk}/approve/",
+        {"comments": "Attempt to bypass Procurement"}, format="json",
+    ).status_code == 403
+    for client, comment in (
+        (buyer, "Procurement approved the RFQ award"),
+        (finance, "Finance confirmed cost and budget"),
+        (gm, "General Manager authorized LPO"),
+    ):
+        decision = client.post(
+            f"/api/v1/purchase-orders/{order.pk}/approve/",
+            {"comments": comment}, format="json",
+        )
+        assert decision.status_code == 200, (comment, decision.data)
+    order.refresh_from_db()
+    assert order.status == POStatus.APPROVED
+    order.issue(sent_by=buyer_employee)
+    assert order.status == POStatus.ISSUED
 
     for number, amount in enumerate(("3.0000", "5.0000"), start=1):
         arrived = receiver.post(
