@@ -118,7 +118,6 @@ def notify_storekeepers_for_expiring_batch(batch, *, created_by=None):
             assignment.employee,
             batch,
             created_by=created_by,
-            deduplication_key=deduplication_key,
         )
         if notification:
             notifications.append(notification)
