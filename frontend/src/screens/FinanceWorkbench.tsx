@@ -28,14 +28,27 @@ export default function FinanceWorkbench() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [paymentPathHint, setPaymentPathHint] = useState('')
+  const isAccountsPayable = app.user.role.trim().toLowerCase() === 'accounts payable clerk'
+  // AP staff must not request Operating Expenses or bank administration data.
+  const accessiblePaths = useMemo(() => isAccountsPayable
+    ? Object.entries(financePaths).filter(([key]) => !['expenses', 'expenseCategories', 'banks', 'transactions'].includes(key))
+    : Object.entries(financePaths), [isAccountsPayable])
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
     try {
-      const entries = await Promise.all(Object.entries(financePaths).map(async ([key, path]) => [key, await readBackendRecords(path)]))
-      setData(Object.fromEntries(entries))
+      const entries = await Promise.all(accessiblePaths.map(async ([key, path]) => {
+        // Payment methods are reference data; an un-synced role grant must not
+        // prevent AP from viewing their invoices and outstanding payments.
+        if (key === 'methods' && isAccountsPayable) {
+          try { return [key, await readBackendRecords(path)] }
+          catch { return [key, []] }
+        }
+        return [key, await readBackendRecords(path)]
+      }))
+      setData({ ...empty, ...Object.fromEntries(entries) })
     } catch (reason) { setError(errorMessage(reason)) } finally { setLoading(false) }
-  }, [])
+  }, [accessiblePaths, isAccountsPayable])
   useEffect(() => { void load() }, [load])
   useEffect(() => { setForm({}); setError('') }, [tab])
   const scopedData = useMemo(() => {
@@ -67,7 +80,11 @@ export default function FinanceWorkbench() {
   const invoiceLabel = (row: Row) => `${sid(row.invoice_number)} · ${suppliers.get(sid(row.supplier)) || 'Supplier'} · ${money(row.balance_due)} due`
   const tabs: Array<[FinanceTab, string, string]> = [
     ['invoices', 'request_page', 'Invoices & matching'], ['payments', 'payments', 'Supplier payments'],
-    ['expenses', 'receipt', 'Expenses'], ['banking', 'account_balance', 'Banking'], ['methods', 'credit_card', 'Payment methods'],
+    ...(!isAccountsPayable ? [
+      ['expenses', 'receipt', 'Expenses'] as [FinanceTab, string, string],
+      ['banking', 'account_balance', 'Banking'] as [FinanceTab, string, string],
+      ['methods', 'credit_card', 'Payment methods'] as [FinanceTab, string, string],
+    ] : []),
   ]
   const paymentPathActive = paymentPathHint || (tab === 'payments'
     ? (form.payment ? 'post' : 'payment')
@@ -163,7 +180,7 @@ function PaymentPanel({ data, form, setForm, busy, execute, invoiceLabel }: any)
     <Field label="Approved invoice"><Select value={form.invoice} change={(v) => setForm({ invoice: v })} rows={payable} label={invoiceLabel} /></Field>
     <Two><Field label="Amount"><Input type="number" value={form.amount} change={(v) => setForm({ ...form, amount: v })} /></Field><Field label="Payment date"><Input type="date" value={form.date} change={(v) => setForm({ ...form, date: v })} /></Field></Two>
     <Field label="Payment method"><Select value={form.method} change={(v) => setForm({ ...form, method: v })} rows={data.methods.filter((r: Row) => r.is_active)} /></Field>
-    <Field label="Bank account"><Select value={form.bank} change={(v) => setForm({ ...form, bank: v })} rows={data.banks.filter((r: Row) => r.is_active)} label={(row: Row) => `${sid(row.bank_name)} · ${sid(row.account_number)}`} optional /></Field>
+    {data.banks.some((r: Row) => r.is_active) && <Field label="Bank account"><Select value={form.bank} change={(v) => setForm({ ...form, bank: v })} rows={data.banks.filter((r: Row) => r.is_active)} label={(row: Row) => `${sid(row.bank_name)} · ${sid(row.account_number)}`} optional /></Field>}
     <Field label="Reference"><Input value={form.reference} change={(v) => setForm({ ...form, reference: v })} /></Field>
     <Action disabled={busy || !form.invoice || !form.method || !form.reference} click={() => execute(() => createBackendRecord('supplier-payments', { invoice: form.invoice, amount: number(form.amount), payment_date: form.date || new Date().toISOString().slice(0, 10), payment_method: form.method, bank_account: form.bank || null, reference: form.reference, note: '' }), 'Draft payment created')}>Create payment</Action>
     <Field label="Draft payment"><Select value={form.payment} change={(v) => setForm({ payment: v })} rows={data.payments.filter((r: Row) => sid(r.status) === 'draft')} label={(row: Row) => `${sid(row.reference)} · ${money(row.amount)}`} /></Field>
