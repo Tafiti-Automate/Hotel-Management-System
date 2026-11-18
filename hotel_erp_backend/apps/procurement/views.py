@@ -1173,6 +1173,104 @@ class RequisitionHistoryViewSet(ReadOnlyModelViewSet):
         return queryset.filter(requisition__in=visible_requisitions)
 
 
+def compare_requisition_vendor_quotes(requisition):
+    """Normalize all vendor bids to the *same approved base quantities*.
+
+    Prices quoted by carton, kilogram, etc. cannot be compared by raw pack
+    price, and missing, underquoted or expired bids cannot count toward the
+    required competitive-sourcing threshold.
+    """
+    from django.core.exceptions import ValidationError as ModelValidationError
+
+    today = timezone.localdate()
+    required_lines = [
+        line for line in requisition.items.select_related("item", "unit").all()
+        if (line.approved_quantity if line.approved_quantity is not None else line.quantity) > 0
+        and not line.rejection_stage
+    ]
+    expected_ids = {line.pk for line in required_lines}
+    threshold = Decimal(str(settings.PROCUREMENT_QUOTATION_THRESHOLD))
+    minimum_quotes = int(settings.PROCUREMENT_MIN_QUOTATIONS) if requisition.estimated_total >= threshold else 1
+    results = []
+    quotes = requisition.vendor_quotations.select_related("supplier").prefetch_related(
+        "items__requisition_item__item", "items__unit"
+    ).order_by("supplier__name", "pk")
+    for quote in quotes:
+        reasons = []
+        if not quote.supplier.is_active:
+            reasons.append("Supplier is inactive.")
+        if quote.valid_until and quote.valid_until < today:
+            reasons.append("Quotation has expired.")
+        quoted_items = {line.requisition_item_id: line for line in quote.items.all()}
+        missing = expected_ids - set(quoted_items)
+        if missing:
+            reasons.append(f"{len(missing)} approved Article(s) are not priced.")
+        raw_amount = Decimal("0.00")
+        for line in required_lines:
+            offered = quoted_items.get(line.pk)
+            if not offered:
+                continue
+            if offered.unit_price <= 0:
+                reasons.append(f"No positive quoted price for {line.item.name}.")
+                continue
+            try:
+                required_base = line.item.quantity_in_base_units(
+                    line.approved_quantity if line.approved_quantity is not None else line.quantity,
+                    line.unit,
+                )
+                quoted_base = offered.base_quantity
+                factor = line.item.conversion_factor_for_unit(offered.unit)
+                if factor <= 0:
+                    raise ModelValidationError("Invalid article unit conversion.")
+                if quoted_base < required_base:
+                    reasons.append(f"Quoted quantity is short for {line.item.name}.")
+                raw_amount += (required_base / factor) * offered.unit_price
+            except (ModelValidationError, ArithmeticError, ValueError):
+                reasons.append(f"Invalid purchase unit conversion for {line.item.name}.")
+        normalized_total = (
+            raw_amount + quote.tax_amount + quote.transport_cost - quote.discount_amount
+        ).quantize(Decimal("0.01"))
+        if normalized_total <= 0:
+            reasons.append("Comparable quotation total must be positive.")
+        results.append({
+            "id": str(quote.pk),
+            "supplier_id": str(quote.supplier_id),
+            "supplier_name": quote.supplier.name,
+            "valid_until": quote.valid_until.isoformat() if quote.valid_until else None,
+            "delivery_date": quote.delivery_date.isoformat() if quote.delivery_date else None,
+            "payment_terms": quote.payment_terms,
+            "quoted_total": str(quote.total_amount),
+            "comparable_total": str(normalized_total),
+            "line_count": len(quoted_items),
+            "missing_line_count": len(missing),
+            "selected": any(line.selected for line in quote.items.all()),
+            "qualified": not reasons,
+            "blockers": list(dict.fromkeys(reasons)),
+            "rank": None,
+        })
+
+    valid = sorted(
+        (row for row in results if row["qualified"]),
+        key=lambda row: (Decimal(row["comparable_total"]), row["supplier_name"], row["id"]),
+    )
+    for rank, row in enumerate(valid, start=1):
+        row["rank"] = rank
+    return {
+        "requisition_id": str(requisition.pk),
+        "requisition_number": requisition.requisition_number,
+        "base_currency": "UGX",
+        "required_line_count": len(required_lines),
+        "qualification_threshold": str(threshold),
+        "required_qualified_quotations": minimum_quotes,
+        "qualified_quotation_count": len(valid),
+        "competitive_sourcing_ready": len(valid) >= minimum_quotes and bool(required_lines),
+        "quotes": sorted(results, key=lambda row: (
+            not row["qualified"], row["rank"] or 999999, row["supplier_name"], row["id"]
+        )),
+        "note": "Comparable totals normalize each bid to approved Article quantities; ranking never awards automatically.",
+    }
+
+
 class VendorQuotationViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = VendorQuotation.objects.select_related("requisition", "supplier")
     serializer_class = VendorQuotationSerializer
@@ -1180,56 +1278,121 @@ class VendorQuotationViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("supplier__name",)
     ordering_fields = ("total_amount", "created_at")
 
+    def _visible_requisitions(self):
+        user = self.request.user
+        if not user or not user.is_authenticated or not user.is_active:
+            return PurchaseRequisition.objects.none()
+        if user.is_superuser or user_has_role(user, "System Administrator"):
+            return PurchaseRequisition.objects.all()
+        employee = getattr(user, "employee_profile", None)
+        if not employee or not employee.is_active or not employee.branch_id:
+            return PurchaseRequisition.objects.none()
+        if user_has_role(user, "Procurement Manager", "Procurement Officer"):
+            return PurchaseRequisition.objects.filter(branch_id=employee.branch_id)
+        if user_has_role(user, "Cost Controller", "Financial Manager", "General Manager"):
+            if employee.branch.hotel_id:
+                return PurchaseRequisition.objects.filter(
+                    branch__hotel_id=employee.branch.hotel_id
+                )
+            return PurchaseRequisition.objects.filter(branch_id=employee.branch_id)
+        return PurchaseRequisition.objects.none()
+
+    def get_queryset(self):
+        return super().get_queryset().filter(requisition__in=self._visible_requisitions())
+
+    def _require_buyer(self):
+        if not user_has_role(self.request.user, "Procurement Manager", "Procurement Officer"):
+            raise PermissionDenied("Only an authorized Procurement Manager may select RFQ winners.")
+        employee = getattr(self.request.user, "employee_profile", None)
+        if not employee or not employee.is_active or not employee.branch_id:
+            raise PermissionDenied("An active branch-assigned Procurement employee is required.")
+
+    def perform_create(self, serializer):
+        self._require_buyer()
+        requisition = serializer.validated_data["requisition"]
+        if not self._visible_requisitions().filter(pk=requisition.pk).exists():
+            raise PermissionDenied("You may only quote requisitions assigned to your branch.")
+        if VendorQuotationItem.objects.filter(quotation__requisition=requisition, selected=True).exists():
+            raise ValidationError("RFQ evaluation has already been awarded. The sourcing evidence is locked.")
+        super().perform_create(serializer)
+
+    def perform_update(self, serializer):
+        self._require_buyer()
+        if VendorQuotationItem.objects.filter(
+            quotation__requisition=serializer.instance.requisition, selected=True
+        ).exists():
+            raise ValidationError("The requisition's awarded quotations are immutable.")
+        if "requisition" in serializer.validated_data and (
+            serializer.validated_data["requisition"].pk != serializer.instance.requisition_id
+        ):
+            raise ValidationError("A quotation cannot be moved to another requisition.")
+        super().perform_update(serializer)
+
+    def perform_destroy(self, instance):
+        self._require_buyer()
+        if VendorQuotationItem.objects.filter(
+            quotation__requisition=instance.requisition, selected=True
+        ).exists() or instance.requisition.purchase_orders.exists():
+            raise ValidationError("An awarded or commercially committed quotation cannot be deleted.")
+        instance.delete()
+
+    @action(detail=False, methods=["get"], url_path="comparison")
+    def comparison(self, request):
+        requisition_id = request.query_params.get("requisition")
+        if not requisition_id:
+            raise ValidationError({"requisition": "Choose the approved requisition to compare."})
+        requisition = self._visible_requisitions().filter(pk=requisition_id).first()
+        if not requisition:
+            raise PermissionDenied("The requisition is not available to your property and role.")
+        return Response(compare_requisition_vendor_quotes(requisition))
+
     @action(detail=True, methods=["post"])
     def award(self, request, pk=None):
+        self._require_buyer()
         quotation = self.get_object()
         selection_reason = str(request.data.get("selection_reason", "")).strip()
         if not selection_reason:
-            raise ValidationError(
-                {"selection_reason": "Record a written evaluation justification before selecting a winner."}
-            )
-        if quotation.valid_until and quotation.valid_until < timezone.localdate():
-            raise ValidationError("This supplier quotation has expired and cannot be selected.")
-        threshold = Decimal(str(settings.PROCUREMENT_QUOTATION_THRESHOLD))
-        required_quotes = settings.PROCUREMENT_MIN_QUOTATIONS
-        quotation_count = quotation.requisition.vendor_quotations.count()
-        if (
-            quotation.requisition.estimated_total >= threshold
-            and quotation_count < required_quotes
-        ):
-            remaining_quotes = required_quotes - quotation_count
-            raise ValidationError(
-                {
-                    "detail": "Competitive sourcing is not complete.",
-                    "blockers": [
-                        f"This requisition is valued at or above UGX {threshold:,.0f} and requires "
-                        f"at least {required_quotes} supplier quotations. "
-                        f"Add {remaining_quotes} more quotation{'s' if remaining_quotes != 1 else ''}."
-                    ],
-                    "quotation_count": quotation_count,
-                    "required_quotation_count": required_quotes,
-                }
-            )
-        requisition_line_ids = set(quotation.requisition.items.values_list("id", flat=True))
-        quoted_line_ids = set(quotation.items.values_list("requisition_item_id", flat=True))
-        missing_count = len(requisition_line_ids - quoted_line_ids)
-        if missing_count:
-            raise ValidationError(
-                {
-                    "detail": "A winning quotation must price every requisition line.",
-                    "blockers": [f"Add prices for {missing_count} missing requisition line(s)."],
-                }
-            )
+            raise ValidationError({
+                "selection_reason": "Record a written evaluation justification before selecting a winner."
+            })
+        if quotation.requisition.status in (PRStatus.CANCELLED, PRStatus.REJECTED):
+            raise ValidationError("Cancelled or rejected requisitions cannot be awarded.")
+        if quotation.requisition.purchase_orders.exists():
+            raise ValidationError("An LPO already exists. Do not change the winning quotation after commercial commitment.")
+
         with transaction.atomic():
+            # Prevent two Purchasing users racing to assign different winners.
+            requisition = PurchaseRequisition.objects.select_for_update().get(pk=quotation.requisition_id)
+            comparison = compare_requisition_vendor_quotes(requisition)
+            if not comparison["competitive_sourcing_ready"]:
+                raise ValidationError({
+                    "detail": "Competitive sourcing is not complete.",
+                    "required_quotation_count": comparison["required_qualified_quotations"],
+                    "qualified_quotation_count": comparison["qualified_quotation_count"],
+                })
+            selected = next((row for row in comparison["quotes"] if row["id"] == str(quotation.pk)), None)
+            if not selected or not selected["qualified"]:
+                raise ValidationError({
+                    "detail": "This supplier quotation cannot be awarded.",
+                    "blockers": selected["blockers"] if selected else ["Quotation not found."],
+                })
             VendorQuotationItem.objects.filter(
-                quotation__requisition=quotation.requisition
+                quotation__requisition=requisition
             ).update(selected=False, selection_reason="")
-            quotation.items.update(
-                selected=True,
-                selection_reason=selection_reason,
+            quotation.items.update(selected=True, selection_reason=selection_reason)
+            requisition.record_history(
+                action="quotation_awarded",
+                previous_status=requisition.status,
+                actor=request.user,
+                comments=selection_reason,
+                metadata={
+                    "quotation_id": str(quotation.pk),
+                    "supplier_id": str(quotation.supplier_id),
+                    "comparable_total": selected["comparable_total"],
+                    "qualified_quote_count": comparison["qualified_quotation_count"],
+                },
             )
         return Response(self.get_serializer(quotation).data)
-
 
 class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = PurchaseOrder.objects.select_related(
@@ -2148,7 +2311,41 @@ class VendorQuotationItemViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("quotation__supplier__name", "item__name", "item__sku", "selection_reason")
     ordering_fields = ("quantity", "unit_price", "delivery_days", "created_at")
 
+    def get_queryset(self):
+        requisitions = VendorQuotationViewSet._visible_requisitions(self)
+        return super().get_queryset().filter(quotation__requisition__in=requisitions)
+
+    def _require_editable_quote(self, quote):
+        if not user_has_role(self.request.user, "Procurement Manager", "Procurement Officer"):
+            raise PermissionDenied("Only Procurement may change supplier bid lines.")
+        visible = VendorQuotationViewSet._visible_requisitions(self)
+        if not visible.filter(pk=quote.requisition_id).exists():
+            raise PermissionDenied("This quotation belongs to another branch.")
+        if VendorQuotationItem.objects.filter(
+            quotation__requisition=quote.requisition, selected=True
+        ).exists() or quote.requisition.purchase_orders.exists():
+            raise ValidationError("An awarded or commercially committed quotation cannot be edited.")
+
+    def perform_create(self, serializer):
+        self._require_editable_quote(serializer.validated_data["quotation"])
+        super().perform_create(serializer)
+
+    def perform_update(self, serializer):
+        instance = serializer.instance
+        self._require_editable_quote(instance.quotation)
+        if "quotation" in serializer.validated_data and (
+            serializer.validated_data["quotation"].pk != instance.quotation_id
+        ):
+            raise ValidationError("A bid line cannot be reassigned to another quotation.")
+        if "requisition_item" in serializer.validated_data and (
+            serializer.validated_data["requisition_item"].pk != instance.requisition_item_id
+        ):
+            raise ValidationError("A bid line cannot be reassigned to another Article.")
+        super().perform_update(serializer)
+        instance.quotation.update_total_amount()
+
     def perform_destroy(self, instance):
+        self._require_editable_quote(instance.quotation)
         if instance.selected:
             raise ValidationError("A selected winning quotation line cannot be removed.")
         quotation = instance.quotation

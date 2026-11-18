@@ -1100,6 +1100,92 @@ function RequestPanel({ data, form, setForm, requisitionLabel, items }: any) {
   </Panel>
 }
 
+type RfqQuote = {
+  id: string
+  supplier_name: string
+  comparable_total: string
+  valid_until: string | null
+  qualified: boolean
+  selected: boolean
+  rank: number | null
+  blockers: string[]
+}
+type RfqComparison = {
+  required_qualified_quotations: number
+  qualified_quotation_count: number
+  competitive_sourcing_ready: boolean
+  quotes: RfqQuote[]
+  note: string
+}
+
+function RfqComparisonPanel({ requisitionId, revision, busy, run, retainForm }: {
+  requisitionId: string
+  revision: string
+  busy: boolean
+  run: (operation: () => Promise<unknown>, success: string, nextForm?: Row) => Promise<unknown>
+  retainForm: Row
+}) {
+  const [report, setReport] = useState<RfqComparison | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [failure, setFailure] = useState('')
+  const [reason, setReason] = useState('')
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    setReport(null)
+    setFailure('')
+    void readBackendPayload('quotations/comparison/?requisition=' + encodeURIComponent(requisitionId))
+      .then((result) => { if (active) setReport(result as unknown as RfqComparison) })
+      .catch((error) => { if (active) setFailure(errorMessage(error)) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [requisitionId, revision])
+  return <section style={{ border: '1px solid var(--border)', borderRadius: 9, padding: 12, marginBottom: 16 }}>
+    <strong style={{ display: 'block', fontSize: 12, marginBottom: 5 }}>Competitive RFQ comparison</strong>
+    <p style={{ margin: '0 0 10px', color: 'var(--text-muted)', fontSize: 11 }}>
+      Compare complete, non-expired bids at the same approved quantity and UOM before awarding.
+    </p>
+    {loading && <Hint>Loading verified supplier quotations…</Hint>}
+    {failure && <Hint>RFQ comparison unavailable: {failure}</Hint>}
+    {report && <>
+      <div style={{ fontSize: 11.5, color: report.competitive_sourcing_ready ? 'var(--good)' : 'var(--warn)', marginBottom: 9 }}>
+        {report.qualified_quotation_count}/{report.required_qualified_quotations} qualified quotations · {report.competitive_sourcing_ready ? 'Sourcing threshold met' : 'More valid quotations required'}
+      </div>
+      <div style={{ display: 'grid', gap: 6 }}>
+        {report.quotes.map((quote) => <div key={quote.id} style={{ border: '1px solid var(--border)', borderRadius: 7, padding: 9, display: 'grid', gap: 5 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+            <strong style={{ fontSize: 11.5 }}>{quote.supplier_name}</strong>
+            <span style={{ fontSize: 11, fontWeight: 650 }}>{quote.qualified ? '#' + quote.rank + ' · UGX ' + quote.comparable_total : 'Not qualified'}</span>
+          </div>
+          <small style={{ color: 'var(--text-muted)' }}>
+            {quote.selected ? 'Awarded' : quote.qualified ? 'Qualified' : quote.blockers.join(' ')}
+            {quote.valid_until ? ' · Expires ' + quote.valid_until : ''}
+          </small>
+          {quote.qualified && !quote.selected && <ConfirmTransaction
+            title="Award this supplier quotation?"
+            description={'Record this quotation as the selected commercial offer for ' + quote.supplier_name + '. The requisition and supplier pricing evidence will be locked.'}
+            confirmLabel="Award quotation"
+            disabled={busy || !report.competitive_sourcing_ready || !reason.trim()}
+            onConfirm={() => run(
+              () => runBackendAction('quotations', quote.id, 'award', { selection_reason: reason.trim() }),
+              'Supplier quotation awarded and audit recorded',
+              retainForm,
+            )}
+          >Award supplier</ConfirmTransaction>}
+        </div>)}
+        {!report.quotes.length && <Hint>No requisition-specific RFQ bids have been recorded. Article-level catalogue prices remain available below.</Hint>}
+      </div>
+      {report.quotes.some((quote) => quote.qualified && !quote.selected) &&
+        <Field label="Written award justification (required)"><Input
+          value={reason}
+          onChange={setReason}
+          placeholder="Compare normalized price, lead time and supplier terms"
+        /></Field>}
+      <small style={{ display: 'block', marginTop: 8, color: 'var(--text-muted)' }}>{report.note}</small>
+    </>}
+  </section>
+}
+
 function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplierItems, items, itemUnits, onContinueToLpo }: any) {
   const requisitions = data.requisitions.filter((row: Row) => isProcurementHandoffSource(row.procurement_source) && ['approved','partially_ordered'].includes(id(row.status)))
   const selectedRequisition = requisitions.find((row: Row) => id(row.id) === id(form.requisition))
@@ -1158,6 +1244,13 @@ function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplier
       <span style={{ padding: '5px 8px', borderRadius: 999, background: allAllocated ? 'var(--good-soft)' : 'var(--warn-soft)', color: allAllocated ? 'var(--good)' : 'var(--warn)', fontSize: 10.5, fontWeight: 750 }}>{allocatedCount}/{activeReqLines.length} active items allocated</span>
     </div>
 
+    <RfqComparisonPanel
+      requisitionId={id(selectedRequisition.id)}
+      revision={data.quotationItems.filter((row: Row) => data.quotations.some((q: Row) => id(q.id) === id(row.quotation) && id(q.requisition) === id(selectedRequisition.id))).map((row: Row) => [id(row.id), id(row.selected), id(row.unit_price)].join(':')).join('|')}
+      busy={busy}
+      run={run}
+      retainForm={form}
+    />
     <SectionLabel>Items</SectionLabel>
     <div style={{ display: 'grid', gap: 6, marginBottom: 14 }}>
       {reqLines.map((line: Row) => {

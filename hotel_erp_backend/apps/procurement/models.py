@@ -605,13 +605,13 @@ class PurchaseRequisition(BaseModel):
         if quotation_item:
             conversion = requisition_item.conversion_factor_for_unit(quotation_item.unit)
             quantity = (remaining_base_quantity / conversion).quantize(
-                Decimal("0.01"),
+                Decimal("0.0001"),
                 rounding=ROUND_DOWN,
             )
             if quantity <= Decimal("0.00"):
                 raise ValidationError(
                     f"The remaining approved quantity for {requisition_item.item} "
-                    f"is smaller than 0.01 {quotation_item.unit}."
+                    f"is smaller than 0.0001 {quotation_item.unit}."
                 )
             return (
                 quantity,
@@ -634,13 +634,13 @@ class PurchaseRequisition(BaseModel):
         if supplier_price:
             conversion = requisition_item.conversion_factor_for_unit(supplier_price.unit)
             quantity = (remaining_base_quantity / conversion).quantize(
-                Decimal("0.01"),
+                Decimal("0.0001"),
                 rounding=ROUND_DOWN,
             )
             if quantity <= Decimal("0.00"):
                 raise ValidationError(
                     f"The remaining approved quantity for {requisition_item.item} "
-                    f"is smaller than 0.01 {supplier_price.unit}."
+                    f"is smaller than 0.0001 {supplier_price.unit}."
                 )
             return (
                 quantity,

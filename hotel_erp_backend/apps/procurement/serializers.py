@@ -955,7 +955,7 @@ class VendorQuotationItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = VendorQuotationItem
         fields = "__all__"
-        read_only_fields = ("id", "item", "line_total", "created_at", "updated_at", "created_by")
+        read_only_fields = ("id", "item", "selected", "selection_reason", "line_total", "created_at", "updated_at", "created_by")
 
     def validate(self, attrs):
         quotation = attrs.get("quotation") or getattr(self.instance, "quotation", None)

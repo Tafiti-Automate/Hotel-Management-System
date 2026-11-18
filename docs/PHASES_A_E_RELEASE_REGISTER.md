@@ -20,7 +20,7 @@ The reference requires seven invariants: segregation of duties, store assets ver
 
 | Requirement | Current implementation / evidence | Remaining gate |
 |---|---|---|
-| Supplier/RFQ quote workflow | Buyer proposes quotes; Cost Controller approves effective supplier prices; history and validity fields exist. | Full multi-vendor RFQ side-by-side award comparison and expiry tests |
+| Supplier/RFQ quote workflow | Buyer proposes catalogue quotes; Cost Controller approves published prices. Requisition-level normalized RFQ comparison, qualified-bid thresholds, supplier award history, locked winning bids and role/property controls implemented in code. | Validate frontend award and monetary threshold policy with real Procurement, Cost Control and Finance staging users |
 | Market Lists | Standard department/store requisitions and PRs exist. | **OPEN — separate daily fresh/perishable Market List workflow from agreed client reference** |
 | Commercial approvals | Procurement → Finance → GM LPO approval route, quantity limits, supplier allocation and controlled print issue exist. | Positive/negative monetary-threshold, budget-override and supplier-award witnessed tests |
 | Blind GRN / HACCP | Receiving role hides ordered prices/counts; tracked lot and expiry mandatory. New `requires_delivery_temperature` article flag makes observed delivery temperature mandatory on both API and UI for applicable articles. | Test actual chilled/frozen goods, full HACCP thresholds and quality rejection evidence |
@@ -89,3 +89,56 @@ Files: `inventory/0034_four_decimal_quantities.py`,
 `sales/0003_four_decimal_quantities.py`,
 `finance/0008_four_decimal_quantities.py`, and
 `materials_control/0007_four_decimal_quantities.py`.
+
+## Staging migration evidence — operator procedure
+
+This is an **operator-controlled staging activity**, not a permission to access the
+production Neon database. The precision audit is strictly read-only with respect
+to the database and intentionally excludes staff names, supplier contact details
+and operational document descriptions. It hashes row identifiers and numeric
+values only. The produced JSON is **not a database backup**.
+
+Before any schema change, an authorized operator must create a verified,
+restorable PostgreSQL/Neon backup or database branch. Use separate staging
+database credentials and record the commit SHA for the tested release.
+
+Run on the **restored staging database** from the hotel backend working directory:
+
+```bash
+python manage.py audit_inventory_precision --json --strict --write-baseline /secure/audit-before.json
+python manage.py migrate --plan
+python manage.py migrate
+python manage.py audit_inventory_precision --json --strict --baseline /secure/audit-before.json
+python manage.py audit_role_readiness --json --strict
+```
+
+The migration must not have other operational stock transactions between
+the BEFORE and AFTER snapshots. A mismatched numeric checksum, any reserved
+quantity exceeding on-hand, an overdrawn inventory batch, or an invalid ledger
+movement is a blocker. Keep the BEFORE JSON independently; the audit refuses
+to overwrite an existing file. Use environment-specific Django settings and
+review deployment migration locking and maintenance windows before running.
+
+A passing audit alone does not establish financial sign-off. Finance must still
+review the opening and closing value reconciliation and unknown historical-cost
+count. The test suite currently uses SQLite, so **PostgreSQL migration execution
+against restored staging data has not been witnessed in CI**.
+
+## Procurement RFQ comparison controls
+
+The Procurement workspace now provides a requisition-specific comparison
+of complete bids at the **same approved base quantities**, regardless of
+supplier quotation UOM. An expired quote, incomplete quotation, inactive
+supplier, invalid unit conversion or insufficient quoted quantity is not a
+qualified bidder. Thresholds count **qualified vendors**, not the presence of
+incomplete quotation records.
+
+Only active, branch-assigned Procurement Managers may award, with a written
+reason and audit event. Cost Control, Finance and Management can read eligible
+commercial evidence within their hotel; Receiving and Department users cannot.
+Awarded RFQ headers and lines cannot be rewritten after selection.
+
+The workflow is not an automated purchase award: authorized Procurement must
+select and justify the supplier. Article catalogue prices remain separately
+approved by Cost Control. The distinct perishable Market List workflow is
+**not implemented by this increment** and remains an open Phase B gate.

@@ -76,6 +76,7 @@ ROLE_SPECS = {
                 "stockcount", "stockcountitem", "stockledger",
                 "stockadjustment", "stockadjustmentitem",
             ],
+            "procurement": ["vendorquotation", "vendorquotationitem"],
         },
     },
     "Store Keeper": {
@@ -110,6 +111,7 @@ ROLE_SPECS = {
             "procurement": [
                 "purchaseorder", "purchaseorderitem", "procurementattachment",
                 "procurementcommunication", "purchaserequisition", "requisitionitem",
+                "vendorquotation", "vendorquotationitem",
             ],
         },
         "view": {
@@ -137,6 +139,7 @@ ROLE_SPECS = {
             "procurement": [
                 "purchaseorderitem", "purchaseorderactivity", "purchaserequisition", "requisitionitem",
                 "goodsreceiptnote", "goodsreceiptitem", "supplierreturn",
+                "vendorquotation", "vendorquotationitem",
             ],
             "vendors": ["supplier"],
             "finance": ["supplierinvoice", "supplierinvoiceitem", "supplierpayment", "suppliercreditnote", "expense"],
@@ -165,7 +168,7 @@ ROLE_SPECS = {
         "view": {
             "departments": ["branch", "department"],
             "inventory": ["item", "unitofmeasure"],
-            "procurement": ["purchaseorderitem", "purchaseorderactivity"],
+            "procurement": ["purchaseorderitem", "purchaseorderactivity", "vendorquotation", "vendorquotationitem"],
             "vendors": ["supplier"],
             "finance": ["supplierinvoice", "expense"],
             "materials_control": [
