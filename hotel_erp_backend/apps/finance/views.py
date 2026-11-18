@@ -279,6 +279,11 @@ class SupplierPaymentViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("reference", "invoice__invoice_number", "invoice__supplier__name")
     ordering_fields = ("payment_date", "amount", "status", "created_at")
 
+    def get_permissions(self):
+        if self.action in ("authorize", "release"):
+            return [IsAuthenticated()]
+        return super().get_permissions()
+
     def perform_create(self, serializer):
         require_accounts_payable_action(self.request.user)
         require_finance_property(
@@ -291,6 +296,8 @@ class SupplierPaymentViewSet(CreatedByModelMixin, ModelViewSet):
         require_finance_property(self.request.user, serializer.instance.invoice.purchase_order)
         invoice = serializer.validated_data.get("invoice", serializer.instance.invoice)
         require_finance_property(self.request.user, invoice.purchase_order)
+        if serializer.instance.status != SupplierPayment.STATUS_DRAFT:
+            raise ValidationError("Payment instructions are locked after submission.")
         super().perform_update(serializer)
 
     def get_queryset(self):
@@ -299,6 +306,8 @@ class SupplierPaymentViewSet(CreatedByModelMixin, ModelViewSet):
         )
 
     def perform_destroy(self, instance):
+        require_accounts_payable_action(self.request.user)
+        require_finance_property(self.request.user, instance.invoice.purchase_order)
         if instance.status != SupplierPayment.STATUS_DRAFT:
             raise ValidationError(
                 "A posted supplier payment cannot be deleted. Record a controlled reversal instead."
@@ -306,14 +315,53 @@ class SupplierPaymentViewSet(CreatedByModelMixin, ModelViewSet):
         instance.delete()
 
     @action(detail=True, methods=["post"])
-    def post(self, request, pk=None):
+    def submit(self, request, pk=None):
         require_accounts_payable_action(request.user)
         payment = self.get_object()
         try:
-            payment.post(posted_by=request.user)
+            payment.submit(actor=request.user)
         except DjangoValidationError as error:
             raise ValidationError(getattr(error, "messages", str(error)))
         return Response(self.get_serializer(payment).data)
+
+    @action(detail=True, methods=["post"])
+    def authorize(self, request, pk=None):
+        user = request.user
+        if (not user.is_active or user.is_superuser
+                or user.groups.filter(name="System Administrator").exists()
+                or not user.groups.filter(name="Financial Manager").exists()):
+            raise PermissionDenied("Only a Financial Manager may authorize supplier payments.")
+        payment = self.get_object()
+        require_finance_property(user, payment.invoice.purchase_order)
+        try:
+            payment.authorize(actor=user)
+        except DjangoValidationError as error:
+            raise ValidationError(getattr(error, "messages", str(error)))
+        return Response(self.get_serializer(payment).data)
+
+    @action(detail=True, methods=["post"])
+    def release(self, request, pk=None):
+        user = request.user
+        if (not user.is_active or user.is_superuser
+                or user.groups.filter(name="System Administrator").exists()
+                or not user.groups.filter(name__in=("General Manager", "Financial Manager")).exists()):
+            raise PermissionDenied("Only a separately authorized Finance or General Manager may release a payment.")
+        payment = self.get_object()
+        require_finance_property(user, payment.invoice.purchase_order)
+        try:
+            payment.release(actor=user)
+        except DjangoValidationError as error:
+            raise ValidationError(getattr(error, "messages", str(error)))
+        return Response(self.get_serializer(payment).data)
+
+    @action(detail=True, methods=["post"])
+    def post(self, request, pk=None):
+        # Historical API: posting a payment without external settlement evidence
+        # falsely marked supplier invoices paid. Reject new direct posts.
+        raise ValidationError(
+            "Direct payment posting is disabled. Submit, authorize and release "
+            "the payment instruction; bank settlement requires verified external evidence."
+        )
 
 
 class SupplierCreditNoteViewSet(CreatedByModelMixin, ModelViewSet):
