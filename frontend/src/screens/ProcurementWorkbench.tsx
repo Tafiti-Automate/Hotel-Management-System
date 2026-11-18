@@ -1539,10 +1539,18 @@ function friendlyLpoStatus(status: string, steps: Row[]) { if (status === 'pendi
 
 function LpoSummary({ order, lines, names, quantityValue, quantityMax, onQuantityChange, totalOverride }: { order: Row; lines: Row[]; names: Record<string, Map<string, string>>; quantityValue?: (row: Row) => number; quantityMax?: (row: Row) => number; onQuantityChange?: (row: Row, value: unknown) => void; totalOverride?: number }) {
   const approvalSteps = Array.isArray(order.approval_steps) ? order.approval_steps as Row[] : []
+  // The Purchase Order API provides human-readable labels. The global item
+  // catalogue can be unavailable for Procurement accounts; never show UUIDs.
+  const articleName = (line: Row) => id(line.item_name).trim()
+    || names.items.get(id(line.item))
+    || 'Article name unavailable'
+  const supplierName = id(order.supplier_name).trim()
+    || names.suppliers.get(id(order.supplier))
+    || 'Supplier name unavailable'
   return <section className="lpo-summary-card" style={{ margin: '10px 0 14px', overflow: 'hidden', border: '1px solid var(--border)', borderRadius: 8 }}>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8, padding: 11, background: 'var(--surface-2)' }}>
       <ReadOnlyValue label="LPO number" value={id(order.lpo_number) || id(order.po_number)} />
-      <ReadOnlyValue label="Supplier" value={names.suppliers.get(id(order.supplier)) || 'Inherited supplier'} />
+      <ReadOnlyValue label="Supplier" value={supplierName} />
       <ReadOnlyValue label="Status" value={friendlyLpoStatus(id(order.status), approvalSteps)} />
       <ReadOnlyValue label="LPO total" value={money(totalOverride ?? order.total_amount)} />
     </div>
@@ -1565,8 +1573,8 @@ function LpoSummary({ order, lines, names, quantityValue, quantityMax, onQuantit
       const shownQuantity = quantityValue ? quantityValue(row) : num(row.approved_quantity ?? row.quantity)
       const maximum = quantityMax ? quantityMax(row) : undefined
       return <div key={id(row.id)} style={{ padding: '9px 11px', display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) .6fr .7fr .8fr', gap: 8, alignItems: 'center', borderTop: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 10.8 }}>
-        <strong style={{ color: 'var(--text)' }}>{names.items.get(id(row.item)) || id(row.item)}</strong>
-        {onQuantityChange ? <input type="number" min="0.0001" max={maximum} step="0.0001" value={shownQuantity} onChange={(event) => onQuantityChange(row, event.target.value)} aria-label={`Quantity for ${names.items.get(id(row.item)) || id(row.item)}`} style={{ ...control, height: 34, minWidth: 0 }} /> : <span>{id(row.approved_quantity ?? row.quantity)}</span>}
+        <strong style={{ color: 'var(--text)' }}>{articleName(row)}{id(row.item_sku) && <small style={{ display: 'block', color: 'var(--text-muted)', fontWeight: 500 }}>{id(row.item_sku)}</small>}</strong>
+        {onQuantityChange ? <input type="number" min="0.0001" max={maximum} step="0.0001" value={shownQuantity} onChange={(event) => onQuantityChange(row, event.target.value)} aria-label={`Quantity for ${articleName(row)}`} style={{ ...control, height: 34, minWidth: 0 }} /> : <span>{id(row.approved_quantity ?? row.quantity)}</span>}
         <span>{money(row.unit_cost)}</span>
         <span>{money(shownQuantity * num(row.unit_cost))}</span>
       </div>
