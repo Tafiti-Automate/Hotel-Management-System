@@ -104,7 +104,7 @@ def test_daily_market_list_never_leaks_supplier_prices_and_reuses_pr_approval():
     assert missing.status_code == 400, missing.data
     pr.refresh_from_db()
     assert pr.status == PRStatus.DRAFT
-    assert hod.post(f"/api/v1/requisitions/{pr.pk}/submit/").status_code == 400
+    assert hod.post(f"/api/v1/requisitions/{pr.pk}/submit/").status_code == 403
     assert buyer.post(submit_url).status_code == 403
 
     supplier = Supplier.objects.create(

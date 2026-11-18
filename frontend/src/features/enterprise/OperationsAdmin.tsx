@@ -703,7 +703,7 @@ export function EnterpriseMenuEngineering() {
         {notice && <div className="mc-alert" role="status">{notice}</div>}
       </section>
       <EnterpriseTable<ApiRow> label="Menu engineering classifications"
-        rows={report.map((row) => ({ ...row, id: row.sku }))}
+        rows={report.map((row) => ({ ...row, id: str(row.sku) }))}
         columns={[
           {id:'article',label:'Menu article',value:row=>str(row.article)},
           {id:'classification',label:'Classification',value:row=>str(row.classification),render:row=><StatusPill status={str(row.classification)}/>},
