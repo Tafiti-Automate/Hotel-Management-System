@@ -16,6 +16,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.employees.models import Employee
 from apps.procurement.consolidation import consolidate_approved_requisitions
 from apps.procurement.models import GoodsReceiptNote, GoodsReceiptItem
 from apps.inventory.stores_fulfillment import post_grn_to_inventory
@@ -97,6 +98,18 @@ class PurchaseOrderViewSet(BasePurchaseOrderViewSet):
                     raise PermissionDenied("This LPO belongs to a different branch.")
             elif employee.branch_id != order_branch_id:
                 raise PermissionDenied("This LPO belongs to a different branch.")
+
+        # The URL router uses this operational ViewSet rather than the
+        # base view. Enforce maker-checker here before either approval route.
+        if step.stage == 1 and order.ordered_by_id == employee.pk:
+            if Employee.objects.filter(
+                is_active=True, user__is_active=True,
+                user__groups__name="Procurement Manager",
+                branch_id=employee.branch_id,
+            ).exclude(pk=employee.pk).exists():
+                raise PermissionDenied(
+                    "You prepared this LPO. Another assigned Procurement Manager must approve Level 1."
+                )
 
         if step.approver_id:
             if step.approver_id != employee.id:
