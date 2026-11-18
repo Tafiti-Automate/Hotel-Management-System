@@ -184,7 +184,9 @@ class SupplierPaymentSerializer(serializers.ModelSerializer):
         model = SupplierPayment
         fields = "__all__"
         read_only_fields = (
-            "id", "status", "posted_at", "posted_by", "created_at", "updated_at", "created_by"
+            "id", "status", "submitted_at", "approved_at", "released_at",
+            "approved_by", "released_by",
+            "posted_at", "posted_by", "created_at", "updated_at", "created_by"
         )
 
     def validate(self, attrs):
