@@ -613,6 +613,11 @@ def test_department_return_requires_signed_issue_assigned_keeper_and_no_overcred
         f"/api/v1/stock-issues/{dispatched.data['id']}/acknowledge/",
         {}, format="json",
     ).status_code == 200
+    # Simulate a later catalogue/stock WAC change. The returned 2 bottles
+    # must reverse the ORIGINAL issue cost, not the new 3,200 WAC.
+    InventoryBalance.objects.filter(
+        item=ctx["item"], store=ctx["store"],
+    ).update(weighted_average_cost=Decimal("3200.0000"))
 
     for client in (supervisor, ctx["head"][2], ctx["cost"][2]):
         denied = client.post(
@@ -653,6 +658,18 @@ def test_department_return_requires_signed_issue_assigned_keeper_and_no_overcred
         f"/api/v1/store-returns/{return_id}/apply/", {}, format="json",
     )
     assert applied.status_code == 200, applied.data
+    from apps.inventory.models import StockLedger
+    from core.constants.choices import LedgerReferenceType
+    credited = StockLedger.objects.get(
+        reference_id=return_id,
+        reference_type=LedgerReferenceType.STORE_RETURN,
+    )
+    assert credited.unit_cost_snapshot == Decimal("2500.0000")
+    assert credited.total_cost_snapshot == Decimal("5000.0000")
+    assert credited.wac_before == Decimal("3200.0000")
+    assert InventoryBalance.objects.get(
+        item=ctx["item"], store=ctx["store"]
+    ).weighted_average_cost == Decimal("3117.6471")
     assert InventoryBalance.objects.get(
         item=ctx["item"], store=ctx["store"]
     ).quantity_in_stock == before - Decimal("3.0000")
