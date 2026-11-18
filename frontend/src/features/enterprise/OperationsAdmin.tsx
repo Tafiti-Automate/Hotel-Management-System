@@ -6,6 +6,7 @@ import {
   createBackendRecord, errorMessage, runBackendAction, updateBackendRecord, fetchOperationalReport,
 } from '../../lib/api'
 import { useApp } from '../../state/AppContext'
+import { printReturnNote, exportReturnRegister } from './returnDocuments'
 import {
   amount, dateStr, dec, DocumentReference, FormField, StateMessage,
   StatusPill, str, useBackendRows, WorkspacePage, type ApiRow,
@@ -464,7 +465,17 @@ export function EnterpriseDepartmentReturn() {
   const [article,setArticle]=useState('')
   const [quantity,setQuantity]=useState('')
   const [conditionNote,setConditionNote]=useState('')
+  const app=useApp()
   const returns=data['store-returns']||[]
+  const [printId,setPrintId]=useState('')
+  const printed=returns.find(r=>str(r.id)===printId)
+  const printLines=(data['store-return-items']||[]).filter(r=>str(r.store_return)===printId)
+  const onPrint=()=>{
+    if(!printed)return
+    const deptName=(data.departments||[]).find(r=>str(r.id)===str(printed.department))?.name
+    const printedOk=printReturnNote('department',printed,printLines,data.items||[],data.stores||[],str(deptName||'Department unavailable'),app.user.name)
+    if(!printedOk)app.showWorkflowAlert('Unable to print Department Return Note','Select a return with recorded articles and allow pop-ups for this site.','warning')
+  }
   const lines=(data['store-return-items']||[]).filter(r=>str(r.store_return)===draftId)
   const draft=returns.find(r=>str(r.id)===draftId&&!r.inventory_changes_applied)
   const validQuantity=/^\d+(?:\.\d{1,4})?$/.test(quantity.trim())&&Number(quantity)>0
@@ -493,7 +504,15 @@ export function EnterpriseDepartmentReturn() {
         {id:'state',label:'Stock posted',value:r=>r.inventory_changes_applied?'Posted':'Draft',render:r=><StatusPill status={r.inventory_changes_applied?'posted':'draft'}/>},
       ]}/>
       <section className="mc-dense-panel mc-form-panel">
-        <header className="mc-panel-title">1. Register a physical department return</header>
+        <header className="mc-panel-title">Department return documents & register</header>
+        <label className="mc-field"><span>Return note</span><select value={printId} onChange={e=>setPrintId(e.target.value)}>
+          <option value="">Select recorded return</option>{returns.map(r=><option key={str(r.id)} value={str(r.id)}>{str(r.return_no)} · {r.inventory_changes_applied?'Posted':'Draft'}</option>)}
+        </select></label>
+        <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+          <button type="button" className={btn} disabled={!printed||!printLines.length} onClick={onPrint}><Icon name="print" size={16}/> Print Department Return Note</button>
+          <button type="button" className={btn} onClick={()=>exportReturnRegister('department',returns,data['store-return-items']||[])}><Icon name="download" size={16}/> Export Department Return Register</button>
+        </div>
+                <header className="mc-panel-title">1. Register a physical department return</header>
         <label className="mc-field"><span>Receiving store</span><select value={store} onChange={e=>setStore(e.target.value)}>
           <option value="">Select your assigned store</option>
           {(data.stores||[]).filter(r=>r.is_active).map(r=><option key={str(r.id)} value={str(r.id)}>{str(r.name)}</option>)}
@@ -533,6 +552,17 @@ export function EnterpriseSupplierReturn() {
     'grns','grn-items','purchase-orders','supplier-returns','supplier-return-items','stores','items',
   ])
   const {execute,busy,error:mutationError}=useWrite(reload)
+  const app=useApp()
+  const [printId,setPrintId]=useState('')
+  const printRecord=(data['supplier-returns']||[]).find(r=>str(r.id)===printId)
+  const printLines=(data['supplier-return-items']||[]).filter(r=>str(r.supplier_return)===printId)
+  const onPrint=()=>{
+    if(!printRecord)return
+    const supplierName=app.data.suppliers.find(r=>str(r.id)===str(printRecord.supplier))?.name
+    const grnNumber=(data.grns||[]).find(r=>str(r.id)===str(printRecord.goods_receipt))?.grn_number
+    const ok=printReturnNote('supplier',{...printRecord,grn_number:grnNumber},printLines,data.items||[],data.stores||[],str(supplierName||'Supplier unavailable'),app.user.name)
+    if(!ok)app.showWorkflowAlert('Unable to print Supplier Return Note','Select a return with recorded articles and allow pop-ups for this site.','warning')
+  }
   const [grn,setGrn]=useState('')
   const [store,setStore]=useState('')
   const [reason,setReason]=useState('')
@@ -582,7 +612,15 @@ export function EnterpriseSupplierReturn() {
         {id:'credit',label:'Credit note',value:r=>str(r.credit_note_number)},
       ]}/>
       <section className="mc-dense-panel mc-form-panel">
-        <header className="mc-panel-title">1. Create supplier return</header>
+        <header className="mc-panel-title">Supplier return documents & register</header>
+        <label className="mc-field"><span>Return note</span><select value={printId} onChange={e=>setPrintId(e.target.value)}>
+          <option value="">Select recorded return</option>{(data['supplier-returns']||[]).map(r=><option key={str(r.id)} value={str(r.id)}>{str(r.return_no)} · {str(r.status)}</option>)}
+        </select></label>
+        <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+          <button type="button" className={btn} disabled={!printRecord||!printLines.length} onClick={onPrint}><Icon name="print" size={16}/> Print Supplier Return Note</button>
+          <button type="button" className={btn} onClick={()=>exportReturnRegister('supplier',data['supplier-returns']||[],data['supplier-return-items']||[])}><Icon name="download" size={16}/> Export Supplier Return Register</button>
+        </div>
+                <header className="mc-panel-title">1. Create supplier return</header>
         <label className="mc-field"><span>Posted GRN</span><select value={grn} onChange={e=>{setGrn(e.target.value);setStore('')}}>
           <option value="">Select posted GRN</option>{postedGrns.map(r=><option key={str(r.id)} value={str(r.id)}>{str(r.grn_number)}</option>)}</select></label>
         <label className="mc-field"><span>Return source store</span><select value={store} onChange={e=>setStore(e.target.value)}>
