@@ -16,6 +16,7 @@ from apps.inventory.models import (
     StockLedger,
     StockCountItem,
     StockIssue,
+    StoreReturnItem,
     StoreKeeperAssignment,
     StoreRequisition,
     SupplierItemPrice,
@@ -30,6 +31,7 @@ from apps.procurement.models import (
     PurchaseRequisition,
     RequisitionHistory,
     SupplierReturn,
+    SupplierReturnItem,
 )
 from apps.approvals.models import ApprovalWorkflow
 from apps.audit_logs.models import AuditLog
@@ -109,6 +111,7 @@ def classify_menu_recipes(grouped):
 REPORT_ROLE_ACCESS = {
     "departmentRequests": {"Requester", "Department Head", "Store Keeper", "General Manager"},
     "storeIssues": {"Requester", "Department Head", "Store Keeper", "General Manager"},
+    "returnRegisters": {"Store Keeper", "Financial Manager", "General Manager"},
     "purchaseRequisitions": {"Procurement Manager", "Procurement Officer", "General Manager"},
     "purchaseOrders": {"Procurement Manager", "Procurement Officer", "Financial Manager", "Accounts Payable Clerk", "General Manager", "Receiving Clerk"},
     "goodsReceipts": {"Store Keeper", "Procurement Manager", "Procurement Officer", "Financial Manager", "Accounts Payable Clerk", "General Manager", "Receiving Clerk"},
@@ -315,6 +318,55 @@ def weighted_average_cost(item, store):
 
 def decimal_string(value):
     return str(value.quantize(Decimal("0.01")))
+
+
+class ReturnReconciliationRegisterReportView(ReportAPIView):
+    """Return-note lines reconciled against the actual physical stock ledger."""
+    report_key = "returnRegisters"
+
+    def get(self, request):
+        kind = str(request.query_params.get("type", "department")).lower()
+        if kind not in ("department", "supplier"):
+            raise ValidationError({"type": "Choose department or supplier."})
+        supplier = kind == "supplier"
+        source_field = "supplier_return" if supplier else "store_return"
+        queryset = (SupplierReturnItem if supplier else StoreReturnItem).objects.select_related(
+            source_field + "__store", "item", source_field
+        )
+        queryset = apply_store_scope(queryset, request, store_field=source_field + "__store")
+        ledgertype = LedgerReferenceType.RETURN_TO_VENDOR if supplier else LedgerReferenceType.STORE_RETURN
+        rows = []
+        for line in queryset.order_by("-created_at")[:1000]:
+            doc = getattr(line, source_field)
+            posted = bool(doc.inventory_changes_applied)
+            actual = StockLedger.objects.filter(
+                reference_type=ledgertype, reference_id=doc.pk, item_id=line.item_id,
+                store_id=doc.store_id,
+            ).aggregate(q=Sum("quantity_out" if supplier else "quantity_in"))["q"] or Decimal("0")
+            expected = line.base_quantity if posted else Decimal("0")
+            rows.append({
+                "date": doc.return_date,
+                "reference": doc.return_no,
+                "return_type": kind,
+                "article": line.item.name,
+                "sku": line.item.sku,
+                "quantity": str(line.base_quantity),
+                "ledger_quantity": str(actual),
+                "difference": str(expected - actual),
+                "reconciled": actual == expected,
+                "posted": posted,
+                "store": doc.store.name,
+                "store_id": str(doc.store_id),
+                "reason": line.reason if supplier else (line.condition_note or doc.reason),
+                "supplier_credit_note": doc.credit_note_number if supplier else "",
+                "status": doc.status if supplier else ("posted" if posted else "draft"),
+            })
+        return Response({
+            "count": len(rows), "results": rows,
+            "unreconciled_count": sum(not row["reconciled"] for row in rows),
+            "report": "Supplier Return Reconciliation" if supplier else "Department Return Reconciliation",
+            "is_truncated": len(rows) == 1000,
+        })
 
 
 class DepartmentRequestRegisterReportView(ReportAPIView):
