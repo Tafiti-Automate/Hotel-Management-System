@@ -21,7 +21,9 @@ const number = (value: unknown) => Number(value || 0)
 
 export default function FinanceWorkbench() {
   const app = useApp()
-  const [tab, setTab] = useState<FinanceTab>('invoices')
+  const [tab, setTab] = useState<FinanceTab>(
+    app.user.role.trim().toLowerCase() === 'general manager' ? 'payments' : 'invoices'
+  )
   const [data, setData] = useState(empty)
   const [form, setForm] = useState<Row>({})
   const [loading, setLoading] = useState(true)
@@ -29,10 +31,13 @@ export default function FinanceWorkbench() {
   const [error, setError] = useState('')
   const [paymentPathHint, setPaymentPathHint] = useState('')
   const isAccountsPayable = app.user.role.trim().toLowerCase() === 'accounts payable clerk'
+  const isGeneralManager = app.user.role.trim().toLowerCase() === 'general manager'
   // AP staff must not request Operating Expenses or bank administration data.
-  const accessiblePaths = useMemo(() => isAccountsPayable
-    ? Object.entries(financePaths).filter(([key]) => !['expenses', 'expenseCategories', 'banks', 'transactions'].includes(key))
-    : Object.entries(financePaths), [isAccountsPayable])
+  const accessiblePaths = useMemo(() => isGeneralManager
+    ? Object.entries(financePaths).filter(([key]) => ['invoices', 'payments'].includes(key))
+    : isAccountsPayable
+      ? Object.entries(financePaths).filter(([key]) => !['expenses', 'expenseCategories', 'banks', 'transactions'].includes(key))
+      : Object.entries(financePaths), [isAccountsPayable, isGeneralManager])
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -52,7 +57,7 @@ export default function FinanceWorkbench() {
   useEffect(() => { void load() }, [load])
   useEffect(() => { setForm({}); setError('') }, [tab])
   const scopedData = useMemo(() => {
-    if (!app.currentBranch) return data
+    if (isGeneralManager || !app.currentBranch) return data
     const stores = new Set(app.data.locations.map((row) => sid(row.id)))
     const next = { ...data }
     next.orders = data.orders.filter((row) => !row.store || stores.has(sid(row.store)))
@@ -65,7 +70,7 @@ export default function FinanceWorkbench() {
     next.expenses = data.expenses.filter((row) => !row.store || stores.has(sid(row.store)))
     next.transactions = data.transactions.filter((row) => !row.store || stores.has(sid(row.store)))
     return next
-  }, [app.currentBranch, app.data.locations, data])
+  }, [app.currentBranch, app.data.locations, data, isGeneralManager])
 
   const execute = async (operation: () => Promise<unknown>, message: string) => {
     setBusy(true); setError('')
@@ -79,8 +84,9 @@ export default function FinanceWorkbench() {
   const orderLabel = (row: Row) => `${sid(row.lpo_number || row.po_number)} · ${suppliers.get(sid(row.supplier)) || 'Supplier'} · ${money(row.total_amount)}`
   const invoiceLabel = (row: Row) => `${sid(row.invoice_number)} · ${suppliers.get(sid(row.supplier)) || 'Supplier'} · ${money(row.balance_due)} due`
   const tabs: Array<[FinanceTab, string, string]> = [
-    ['invoices', 'request_page', 'Invoices & matching'], ['payments', 'payments', 'Supplier payments'],
-    ...(!isAccountsPayable ? [
+    ...(!isGeneralManager ? [['invoices', 'request_page', 'Invoices & matching'] as [FinanceTab, string, string]] : []),
+    ['payments', 'payments', isGeneralManager ? 'Payment release queue' : 'Supplier payments'],
+    ...(!isAccountsPayable && !isGeneralManager ? [
       ['expenses', 'receipt', 'Expenses'] as [FinanceTab, string, string],
       ['banking', 'account_balance', 'Banking'] as [FinanceTab, string, string],
       ['methods', 'credit_card', 'Payment methods'] as [FinanceTab, string, string],
@@ -106,7 +112,7 @@ export default function FinanceWorkbench() {
       <div><div style={eyebrow}>Procure to pay</div><h1 style={{ margin: '3px 0', fontSize: 23 }}>Finance control centre</h1><div style={subtle}>Supplier invoices, matching, payment approval and settlement.</div></div>
       <button onClick={() => void load()} style={{ ...secondary, marginLeft: 'auto' }}><Icon name="refresh" size={17} />Refresh</button>
     </section>
-    <WorkflowPath
+    {!isGeneralManager && <WorkflowPath
       title="Supplier invoice to payment"
       summary="Invoices, matching, payments and expenses."
       activeKey={paymentPathActive}
@@ -119,7 +125,7 @@ export default function FinanceWorkbench() {
         { key: 'authorize', label: 'Authorize', actor: 'Financial Manager', description: 'Approve a submitted instruction independently.', icon: 'approval' },
         { key: 'release', label: 'Release to bank', actor: 'Independent approver', description: 'Record release for external execution. This is NOT payment settlement.', icon: 'outbox' },
       ]}
-    />
+    />}
     <section className="finance-kpi-grid" aria-label="Finance operational metrics">
       <FinanceMetric icon="difference" label="Awaiting Matching" value={String(matchingQueue.length)} hint="Invoices requiring three-way match" tone={matchingQueue.length ? 'warning' : 'good'} />
       <FinanceMetric icon="approval" label="Ready for Approval" value={String(approvalQueue.length)} hint="Matched invoices awaiting decision" tone={approvalQueue.length ? 'warning' : 'good'} />
