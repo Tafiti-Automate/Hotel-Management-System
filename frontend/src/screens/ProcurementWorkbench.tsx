@@ -1554,7 +1554,7 @@ function ReturnPanel({ data, form, setForm, busy, run, receiptLabel, names, stor
   const postedReceipts = data.receipts.filter((row: Row) => id(row.status) === 'posted')
   const availableArticles: Row[] = [...new Map<string, Row>(returnReceiptItems.map((line: Row) => [id(line.item), { id: line.item, name: names.items.get(id(line.item)) || id(line.item) }])).values()]
   const selectedItemInReceipt = availableArticles.some((item: Row) => id(item.id) === id(form.item))
-  const quantityValid = Number.isFinite(Number(form.quantity)) && num(form.quantity) > 0 && /^\\d+(?:\\.\\d{1,4})?$/.test(id(form.quantity).trim())
+  const quantityValid = Number.isFinite(Number(form.quantity)) && num(form.quantity) > 0 && /^\d+(?:\.\d{1,4})?$/.test(id(form.quantity).trim())
   const draftHasLines = data.returnItems.some((line: Row) => id(line.supplier_return) === id(form.return))
   return <Panel title="Supplier return" note="Record supplier returns.">
     <Field label="Original GRN"><Select value={form.receipt} onChange={(v) => setForm({ ...form, receipt: v, return: '', item: '', quantity: '' })} rows={postedReceipts} label={receiptLabel} /></Field>
