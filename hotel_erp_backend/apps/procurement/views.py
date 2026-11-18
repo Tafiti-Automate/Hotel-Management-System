@@ -941,6 +941,112 @@ class PurchaseRequisitionViewSet(CreatedByModelMixin, ModelViewSet):
                 source.save(update_fields=["status", "rejection_reason", "updated_at"])
         return Response(self.get_serializer(locked).data)
 
+    @action(detail=True, methods=["post"], url_path="review-and-allocate")
+    def review_and_allocate(self, request, pk=None):
+        """One atomic Procurement decision for all articles, without skipping approvals.
+
+        Every active line is supplied, even if unchanged. Quantities can only
+        reduce, supplier prices remain Cost Controller-controlled, and an
+        existing LPO prevents retrospective edits.
+        """
+        requisition = self.get_object()
+        if not user_has_role(request.user, "Procurement Manager", "Procurement Officer"):
+            raise PermissionDenied("Only Procurement can review and allocate purchase requisitions.")
+        decisions = request.data.get("lines")
+        if not isinstance(decisions, list) or not decisions:
+            raise ValidationError({"lines": "Review each requisition article before saving."})
+        try:
+            with transaction.atomic():
+                locked = PurchaseRequisition.objects.select_for_update().get(pk=requisition.pk)
+                if locked.status not in (PRStatus.APPROVED, PRStatus.PARTIALLY_ORDERED):
+                    raise ValidationError("Only approved requisitions can be allocated.")
+                lines = list(locked.items.select_for_update().order_by("pk"))
+                by_id = {}
+                for decision in decisions:
+                    if not isinstance(decision, dict):
+                        raise ValidationError({"lines": "Each article needs a quantity and supplier decision."})
+                    key = str(decision.get("line_id") or "")
+                    if not key or key in by_id:
+                        raise ValidationError({"lines": "Article decisions must have unique line IDs."})
+                    by_id[key] = decision
+                if set(by_id) != {str(line.pk) for line in lines}:
+                    raise ValidationError({"lines": "Review every article in this requisition."})
+                validated = []
+                for line in lines:
+                    choice = by_id[str(line.pk)]
+                    if line.purchase_order_items.exists():
+                        raise ValidationError("An LPO exists for an article; review the LPO instead.")
+                    try:
+                        qty = Decimal(str(choice.get("approved_quantity")))
+                        allocation_qty = Decimal(str(choice.get("quantity") or "0"))
+                    except (InvalidOperation, TypeError, ValueError) as error:
+                        raise ValidationError({"lines": "Enter valid article quantities."}) from error
+                    if not qty.is_finite() or not allocation_qty.is_finite():
+                        raise ValidationError({"lines": "Quantities must be finite."})
+                    current = line.approved_quantity if line.approved_quantity is not None else line.quantity
+                    if qty < 0 or qty > current:
+                        raise ValidationError({"lines": f"{line.item}: quantity cannot exceed {current}."})
+                    reason = str(choice.get("reason") or "").strip()
+                    if qty < current and not reason:
+                        raise ValidationError({"lines": f"{line.item}: explain any quantity reduction."})
+                    if qty > 0 and (allocation_qty <= 0 or allocation_qty > qty or not choice.get("supplier_price")):
+                        raise ValidationError({"lines": f"{line.item}: select a supplier and positive quantity within {qty}."})
+                    if qty == 0 and allocation_qty != 0:
+                        raise ValidationError({"lines": f"{line.item}: rejected articles cannot be purchased."})
+                    validated.append((line, qty, current, allocation_qty, reason, choice))
+                if not any(qty > 0 for _, qty, _, _, _, _ in validated):
+                    raise ValidationError("Use Reject entire requisition to reject every article.")
+                updated = []
+                now = timezone.now()
+                for line, qty, current, allocation_qty, reason, choice in validated:
+                    if qty != current:
+                        RequisitionItem.objects.filter(pk=line.pk).update(
+                            approved_quantity=qty,
+                            rejection_stage="Procurement Manager" if qty == 0 else "",
+                            rejection_reason=reason if qty == 0 else "",
+                            rejected_at=now if qty == 0 else None,
+                            rejected_by=request.user if qty == 0 else None,
+                            procurement_supplier=None,
+                            procurement_supplier_price=None,
+                            procurement_unit=None,
+                            procurement_quantity=None,
+                            procurement_unit_cost=None,
+                            procurement_note=reason if qty < current else "",
+                            procurement_allocated_at=None,
+                            procurement_allocated_by=None,
+                            updated_at=now,
+                        )
+                        locked.record_history(
+                            action="procurement_line_quantity_review", actor=request.user,
+                            comments=reason,
+                            metadata={
+                                "line_id": str(line.pk), "item": str(line.item),
+                                "previous_quantity": str(current), "approved_quantity": str(qty),
+                                "rejected": qty == 0,
+                            },
+                        )
+                    if qty > 0:
+                        payload = {
+                            "line_id": str(line.pk),
+                            "supplier_price": choice["supplier_price"],
+                            "quantity": str(allocation_qty),
+                            "note": str(choice.get("note") or ""),
+                        }
+                        updated.append(self._allocate_procurement_line(request, locked, payload))
+                locked.record_history(
+                    action="procurement_bulk_allocation", actor=request.user,
+                    comments="Procurement reviewed and allocated all articles together.",
+                    metadata={"allocated_lines": len(updated), "reviewed_lines": len(lines)},
+                )
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        return Response({
+            "requisition": str(requisition.pk),
+            "reviewed_lines": len(lines),
+            "allocated_lines": len(updated),
+            "ready_for_lpo": True,
+        })
+
     @action(detail=True, methods=["post"], url_path="allocate-line")
     def allocate_line(self, request, pk=None):
         requisition = self.get_object()
