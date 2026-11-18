@@ -2494,6 +2494,9 @@ def test_procurement_review_and_allocate_saves_full_requisition_atomically():
     """One action replaces per-line quantity/save and supplier/save clicks."""
     employee, department, supplier, first_item = create_procurement_context()
     buyer = employee.user
+    branch = Branch.objects.create(name="Quick allocation property")
+    employee.branch = branch
+    employee.save(update_fields=("branch", "updated_at"))
     buyer.groups.add(Group.objects.get_or_create(name="Procurement Manager")[0])
     client = APIClient()
     client.force_authenticate(buyer)
@@ -2511,7 +2514,7 @@ def test_procurement_review_and_allocate_saves_full_requisition_atomically():
         unit_price=Decimal("4000.00"), lead_time_days=2,
     )
     requisition = PurchaseRequisition.objects.create(
-        requester=employee, department=department,
+        requester=employee, department=department, branch=branch,
         reason="One-click processing of two approved articles",
         status=PRStatus.APPROVED,
     )
