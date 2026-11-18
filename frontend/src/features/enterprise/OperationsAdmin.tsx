@@ -453,22 +453,49 @@ export function EnterpriseBlindReceiving() {
 }
 
 export function EnterpriseSupplierReturn() {
-  const {data,loading,error,reload}=useBackendRows(['grns','supplier-returns','stores','suppliers'])
+  const {data,loading,error,reload}=useBackendRows([
+    'grns','grn-items','purchase-orders','supplier-returns','supplier-return-items','stores','items',
+  ])
   const {execute,busy,error:mutationError}=useWrite(reload)
   const [grn,setGrn]=useState('')
   const [store,setStore]=useState('')
   const [reason,setReason]=useState('')
-  const receipt=(data.grns||[]).find(r=>str(r.id)===grn)
+  const [draftId,setDraftId]=useState('')
+  const [article,setArticle]=useState('')
+  const [quantity,setQuantity]=useState('')
+  const [representative,setRepresentative]=useState('')
+  const [creditReference,setCreditReference]=useState('')
+  const [replacementDate,setReplacementDate]=useState('')
+  const postedGrns=(data.grns||[]).filter(r=>str(r.status)==='posted')
+  const receipt=postedGrns.find(r=>str(r.id)===grn)
+  const order=(data['purchase-orders']||[]).find(r=>str(r.id)===str(receipt?.purchase_order))
+  const drafts=(data['supplier-returns']||[]).filter(r=>str(r.status)==='draft')
+  const selectedDraft=drafts.find(r=>str(r.id)===draftId)
+  const returnLines=(data['supplier-return-items']||[]).filter(r=>str(r.supplier_return)===draftId)
+  const postedReturn=(data['supplier-returns']||[]).filter(r=>str(r.status)==='posted'&&!r.supplier_acknowledged_at)
+  const selectedReceiptLines=(data['grn-items']||[]).filter(r=>
+    str(r.goods_receipt)===str(selectedDraft?.goods_receipt) && r.inventory_changes_applied===true
+  )
+  const articleIds=new Set(selectedReceiptLines.map(r=>str(r.item)))
+  const eligibleArticles=(data.items||[]).filter(r=>articleIds.has(str(r.id)))
+  const validQty=/^\\d+(?:\\.\\d{1,4})?$/.test(quantity.trim())&&Number(quantity)>0
+  const [ackId,setAckId]=useState('')
   const submit=async()=>{
-    if(!grn||!store||!reason.trim()||!receipt)return
+    if(!receipt||!store||!reason.trim()||!order?.supplier)return
     const ok=await execute(()=>createBackendRecord('supplier-returns',{
-      supplier:receipt.supplier||receipt.purchase_order_supplier,
-      goods_receipt:grn,store,reason,
+      supplier:order.supplier,goods_receipt:grn,store,reason:reason.trim(),
     }),'Supplier return draft created')
     if(ok){setGrn('');setStore('');setReason('')}
   }
-  return <WorkspacePage section="Receiving / Supplier claims" title="Return to supplier"
-    subtitle="Record supplier return drafts against physical receiving documents. A debit note requires a subsequent authorised return dispatch.">
+  const addLine=async()=>{
+    if(!draftId||!articleIds.has(article)||!validQty)return
+    const ok=await execute(()=>createBackendRecord('supplier-return-items',{
+      supplier_return:draftId,item:article,quantity,reason:reason.trim()||'Supplier return',
+    }),'Return article added')
+    if(ok){setArticle('');setQuantity('')}
+  }
+  return <WorkspacePage section="Stores / Supplier returns" title="Return to supplier"
+    subtitle="The assigned Storekeeper returns stock from a posted GRN. Finance separately manages supplier credit approval.">
     <StateMessage loading={loading} error={error||mutationError}/>
     {!loading&&!error&&<div className="mc-split mc-admin-split">
       <EnterpriseTable<ApiRow> label="Supplier returns" rows={data['supplier-returns']||[]} columns={[
@@ -478,14 +505,32 @@ export function EnterpriseSupplierReturn() {
         {id:'status',label:'Status',value:r=>str(r.status),render:r=><StatusPill status={r.status}/>},
         {id:'credit',label:'Credit note',value:r=>str(r.credit_note_number)},
       ]}/>
-      <section className="mc-dense-panel mc-form-panel"><header className="mc-panel-title">New supplier return draft</header>
-        <label className="mc-field"><span>Linked GRN</span><select value={grn} onChange={e=>{setGrn(e.target.value);setStore('')}}>
-          <option value="">Select GRN</option>{(data.grns||[]).map(r=><option key={str(r.id)} value={str(r.id)}>{str(r.grn_number)} · {str(r.status)}</option>)}</select></label>
+      <section className="mc-dense-panel mc-form-panel">
+        <header className="mc-panel-title">1. Create supplier return</header>
+        <label className="mc-field"><span>Posted GRN</span><select value={grn} onChange={e=>{setGrn(e.target.value);setStore('')}}>
+          <option value="">Select posted GRN</option>{postedGrns.map(r=><option key={str(r.id)} value={str(r.id)}>{str(r.grn_number)}</option>)}</select></label>
         <label className="mc-field"><span>Return source store</span><select value={store} onChange={e=>setStore(e.target.value)}>
-          <option value="">Select store</option>{(data.stores||[]).map(r=><option key={str(r.id)} value={str(r.id)}>{str(r.name)}</option>)}</select></label>
-        <label className="mc-field"><span>Reason</span><textarea value={reason} onChange={e=>setReason(e.target.value)} rows={3}/></label>
-        <div className="mc-alert mc-muted">The existing Return service requires a GRN, supplier, return store and authorised return lines. This form creates the draft; debit-note generation depends on posting and supplier acknowledgement.</div>
-        <button className={primary} disabled={busy||!grn||!store||!reason.trim()} onClick={()=>void submit()}>Save return draft</button>
+          <option value="">Select assigned store</option>{(data.stores||[]).filter(r=>!receipt||str(r.id)===str(order?.store)).map(r=><option key={str(r.id)} value={str(r.id)}>{str(r.name)}</option>)}</select></label>
+        <label className="mc-field"><span>Reason for return</span><textarea value={reason} onChange={e=>setReason(e.target.value)} rows={2}/></label>
+        <button className={primary} disabled={busy||!receipt||!store||!reason.trim()||!order?.supplier} onClick={()=>void submit()}>Create draft</button>
+        <header className="mc-panel-title">2. Record return articles</header>
+        <label className="mc-field"><span>Draft return</span><select value={draftId} onChange={e=>{setDraftId(e.target.value);setArticle('');setQuantity('')}}>
+          <option value="">Select draft</option>{drafts.map(r=><option key={str(r.id)} value={str(r.id)}>{str(r.return_no)}</option>)}</select></label>
+        <label className="mc-field"><span>Article received on GRN</span><select value={article} onChange={e=>setArticle(e.target.value)}>
+          <option value="">Select article</option>{eligibleArticles.map(r=><option key={str(r.id)} value={str(r.id)}>{str(r.name)}</option>)}</select></label>
+        <label className="mc-field"><span>Return quantity (base units)</span><input type="number" min="0" step="0.0001" value={quantity} onChange={e=>setQuantity(e.target.value)}/></label>
+        <div className="mc-alert mc-muted">{returnLines.length} line(s) on this draft. The server verifies the remaining accepted GRN quantity and physical stock again when posting.</div>
+        <button className={primary} disabled={busy||!draftId||!articleIds.has(article)||!validQty} onClick={()=>void addLine()}>Add return line</button>
+        <ConfirmTransaction title="Dispatch goods back to supplier?" description="Posting reduces store stock once and records an immutable stock movement. Confirm the articles and quantities before dispatch." confirmLabel="Post supplier return" disabled={busy||!draftId||returnLines.length===0} busy={busy} onConfirm={()=>execute(()=>runBackendAction('supplier-returns',draftId,'apply'),'Supplier return posted to stock ledger')}>Post return to supplier</ConfirmTransaction>
+        <header className="mc-panel-title">3. Supplier acknowledgement</header>
+        <label className="mc-field"><span>Dispatched return</span><select value={ackId} onChange={e=>setAckId(e.target.value)}>
+          <option value="">Select posted return</option>{postedReturn.map(r=><option key={str(r.id)} value={str(r.id)}>{str(r.return_no)}</option>)}</select></label>
+        <label className="mc-field"><span>Supplier representative</span><input value={representative} onChange={e=>setRepresentative(e.target.value)}/></label>
+        <label className="mc-field"><span>Supplier credit note reference (optional)</span><input value={creditReference} onChange={e=>setCreditReference(e.target.value)}/></label>
+        <label className="mc-field"><span>Replacement expected (optional)</span><input type="date" value={replacementDate} onChange={e=>setReplacementDate(e.target.value)}/></label>
+        <button className={primary} disabled={busy||!ackId||!representative.trim()} onClick={()=>void execute(()=>runBackendAction('supplier-returns',ackId,'acknowledge',{
+          acknowledged_by:representative.trim(),credit_note_number:creditReference.trim(),replacement_expected_date:replacementDate||null,
+        }),'Supplier acknowledgement recorded')}>Record acknowledgement</button>
       </section>
     </div>}
   </WorkspacePage>
