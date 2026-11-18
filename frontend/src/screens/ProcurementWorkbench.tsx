@@ -3,6 +3,7 @@ import { Icon } from '../components/Icon'
 import ConfirmTransaction from '../components/ConfirmTransaction'
 import { HelpLabel } from '../components/HelpLabel'
 import LpoPreviewModal from '../components/LpoPreviewModal'
+import GrnReferenceDocument from '../components/GrnReferenceDocument'
 import { WorkflowPath } from '../components/WorkflowPath'
 import { createBackendRecord, downloadControlledPurchaseOrder, downloadProcurementAttachment, errorMessage, fetchHotels, readBackendPayload, readBackendRecords, runBackendAction, uploadProcurementAttachment, type HotelRecord } from '../lib/api'
 import type { Row } from '../lib/data'
@@ -885,7 +886,7 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
         </div>
       </div>
       <div className="grn-document-scroll">
-        <GoodsReceiptDocument
+        <GrnReferenceDocument
           receipt={selectedReceipt}
           lines={receiptLines}
           hotel={hotel}
@@ -950,134 +951,6 @@ function ReceivingClerkWorkspace({ data, names, busy, run, onRefresh }: {
       </>}
     </section>
   </div>
-}
-
-function GoodsReceiptDocument({ receipt, lines, hotel, propertyName, preparedBy, items, departments }: {
-  receipt: Row
-  lines: Row[]
-  hotel: HotelRecord | null
-  propertyName: string
-  preparedBy: string
-  items: Row[]
-  departments: Row[]
-}) {
-  const vatRate = 0.18
-  const vatPercent = vatRate * 100
-  const hasCommercialValues = lines.some((line) => line.unit_cost !== undefined && line.unit_cost !== null && id(line.unit_cost) !== '')
-  const netTotal = lines.reduce((total, line) => total + num(line.accepted_quantity ?? line.quantity_received) * num(line.unit_cost), 0)
-  const vatTotal = netTotal * vatRate
-  const grandTotal = netTotal + vatTotal
-  const posted = id(receipt.status) === 'posted' || (lines.length > 0 && lines.every((line) => Boolean(line.inventory_changes_applied)))
-  const documentStatus = posted ? 'Posted' : 'Received'
-  const propertyLabel = propertyName || id(hotel?.name) || id(hotel?.legal_name) || 'Hotel Property'
-  const receivingDestination = id(receipt.receiving_store_name) || (() => {
-    const directDepartments = lines
-      .map((line) => departments.find((row) => id(row.id) === id(line.direct_issue_department))?.name)
-      .filter(Boolean)
-    const destinations = Array.from(new Set(directDepartments))
-    return destinations.length ? destinations.join(', ') : 'Direct delivery'
-  })()
-  const formatQty = (value: unknown) => num(value).toLocaleString('en-UG', { minimumFractionDigits: 2, maximumFractionDigits: 4 })
-  const documentDate = (value: unknown) => {
-    const raw = id(value).trim()
-    if (!raw) return '—'
-    const parsed = new Date(`${raw.slice(0, 10)}T00:00:00`)
-    if (Number.isNaN(parsed.getTime())) return raw
-    return parsed.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
-  }
-  const documentTimestamp = (value: unknown) => {
-    const raw = id(value).trim()
-    if (!raw) return ''
-    const parsed = new Date(raw)
-    if (Number.isNaN(parsed.getTime())) return raw
-    return `${parsed.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}  ${parsed.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })}`
-  }
-  const amount = (value: number) => hasCommercialValues ? value.toLocaleString('en-UG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'
-
-  return <>
-    <style>{'@media print { @page { size: A4 landscape; margin: 7mm; } }'}</style>
-    <article className="grn-document" aria-label={`Goods Received Note ${id(receipt.grn_number)}`}>
-      <header className="grn-reference-header">
-        <div className="grn-reference-supplier">
-          <strong>{id(receipt.supplier_name) || 'Supplier'}</strong>
-          {receipt.supplier_address && <span>{id(receipt.supplier_address)}</span>}
-          {receipt.supplier_phone && <span>Tel: {id(receipt.supplier_phone)}</span>}
-          {receipt.supplier_email && <span>Email: {id(receipt.supplier_email)}</span>}
-          {receipt.supplier_tin && <span>TIN: {id(receipt.supplier_tin)}</span>}
-        </div>
-        <div className="grn-reference-title">
-          {hotel?.logo && <img src={hotel.logo} alt={`${hotel.name} logo`} />}
-          <span>{propertyLabel}</span>
-          <strong>Goods Received Note</strong>
-          <small>(PURCHASE ORDER RECEIVING)</small>
-        </div>
-        <section className="grn-reference-meta">
-          <div><b>GRN No.</b><span>{id(receipt.grn_number) || '—'}</span></div>
-          <div><b>P/O No.</b><span>{id(receipt.lpo_number) || '—'}</span></div>
-          <div><b>Delivery Date</b><span>{documentDate(receipt.received_date)}</span></div>
-          <div><b>Delivery Note No.</b><span>{id(receipt.delivery_note_no) || '—'}</span></div>
-          <div><b>Delivery Location</b><span>{receivingDestination}</span></div>
-        </section>
-      </header>
-
-      <table className="grn-material-table">
-        <thead><tr>
-          <th>Status</th>
-          <th>Article</th>
-          <th className="number">Ordered</th>
-          <th>Unit</th>
-          <th className="number">Delivered</th>
-          <th className="number">Unit Price</th>
-          <th className="number">Net</th>
-          <th className="number">VAT %</th>
-          <th className="number">Amount</th>
-        </tr></thead>
-        <tbody>
-          {lines.map((line) => {
-            const item = items.find((row) => id(row.id) === id(line.item))
-            const ordered = num(line.ordered_quantity ?? line.quantity_received)
-            const delivered = num(line.accepted_quantity ?? line.quantity_received)
-            const rate = num(line.unit_cost)
-            const net = delivered * rate
-            const gross = net * (1 + vatRate)
-            return <tr className="grn-material-line" key={id(line.id)}>
-              <td>{documentStatus}</td>
-              <td>
-                <strong>{id(line.item_name) || id(item?.name) || 'Article'}</strong>
-                {(id(line.item_sku) || id(item?.sku)) && <small>{id(line.item_sku) || id(item?.sku)}</small>}
-                {line.expiry_date && <small>Expiry: {documentDate(line.expiry_date)}</small>}
-              </td>
-              <td className="number">{formatQty(ordered)}</td>
-              <td>{id(line.unit_abbreviation) || id(line.unit_name) || id(item?.uom) || 'Each'}</td>
-              <td className="number">{formatQty(delivered)}</td>
-              <td className="number">{amount(rate)}</td>
-              <td className="number">{amount(net)}</td>
-              <td className="number">{vatPercent.toFixed(0)}%</td>
-              <td className="number">{amount(gross)}</td>
-            </tr>
-          })}
-          {!lines.length && <tr><td colSpan={9} className="grn-empty-row">No received items recorded on this GRN.</td></tr>}
-        </tbody>
-        <tfoot>
-          <tr><td colSpan={7}></td><th>Net Total</th><td className="number">{amount(netTotal)}</td></tr>
-          <tr><td colSpan={7}></td><th>VAT Total</th><td className="number">{amount(vatTotal)}</td></tr>
-          <tr className="grn-grand-total"><td colSpan={7}></td><th>Total Amount</th><td className="number">{amount(grandTotal)}</td></tr>
-        </tfoot>
-      </table>
-
-      <section className="grn-reference-signoff">
-        <div className="grn-signature-line"><b>Signature:</b><i></i></div>
-        <div className="grn-received-by"><b>Received By:</b><span>{preparedBy}</span></div>
-        <div className="grn-reference-remarks"><b>Remarks:</b><span>{id(receipt.note) || '—'}</span></div>
-        <div className="grn-status-note"><b>Status:</b> {documentStatus}. Partial delivery applies only while the LPO remains open.</div>
-      </section>
-
-      <footer className="grn-document-footer">
-        <span>Supplier Invoice: {id(receipt.supplier_invoice_no) || '—'}</span>
-        <span>{documentTimestamp(receipt.posted_at || receipt.created_at)}</span>
-      </footer>
-    </article>
-  </>
 }
 
 function RequestPanel({ data, form, setForm, requisitionLabel, items }: any) {

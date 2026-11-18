@@ -1,0 +1,297 @@
+/*
+ * Lake Victoria Serena Goods Received Note specimen.
+ * The visible A4 landscape paper is deliberately restrained: black serif,
+ * thin rules, left supplier block, right GRN metadata, open item table,
+ * large clear signing area, right-aligned totals and narrow audit footer.
+ * Load AFTER index.css and all shell/theme overrides.
+ */
+.grn-reference-print-region {
+  min-width: 0;
+  overflow-x: auto;
+  background: #e7e9e9;
+  border: 1px solid #d6d9d9;
+  border-radius: 8px;
+  padding: 18px;
+  margin-top: 16px;
+}
+.grn-reference-page {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 275mm;
+  min-height: 190mm;
+  margin: 0 auto;
+  padding: 0;
+  border: 0;
+  background: #fff;
+  color: #111;
+  font-family: "Times New Roman", Times, serif;
+  font-size: 10pt;
+  line-height: 1.12;
+  box-shadow: 0 3px 18px rgba(20, 29, 32, .16);
+}
+.grn-reference-page *,
+.grn-reference-page *::before,
+.grn-reference-page *::after {
+  box-sizing: border-box;
+  font-family: "Times New Roman", Times, serif;
+  color: #111;
+}
+.grn-reference-top {
+  position: relative;
+  height: 60mm;
+  min-height: 60mm;
+}
+.grn-reference-property-strip {
+  height: 5.5mm;
+  width: 100%;
+  border: .28mm solid #222;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10pt;
+  line-height: 1;
+}
+.grn-reference-document-heading {
+  position: absolute;
+  top: 6mm;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.13;
+  font-size: 9pt;
+  font-weight: bold;
+  text-align: center;
+}
+.grn-reference-document-heading strong { font-size: 10.5pt; }
+.grn-reference-document-heading span { font-size: 9pt; font-weight: bold; }
+.grn-reference-supplier-address {
+  position: absolute;
+  left: 1.5mm;
+  top: 16mm;
+  width: 59%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  font-size: 9pt;
+  line-height: 1.15;
+  white-space: pre-line;
+}
+.grn-reference-supplier-address strong {
+  font-size: 9.8pt;
+  line-height: 1.15;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.grn-reference-supplier-address span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.grn-reference-fields {
+  position: absolute;
+  right: 1mm;
+  bottom: 3.5mm;
+  width: 30%;
+  margin: 0;
+  border: .26mm solid #222;
+  display: grid;
+  grid-template-rows: repeat(5, minmax(4.3mm, auto));
+  font-size: 8.2pt;
+  line-height: 1.05;
+}
+.grn-reference-fields > div {
+  min-height: 4.3mm;
+  display: grid;
+  grid-template-columns: 46% 54%;
+  border-bottom: .2mm solid #222;
+}
+.grn-reference-fields > div:last-child { border-bottom: 0; }
+.grn-reference-fields dt,
+.grn-reference-fields dd {
+  min-width: 0;
+  margin: 0;
+  padding: .3mm 1mm;
+  overflow-wrap: anywhere;
+}
+.grn-reference-fields dt {
+  font-weight: bold;
+  border-right: .2mm solid #222;
+}
+.grn-reference-body {
+  flex: 1 0 100mm;
+  min-height: 100mm;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+.grn-reference-lines {
+  width: 100%;
+  border-collapse: collapse;
+  border-spacing: 0;
+  table-layout: fixed;
+  font-size: 8.8pt;
+}
+.grn-col-status { width: 6%; }
+.grn-col-article { width: 27%; }
+.grn-col-ordered { width: 8%; }
+.grn-col-unit { width: 8%; }
+.grn-col-delivered { width: 8%; }
+.grn-col-price { width: 11%; }
+.grn-col-net { width: 11%; }
+.grn-col-vat { width: 8%; }
+.grn-col-amount { width: 13%; }
+.grn-reference-lines thead {
+  border-top: .25mm solid #222;
+  border-bottom: .25mm solid #222;
+}
+.grn-reference-lines th {
+  padding: .45mm 1mm .5mm;
+  border: 0;
+  font-size: 8.6pt;
+  text-align: left;
+  font-weight: bold;
+  line-height: 1;
+}
+.grn-reference-lines td {
+  padding: .8mm 1mm .3mm;
+  border: 0;
+  vertical-align: top;
+  font-size: 8.6pt;
+  overflow-wrap: anywhere;
+}
+.grn-reference-lines tr { break-inside: avoid; page-break-inside: avoid; }
+.grn-reference-lines th.grn-num,
+.grn-reference-lines td.grn-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.grn-line-name { display: block; }
+.grn-reference-lines small {
+  display: block;
+  margin-top: .35mm;
+  font-size: 7.6pt;
+  font-style: italic;
+}
+.grn-reference-blank-area { flex: 1 1 auto; min-height: 12mm; border-bottom: .26mm solid #222; }
+.grn-reference-summary {
+  margin-left: auto;
+  padding: 1.2mm .3mm 0;
+  width: 23.5%;
+  font-size: 9pt;
+}
+.grn-reference-summary > div {
+  display: grid;
+  grid-template-columns: 55% 45%;
+  gap: 1mm;
+  min-height: 4.4mm;
+  align-items: center;
+  font-weight: bold;
+  white-space: nowrap;
+}
+.grn-reference-summary > div span {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.grn-reference-grand-total { border-top: .2mm solid #222; border-bottom: .5mm double #222; }
+.grn-reference-signature {
+  min-height: 20mm;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2mm;
+  padding: 2mm 0 1.5mm;
+  font-size: 9.8pt;
+}
+.grn-reference-sig-line {
+  width: 36%;
+  display: flex;
+  align-items: flex-end;
+  gap: 1.5mm;
+}
+.grn-reference-sig-line strong { font-style: italic; }
+.grn-reference-sig-line span { flex: 1 1 auto; border-bottom: .24mm dotted #222; height: 2.8mm; }
+.grn-reference-note { font-size: 8pt; font-style: italic; max-width: 96%; }
+.grn-reference-bottom {
+  min-height: 6mm;
+  border-top: .22mm solid #222;
+  border-bottom: .22mm solid #222;
+  display: grid;
+  grid-template-columns: 28% minmax(0, 1fr) 17%;
+  align-items: center;
+  gap: 2mm;
+  padding: .3mm .8mm;
+  font-size: 7.3pt;
+}
+.grn-reference-prepared { font-style: italic; overflow-wrap: anywhere; }
+.grn-reference-status-note { text-align: center; font-style: italic; font-weight: bold; }
+.grn-reference-timestamp { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+@media print {
+  @page { size: A4 landscape; margin: 8mm 11mm; }
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+  /* The standard application uses transforms and a nested scrolling shell.
+   * Reset each ancestor so the document starts at the page's real origin.
+   */
+  body:has(.grn-reference-page) :is(
+    #root,.application-root,.neo-app-shell,.neo-app-main,.neo-workspace,
+    .app-shell,.app-main,.app-content,.enterprise-workspace,.ds-workspace,
+    .ds-card,.ds-detail,.grn-document-screen,.grn-document-scroll,
+    .grn-reference-print-region
+  ) {
+    position: static !important;
+    display: block !important;
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    transform: none !important;
+    animation: none !important;
+  }
+  body:has(.grn-reference-page) :is(
+    .neo-sidebar,.neo-header,.neo-skip-link,.ds-hero,.ds-tabs,
+    .screen-document-view
+  ) { display: none !important; }
+  body:has(.grn-reference-page) .ds-card:has(> .grn-reference-print-region) > :not(.grn-reference-print-region) {
+    display: none !important;
+  }
+  body:has(.grn-reference-page) * { visibility: hidden !important; }
+  body:has(.grn-reference-page) .grn-reference-page,
+  body:has(.grn-reference-page) .grn-reference-page * {
+    visibility: visible !important;
+  }
+  body:has(.grn-reference-page) .grn-reference-page {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    width: 275mm !important;
+    max-width: 275mm !important;
+    min-width: 0 !important;
+    min-height: 193mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    color: #111 !important;
+    background: #fff !important;
+    transform: none !important;
+    animation: none !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .grn-reference-top { flex-shrink: 0; }
+  .grn-reference-bottom { flex-shrink: 0; }
+  .grn-reference-lines td, .grn-reference-lines th { border-right: 0 !important; }
+}

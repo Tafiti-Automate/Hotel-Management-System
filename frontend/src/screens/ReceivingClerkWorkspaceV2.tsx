@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Icon } from '../components/Icon'
 import ConfirmTransaction from '../components/ConfirmTransaction'
-import { errorMessage, readBackendPayload, readBackendRecords, runBackendAction } from '../lib/api'
+import GrnReferenceDocument from '../components/GrnReferenceDocument'
+import { errorMessage, fetchHotels, readBackendPayload, readBackendRecords, runBackendAction, type HotelRecord } from '../lib/api'
 import type { Row } from '../lib/data'
 import { useApp } from '../state/AppContext'
 
@@ -316,10 +317,21 @@ function GrnPreview({ receipt, lines, back }: { receipt: Row; lines: Row[]; back
   const app = useApp()
   const receiptLines = lines.filter((line) => id(line.goods_receipt) === id(receipt.id))
   const [comparison, setComparison] = useState<LockedComparison | null>(null)
+  const [hotel, setHotel] = useState<HotelRecord | null>(null)
   const [loading, setLoading] = useState(Boolean(receipt.blind_count_locked_at))
   const [error, setError] = useState('')
   const [note, setNote] = useState('')
   const [savingNote, setSavingNote] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    void fetchHotels()
+      .then((hotels) => {
+        if (active) setHotel(hotels.find((row) => row.is_active) || hotels[0] || null)
+      })
+      .catch(() => undefined)
+    return () => { active = false }
+  }, [])
 
   useEffect(() => {
     if (!receipt.blind_count_locked_at) { setLoading(false); return }
@@ -434,6 +446,24 @@ function GrnPreview({ receipt, lines, back }: { receipt: Row; lines: Row[]; back
         </table>
       </div>}
       {!comparison && receipt.note && <div className="ds-sticky-action"><span><strong>Receiving note:</strong> {id(receipt.note)}</span></div>}
+      <div className="screen-document-view" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginTop: 24 }}>
+        <div><strong>Print-ready GRN</strong><p style={{ fontSize: 12, margin: '4px 0', color: 'var(--text-muted)' }}>A4 landscape · original purchase-order receiving layout · supplier and delivery metadata</p></div>
+        <button type="button" className="ds-btn ds-btn-secondary" disabled={loading || Boolean(receipt.blind_count_locked_at && !comparison)} onClick={() => window.print()}>
+          <Icon name="print" size={16} /> Print GRN
+        </button>
+      </div>
+      <div className="grn-reference-print-region">
+        <GrnReferenceDocument
+          receipt={receipt}
+          lines={receiptLines}
+          comparison={comparison}
+          hotel={hotel}
+          propertyName={id(receipt.branch_name) || app.currentBranch || app.user.branchName}
+          preparedBy={id(receipt.received_by_name) || app.user.name}
+          items={app.data.items}
+          departments={app.data.departments}
+        />
+      </div>
     </section>
   )
 }
