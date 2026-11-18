@@ -612,7 +612,7 @@ export default function ProcurementWorkbench() {
             {stage === 'lpo' && <LpoPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, orderLabel, names, lpoQueue, setLpoQueue }} role={role} canManage={canManageLpo} userName={app.user.name} suppliers={app.data.suppliers} items={app.data.items} itemUnits={app.data.itemUnits} />}
             {canChangeStage && stage === 'receipt' && <ReceiptPanel {...{ data: scopedData, form, setForm, busy, run, orderLabel, receiptLabel, names }} employees={app.data.employees} stores={app.data.locations} items={app.data.items} />}
             {canChangeStage && stage === 'inspect' && <InspectionPanel {...{ data: scopedData, form, setForm, busy, run, receiptLabel, names }} employees={app.data.employees} />}
-            {canChangeStage && stage === 'return' && <ReturnPanel {...{ data: scopedData, form, setForm, busy, run, receiptLabel, names }} employees={app.data.employees} stores={app.data.locations} />}
+            {canChangeStage && stage === 'return' && <ReturnPanel {...{ data: scopedData, form, setForm, busy, run, receiptLabel, names }} stores={app.data.locations} />}
           </aside>}
         </div>
       )}
@@ -1545,21 +1545,21 @@ function InspectionPanel({ data, form, setForm, busy, run, receiptLabel, names }
   </Panel>
 }
 
-function ReturnPanel({ data, form, setForm, busy, run, receiptLabel, names, employees, stores }: any) {
+function ReturnPanel({ data, form, setForm, busy, run, receiptLabel, names, stores }: any) {
   const receipt = data.receipts.find((row: Row) => id(row.id) === id(form.receipt))
   const order = data.orders.find((row: Row) => id(row.id) === id(receipt?.purchase_order))
   const receiptItems = data.receiptItems.filter((row: Row) => id(row.goods_receipt) === id(form.receipt))
   const supplierReturn = data.returns.find((row: Row) => id(row.id) === id(form.return))
-  const returnReceiptItems = data.receiptItems.filter((row: Row) => id(row.goods_receipt) === id(supplierReturn?.goods_receipt))
+  const returnReceiptItems: Row[] = data.receiptItems.filter((row: Row) => id(row.goods_receipt) === id(supplierReturn?.goods_receipt))
   const postedReceipts = data.receipts.filter((row: Row) => id(row.status) === 'posted')
-  const availableArticles = [...new Map(returnReceiptItems.map((line: Row) => [id(line.item), { id: line.item, name: names.items.get(id(line.item)) || id(line.item) }])).values()]
+  const availableArticles: Row[] = [...new Map<string, Row>(returnReceiptItems.map((line: Row) => [id(line.item), { id: line.item, name: names.items.get(id(line.item)) || id(line.item) }])).values()]
   const selectedItemInReceipt = availableArticles.some((item: Row) => id(item.id) === id(form.item))
   const quantityValid = Number.isFinite(Number(form.quantity)) && num(form.quantity) > 0 && /^\\d+(?:\\.\\d{1,4})?$/.test(id(form.quantity).trim())
   const draftHasLines = data.returnItems.some((line: Row) => id(line.supplier_return) === id(form.return))
   return <Panel title="Supplier return" note="Record supplier returns.">
     <Field label="Original GRN"><Select value={form.receipt} onChange={(v) => setForm({ ...form, receipt: v, return: '', item: '', quantity: '' })} rows={postedReceipts} label={receiptLabel} /></Field>
     <Field label="Store"><Select value={form.store} onChange={(v) => setForm({ ...form, store: v })} rows={stores} /></Field>
-    <Hint>The signed-in Receiving Clerk is recorded as the return author. Only posted GRNs are eligible.</Hint>
+    <Hint>The signed-in Storekeeper is recorded as the return author. Only posted GRNs are eligible.</Hint>
     <Field label="Reason"><Input value={form.reason} onChange={(v) => setForm({ ...form, reason: v })} /></Field>
     <Action disabled={busy || id(receipt?.status) !== 'posted' || !form.store || !order?.supplier || !id(form.reason).trim()} onClick={() => run(() => createBackendRecord('supplier-returns', { supplier: order.supplier, goods_receipt: form.receipt, store: form.store, reason: form.reason, return_date: new Date().toISOString().slice(0, 10) }), 'Supplier return created')}>Create return</Action>
     {!receiptItems.length && form.receipt && <Hint>This GRN has no delivered lines.</Hint>}
