@@ -678,7 +678,14 @@ def test_store_request_requires_department_head_before_store_keeper_review():
     request.refresh_from_db()
     assert request.status == StoreRequisitionStatus.SUBMITTED
     assert request.department_approved_by == hod
-    assert stores.get("/api/v1/store-requisitions/").data["results"] == []
+    # Stores may inspect HOD-approved demand to prepare a shortage handoff,
+    # but cannot dispatch stock before Cost Control approves an internal issue.
+    visible = stores.get("/api/v1/store-requisitions/")
+    assert visible.status_code == 200
+    assert [row["id"] for row in visible.data["results"]] == [str(request.pk)]
+    assert stores.post(
+        f"/api/v1/store-requisitions/{request.pk}/prepare-transfer/", {}, format="json"
+    ).status_code == 400
 
     cost_client = APIClient()
     cost_client.force_authenticate(cost_user)
