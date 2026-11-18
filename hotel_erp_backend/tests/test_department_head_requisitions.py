@@ -209,15 +209,13 @@ def test_requisition_only_orders_the_unavailable_stock_and_keeps_approved_quanti
         {"items": [{"id": line_id, "approved_quantity": "28.0000"}]}, format="json",
     )
     assert decision.status_code == 200, decision.data
-    confirmed = keeper.patch(
-        f"/api/v1/store-requisition-items/{line_id}/",
-        {"quantity_approved": "28.0000", "storekeeper_comment": "Purchase only the shortfall"},
-        format="json",
-    )
-    assert confirmed.status_code == 200, confirmed.data
     purchase = keeper.post(
         f"/api/v1/store-requisitions/{request_id}/send-to-procurement/",
-        {"reason": "Approved store shortage"}, format="json",
+        {
+            "reason": "Approved store shortage",
+            "items": [{"id": line_id, "approved_quantity": "28.0000",
+                       "reason": "Purchase only the shortfall"}],
+        }, format="json",
     )
     assert purchase.status_code == 200, purchase.data
     req = StoreRequisition.objects.get(pk=request_id)
