@@ -127,7 +127,7 @@ function getLines(
 }
 
 export default function GrnReferenceDocument({
-  receipt, lines, hotel, propertyName, preparedBy, items = [], departments = [],
+  receipt, lines, hotel, propertyName, preparedBy, items = [],
   comparison,
 }: GrnReferenceDocumentProps) {
   const entries = getLines(lines, comparison, items)
@@ -139,12 +139,6 @@ export default function GrnReferenceDocument({
   const posted = receiptStatus === 'posted'
   const propertyLabel = str(hotel?.name) || str(propertyName) ||
     str(hotel?.legal_name) || 'Hotel Property'
-  const receivingDestination = str(receipt.receiving_store_name) || (() => {
-    const names = lines
-      .map(line => departments.find(item => str(item.id) === str(line.direct_issue_department))?.name)
-      .filter(Boolean)
-    return [...new Set(names)].join(', ') || 'Direct delivery'
-  })()
   const partial = entries.some(line => line.status === 'UD' || line.status === 'Rejected')
     || Boolean(comparison?.has_variance)
     || /partial delivery/i.test(str(receipt.note))
@@ -156,11 +150,8 @@ export default function GrnReferenceDocument({
     <article className="grn-reference-page" role="document"
       aria-label={'Goods Received Note ' + str(receipt.grn_number)}>
       <header className="grn-reference-top">
-        <div className="grn-reference-property-strip">
-          <strong>{propertyLabel}</strong>
-        </div>
         <div className="grn-reference-document-heading">
-          <strong>Goods Received Note</strong>
+          <strong>{propertyLabel}</strong>
           <span>(PURCHASE ORDER RECEIVING)</span>
         </div>
         <div className="grn-reference-supplier-address">
@@ -175,7 +166,6 @@ export default function GrnReferenceDocument({
           <div><dt>LPO No.</dt><dd>{str(receipt.lpo_number) || '—'}</dd></div>
           <div><dt>Delivery Date</dt><dd>{dateOnly(receipt.received_date)}</dd></div>
           <div><dt>Delivery Note No.</dt><dd>{str(receipt.delivery_note_no) || '—'}</dd></div>
-          <div><dt>Delivery Location</dt><dd>{receivingDestination}</dd></div>
         </dl>
       </header>
 
@@ -195,7 +185,7 @@ export default function GrnReferenceDocument({
           <thead><tr>
             <th>Status</th><th>Article</th><th className="grn-num">Ordered</th>
             <th>Unit</th><th className="grn-num">Delivered</th>
-            <th className="grn-num">Unit Price</th><th className="grn-num">Nett</th>
+            <th className="grn-num">Unit Price</th><th className="grn-num">Net</th>
             <th className="grn-num">VAT %</th><th className="grn-num">Amount</th>
           </tr></thead>
           <tbody>
@@ -218,9 +208,9 @@ export default function GrnReferenceDocument({
         </table>
         <div className="grn-reference-blank-area" aria-hidden="true" />
         <div className="grn-reference-summary">
-          <div><strong>Nett Total</strong><span>{money(netTotal)}</span></div>
+          <div><strong>Net Total</strong><span>{money(netTotal)}</span></div>
           <div><strong>VAT Total</strong><span>{money(vatTotal)}</span></div>
-          <div className="grn-reference-grand-total"><strong>Total Amount</strong><span>{money(grandTotal)}</span></div>
+          <div className="grn-reference-grand-total"><strong>Total</strong><span>{money(grandTotal)}</span></div>
         </div>
       </section>
 
