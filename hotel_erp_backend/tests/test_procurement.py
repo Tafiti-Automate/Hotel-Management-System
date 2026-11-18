@@ -2581,3 +2581,72 @@ def test_procurement_review_and_allocate_saves_full_requisition_atomically():
     assert increased.status_code == 400, increased.data
     first.refresh_from_db()
     assert first.approved_quantity == Decimal("8.0000")
+
+
+@pytest.mark.django_db
+def test_procurement_level_one_requires_another_manager_when_available():
+    """Prevent self-approval when the branch has another active Procurement Manager."""
+    employee, department, supplier, item = create_procurement_context()
+    branch = Branch.objects.create(name="Independent LPO Review")
+    employee.branch = branch
+    employee.is_active = True
+    employee.save(update_fields=("branch", "is_active", "updated_at"))
+    role, _ = Group.objects.get_or_create(name="Procurement Manager")
+    employee.user.groups.add(role)
+    reviewer = get_user_model().objects.create_user(
+        username="independent-purchasing-reviewer",
+        employee_code="EMP-INDEPENDENT-PM", password="test-pass-123",
+    )
+    reviewer.groups.add(role)
+    Employee.objects.create(
+        user=reviewer, department=department, branch=branch,
+        designation="Procurement Manager", is_active=True,
+    )
+    for role_name, suffix in (("Financial Manager", "FIN"), ("General Manager", "GM")):
+        user = get_user_model().objects.create_user(
+            username=f"independent-{suffix.lower()}",
+            employee_code=f"EMP-INDEPENDENT-{suffix}",
+            password="test-pass-123",
+        )
+        user.groups.add(Group.objects.get_or_create(name=role_name)[0])
+        Employee.objects.create(
+            user=user, department=department, branch=branch,
+            designation=role_name, is_active=True,
+        )
+    store = StoreLocation.objects.create(branch=branch, name="Independent LPO Store")
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee, department=department, branch=branch,
+        reason="Independent purchase approval", status=PRStatus.APPROVED,
+    )
+    line = RequisitionItem.objects.create(
+        requisition=requisition, item=item, quantity=Decimal("2.0000"),
+        approved_quantity=Decimal("2.0000"), destination_store=store,
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition, supplier=supplier,
+        ordered_by=employee, store=store,
+    )
+    PurchaseOrderItem.objects.create(
+        purchase_order=order, requisition_item=line, item=item,
+        quantity=Decimal("2.0000"), unit_cost=Decimal("1000.00"),
+        destination_store=store,
+    )
+    order.submit_for_approval()
+    assert order.approval_workflow.order_by("stage").first().stage_name == "Procurement Manager Approval"
+
+    creator = APIClient()
+    creator.force_authenticate(employee.user)
+    peer = APIClient()
+    peer.force_authenticate(reviewer)
+    blocked = creator.post(
+        f"/api/v1/purchase-orders/{order.pk}/approve/",
+        {"comments": "Attempted self approval"}, format="json",
+    )
+    assert blocked.status_code == 403, blocked.data
+    approved = peer.post(
+        f"/api/v1/purchase-orders/{order.pk}/approve/",
+        {"comments": "Independent review completed"}, format="json",
+    )
+    assert approved.status_code == 200, approved.data
+    order.refresh_from_db()
+    assert order.status == POStatus.PENDING_APPROVAL
