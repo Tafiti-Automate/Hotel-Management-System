@@ -219,6 +219,7 @@ function Receive({ order, lines, app, busy, act, back, receiptRecorded }: { orde
     const trace = tracking[id(line.id)] || { batch_number: '', expiry_date: '', delivery_temperature: '' }
     return (Boolean(article?.batchTracking) && !trace.batch_number.trim())
       || (Boolean(article?.expiryTracking) && !trace.expiry_date)
+      || (Boolean(article?.requiresDeliveryTemperature) && trace.delivery_temperature.trim() === '')
       || Boolean(trace.expiry_date && trace.expiry_date < new Date().toISOString().slice(0, 10))
   })
   const invalid = invalidLines.length > 0 || invalidTracking.length > 0 || invalidRejected.length > 0
@@ -250,14 +251,14 @@ function Receive({ order, lines, app, busy, act, back, receiptRecorded }: { orde
               <td><input type="text" placeholder="If rejected" aria-label={'Rejection reason for ' + id(item?.name || line.item_name)} value={rejectionReasons[id(line.id)] || ''} onChange={(event) => setRejectionReasons({ ...rejectionReasons, [id(line.id)]: event.target.value })} /></td>
               <td><input aria-label={`Batch number for ${id(item?.name || line.item_name)}`} required={Boolean(item?.batchTracking) && n(values[id(line.id)]) > 0} placeholder={item?.batchTracking ? 'Required' : 'Optional'} value={trace.batch_number} onChange={(event) => setTrace('batch_number', event.target.value)} /></td>
               <td><input aria-label={`Expiry date for ${id(item?.name || line.item_name)}`} required={Boolean(item?.expiryTracking) && n(values[id(line.id)]) > 0} type="date" min={new Date().toISOString().slice(0, 10)} value={trace.expiry_date} onChange={(event) => setTrace('expiry_date', event.target.value)} /></td>
-              <td><input aria-label={`Delivery temperature for ${id(item?.name || line.item_name)}`} type="number" step="0.1" placeholder="Optional" value={trace.delivery_temperature} onChange={(event) => setTrace('delivery_temperature', event.target.value)} /></td>
+              <td><input aria-label={`Delivery temperature for ${id(item?.name || line.item_name)}`} type="number" step="0.1" required={Boolean(item?.requiresDeliveryTemperature) && n(values[id(line.id)]) > 0} placeholder={item?.requiresDeliveryTemperature ? 'Required' : 'Optional'} value={trace.delivery_temperature} onChange={(event) => setTrace('delivery_temperature', event.target.value)} /></td>
             </tr>
           })}</tbody>
         </table>
       </div>
       {invalidLines.length > 0 && <div className="ds-alert" role="alert">Enter a valid, non-negative physical count in every Article row.</div>}
       {invalidRejected.length > 0 && <div className="ds-alert" role="alert">Rejected quantity must not exceed the counted quantity; every rejection needs a reason.</div>}
-      {invalidTracking.length > 0 && <div className="ds-alert" role="alert">Complete required batch numbers and valid future expiry dates for tracked articles.</div>}
+      {invalidTracking.length > 0 && <div className="ds-alert" role="alert">Complete required batch numbers, expiry dates and HACCP temperatures for tracked articles.</div>}
       <label className="ds-field">Delivery variance / short delivery reason<textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Required when your blind count is short against the LPO" /></label>
       <div className="ds-sticky-action"><span>Receiving records the physical delivery. Store Keeper will verify the GRN before SOH increases.</span><ConfirmTransaction title="Confirm supplier delivery" description="Create a goods receipt note for the entered quantities. This records the physical delivery but does not post stock until Stores verifies the GRN." confirmLabel="Record delivery" className="ds-btn ds-btn-primary" disabled={busy || !invoice.trim() || !positive.length || invalid || false} busy={busy} onConfirm={async () => {
         const receipt = await act(() => runBackendAction('purchase-orders', id(order.id), 'receive-delivery', { supplier_invoice_no: invoice, delivery_note_no: delivery, short_delivery_reason: reason.trim(), lines: positive.map((line) => ({ purchase_order_item: id(line.id), quantity_received: n(values[id(line.id)]), quantity_rejected: n(rejected[id(line.id)]), rejection_reason: rejectionReasons[id(line.id)] || '', batch_number: tracking[id(line.id)]?.batch_number || '', expiry_date: tracking[id(line.id)]?.expiry_date || null, delivery_temperature: tracking[id(line.id)]?.delivery_temperature ? Number(tracking[id(line.id)].delivery_temperature) : null })) }), 'GRN recorded · awaiting Store Keeper verification')

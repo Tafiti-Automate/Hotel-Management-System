@@ -3,7 +3,9 @@ from decimal import Decimal
 
 import pytest
 
-from apps.departments.models import Branch
+from apps.departments.models import Branch, Department
+from apps.employees.models import Employee
+from django.contrib.auth import get_user_model
 from apps.inventory.models import (
     Category, InventoryBalance, Item, StockAdjustment, StockAdjustmentItem,
     StockCount, StockCountItem, StockLedger, StockTransfer,
@@ -33,7 +35,16 @@ def test_transfer_preserves_source_cost_across_transit_and_revalues_destination(
     )
     transfer = StockTransfer.objects.create(from_store=source, to_store=target)
     StockTransferItem.objects.create(stock_transfer=transfer, item=item, quantity=Decimal("4"))
-    transfer.dispatch(require_approval=False)
+    approver = Employee.objects.create(
+        user=get_user_model().objects.create_user(
+            username="valuation-transfer-approver", employee_code="VAL-TRF",
+            password="transfer-test-only",
+        ),
+        department=Department.objects.create(name="Transfer valuation approvals"),
+        branch=branch, designation="Store Keeper",
+    )
+    transfer.approve(approved_by=approver)
+    transfer.dispatch(dispatched_by=approver)
     out = StockLedger.objects.get(reference_id=transfer.pk, store=source)
     assert out.unit_cost_snapshot == Decimal("5000.0000")
     assert out.total_cost_snapshot == Decimal("20000.0000")

@@ -154,6 +154,10 @@ class Item(BaseModel):
     )
     batch_tracking = models.BooleanField(default=False)
     expiry_tracking = models.BooleanField(default=False)
+    requires_delivery_temperature = models.BooleanField(
+        default=False,
+        help_text="Receiving must record the observed HACCP delivery temperature for this Article.",
+    )
     business_type = models.CharField(
         max_length=30,
         choices=ItemBusinessType.choices,
@@ -874,18 +878,29 @@ class StockTransfer(BaseModel):
 
     def clean(self):
         super().clean()
-        if self.from_store_id and self.to_store_id and self.from_store_id == self.to_store_id:
-            raise ValidationError("Source and destination stores must be different.")
+        if self.from_store_id and self.to_store_id:
+            if self.from_store_id == self.to_store_id:
+                raise ValidationError("Source and destination stores must be different.")
+            # Inter-property movement needs a separate authorization and GL
+            # design. Never silently move inventory across property boundaries.
+            if self.from_store.branch_id != self.to_store.branch_id:
+                raise ValidationError(
+                    "Cross-property transfers require a separately approved workflow and are not enabled."
+                )
 
     def apply_inventory_changes(self):
-        """Compatibility operation that dispatches and receives immediately."""
-        if self.status == StockTransferStatus.PENDING:
-            self.dispatch(require_approval=False)
+        """Compatibility helper that can only complete an approved, dispatched transfer.
+
+        It must never create its own approval or dispatch stock implicitly.
+        """
+        if self.status != StockTransferStatus.IN_TRANSIT or not self.approved_by_id:
+            raise ValidationError("Approve and dispatch the transfer before booking its receipt.")
         self.receive()
 
     def approve(self, approved_by=None):
-        if self.status != StockTransferStatus.PENDING:
-            raise ValidationError("Only a pending transfer can be approved.")
+        if self.status != StockTransferStatus.PENDING or self.approved_by_id:
+            raise ValidationError("Only a pending, unapproved transfer can be approved.")
+        self.clean()
         if not self.items.exists():
             raise ValidationError("Add at least one item before approving the transfer.")
         self.approved_by = approved_by or self.approved_by
@@ -895,19 +910,23 @@ class StockTransfer(BaseModel):
         self.save(update_fields=["approved_by", "approved_at", "updated_at"])
 
     def dispatch(self, dispatched_by=None, require_approval=True):
+        # The legacy require_approval=False flag is retained for call-site
+        # compatibility, but never bypasses the approval requirement.
         if self.inventory_changes_applied:
             raise ValidationError("Inventory changes have already been applied.")
         if self.status != StockTransferStatus.PENDING:
             raise ValidationError("Only a pending transfer can be dispatched.")
-        if require_approval and not self.approved_by_id:
+        if not self.approved_by_id:
             raise ValidationError("The transfer must be approved before dispatch.")
+        self.clean()
 
         with transaction.atomic():
             transfer = StockTransfer.objects.select_for_update().get(pk=self.pk)
             if transfer.status != StockTransferStatus.PENDING or transfer.inventory_changes_applied:
                 raise ValidationError("Only a pending, unposted transfer may be dispatched.")
-            if require_approval and not transfer.approved_by_id:
+            if not transfer.approved_by_id:
                 raise ValidationError("The transfer must be approved before dispatch.")
+            transfer.clean()
             items = list(transfer.items.select_related("item").all())
             if not items:
                 raise ValidationError("Add at least one item before dispatching the transfer.")
@@ -949,8 +968,9 @@ class StockTransfer(BaseModel):
     def receive(self, received_by=None):
         if self.inventory_changes_applied:
             raise ValidationError("Inventory changes have already been applied.")
-        if self.status != StockTransferStatus.IN_TRANSIT:
-            raise ValidationError("Only an in-transit transfer can be received.")
+        if self.status != StockTransferStatus.IN_TRANSIT or not self.approved_by_id:
+            raise ValidationError("Only an approved, in-transit transfer can be received.")
+        self.clean()
 
         with transaction.atomic():
             transfer = StockTransfer.objects.select_for_update().get(pk=self.pk)

@@ -76,6 +76,7 @@ export const cfg: Record<string, EntityConfig> = {
       { key: 'reorder', label: 'Reorder level', type: 'number' },
       { key: 'batchTracking', label: 'Track batches / lots', type: 'select', opts: 'yesNo', hint: 'Turn on only when this Article needs supplier or lot traceability.' },
       { key: 'expiryTracking', label: 'Require expiry date when receiving', type: 'select', opts: 'yesNo', hint: 'Turn on for Articles with a real use-by, best-before, or expiry date. Leave off for fresh produce and non-expiring Articles.' },
+      { key: 'requiresDeliveryTemperature', label: 'Require HACCP delivery temperature', type: 'select', opts: 'yesNo', hint: 'Turn on for chilled, frozen or temperature-sensitive deliveries that require a measured loading-bay temperature.' },
     ],
   },
   categories: {

@@ -74,6 +74,7 @@ ROLE_SPECS = {
                 # Stocktake variance review reads the frozen count and ledger snapshot.
                 # Only Store Keepers can enter/change the physical counts.
                 "stockcount", "stockcountitem", "stockledger",
+                "stockadjustment", "stockadjustmentitem",
             ],
         },
     },
@@ -87,6 +88,7 @@ ROLE_SPECS = {
                 "stockissue", "stockissueitem",
                 "stocktransfer", "stocktransferitem",
                 "stockcount", "stockcountitem",
+                "stockadjustment", "stockadjustmentitem",
             ],
         },
         "view": {
@@ -126,10 +128,11 @@ ROLE_SPECS = {
             "procurement": ["purchaseorder"],
             "materials_control": ["budgetoverride"],
             "finance": ["suppliercreditnote", "supplierpaymentreconciliation"],
+            "inventory": ["stockadjustment"],
         },
         "view": {
             "departments": ["branch", "department"],
-            "inventory": ["item", "unitofmeasure", "stockcount", "stockcountitem", "stockledger"],
+            "inventory": ["item", "unitofmeasure", "stockcount", "stockcountitem", "stockledger", "stockadjustmentitem"],
             # Read-only GRN, receipt-line and return evidence for three-way matching.
             "procurement": [
                 "purchaseorderitem", "purchaseorderactivity", "purchaserequisition", "requisitionitem",

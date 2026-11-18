@@ -922,6 +922,10 @@ class GoodsReceiptItemSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"batch_number": "Enter the supplier batch or lot number for this tracked Article."}
             )
+        if order_line and order_line.item.requires_delivery_temperature and delivery_temperature is None:
+            raise serializers.ValidationError(
+                {"delivery_temperature": "Record the observed HACCP delivery temperature for this Article."}
+            )
         if receipt and expiry_date and expiry_date < receipt.received_date:
             raise serializers.ValidationError(
                 {"expiry_date": "Expiry date cannot be earlier than the received date."}

@@ -963,7 +963,7 @@ function TransferPanel({ app, data, form, setForm, busy, execute }: any) {
     <Field label="Transfer"><Select value={form.transfer} change={(v) => setForm({ transfer: v })} rows={data.transfers.filter((r: Row) => !r.inventory_changes_applied)} label={(r) => `${storeName(app, r.from_store)} → ${storeName(app, r.to_store)} · ${r.status}`} /></Field>
     <Field label="Article"><Select value={form.item} change={(v) => setForm({ ...form, item: v })} rows={app.data.items} /></Field>
     <Field label="Quantity"><Input type="number" value={form.quantity} change={(v) => setForm({ ...form, quantity: v })} /></Field>
-    <Action disabled={busy || !form.transfer || !form.item || id(transfer?.status) !== 'pending'} click={() => execute(() => createBackendRecord('stock-transfer-items', { stock_transfer: form.transfer, item: form.item, unit: null, quantity: num(form.quantity) }), 'Transfer line added')}>Add transfer line</Action>
+    <Action disabled={busy || !form.transfer || !form.item || id(transfer?.status) !== 'pending' || Boolean(transfer?.approved_by)} click={() => execute(() => createBackendRecord('stock-transfer-items', { stock_transfer: form.transfer, item: form.item, unit: null, quantity: num(form.quantity) }), 'Transfer line added')}>Add transfer line</Action>
     <Action disabled={busy || !form.transfer || id(transfer?.status) !== 'pending' || Boolean(transfer?.approved_by)} click={() => execute(() => runBackendAction('stock-transfers', id(form.transfer), 'approve'), 'Transfer approved')}>Approve transfer</Action>
     <Action disabled={busy || !form.transfer || id(transfer?.status) !== 'pending' || !transfer?.approved_by} click={() => execute(() => runBackendAction('stock-transfers', id(form.transfer), 'dispatch'), 'Transfer dispatched')}>Dispatch from source</Action>
     <Action tone="good" disabled={busy || !form.transfer || id(transfer?.status) !== 'in_transit'} click={() => execute(() => runBackendAction('stock-transfers', id(form.transfer), 'receive'), 'Transfer received at destination')}>Confirm destination receipt</Action>
@@ -971,20 +971,23 @@ function TransferPanel({ app, data, form, setForm, busy, execute }: any) {
 }
 
 function AdjustmentPanel({ app, data, form, setForm, busy, execute }: any) {
-  return <Panel title="Controlled stock adjustment" note="Record authorised stock corrections.">
+  const isKeeper = String(app.user.role || '').toLowerCase() === 'store keeper'
+  const isFinance = String(app.user.role || '').toLowerCase() === 'financial manager'
+  const adjustment = data.adjustments.find((r: Row) => id(r.id) === id(form.adjustment))
+  return <Panel title="Controlled stock adjustment" note={isFinance ? 'Independent Finance authorization. Stock corrections cannot be changed here.' : 'Store Keeper drafts and posts only Finance-approved stock corrections.'}>
     <Field label="Store"><Select value={form.store} change={(v) => setForm({ ...form, store: v })} rows={app.data.locations} /></Field>
     <Field label="Reference"><Input value={form.reference} change={(v) => setForm({ ...form, reference: v })} /></Field>
     <Field label="Reason"><Input value={form.reason} change={(v) => setForm({ ...form, reason: v })} /></Field>
-    <Action disabled={busy || !form.store} click={() => execute(() => createBackendRecord('stock-adjustments', { store: form.store, reference: form.reference || '', reason: form.reason || '', note: '', status: 'draft' }), 'Adjustment created')}>Create adjustment</Action>
+    <Action disabled={!isKeeper || busy || !form.store} click={() => execute(() => createBackendRecord('stock-adjustments', { store: form.store, reference: form.reference || '', reason: form.reason || '', note: '', status: 'draft' }), 'Adjustment created')}>Create adjustment</Action>
     <Rule />
     <Field label="Adjustment"><Select value={form.adjustment} change={(v) => setForm({ adjustment: v })} rows={data.adjustments.filter((r: Row) => !['applied', 'cancelled'].includes(id(r.status)))} label={(r) => `${id(r.reference) || `Adjustment ${id(r.id).slice(0, 8)}`} · ${r.status}`} /></Field>
     <Field label="Article"><Select value={form.item} change={(v) => setForm({ ...form, item: v })} rows={app.data.items} /></Field>
     <Field label="Quantity change (+ / −)"><Input type="number" value={form.quantity} change={(v) => setForm({ ...form, quantity: v })} /></Field>
-    <Action disabled={busy || !form.adjustment || !form.item} click={() => execute(() => createBackendRecord('stock-adjustment-items', { stock_adjustment: form.adjustment, item: form.item, unit: null, quantity_change: num(form.quantity), reason: form.reason || '' }), 'Adjustment line added')}>Add adjustment line</Action>
-    <Action disabled={busy || !form.adjustment || id(data.adjustments.find((r: Row) => id(r.id) === id(form.adjustment))?.status) !== 'draft'} click={() => execute(() => runBackendAction('stock-adjustments', id(form.adjustment), 'submit'), 'Stock adjustment submitted')}>Submit adjustment</Action>
-    <Action disabled={busy || !form.adjustment || id(data.adjustments.find((r: Row) => id(r.id) === id(form.adjustment))?.status) !== 'pending'} click={() => execute(() => runBackendAction('stock-adjustments', id(form.adjustment), 'approve'), 'Stock adjustment approved')}>Approve adjustment</Action>
-    <Action tone="danger" disabled={busy || !form.adjustment || id(data.adjustments.find((r: Row) => id(r.id) === id(form.adjustment))?.status) !== 'pending'} click={() => execute(() => runBackendAction('stock-adjustments', id(form.adjustment), 'reject', { reason: form.reason || '' }), 'Stock adjustment rejected')}>Reject adjustment</Action>
-    <Action tone="good" disabled={busy || !form.adjustment || id(data.adjustments.find((r: Row) => id(r.id) === id(form.adjustment))?.status) !== 'approved'} click={() => execute(() => runBackendAction('stock-adjustments', id(form.adjustment), 'apply'), 'Stock adjustment applied')}>Apply approved adjustment</Action>
+    <Action disabled={!isKeeper || busy || !form.adjustment || !form.item || id(adjustment?.status) !== 'draft'} click={() => execute(() => createBackendRecord('stock-adjustment-items', { stock_adjustment: form.adjustment, item: form.item, unit: null, quantity_change: num(form.quantity), reason: form.reason || '' }), 'Adjustment line added')}>Add adjustment line</Action>
+    <Action disabled={!isKeeper || busy || !form.adjustment || id(adjustment?.status) !== 'draft'} click={() => execute(() => runBackendAction('stock-adjustments', id(form.adjustment), 'submit'), 'Stock adjustment submitted')}>Submit adjustment</Action>
+    <Action disabled={!isFinance || busy || !form.adjustment || id(adjustment?.status) !== 'pending'} click={() => execute(() => runBackendAction('stock-adjustments', id(form.adjustment), 'approve'), 'Stock adjustment approved')}>Approve adjustment</Action>
+    <Action tone="danger" disabled={!isFinance || busy || !form.adjustment || id(adjustment?.status) !== 'pending'} click={() => execute(() => runBackendAction('stock-adjustments', id(form.adjustment), 'reject', { reason: form.reason || '' }), 'Stock adjustment rejected')}>Reject adjustment</Action>
+    <Action tone="good" disabled={!isKeeper || busy || !form.adjustment || id(adjustment?.status) !== 'approved'} click={() => execute(() => runBackendAction('stock-adjustments', id(form.adjustment), 'apply'), 'Stock adjustment applied')}>Apply approved adjustment</Action>
   </Panel>
 }
 

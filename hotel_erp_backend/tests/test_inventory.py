@@ -320,6 +320,17 @@ def test_stock_transfer_posts_store_balances_and_ledger_entries():
         quantity=Decimal("2.00"),
     )
 
+    transfer_approver_user = get_user_model().objects.create_user(
+        username="inventory-transfer-approver", employee_code="TRF-APPR",
+        password="transfer-test-only",
+    )
+    transfer_approver = Employee.objects.create(
+        user=transfer_approver_user,
+        department=Department.objects.create(name="Transfer approvals"),
+        branch=branch, designation="Store Keeper",
+    )
+    transfer.approve(approved_by=transfer_approver)
+    transfer.dispatch(dispatched_by=transfer_approver)
     transfer.apply_inventory_changes()
 
     transfer_item.refresh_from_db()

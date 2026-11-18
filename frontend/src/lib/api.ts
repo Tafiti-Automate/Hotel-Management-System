@@ -863,6 +863,7 @@ function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey
       reorder_level: num(values.reorder),
       batch_tracking: text(values.batchTracking, 'No') === 'Yes',
       expiry_tracking: text(values.expiryTracking, 'No') === 'Yes',
+      requires_delivery_temperature: text(values.requiresDeliveryTemperature, 'No') === 'Yes',
       business_type: toBackendBusinessType(values.businessType),
       is_active: true,
     }
@@ -1333,6 +1334,7 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
       baseUnitLocked: bool(row.base_unit_locked),
       batchTracking: bool(row.batch_tracking),
       expiryTracking: bool(row.expiry_tracking),
+      requiresDeliveryTemperature: bool(row.requires_delivery_temperature),
       maximumLevel: row.maximum_level == null ? null : num(row.maximum_level),
       store: storeNames.get(text(balance?.store)) || '',
       onHand,

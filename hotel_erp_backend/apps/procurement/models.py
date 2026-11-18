@@ -2379,6 +2379,10 @@ class GoodsReceiptItem(BaseModel):
             raise ValidationError({
                 "batch_number": "Enter the supplier batch or lot number for this tracked Article."
             })
+        if self.item_id and self.item.requires_delivery_temperature and self.delivery_temperature is None:
+            raise ValidationError({
+                "delivery_temperature": "Record the observed HACCP delivery temperature for this Article."
+            })
         if (
             self.expiry_date
             and self.goods_receipt_id

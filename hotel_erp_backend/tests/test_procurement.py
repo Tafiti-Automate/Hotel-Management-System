@@ -1463,7 +1463,8 @@ def test_receiving_clerk_records_grn_but_cannot_post_store_inventory():
     receiving, _ = Group.objects.get_or_create(name="Receiving Clerk")
     employee.user.groups.add(receiving)
     item.expiry_tracking = True
-    item.save(update_fields=("expiry_tracking", "updated_at"))
+    item.requires_delivery_temperature = True
+    item.save(update_fields=("expiry_tracking", "requires_delivery_temperature", "updated_at"))
 
     requisition = PurchaseRequisition.objects.create(
         requester=employee,
@@ -1518,6 +1519,25 @@ def test_receiving_clerk_records_grn_but_cannot_post_store_inventory():
         supplier_invoice_no="INV-MISSING-EXPIRY"
     ).exists()
 
+    missing_temperature = client.post(
+        f"/api/v1/purchase-orders/{order.pk}/receive-delivery/",
+        {
+            "supplier_invoice_no": "INV-MISSING-TEMP",
+            "short_delivery_reason": "Only one unit delivered.",
+            "lines": [{
+                "purchase_order_item": str(order_line.pk),
+                "quantity_received": "1.00",
+                "expiry_date": expiry_date.isoformat(),
+                "batch_number": "LOT-2026",
+            }],
+        },
+        format="json",
+    )
+    assert missing_temperature.status_code == 400
+    assert not GoodsReceiptNote.objects.filter(
+        supplier_invoice_no="INV-MISSING-TEMP"
+    ).exists()
+
     response = client.post(
         f"/api/v1/purchase-orders/{order.pk}/receive-delivery/",
         {
@@ -1530,6 +1550,8 @@ def test_receiving_clerk_records_grn_but_cannot_post_store_inventory():
                     "purchase_order_item": str(order_line.pk),
                     "quantity_received": "1.00",
                     "expiry_date": expiry_date.isoformat(),
+                    "batch_number": "LOT-2026",
+                    "delivery_temperature": "4.50",
                 }
             ],
         },

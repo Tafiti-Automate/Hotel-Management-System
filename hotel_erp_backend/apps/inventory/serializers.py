@@ -195,6 +195,7 @@ class ItemSerializer(serializers.ModelSerializer):
             "maximum_level",
             "batch_tracking",
             "expiry_tracking",
+            "requires_delivery_temperature",
             "business_type",
             "is_active",
             "created_at",
@@ -627,20 +628,39 @@ class StockTransferSerializer(serializers.ModelSerializer):
         model = StockTransfer
         fields = "__all__"
         read_only_fields = (
-            "id",
-            "total_quantity",
-            "inventory_changes_applied",
-            "created_at",
-            "updated_at",
-            "created_by",
+            "id", "total_quantity", "inventory_changes_applied",
+            "approved_by", "approved_at", "status",
+            "dispatched_by", "dispatched_at", "received_by", "received_at",
+            "requested_by", "created_at", "updated_at", "created_by",
         )
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        source = attrs.get("from_store", getattr(self.instance, "from_store", None))
+        destination = attrs.get("to_store", getattr(self.instance, "to_store", None))
+        if source and destination:
+            if source.pk == destination.pk:
+                raise serializers.ValidationError("Choose a different destination store.")
+            if source.branch_id != destination.branch_id:
+                raise serializers.ValidationError(
+                    "Cross-property stock transfers are not permitted without a separate approved workflow."
+                )
+        if self.instance and (
+            self.instance.status != "pending" or self.instance.approved_by_id
+        ):
+            raise serializers.ValidationError(
+                "Approved or dispatched transfers cannot be changed."
+            )
+        return attrs
 
 
 class StockAdjustmentItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = StockAdjustmentItem
         fields = "__all__"
-        read_only_fields = ("id", "created_at", "updated_at", "created_by")
+        # A Store Keeper records a counted correction, never an invented valuation.
+        # Finance must approve the impact; historical WAC is used for posting.
+        read_only_fields = ("id", "unit_cost", "created_at", "updated_at", "created_by")
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
@@ -659,7 +679,10 @@ class StockAdjustmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = StockAdjustment
         fields = "__all__"
-        read_only_fields = ("id", "created_at", "updated_at", "created_by")
+        read_only_fields = (
+            "id", "status", "approved_by", "approved_at", "rejection_reason",
+            "created_at", "updated_at", "created_by",
+        )
 
 class ReorderRuleSerializer(serializers.ModelSerializer):
     current_stock = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)

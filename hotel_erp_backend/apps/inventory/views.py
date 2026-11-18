@@ -73,7 +73,7 @@ from apps.inventory.serializers import (
 )
 from apps.procurement.models import RequisitionItem
 from core.mixins.viewsets import CreatedByModelMixin
-from core.constants.choices import ItemBusinessType, StoreRequisitionStatus, StockCountStatus
+from core.constants.choices import ItemBusinessType, StoreRequisitionStatus, StockCountStatus, StockTransferStatus, StockAdjustmentStatus
 
 
 def raise_drf_validation_error(error):
@@ -701,31 +701,21 @@ class StockTransferViewSet(CreatedByModelMixin, ModelViewSet):
 
     def perform_update(self, serializer):
         self._require_source_store_control(serializer.instance)
+        if serializer.instance.status != StockTransferStatus.PENDING or serializer.instance.approved_by_id:
+            raise ValidationError("Approved or dispatched transfers cannot be edited. Create a controlled reversal instead.")
         from_store = serializer.validated_data.get("from_store", serializer.instance.from_store)
+        to_store = serializer.validated_data.get("to_store", serializer.instance.to_store)
         if self._is_store_keeper() and from_store.pk not in self._assigned_store_ids():
             raise PermissionDenied("Choose a source store assigned to your Store Keeper account.")
+        if from_store.branch_id != to_store.branch_id:
+            raise ValidationError("Cross-property transfers require a separate approved workflow.")
         serializer.save()
 
-    @action(detail=True, methods=["post"], url_path="assign-store")
-    def assign_store(self, request, pk=None):
-        requisition = self.get_object()
-        if not has_role(request.user, "System Administrator", "Store Keeper"):
-            raise PermissionDenied("Only the Store Keeper can choose the destination store.")
-        if requisition.status != StoreRequisitionStatus.SUBMITTED:
-            raise ValidationError("The destination store can only be selected for a submitted Department request.")
-        store_id = request.data.get("store")
-        if not store_id:
-            raise ValidationError({"store": "Select the destination store."})
-        store = StoreLocation.objects.filter(pk=store_id, is_active=True).first()
-        if not store:
-            raise ValidationError({"store": "The selected destination store is not available."})
-        if not has_role(request.user, "System Administrator") and not StoreKeeperAssignment.objects.filter(
-            store=store, employee=getattr(request.user, "employee_profile", None), is_active=True
-        ).exists():
-            raise PermissionDenied("You can only route requests to a store assigned to you.")
-        requisition.store = store
-        requisition.save(update_fields=["store", "updated_at"])
-        return Response(self.get_serializer(requisition).data)
+    def perform_destroy(self, instance):
+        self._require_source_store_control(instance)
+        if instance.status != StockTransferStatus.PENDING or instance.approved_by_id:
+            raise ValidationError("Approved or dispatched transfers cannot be deleted.")
+        instance.delete()
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
@@ -757,18 +747,6 @@ class StockTransferViewSet(CreatedByModelMixin, ModelViewSet):
             raise_drf_validation_error(error)
         return Response(self.get_serializer(transfer).data)
 
-    @action(detail=True, methods=["post"])
-    def apply(self, request, pk=None):
-        transfer = self.get_object()
-        self._require_source_store_control(transfer)
-        try:
-            transfer.apply_inventory_changes()
-        except DjangoValidationError as error:
-            raise_drf_validation_error(error)
-        serializer = self.get_serializer(transfer)
-        return Response(serializer.data)
-
-
 class StockTransferItemViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = StockTransferItem.objects.select_related("stock_transfer", "item", "unit")
     serializer_class = StockTransferItemSerializer
@@ -794,43 +772,204 @@ class StockTransferItemViewSet(CreatedByModelMixin, ModelViewSet):
             ).distinct()
         return queryset
 
+    def _require_editable_transfer(self, transfer):
+        self._require_source_store_control(transfer)
+        if transfer.status != StockTransferStatus.PENDING or transfer.approved_by_id:
+            raise ValidationError("Approved or dispatched transfer lines cannot be edited.")
+
     def perform_create(self, serializer):
-        self._require_source_store_control(serializer.validated_data["stock_transfer"])
+        self._require_editable_transfer(serializer.validated_data["stock_transfer"])
         super().perform_create(serializer)
 
     def perform_update(self, serializer):
-        self._require_source_store_control(serializer.instance.stock_transfer)
+        if "stock_transfer" in serializer.validated_data and (
+            serializer.validated_data["stock_transfer"].pk != serializer.instance.stock_transfer_id
+        ):
+            raise ValidationError("A transfer line cannot be reassigned to another document.")
+        self._require_editable_transfer(serializer.instance.stock_transfer)
         serializer.save()
 
     def perform_destroy(self, instance):
-        self._require_source_store_control(instance.stock_transfer)
+        self._require_editable_transfer(instance.stock_transfer)
         instance.delete()
 
 
+def _adjustment_queryset_for_user(queryset, user):
+    """Read visibility follows the assigned store or financial property."""
+    if not user.is_authenticated or not user.is_active:
+        return queryset.none()
+    if user.is_superuser or has_role(user, "System Administrator"):
+        return queryset
+    employee = getattr(user, "employee_profile", None)
+    if not employee or not employee.is_active or not employee.branch_id:
+        return queryset.none()
+    if has_role(user, "Store Keeper"):
+        return queryset.filter(
+            store_id__in=StoreKeeperAssignment.objects.filter(
+                employee=employee, is_active=True, store__is_active=True,
+                store__branch_id=employee.branch_id,
+            ).values("store_id")
+        )
+    if has_role(user, "Financial Manager", "Cost Controller"):
+        hotel_id = getattr(employee.branch, "hotel_id", None)
+        if hotel_id:
+            return queryset.filter(store__branch__hotel_id=hotel_id)
+        return queryset.filter(store__branch_id=employee.branch_id)
+    return queryset.none()
+
+
+def _require_adjustment_keeper(user, store):
+    employee = getattr(user, "employee_profile", None)
+    if (
+        user.is_superuser
+        or not user.is_active
+        or not has_role(user, "Store Keeper")
+        or has_role(user, "System Administrator")
+        or not employee or not employee.is_active
+        or employee.branch_id != store.branch_id
+        or not StoreKeeperAssignment.objects.filter(
+            employee=employee, store=store, is_active=True, store__is_active=True,
+        ).exists()
+    ):
+        raise PermissionDenied("Only an active Store Keeper assigned to this store can change or post its adjustments.")
+    return employee
+
+
 class StockAdjustmentViewSet(CreatedByModelMixin, ModelViewSet):
-    queryset = StockAdjustment.objects.select_related("store", "approved_by")
+    queryset = StockAdjustment.objects.select_related("store", "approved_by", "created_by")
     serializer_class = StockAdjustmentSerializer
     filterset_fields = ("store", "status", "approved_by")
     search_fields = ("reference", "reason", "note", "store__name")
     ordering_fields = ("status", "created_at")
 
+    def get_queryset(self):
+        return _adjustment_queryset_for_user(super().get_queryset(), self.request.user)
+
+    def perform_create(self, serializer):
+        store = serializer.validated_data["store"]
+        _require_adjustment_keeper(self.request.user, store)
+        serializer.save(created_by=self.request.user)
+
+    def _editable_draft(self, adjustment):
+        _require_adjustment_keeper(self.request.user, adjustment.store)
+        if adjustment.status != StockAdjustmentStatus.DRAFT:
+            raise ValidationError("Only a draft adjustment may be edited or deleted.")
+        if adjustment.created_by_id != self.request.user.pk:
+            raise PermissionDenied("Only the employee who drafted this adjustment can edit it.")
+
+    def perform_update(self, serializer):
+        adjustment = serializer.instance
+        self._editable_draft(adjustment)
+        store = serializer.validated_data.get("store", adjustment.store)
+        if store.pk != adjustment.store_id:
+            raise ValidationError("An adjustment cannot be moved to another store.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self._editable_draft(instance)
+        instance.delete()
+
+    @action(detail=True, methods=["post"])
+    def submit(self, request, pk=None):
+        adjustment = self.get_object()
+        self._editable_draft(adjustment)
+        try:
+            adjustment.submit()
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        return Response(self.get_serializer(adjustment).data)
+
+    def _require_finance_approver(self, adjustment):
+        employee = getattr(self.request.user, "employee_profile", None)
+        if (
+            self.request.user.is_superuser or not self.request.user.is_active
+            or not has_role(self.request.user, "Financial Manager")
+            or has_role(self.request.user, "System Administrator")
+            or not employee or not employee.is_active or not employee.branch_id
+        ):
+            raise PermissionDenied("Only an assigned Financial Manager can approve stock corrections.")
+        hotel_id = getattr(employee.branch, "hotel_id", None)
+        if hotel_id:
+            if adjustment.store.branch.hotel_id != hotel_id:
+                raise PermissionDenied("Adjustment is outside your hotel.")
+        elif adjustment.store.branch_id != employee.branch_id:
+            raise PermissionDenied("Adjustment is outside your property.")
+        if adjustment.created_by_id == self.request.user.pk:
+            raise PermissionDenied("The adjustment maker cannot approve the same document.")
+        return employee
+
+    @action(detail=True, methods=["post"])
+    def approve(self, request, pk=None):
+        adjustment = self.get_object()
+        approver = self._require_finance_approver(adjustment)
+        try:
+            adjustment.approve(approved_by=approver)
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        return Response(self.get_serializer(adjustment).data)
+
+    @action(detail=True, methods=["post"])
+    def reject(self, request, pk=None):
+        adjustment = self.get_object()
+        self._require_finance_approver(adjustment)
+        reason = str(request.data.get("reason") or "").strip()
+        if not reason:
+            raise ValidationError({"reason": "Enter the rejection reason."})
+        try:
+            adjustment.reject(reason=reason)
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        return Response(self.get_serializer(adjustment).data)
+
     @action(detail=True, methods=["post"])
     def apply(self, request, pk=None):
         adjustment = self.get_object()
+        _require_adjustment_keeper(request.user, adjustment.store)
+        if adjustment.status != StockAdjustmentStatus.APPROVED or not adjustment.approved_by_id:
+            raise ValidationError("Only an independently approved adjustment may be posted.")
+        from apps.inventory.stores_fulfillment import require_open_period
+        require_open_period(adjustment.store.branch_id, timezone.localdate())
         try:
             adjustment.apply()
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
-        serializer = self.get_serializer(adjustment)
-        return Response(serializer.data)
+        return Response(self.get_serializer(adjustment).data)
 
 
 class StockAdjustmentItemViewSet(CreatedByModelMixin, ModelViewSet):
-    queryset = StockAdjustmentItem.objects.select_related("stock_adjustment", "item", "unit")
+    queryset = StockAdjustmentItem.objects.select_related("stock_adjustment__store", "item", "unit")
     serializer_class = StockAdjustmentItemSerializer
     filterset_fields = ("stock_adjustment", "item", "unit")
     search_fields = ("item__name", "item__sku", "reason")
     ordering_fields = ("quantity_change", "created_at")
+
+    def get_queryset(self):
+        headers = _adjustment_queryset_for_user(StockAdjustment.objects.all(), self.request.user)
+        return super().get_queryset().filter(stock_adjustment__in=headers)
+
+    def _require_draft(self, adjustment):
+        _require_adjustment_keeper(self.request.user, adjustment.store)
+        if adjustment.status != StockAdjustmentStatus.DRAFT:
+            raise ValidationError("Approved, submitted or posted adjustment lines are immutable.")
+        if adjustment.created_by_id != self.request.user.pk:
+            raise PermissionDenied("Only the adjustment maker can edit the lines.")
+
+    def perform_create(self, serializer):
+        self._require_draft(serializer.validated_data["stock_adjustment"])
+        super().perform_create(serializer)
+
+    def perform_update(self, serializer):
+        if "stock_adjustment" in serializer.validated_data and (
+            serializer.validated_data["stock_adjustment"].pk != serializer.instance.stock_adjustment_id
+        ):
+            raise ValidationError("An adjustment line cannot be reassigned to another document.")
+        self._require_draft(serializer.instance.stock_adjustment)
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self._require_draft(instance.stock_adjustment)
+        instance.delete()
+
 
 class ReorderRuleViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = ReorderRule.objects.select_related("item", "store", "preferred_supplier")
