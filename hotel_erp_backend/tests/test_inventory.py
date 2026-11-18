@@ -737,7 +737,7 @@ def test_store_requisition_issue_and_department_return_update_stock():
     # This legacy booking test models a completed, signed departmental pickup.
     StockIssue.objects.filter(pk=issue.pk).update(
         fulfillment_status=StockIssue.STATUS_COMPLETED,
-        signed_at=timezone.now(),
+        signed_at=__import__('django.utils.timezone', fromlist=['now']).now(),
     )
 
     requisition.refresh_from_db()
