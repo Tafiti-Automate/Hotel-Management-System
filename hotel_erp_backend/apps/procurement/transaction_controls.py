@@ -213,7 +213,7 @@ class GoodsReceiptNoteViewSet(BaseGoodsReceiptNoteViewSet):
     """Receiving records a GRN; Store Keeper verifies and posts it to SOH."""
 
     def get_permissions(self):
-        if self.action in ("verification", "post_to_inventory"):
+        if self.action in ("verification", "post_to_inventory", "blind_reconciliation", "variance_note"):
             return [IsAuthenticated()]
         return super().get_permissions()
 

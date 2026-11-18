@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Icon } from '../components/Icon'
 import ConfirmTransaction from '../components/ConfirmTransaction'
-import { errorMessage, readBackendRecords, runBackendAction } from '../lib/api'
+import { errorMessage, readBackendPayload, readBackendRecords, runBackendAction } from '../lib/api'
 import type { Row } from '../lib/data'
 import { useApp } from '../state/AppContext'
 
@@ -9,6 +9,34 @@ const id = (value: unknown) => String(value ?? '')
 const n = (value: unknown) => Number(value || 0)
 const q = (value: unknown) => n(value).toLocaleString('en-UG', { maximumFractionDigits: 4 })
 const receiptStatus = (value: unknown) => id(value) === 'posted' ? 'Posted to SOH' : 'Awaiting Stores'
+
+type LockedCountLine = {
+  purchase_order_item: string
+  article: string
+  sku: string
+  unit: string
+  ordered_quantity: string
+  previously_received_quantity: string
+  due_before_delivery: string
+  counted_quantity: string
+  accepted_quantity: string
+  rejected_quantity: string
+  short_quantity: string
+  excess_quantity: string
+  outstanding_after_inspection: string
+  has_variance: boolean
+  rejection_reason: string
+}
+type LockedComparison = {
+  grn_id: string
+  blind_count_locked_at: string
+  blind_count_locked: boolean
+  has_variance: boolean
+  variance_note_required: boolean
+  variance_note: string
+  note: string
+  lines: LockedCountLine[]
+}
 
 export default function ReceivingClerkWorkspaceV2() {
   const app = useApp()
@@ -104,7 +132,7 @@ export default function ReceivingClerkWorkspaceV2() {
         <div>
           <div className="ds-eyebrow">Receiving Clerk</div>
           <h1>Supplier Receiving & GRN</h1>
-          <p>Count goods independently of the LPO. Enter rejected quantity, batch, expiry and temperature; Stores verifies before posting stock.</p>
+          <p>Stage 1: save and lock an independent physical count. Stage 2: review the ordered-versus-counted quantities before Stores verifies the GRN.</p>
         </div>
         <div className="ds-hero-actions">
           <button
@@ -158,7 +186,7 @@ export default function ReceivingClerkWorkspaceV2() {
                 receiptRecorded={(receiptId) => {
                   setSelectedOrderId('')
                   setSelectedGrnId(receiptId)
-                  setPreviewGrnId('')
+                  setPreviewGrnId(receiptId)
                   setTab('history')
                 }}
               />
@@ -189,8 +217,7 @@ function Receive({ order, lines, app, busy, act, back, receiptRecorded }: { orde
   const [tracking, setTracking] = useState<Record<string, { batch_number: string; expiry_date: string; delivery_temperature: string }>>({})
   const [rejected, setRejected] = useState<Record<string, string>>({})
   const [rejectionReasons, setRejectionReasons] = useState<Record<string, string>>({})
-  const [reason, setReason] = useState('')
-
+ 
   useEffect(() => {
     const nextValues: Record<string, string> = {}
     const nextTracking: Record<string, { batch_number: string; expiry_date: string; delivery_temperature: string }> = {}
@@ -227,7 +254,7 @@ function Receive({ order, lines, app, busy, act, back, receiptRecorded }: { orde
   return (
     <section className="ds-card ds-detail">
       <button type="button" className="ds-btn ds-btn-secondary" onClick={back}><Icon name="arrow_back" size={15} />Back</button>
-      <div className="ds-detail-head"><div><div className="ds-eyebrow">Review before GRN</div><h2>LPO {id(order.lpo_number || order.po_number)}</h2></div><span className="ds-status info">Approved supplier order</span></div>
+      <div className="ds-detail-head"><div><div className="ds-eyebrow">Stage 1 · Blind physical count</div><h2>LPO {id(order.lpo_number || order.po_number)}</h2></div><span className="ds-status info">Approved supplier order</span></div>
       <div className="ds-form-grid">
         <div className="ds-read"><span>Receiving mode</span><strong>Blind count · ordered quantities concealed</strong></div>
         <div className="ds-read"><span>Expected delivery</span><strong>{id(order.expected_date) || '—'}</strong></div>
@@ -259,9 +286,8 @@ function Receive({ order, lines, app, busy, act, back, receiptRecorded }: { orde
       {invalidLines.length > 0 && <div className="ds-alert" role="alert">Enter a valid, non-negative physical count in every Article row.</div>}
       {invalidRejected.length > 0 && <div className="ds-alert" role="alert">Rejected quantity must not exceed the counted quantity; every rejection needs a reason.</div>}
       {invalidTracking.length > 0 && <div className="ds-alert" role="alert">Complete required batch numbers, expiry dates and HACCP temperatures for tracked articles.</div>}
-      <label className="ds-field">Delivery variance / short delivery reason<textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Required when your blind count is short against the LPO" /></label>
-      <div className="ds-sticky-action"><span>Receiving records the physical delivery. Store Keeper will verify the GRN before SOH increases.</span><ConfirmTransaction title="Confirm supplier delivery" description="Create a goods receipt note for the entered quantities. This records the physical delivery but does not post stock until Stores verifies the GRN." confirmLabel="Record delivery" className="ds-btn ds-btn-primary" disabled={busy || !invoice.trim() || !positive.length || invalid || false} busy={busy} onConfirm={async () => {
-        const receipt = await act(() => runBackendAction('purchase-orders', id(order.id), 'receive-delivery', { supplier_invoice_no: invoice, delivery_note_no: delivery, short_delivery_reason: reason.trim(), lines: positive.map((line) => ({ purchase_order_item: id(line.id), quantity_received: n(values[id(line.id)]), quantity_rejected: n(rejected[id(line.id)]), rejection_reason: rejectionReasons[id(line.id)] || '', batch_number: tracking[id(line.id)]?.batch_number || '', expiry_date: tracking[id(line.id)]?.expiry_date || null, delivery_temperature: tracking[id(line.id)]?.delivery_temperature ? Number(tracking[id(line.id)].delivery_temperature) : null })) }), 'GRN recorded · awaiting Store Keeper verification')
+      <div className="ds-sticky-action"><span>Ordered quantities remain hidden until this physical count and inspection are saved and permanently locked.</span><ConfirmTransaction title="Save and lock your blind count?" description="The saved quantities, batch details and inspection decisions cannot be changed by the Receiving Clerk. After saving, the system reveals ordered quantities and any delivery differences in a read-only reconciliation. Stores will verify before SOH increases." confirmLabel="Save & lock blind count" className="ds-btn ds-btn-primary" disabled={busy || !invoice.trim() || !positive.length || invalid || false} busy={busy} onConfirm={async () => {
+        const receipt = await act(() => runBackendAction('purchase-orders', id(order.id), 'receive-delivery', { supplier_invoice_no: invoice, delivery_note_no: delivery, lines: positive.map((line) => ({ purchase_order_item: id(line.id), quantity_received: n(values[id(line.id)]), quantity_rejected: n(rejected[id(line.id)]), rejection_reason: rejectionReasons[id(line.id)] || '', batch_number: tracking[id(line.id)]?.batch_number || '', expiry_date: tracking[id(line.id)]?.expiry_date || null, delivery_temperature: tracking[id(line.id)]?.delivery_temperature ? Number(tracking[id(line.id)].delivery_temperature) : null })) }), 'GRN recorded · awaiting Store Keeper verification')
         const receiptId = id((receipt as Row | undefined)?.id)
         if (receiptId) receiptRecorded(receiptId)
       }}>Generate GRN</ConfirmTransaction></div>
@@ -287,12 +313,55 @@ function History({ grns, lines, selectedId, select }: { grns: Row[]; lines: Row[
 }
 
 function GrnPreview({ receipt, lines, back }: { receipt: Row; lines: Row[]; back: () => void }) {
+  const app = useApp()
   const receiptLines = lines.filter((line) => id(line.goods_receipt) === id(receipt.id))
+  const [comparison, setComparison] = useState<LockedComparison | null>(null)
+  const [loading, setLoading] = useState(Boolean(receipt.blind_count_locked_at))
+  const [error, setError] = useState('')
+  const [note, setNote] = useState('')
+  const [savingNote, setSavingNote] = useState(false)
 
+  useEffect(() => {
+    if (!receipt.blind_count_locked_at) { setLoading(false); return }
+    let active = true
+    setLoading(true)
+    setError('')
+    void readBackendPayload('grns/' + encodeURIComponent(id(receipt.id)) + '/blind-reconciliation/')
+      .then((payload) => { if (active) setComparison(payload as unknown as LockedComparison) })
+      .catch((cause) => { if (active) setError(errorMessage(cause)) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [receipt.id, receipt.blind_count_locked_at])
+
+  const recordExplanation = async () => {
+    if (!note.trim() || savingNote) return
+    setSavingNote(true)
+    setError('')
+    try {
+      const result = await runBackendAction(
+        'grns', id(receipt.id), 'variance-note', { note: note.trim() },
+      )
+      setComparison(result as unknown as LockedComparison)
+      setNote('')
+      app.showToast('Variance explanation recorded with audit history. The original count remains locked.')
+    } catch (cause) {
+      const message = errorMessage(cause)
+      setError(message)
+      app.showWorkflowAlert('Variance explanation not saved', message)
+    } finally { setSavingNote(false) }
+  }
   return (
     <section className="ds-card ds-detail">
       <button type="button" className="ds-btn ds-btn-secondary" onClick={back}><Icon name="arrow_back" size={15} />Back to GRN history</button>
-      <div className="ds-detail-head"><div><div className="ds-eyebrow">GRN preview</div><h2>{id(receipt.grn_number)}</h2><p>Read-only receipt recorded from the supplier delivery.</p></div><span className={`ds-status ${id(receipt.status) === 'posted' ? 'good' : 'warn'}`}>{receiptStatus(receipt.status)}</span></div>
+      <div className="ds-detail-head">
+        <div><div className="ds-eyebrow">{receipt.blind_count_locked_at ? 'Stage 2 · Locked count reconciliation' : 'GRN preview'}</div>
+          <h2>{id(receipt.grn_number)}</h2>
+          <p>{receipt.blind_count_locked_at
+            ? 'Physical quantities are saved and locked. Ordered quantities are now visible for comparison.'
+            : 'Read-only receipt recorded from the supplier delivery.'}</p>
+        </div>
+        <span className={`ds-status ${id(receipt.status) === 'posted' ? 'good' : 'warn'}`}>{receiptStatus(receipt.status)}</span>
+      </div>
       <div className="ds-form-grid">
         <div className="ds-read"><span>LPO</span><strong>{id(receipt.lpo_number) || '—'}</strong></div>
         <div className="ds-read"><span>Supplier</span><strong>{id(receipt.supplier_name) || '—'}</strong></div>
@@ -301,15 +370,70 @@ function GrnPreview({ receipt, lines, back }: { receipt: Row; lines: Row[]; back
         <div className="ds-read"><span>Received on</span><strong>{id(receipt.received_date) || '—'}</strong></div>
         <div className="ds-read"><span>Received by</span><strong>{id(receipt.received_by_name) || '—'}</strong></div>
         <div className="ds-read"><span>Receiving store</span><strong>{id(receipt.receiving_store_name) || '—'}</strong></div>
- 
+        {receipt.blind_count_locked_at && <div className="ds-read"><span>Count locked at</span><strong>{new Date(id(receipt.blind_count_locked_at)).toLocaleString('en-UG')}</strong></div>}
       </div>
-      <div className="ds-table-scroll">
+      {loading && <div className="ds-empty" role="status">Loading the locked count comparison…</div>}
+      {error && <div className="ds-alert" role="alert">{error}</div>}
+      {comparison && <>
+        <div className="ds-section-head">
+          <div><h2>Ordered vs independently counted</h2><span>Read-only · values in the purchase unit · supplier prices concealed</span></div>
+          <span className={`ds-status ${comparison.has_variance ? 'warn' : 'good'}`}>
+            {comparison.has_variance ? 'Variance requires attention' : 'Quantities reconciled'}
+          </span>
+        </div>
+        <div className="ds-table-scroll">
+          <table className="ds-table">
+            <thead><tr>
+              <th>Article / unit</th><th>Ordered</th><th>Previously received</th>
+              <th>Due before delivery</th><th>Blind count</th><th>Accepted</th>
+              <th>Rejected</th><th>Short</th><th>Excess</th><th>Outstanding after inspection</th>
+            </tr></thead>
+            <tbody>{comparison.lines.map((line) => <tr key={line.purchase_order_item}>
+              <td><strong>{line.article}</strong><small>{line.sku} · {line.unit}</small></td>
+              <td>{q(line.ordered_quantity)}</td>
+              <td>{q(line.previously_received_quantity)}</td>
+              <td>{q(line.due_before_delivery)}</td>
+              <td><strong>{q(line.counted_quantity)}</strong></td>
+              <td>{q(line.accepted_quantity)}</td>
+              <td>{q(line.rejected_quantity)}</td>
+              <td>{n(line.short_quantity) > 0 ? <strong>{q(line.short_quantity)}</strong> : '—'}</td>
+              <td>{n(line.excess_quantity) > 0 ? <strong>{q(line.excess_quantity)}</strong> : '—'}</td>
+              <td>{q(line.outstanding_after_inspection)}</td>
+            </tr>)}</tbody>
+          </table>
+        </div>
+        <div className="ds-alert" role="status">
+          <Icon name="lock" size={16} /> Saved receiving and inspection quantities cannot be edited. Report a discrepancy to the Store Keeper for independent review.
+        </div>
+        {comparison.has_variance && <>
+          {comparison.variance_note ? (
+            <div className="ds-read"><span>Recorded variance explanation</span><strong>{comparison.variance_note}</strong></div>
+          ) : (
+            <div className="ds-sticky-action">
+              <label className="ds-field" style={{ flex: 1 }}>Explanation for the shortage, excess or rejection
+                <textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={1500}
+                  placeholder="Record what was observed. This does not change the locked quantities." />
+              </label>
+              <button type="button" className="ds-btn ds-btn-primary" onClick={() => void recordExplanation()}
+                disabled={savingNote || !note.trim()}>
+                <Icon name="check_circle" size={16} /> Save audited explanation
+              </button>
+            </div>
+          )}
+        </>}
+        <div className="ds-sticky-action">
+          <span>Stage 2 complete: Stores independently verifies this GRN before posting accepted stock to SOH.</span>
+        </div>
+      </>}
+      {!receipt.blind_count_locked_at && <div className="ds-table-scroll">
         <table className="ds-table">
           <thead><tr><th>Article</th><th>Received</th><th>Accepted</th><th>Rejected</th><th>Unit</th></tr></thead>
-          <tbody>{receiptLines.map((line) => <tr key={id(line.id)}><td><strong>{id(line.item_name || line.item)}</strong><small>{id(line.item_sku)}</small></td><td>{q(line.quantity_received)}</td><td>{q(line.accepted_quantity)}</td><td>{q(line.rejected_quantity)}</td><td>{id(line.unit_abbreviation || line.unit_name) || '—'}</td> </tr>)}</tbody>
+          <tbody>{receiptLines.map((line) => <tr key={id(line.id)}><td><strong>{id(line.item_name || line.item)}</strong><small>{id(line.item_sku)}</small></td>
+            <td>{q(line.quantity_received)}</td><td>{q(line.accepted_quantity)}</td>
+            <td>{q(line.rejected_quantity)}</td><td>{id(line.unit_abbreviation || line.unit_name) || '—'}</td></tr>)}</tbody>
         </table>
-      </div>
-      {receipt.note && <div className="ds-sticky-action"><span><strong>Receiving note:</strong> {id(receipt.note)}</span></div>}
+      </div>}
+      {!comparison && receipt.note && <div className="ds-sticky-action"><span><strong>Receiving note:</strong> {id(receipt.note)}</span></div>}
     </section>
   )
 }

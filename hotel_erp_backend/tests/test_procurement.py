@@ -2342,3 +2342,148 @@ def test_receiving_rejections_are_stored_in_inspection_without_inventory_posting
     assert inspection_line.quantity_accepted == Decimal("1.00")
     assert receipt.status == GoodsReceiptStatus.RECEIVED
     assert not receipt.items.filter(inventory_changes_applied=True).exists()
+
+
+@pytest.mark.django_db
+def test_blind_receiving_reveals_lpo_quantities_only_after_locked_grn_and_preserves_original_count():
+    """Stage 1 stays blind; Stage 2 is read-only and has independent audit notes."""
+    from apps.accounts.role_templates import sync_client_roles
+    from apps.audit_logs.models import AuditLog
+
+    employee, department, supplier, item = create_procurement_context()
+    branch = Branch.objects.create(name="Blind Count Audit Property")
+    store = StoreLocation.objects.create(branch=branch, name="Blind Count Main Store")
+    employee.branch = branch
+    employee.save(update_fields=("branch", "updated_at"))
+    sync_client_roles()
+    employee.user.groups.add(Group.objects.get(name="Receiving Clerk"))
+    second_item = Item.objects.create(
+        name="Blind count flour", sku="BLIND-FLOUR",
+        category=item.category, base_unit=item.base_unit, unit="litre",
+        reorder_level=Decimal("0"),
+    )
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee, department=department, branch=branch,
+        status=PRStatus.APPROVED, reason="Blind reconciliation audit",
+    )
+    req_oil = RequisitionItem.objects.create(
+        requisition=requisition, item=item, quantity=Decimal("5"),
+        approved_quantity=Decimal("5"), destination_store=store,
+    )
+    req_flour = RequisitionItem.objects.create(
+        requisition=requisition, item=second_item, quantity=Decimal("3"),
+        approved_quantity=Decimal("3"), destination_store=store,
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition, supplier=supplier, ordered_by=employee, store=store,
+    )
+    oil = PurchaseOrderItem.objects.create(
+        purchase_order=order, requisition_item=req_oil,
+        item=item, unit=item.base_unit, quantity=Decimal("5"),
+        unit_cost=Decimal("1000"),
+    )
+    PurchaseOrderItem.objects.create(
+        purchase_order=order, requisition_item=req_flour,
+        item=second_item, unit=item.base_unit, quantity=Decimal("3"),
+        unit_cost=Decimal("2000"),
+    )
+    authorize_order_for_test(order)
+    order.issue(sent_by=employee, sent_to_email=supplier.email)
+    client = APIClient()
+    client.force_authenticate(employee.user)
+    blind = client.get("/api/v1/purchase-order-items/")
+    assert blind.status_code == 200, blind.data
+    for line in blind.data.get("results", blind.data) if isinstance(blind.data, dict) else blind.data:
+        assert "approved_quantity" not in line
+        assert "unit_cost" not in line
+
+    # No commercial LPO PDF can disclose amounts before the independent count.
+    assert client.get(
+        f"/api/v1/purchase-orders/{order.pk}/preview-document/"
+    ).status_code == 403
+    draft = GoodsReceiptNote.objects.create(
+        purchase_order=order, received_by=employee, supplier_invoice_no="BLIND-DRAFT",
+    )
+    hidden = client.get(f"/api/v1/grns/{draft.pk}/blind-reconciliation/")
+    assert hidden.status_code == 400
+
+    submitted = client.post(
+        f"/api/v1/purchase-orders/{order.pk}/receive-delivery/",
+        {
+            "supplier_invoice_no": "BLIND-001",
+            "delivery_note_no": "BLIND-DN-001",
+            "lines": [{
+                "purchase_order_item": str(oil.pk),
+                "quantity_received": "4.0000",
+                "quantity_rejected": "1.0000",
+                "rejection_reason": "Broken container during loading",
+            }],
+        },
+        format="json",
+    )
+    assert submitted.status_code == 201, submitted.data
+    receipt = GoodsReceiptNote.objects.get(pk=submitted.data["id"])
+    original = receipt.items.get()
+    assert receipt.blind_count_locked_at is not None
+    assert receipt.note == ""
+    assert original.quantity_received == Decimal("4.0000")
+    assert not InventoryBalance.objects.filter(store=store, item=item).exists()
+
+    revealed = client.get(f"/api/v1/grns/{receipt.pk}/blind-reconciliation/")
+    assert revealed.status_code == 200, revealed.data
+    assert revealed.data["blind_count_locked"] is True
+    assert revealed.data["variance_note_required"] is True
+    assert "unit_cost" not in str(revealed.data)
+    assert "unit_price" not in str(revealed.data)
+    assert "total_amount" not in str(revealed.data)
+    line_by_sku = {line["sku"]: line for line in revealed.data["lines"]}
+    assert line_by_sku[item.sku]["ordered_quantity"] == "5.0000"
+    assert line_by_sku[item.sku]["counted_quantity"] == "4.0000"
+    assert line_by_sku[item.sku]["accepted_quantity"] == "3.0000"
+    assert line_by_sku[item.sku]["rejected_quantity"] == "1.0000"
+    assert line_by_sku[item.sku]["short_quantity"] == "1.0000"
+    assert line_by_sku[second_item.sku]["ordered_quantity"] == "3.0000"
+    assert line_by_sku[second_item.sku]["counted_quantity"] == "0.0000"
+    assert line_by_sku[second_item.sku]["short_quantity"] == "3.0000"
+
+    assert client.patch(
+        f"/api/v1/grns/{receipt.pk}/", {"note": "silently adjust"}, format="json"
+    ).status_code in (400, 403)
+    assert client.patch(
+        f"/api/v1/grn-items/{original.pk}/", {"quantity_received": "5.0000"}, format="json"
+    ).status_code in (400, 403)
+    assert client.delete(f"/api/v1/grn-items/{original.pk}/").status_code in (400, 403)
+    assert client.post(f"/api/v1/grns/{receipt.pk}/cancel/").status_code in (400, 403)
+    original.quantity_received = Decimal("5.0000")
+    with pytest.raises(ValidationError, match="Blind count"):
+        original.save()
+    original.refresh_from_db()
+    assert original.quantity_received == Decimal("4.0000")
+
+    note = client.post(
+        f"/api/v1/grns/{receipt.pk}/variance-note/",
+        {"note": "Four units supplied; one damaged, flour not delivered."}, format="json",
+    )
+    assert note.status_code == 200, note.data
+    assert note.data["variance_note_required"] is False
+    assert note.data["lines"] == revealed.data["lines"]
+    assert AuditLog.objects.filter(
+        entity_id=str(receipt.pk), action="blind_receiving_variance_explained"
+    ).exists()
+    assert client.post(
+        f"/api/v1/grns/{receipt.pk}/variance-note/",
+        {"note": "rewrite the note"}, format="json",
+    ).status_code == 400
+
+    other_user = get_user_model().objects.create_user(
+        username="blind-other-clerk", employee_code="BLIND-OTHER",
+        password="test-only",
+    )
+    Employee.objects.create(user=other_user, department=department, branch=branch)
+    other_user.groups.add(Group.objects.get(name="Receiving Clerk"))
+    client.force_authenticate(other_user)
+    assert client.get(f"/api/v1/grns/{receipt.pk}/blind-reconciliation/").status_code == 404
+    assert client.post(
+        f"/api/v1/grns/{receipt.pk}/variance-note/",
+        {"note": "not mine"}, format="json",
+    ).status_code == 404

@@ -2121,6 +2121,10 @@ class GoodsReceiptNote(BaseModel):
         help_text="Invoice reference physically presented by the supplier.",
     )
     note = models.TextField(blank=True)
+    # Set only after the first blind count and inspection have been committed.
+    # This is distinct from a GRN's inspection status, which may temporarily
+    # transition to "inspected" while individual decisions are being recorded.
+    blind_count_locked_at = models.DateTimeField(null=True, blank=True, editable=False)
     posted_at = models.DateTimeField(null=True, blank=True)
     posted_by = models.ForeignKey(
         "employees.Employee",
@@ -2209,6 +2213,10 @@ class GoodsReceiptNote(BaseModel):
                     pass
 
     def cancel(self):
+        if self.blind_count_locked_at:
+            raise ValidationError(
+                "A saved blind receiving count cannot be cancelled. Request an independent correction."
+            )
         if self.status == GoodsReceiptStatus.POSTED or self.items.filter(
             inventory_changes_applied=True
         ).exists():
@@ -2318,6 +2326,19 @@ class GoodsReceiptItem(BaseModel):
         ordering = ("item__name",)
 
     def save(self, *args, **kwargs):
+        # Only the internal, verified Store Keeper posting path updates the
+        # inventory_applied flag. An initial blind count's physical evidence
+        # is immutable even while it is waiting for inventory posting.
+        internal_post_fields = kwargs.get("update_fields")
+        posting_flag_only = (
+            internal_post_fields is not None
+            and bool(set(internal_post_fields))
+            and set(internal_post_fields) <= {"inventory_changes_applied", "updated_at"}
+        )
+        if self.goods_receipt_id and self.goods_receipt.blind_count_locked_at and not posting_flag_only:
+            raise ValidationError(
+                "Blind count is locked. Delivered quantities and traceability evidence cannot be changed."
+            )
         if self.goods_receipt_id and self.goods_receipt.status in (
             GoodsReceiptStatus.POSTED,
             GoodsReceiptStatus.CANCELLED,
@@ -2341,6 +2362,14 @@ class GoodsReceiptItem(BaseModel):
             self.expiry_date = self.purchase_order_item.expiry_date
         self.full_clean()
         super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.goods_receipt.blind_count_locked_at or self.goods_receipt.status in (
+            GoodsReceiptStatus.RECEIVED, GoodsReceiptStatus.INSPECTED,
+            GoodsReceiptStatus.POSTED, GoodsReceiptStatus.CANCELLED,
+        ):
+            raise ValidationError("A saved blind count cannot be deleted. Use controlled correction.")
+        return super().delete(*args, **kwargs)
 
     @property
     def base_unit_cost(self):
@@ -2697,6 +2726,10 @@ class GoodsInspectionItem(BaseModel):
             )
 
     def save(self, *args, **kwargs):
+        if self.inspection.goods_receipt.blind_count_locked_at:
+            raise ValidationError(
+                "Blind count inspection is locked. A discrepancy requires a documented correction."
+            )
         if self.inspection.goods_receipt.status in (
             GoodsReceiptStatus.POSTED,
             GoodsReceiptStatus.CANCELLED,
@@ -2708,6 +2741,14 @@ class GoodsInspectionItem(BaseModel):
         self.full_clean()
         super().save(*args, **kwargs)
         self.inspection.update_status()
+
+    def delete(self, *args, **kwargs):
+        receipt = self.inspection.goods_receipt
+        if receipt.blind_count_locked_at or receipt.status in (
+            GoodsReceiptStatus.RECEIVED, GoodsReceiptStatus.POSTED, GoodsReceiptStatus.CANCELLED,
+        ):
+            raise ValidationError("Saved inspection evidence cannot be deleted.")
+        return super().delete(*args, **kwargs)
 
     def __str__(self):
         return f"{self.inspection} - {self.item}"

@@ -1584,10 +1584,9 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                             "balance": str(due - incoming),
                         })
 
-                if short_lines and not short_delivery_reason:
-                    raise ValidationError({
-                        "short_delivery_reason": "Enter the reason for the partial delivery."
-                    })
+                # The clerk records their physical count before the system
+                # reveals any ordered quantity or flags a short delivery.
+                # A variance explanation may be entered after this count locks.
 
                 receipt = GoodsReceiptNote(
                     purchase_order=order,
@@ -1641,7 +1640,8 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                     )
 
                 receipt.status = GoodsReceiptStatus.RECEIVED
-                receipt.save(update_fields=["status", "updated_at"])
+                receipt.blind_count_locked_at = timezone.now()
+                receipt.save(update_fields=["status", "blind_count_locked_at", "updated_at"])
 
                 # A supplier delivery is complete when the recorded GRNs cover
                 # the full approved LPO quantities.  Do not wait for inventory
@@ -2081,6 +2081,10 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
     def preview_document(self, request, pk=None):
         """Return an inline, non-controlled LPO preview without recording a print."""
         order = self.get_object()
+        if not can_view_commercial_data(request):
+            raise PermissionDenied(
+                "Commercial LPO PDFs are restricted. Receiving staff use the blind Article view."
+            )
         try:
             pdf = build_purchase_order_pdf(
                 order,
@@ -2241,10 +2245,65 @@ class GoodsReceiptNoteViewSet(CreatedByModelMixin, ModelViewSet):
     def perform_update(self, serializer):
         receipt = serializer.instance
         self._require_receiving_clerk(self.request, receipt)
+        if receipt.blind_count_locked_at or receipt.status != GoodsReceiptStatus.DRAFT:
+            raise ValidationError("Saved blind counts are locked. Use the separate variance note action.")
         candidate_order = serializer.validated_data.get("purchase_order")
         if candidate_order and candidate_order.pk != receipt.purchase_order_id:
             raise ValidationError("A GRN cannot be reassigned to a different purchase order.")
         serializer.save()
+
+    @action(detail=True, methods=["get"], url_path="blind-reconciliation")
+    def blind_reconciliation(self, request, pk=None):
+        receipt = self.get_object()
+        self._require_receiving_clerk(request, receipt)
+        from apps.procurement.blind_reconciliation import blind_receiving_reconciliation
+        try:
+            result = blind_receiving_reconciliation(receipt)
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        return Response(result)
+
+    @action(detail=True, methods=["post"], url_path="variance-note")
+    def variance_note(self, request, pk=None):
+        receipt = self.get_object()
+        self._require_receiving_clerk(request, receipt)
+        explanation = str(request.data.get("note") or "").strip()
+        if not explanation or len(explanation) > 1500:
+            raise ValidationError({"note": "Enter a variance explanation of 1–1500 characters."})
+        from apps.procurement.blind_reconciliation import blind_receiving_reconciliation
+        from apps.audit_logs.models import AuditLog
+        try:
+            with transaction.atomic():
+                locked = GoodsReceiptNote.objects.select_for_update().get(pk=receipt.pk)
+                if not locked.blind_count_locked_at or locked.status not in (
+                    GoodsReceiptStatus.RECEIVED, GoodsReceiptStatus.INSPECTED,
+                ):
+                    raise ValidationError("Only a locked, unposted blind count can receive a variance note.")
+                comparison = blind_receiving_reconciliation(locked)
+                if not comparison["has_variance"]:
+                    raise ValidationError("No delivery quantity variance requires an explanation.")
+                if locked.note.strip():
+                    raise ValidationError(
+                        "A variance note already exists. Further corrections require independent review."
+                    )
+                locked.note = explanation
+                locked.save(update_fields=["note", "updated_at"])
+                AuditLog.objects.create(
+                    actor=request.user,
+                    action="blind_receiving_variance_explained",
+                    entity_type="procurement.GoodsReceiptNote",
+                    entity_id=locked.pk,
+                    metadata={
+                        "grn_number": locked.grn_number,
+                        "lpo_number": locked.purchase_order.lpo_number,
+                        "explanation": explanation,
+                        "blind_count_locked_at": locked.blind_count_locked_at.isoformat(),
+                    },
+                    created_by=request.user,
+                )
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+        return Response(blind_receiving_reconciliation(locked))
 
     @action(detail=True, methods=["get"])
     def readiness(self, request, pk=None):
@@ -2306,14 +2365,21 @@ class GoodsReceiptItemViewSet(CreatedByModelMixin, ModelViewSet):
     def perform_create(self, serializer):
         receipt = serializer.validated_data.get("goods_receipt")
         self._require_receiving_clerk(receipt)
+        if receipt.blind_count_locked_at or receipt.status != GoodsReceiptStatus.DRAFT:
+            raise ValidationError("Saved blind counts cannot receive extra GRN lines.")
         super().perform_create(serializer)
 
     def perform_update(self, serializer):
-        self._require_receiving_clerk(serializer.instance.goods_receipt)
+        receipt = serializer.instance.goods_receipt
+        self._require_receiving_clerk(receipt)
+        if receipt.blind_count_locked_at or receipt.status != GoodsReceiptStatus.DRAFT:
+            raise ValidationError("Saved blind counts cannot be edited.")
         super().perform_update(serializer)
 
     def perform_destroy(self, instance):
         self._require_receiving_clerk(instance.goods_receipt)
+        if instance.goods_receipt.blind_count_locked_at or instance.goods_receipt.status != GoodsReceiptStatus.DRAFT:
+            raise ValidationError("Saved blind count lines cannot be deleted.")
         if instance.inventory_changes_applied:
             raise ValidationError("Posted GRN lines cannot be removed.")
         if GoodsInspectionItem.objects.filter(goods_receipt_item=instance).exists():
@@ -2403,10 +2469,14 @@ class GoodsInspectionViewSet(CreatedByModelMixin, ModelViewSet):
 
     def perform_update(self, serializer):
         self._require_receiving_clerk(serializer.instance.goods_receipt)
+        if serializer.instance.goods_receipt.blind_count_locked_at:
+            raise ValidationError("Locked blind-count inspection evidence is immutable.")
         super().perform_update(serializer)
 
     def perform_destroy(self, instance):
         self._require_receiving_clerk(instance.goods_receipt)
+        if instance.goods_receipt.blind_count_locked_at:
+            raise ValidationError("Locked blind-count inspection evidence cannot be deleted.")
         if instance.goods_receipt.status in ("posted", "cancelled"):
             raise ValidationError("Posted or cancelled GRN inspections cannot be removed.")
         instance.delete()
@@ -2447,6 +2517,8 @@ class GoodsInspectionItemViewSet(CreatedByModelMixin, ModelViewSet):
 
     def perform_update(self, serializer):
         self._require_receiving_clerk(serializer.instance.inspection)
+        if serializer.instance.inspection.goods_receipt.blind_count_locked_at:
+            raise ValidationError("Locked blind-count inspection decisions cannot be edited.")
         if (
             serializer.validated_data.get("inspection", serializer.instance.inspection).pk
             != serializer.instance.inspection_id
@@ -2461,6 +2533,8 @@ class GoodsInspectionItemViewSet(CreatedByModelMixin, ModelViewSet):
 
     def perform_destroy(self, instance):
         self._require_receiving_clerk(instance.inspection)
+        if instance.inspection.goods_receipt.blind_count_locked_at:
+            raise ValidationError("Locked blind-count inspection decisions cannot be deleted.")
         if instance.inspection.goods_receipt.status in ("posted", "cancelled"):
             raise ValidationError("Posted or cancelled GRN inspection decisions cannot be removed.")
         instance.delete()

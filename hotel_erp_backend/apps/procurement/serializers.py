@@ -787,6 +787,7 @@ class GoodsReceiptNoteSerializer(serializers.ModelSerializer):
             "delivery_note_no",
             "supplier_invoice_no",
             "note",
+            "blind_count_locked_at",
             "posted_at",
             "posted_by",
             "created_at",
@@ -795,7 +796,7 @@ class GoodsReceiptNoteSerializer(serializers.ModelSerializer):
         )
         read_only_fields = (
             "id", "grn_number", "received_by", "status", "posted_at", "posted_by",
-            "received_date",
+            "received_date", "blind_count_locked_at",
             "created_at", "updated_at", "created_by",
         )
 
@@ -807,9 +808,12 @@ class GoodsReceiptNoteSerializer(serializers.ModelSerializer):
         return purchase_order
 
     def validate(self, attrs):
-        if self.instance and self.instance.status in ("posted", "cancelled") and attrs:
+        if self.instance and (
+            self.instance.blind_count_locked_at or self.instance.status != "draft"
+        ) and attrs:
             raise serializers.ValidationError(
-                "Posted or cancelled GRNs are immutable. Use a supplier return or controlled reversal."
+                "The saved blind count and GRN header are immutable. "
+                "Add a separately audited variance explanation instead."
             )
         purchase_order = attrs.get(
             "purchase_order",
@@ -900,8 +904,8 @@ class GoodsReceiptItemSerializer(serializers.ModelSerializer):
         order_line = attrs.get("purchase_order_item") or getattr(self.instance, "purchase_order_item", None)
         if self.instance and self.instance.inventory_changes_applied:
             raise serializers.ValidationError("Posted GRN lines cannot be changed.")
-        if receipt and receipt.status in ("posted", "cancelled"):
-            raise serializers.ValidationError("Posted or cancelled GRN lines cannot be changed.")
+        if receipt and (receipt.blind_count_locked_at or receipt.status in ("received", "inspected", "posted", "cancelled")):
+            raise serializers.ValidationError("Saved blind count lines cannot be changed.")
         if receipt and order_line and order_line.purchase_order_id != receipt.purchase_order_id:
             raise serializers.ValidationError(
                 {"purchase_order_item": "This LPO line does not belong to the selected goods receipt."}
@@ -1011,7 +1015,7 @@ class GoodsInspectionItemSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         inspection = attrs.get("inspection") or getattr(self.instance, "inspection", None)
         receipt_item = attrs.get("goods_receipt_item") or getattr(self.instance, "goods_receipt_item", None)
-        if inspection and inspection.goods_receipt.status in ("posted", "cancelled"):
+        if inspection and (inspection.goods_receipt.blind_count_locked_at or inspection.goods_receipt.status in ("received", "posted", "cancelled")):
             raise serializers.ValidationError(
                 "Inspection decisions cannot change after GRN posting or cancellation."
             )
@@ -1042,7 +1046,7 @@ class GoodsInspectionSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         receipt = attrs.get("goods_receipt") or getattr(self.instance, "goods_receipt", None)
-        if receipt and receipt.status in ("posted", "cancelled"):
+        if receipt and (receipt.blind_count_locked_at or receipt.status in ("received", "posted", "cancelled")):
             raise serializers.ValidationError(
                 "A posted or cancelled GRN cannot be inspected or changed."
             )
