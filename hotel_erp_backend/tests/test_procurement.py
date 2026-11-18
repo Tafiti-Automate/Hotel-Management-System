@@ -2637,6 +2637,14 @@ def test_procurement_level_one_requires_another_manager_when_available():
     assert first_step.stage == 1
     assert order.ordered_by_id == employee.pk
     assert first_step.approver_role_id == role.pk
+    assert Notification.objects.filter(
+        employee__user=reviewer,
+        title__contains="requires Procurement Manager approval",
+    ).exists()
+    assert not Notification.objects.filter(
+        employee=employee,
+        title__contains="requires Procurement Manager approval",
+    ).exists()
     assert Employee.objects.filter(
         is_active=True, user__is_active=True,
         user__groups=role, branch=branch,

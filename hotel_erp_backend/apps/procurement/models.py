@@ -1675,12 +1675,22 @@ class PurchaseOrder(BaseModel):
             )
             try:
                 from apps.notifications.services import notify_roles
+                from apps.employees.models import Employee
+                independent_review_available = bool(
+                    order.ordered_by_id and Employee.objects.filter(
+                        is_active=True,
+                        user__is_active=True,
+                        user__groups__name="Procurement Manager",
+                        branch_id=order.requisition.branch_id,
+                    ).exclude(pk=order.ordered_by_id).exists()
+                )
                 notify_roles(
                     ["Procurement Manager"],
                     branch=order.requisition.branch,
                     title=f"LPO {order.lpo_number} requires Procurement Manager approval",
                     message="Review the LPO and approve or reject it before Finance review.",
                     created_by=order.ordered_by.user if order.ordered_by_id else None,
+                    exclude_employee=order.ordered_by if independent_review_available else None,
                 )
             except Exception:
                 # Notification delivery must never cancel a valid LPO submission.
