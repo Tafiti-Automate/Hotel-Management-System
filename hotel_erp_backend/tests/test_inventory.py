@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.departments.models import Branch, Department
@@ -737,7 +738,7 @@ def test_store_requisition_issue_and_department_return_update_stock():
     # This legacy booking test models a completed, signed departmental pickup.
     StockIssue.objects.filter(pk=issue.pk).update(
         fulfillment_status=StockIssue.STATUS_COMPLETED,
-        signed_at=__import__('django.utils.timezone', fromlist=['now']).now(),
+        signed_at=timezone.now(),
     )
 
     requisition.refresh_from_db()
