@@ -178,3 +178,29 @@ def test_every_materials_analysis_menu_entry_has_a_live_report_endpoint():
         assert response.data["title"]
         assert response.data["columns"]
         assert "results" in response.data
+
+
+@pytest.mark.django_db
+def test_return_reconciliation_register_enforces_role_and_valid_type():
+    from django.contrib.auth.models import Group
+    keeper = get_user_model().objects.create_user(
+        username="return-report-keeper", employee_code="RPT-RET-KEEP"
+    )
+    keeper.groups.add(Group.objects.get_or_create(name="Store Keeper")[0])
+    allowed = APIClient()
+    allowed.force_authenticate(keeper)
+    for kind in ("supplier", "department"):
+        response = allowed.get(f"/api/v1/reports/return-reconciliation/?type={kind}")
+        assert response.status_code == 200, response.data
+        assert response.data["results"] == []
+        assert response.data["unreconciled_count"] == 0
+    invalid = allowed.get("/api/v1/reports/return-reconciliation/?type=unknown")
+    assert invalid.status_code == 400
+
+    ap = get_user_model().objects.create_user(
+        username="return-report-ap", employee_code="RPT-RET-AP"
+    )
+    ap.groups.add(Group.objects.get_or_create(name="Accounts Payable Clerk")[0])
+    denied = APIClient()
+    denied.force_authenticate(ap)
+    assert denied.get("/api/v1/reports/return-reconciliation/?type=supplier").status_code == 403
