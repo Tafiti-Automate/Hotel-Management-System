@@ -2198,9 +2198,9 @@ class GoodsReceiptNote(BaseModel):
             self.status = GoodsReceiptStatus.POSTED
             self.save(update_fields=["status", "posted_at", "posted_by", "updated_at"])
 
-            # Complete the originating Department requisition only after the
-            # linked Procurement requisition is fully received. A GRN must never
-            # reopen the request for another Store Keeper decision.
+            # Hand posted supplier stock back to Stores for departmental
+            # fulfillment, including partial deliveries. A posted GRN does NOT
+            # complete a Department requisition; only signed physical pickup does.
             source_request = getattr(self.purchase_order.requisition, "source_store_requisition", None)
             if source_request and source_request.status == "awaiting_procurement":
                 try:
