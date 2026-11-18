@@ -1,6 +1,6 @@
 import { itemStatus, type EntityKey, type Line, type Row } from './data'
 import { isTransportFailure, supplierQuotationMatches } from '../features/shared/mutationRecovery'
-import { ApiHttpError } from '../features/shared/httpError'
+import { ApiHttpError, explainReadFailure } from '../features/shared/httpError'
 import { resolveBackendResourcePath } from '../features/shared/backendResources'
 
 type ApiRecord = Record<string, unknown>
@@ -427,7 +427,7 @@ async function readList(path: string): Promise<ApiRecord[]> {
     pages += 1
     const response = await fetchWithTimeout(url, { headers: { Accept: 'application/json', ...authHeaders() } })
     if (!response.ok) {
-      throw new Error(`GET ${path} failed with ${response.status}`)
+      throw new ApiHttpError(explainReadFailure(path, response.status), response.status)
     }
 
     const body = await response.json()
@@ -1017,7 +1017,7 @@ export async function readBackendPayload(path: string): Promise<Record<string, R
   const response = await fetchWithTimeout(endpointUrl(path), {
     headers: { Accept: 'application/json', ...authHeaders() },
   })
-  if (!response.ok) throw new Error(`GET ${path} failed with ${response.status}`)
+  if (!response.ok) throw new ApiHttpError(explainReadFailure(path, response.status), response.status)
   return response.json() as Promise<Record<string, Row[]>>
 }
 
