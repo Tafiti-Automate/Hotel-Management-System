@@ -122,6 +122,7 @@ const roleNavigation: Record<string, NavGroup[]> = {
       { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
       { route: 'menu-engineering', label: 'Menu engineering', icon: 'scatter_plot' },
       { route: 'approval-inbox', label: 'Final approvals', icon: 'verified' },
+      { route: 'workflow-pay', label: 'Release supplier payments', icon: 'payments' },
     ] },
     { heading: 'Insights', items: [{ route: 'reports', label: 'Reports', icon: 'bar_chart' }] },
   ],
