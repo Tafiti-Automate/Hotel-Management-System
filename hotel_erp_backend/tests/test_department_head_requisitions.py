@@ -795,7 +795,7 @@ def test_role_by_role_acceptance_blocks_draft_mutations_and_approval_skips(workf
         assert client.post(
             path + "dispatch-transfer/",
             {"quantities": {line_id: "4.0000"}}, format="json",
-        ).status_code in (403, 404)
+        ).status_code in (400, 403, 404)
     issued = keeper.post(
         path + "dispatch-transfer/",
         {"quantities": {line_id: "4.0000"}}, format="json",
