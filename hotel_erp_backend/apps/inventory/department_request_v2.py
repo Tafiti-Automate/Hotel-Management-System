@@ -50,8 +50,20 @@ def request_scope(qs,user):
     if is_hod(user): return qs.filter(department=e.department,requested_by__branch=e.branch).exclude(status=StoreRequisitionStatus.DRAFT)
     if is_cost(user): return hotel_scope(qs,e,"requested_by__branch").filter(department_approved_at__isnull=False)
     if is_keeper(user):
-        stores=operational_stores_for_user(user).values_list("id",flat=True)
-        return qs.filter(store_id__in=stores).filter(Q(approved_at__isnull=False)|Q(status__in=(StoreRequisitionStatus.APPROVED,StoreRequisitionStatus.PARTIALLY_ISSUED,StoreRequisitionStatus.ISSUED)))
+        stores=StoreKeeperAssignment.objects.filter(
+            employee=e, is_active=True, store__is_active=True,
+            store__branch_id=e.branch_id,
+        ).values_list("store_id",flat=True)
+        return qs.filter(store_id__in=stores).filter(
+            Q(approved_at__isnull=False)
+            | Q(status__in=(
+                StoreRequisitionStatus.SUBMITTED,
+                StoreRequisitionStatus.APPROVED,
+                StoreRequisitionStatus.AWAITING_PROCUREMENT,
+                StoreRequisitionStatus.PARTIALLY_ISSUED,
+                StoreRequisitionStatus.ISSUED,
+            ), department_approved_at__isnull=False)
+        )
     return qs.none()
 
 class DepartmentRequestItemSerializer(BaseItemSerializer):
@@ -284,6 +296,42 @@ class StoreRequisitionViewSet(CreatedByModelMixin,ModelViewSet):
         r=self.get_object(); self._cost(r); why=str(request.data.get("reason") or "").strip()
         if not why: raise ValidationError({"reason":"Enter Cost Control rejection reason."})
         StoreRequisition.objects.filter(pk=r.pk,status=StoreRequisitionStatus.SUBMITTED).update(status=StoreRequisitionStatus.REJECTED,rejection_reason=why,updated_at=timezone.now()); r.refresh_from_db(); notify_employee(r.requested_by,title=f"{r.requisition_no} rejected by Cost Control",message=why,created_by=request.user); notify_roles(("Department Head",),title=f"{r.requisition_no} rejected by Cost Control",message=why,branch=r.requested_by.branch,department=r.department,created_by=request.user); return Response(self._request(r))
+    @action(detail=True, methods=["post"], url_path="send-to-procurement")
+    def send_to_procurement(self, request, pk=None):
+        """Storekeeper forwards only HOD-approved, physically unavailable goods."""
+        r=self.get_object()
+        keeper=self._keeper(r)
+        decisions=self._decisions(request.data.get("items"))
+        with transaction.atomic():
+            locked=StoreRequisition.objects.select_for_update().get(pk=r.pk)
+            if locked.status != StoreRequisitionStatus.SUBMITTED or not locked.department_approved_at:
+                raise ValidationError("Only HOD-approved requests can be forwarded to Procurement.")
+            if locked.procurement_requisition_id:
+                raise ValidationError("This request already has a linked purchase requisition.")
+            lines=list(locked.items.select_for_update().select_related("item"))
+            if set(decisions) != {str(x.pk) for x in lines}:
+                raise ValidationError({"items":"Confirm the Storekeeper quantity for every Article."})
+            now=timezone.now()
+            confirmed=False
+            for line in lines:
+                qty,why=decisions[str(line.pk)]
+                if not qty.is_finite() or qty<0 or qty>line.department_approved_limit:
+                    raise ValidationError({"items":f"Storekeeper quantity for {line.item} exceeds the HOD limit."})
+                if qty<line.department_approved_limit and not why:
+                    raise ValidationError({"items":f"Explain any reduction for {line.item}."})
+                StoreRequisitionItem.objects.filter(pk=line.pk).update(
+                    quantity_approved=qty,storekeeper_comment=why,updated_at=now,
+                )
+                confirmed |= qty>0
+            if not confirmed:
+                raise ValidationError("At least one Article must have a confirmed quantity.")
+            purchase=locked.create_procurement_requisition(
+                created_by=request.user,
+                reason=str(request.data.get("reason") or "").strip(),
+            )
+        from apps.procurement.serializers import PurchaseRequisitionSerializer
+        return Response(PurchaseRequisitionSerializer(purchase,context=self.get_serializer_context()).data)
+
     @action(detail=False, methods=["get"], url_path="fulfillment-queue")
     def fulfillment_queue(self, request):
         if not is_keeper(request.user):
@@ -297,6 +345,7 @@ class StoreRequisitionViewSet(CreatedByModelMixin,ModelViewSet):
             status__in=(
                 StoreRequisitionStatus.APPROVED,
                 StoreRequisitionStatus.PARTIALLY_ISSUED,
+                StoreRequisitionStatus.AWAITING_PROCUREMENT,
             ),
         ).order_by("created_at")
         records = []
