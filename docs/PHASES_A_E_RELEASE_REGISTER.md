@@ -31,7 +31,7 @@ The reference requires seven invariants: segregation of duties, store assets ver
 |---|---|---|
 | FEFO picking / expiry | Expiry-ordered batches, stock issues and virtual transit exist. | Verify oldest-expiring allocation, aisle-sorted picking / packing printouts |
 | Outlet handover | Transit dispatch and signed pickup/acknowledgment logic exist. | Role-specific real stock-movement and cost-center evidence |
-| Store-to-store transfers | Controlled approval → dispatch → destination receipt; legacy bypass disabled. | Cross-property policy/GL design and actual inter-property transfer flow **NOT ENABLED** |
+| Store-to-store transfers | Controlled approval → dispatch → destination receipt; legacy bypass disabled. | Same-hotel branch transfers supported; separate inter-hotel GL policy and unrelated-hotel transfers **NOT ENABLED** |
 | Stocktakes | Read-only theoretical count snapshots, Finance approval, Store Keeper variance posting and audit exist. | Movement-freeze race tests, scanner entry, decimal bottle counts, variance reconciliation |
 | Supplier/department returns | Return and supplier credit mechanisms exist. | Trace returned batch, supplier debit and stock valuation to GL |
 

@@ -641,9 +641,11 @@ class StockTransferSerializer(serializers.ModelSerializer):
         if source and destination:
             if source.pk == destination.pk:
                 raise serializers.ValidationError("Choose a different destination store.")
-            if source.branch_id != destination.branch_id:
+            if source.branch_id != destination.branch_id and (
+                not source.branch.hotel_id or source.branch.hotel_id != destination.branch.hotel_id
+            ):
                 raise serializers.ValidationError(
-                    "Cross-property stock transfers are not permitted without a separate approved workflow."
+                    "Transfers between different hotels require a separate approved accounting workflow."
                 )
         if self.instance and (
             self.instance.status != "pending" or self.instance.approved_by_id

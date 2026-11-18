@@ -881,11 +881,15 @@ class StockTransfer(BaseModel):
         if self.from_store_id and self.to_store_id:
             if self.from_store_id == self.to_store_id:
                 raise ValidationError("Source and destination stores must be different.")
-            # Inter-property movement needs a separate authorization and GL
-            # design. Never silently move inventory across property boundaries.
-            if self.from_store.branch_id != self.to_store.branch_id:
+            # Branch transfers inside one hotel are operationally supported.
+            # Different hotels require an explicit inter-hotel accounting policy.
+            source_hotel = self.from_store.branch.hotel_id
+            destination_hotel = self.to_store.branch.hotel_id
+            if self.from_store.branch_id != self.to_store.branch_id and (
+                not source_hotel or source_hotel != destination_hotel
+            ):
                 raise ValidationError(
-                    "Cross-property transfers require a separately approved workflow and are not enabled."
+                    "Transfers between different hotels require a separate approved accounting workflow."
                 )
 
     def apply_inventory_changes(self):

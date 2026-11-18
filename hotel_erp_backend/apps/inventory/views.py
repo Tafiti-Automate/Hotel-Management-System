@@ -707,8 +707,10 @@ class StockTransferViewSet(CreatedByModelMixin, ModelViewSet):
         to_store = serializer.validated_data.get("to_store", serializer.instance.to_store)
         if self._is_store_keeper() and from_store.pk not in self._assigned_store_ids():
             raise PermissionDenied("Choose a source store assigned to your Store Keeper account.")
-        if from_store.branch_id != to_store.branch_id:
-            raise ValidationError("Cross-property transfers require a separate approved workflow.")
+        if from_store.branch_id != to_store.branch_id and (
+            not from_store.branch.hotel_id or from_store.branch.hotel_id != to_store.branch.hotel_id
+        ):
+            raise ValidationError("Transfers between different hotels require separate approval and accounting.")
         serializer.save()
 
     def perform_destroy(self, instance):

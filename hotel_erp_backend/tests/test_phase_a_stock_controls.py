@@ -46,6 +46,7 @@ def test_transfer_requires_approval_and_cannot_be_applied_from_legacy_endpoint()
     item = Item.objects.create(
         category=Category.objects.create(name="Transfer-controlled category"),
         name="Transfer-controlled flour", sku="TRANSFER-CONTROL-FLOUR", unit="kg",
+        reorder_level=Decimal("0.00"),
     )
     InventoryBalance.objects.create(item=item, store=from_store, quantity_in_stock=Decimal("10.00"))
     keeper, employee, api = staff("Store Keeper", "transfer", branch, department)
@@ -99,6 +100,7 @@ def test_adjustment_requires_store_maker_and_finance_approver_and_posts_once():
     item = Item.objects.create(
         category=Category.objects.create(name="Adjustment-control category"),
         name="Adjustment-control flour", sku="ADJUSTMENT-CONTROL-FLOUR", unit="kg",
+        reorder_level=Decimal("0.00"),
     )
     InventoryBalance.objects.create(
         item=item, store=store, quantity_in_stock=Decimal("10.00"),
