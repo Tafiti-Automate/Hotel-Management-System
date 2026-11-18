@@ -87,11 +87,11 @@ export default function FinanceWorkbench() {
     ] : []),
   ]
   const paymentPathActive = paymentPathHint || (tab === 'payments'
-    ? (form.payment ? 'post' : 'payment')
+    ? (form.payment ? 'authorize' : 'payment')
     : tab === 'invoices' ? (form.invoice ? 'match' : 'invoice') : '')
   const openPaymentStep = (key: string) => {
     setPaymentPathHint(key)
-    setTab(['payment', 'post'].includes(key) ? 'payments' : 'invoices')
+    setTab(['payment', 'authorize', 'release'].includes(key) ? 'payments' : 'invoices')
     setForm({})
   }
   const invoiceStatus = (row: Row) => sid(row.status).trim().toLowerCase()
@@ -116,14 +116,15 @@ export default function FinanceWorkbench() {
         { key: 'match', label: 'Three-way match', actor: 'Finance', description: 'Compare LPO, accepted GRN and invoice values.', icon: 'difference' },
         { key: 'approve', label: 'Approve invoice', actor: 'Authorised approver', description: 'Release only a matched invoice for payment.', icon: 'approval' },
         { key: 'payment', label: 'Create payment', actor: 'Finance', description: 'Record method, amount, date and bank reference.', icon: 'payments' },
-        { key: 'post', label: 'Post settlement', actor: 'Finance', description: 'Post the payment and reduce the invoice balance.', icon: 'task_alt' },
+        { key: 'authorize', label: 'Authorize', actor: 'Financial Manager', description: 'Approve a submitted instruction independently.', icon: 'approval' },
+        { key: 'release', label: 'Release to bank', actor: 'Independent approver', description: 'Record release for external execution. This is NOT payment settlement.', icon: 'outbox' },
       ]}
     />
     <section className="finance-kpi-grid" aria-label="Finance operational metrics">
       <FinanceMetric icon="difference" label="Awaiting Matching" value={String(matchingQueue.length)} hint="Invoices requiring three-way match" tone={matchingQueue.length ? 'warning' : 'good'} />
       <FinanceMetric icon="approval" label="Ready for Approval" value={String(approvalQueue.length)} hint="Matched invoices awaiting decision" tone={approvalQueue.length ? 'warning' : 'good'} />
       <FinanceMetric icon="payments" label="Outstanding Payable" value={money(outstandingPayable)} hint="Current supplier invoice balance" />
-      <FinanceMetric icon="schedule" label="Payments to Post" value={String(paymentQueue.length)} hint="Prepared settlements not yet posted" tone={paymentQueue.length ? 'warning' : 'good'} />
+      <FinanceMetric icon="schedule" label="Payment instructions in progress" value={String(paymentQueue.length)} hint="Not yet confirmed settled by the bank" tone={paymentQueue.length ? 'warning' : 'good'} />
     </section>
     <div className="finance-workarea-label">Finance work areas</div>
     <div style={{ display: 'flex', gap: 5, marginBottom: 15, flexWrap: 'wrap' }}>{tabs.map(([key, icon, label]) => <button key={key} onClick={() => { setPaymentPathHint(''); setTab(key) }} style={{ ...tabButton, background: tab === key ? 'var(--accent-soft)' : 'var(--surface)', color: tab === key ? 'var(--accent)' : 'var(--text-muted)', borderColor: tab === key ? 'var(--accent)' : 'var(--border)' }}><Icon name={icon} size={17} />{label}</button>)}</div>
@@ -133,7 +134,7 @@ export default function FinanceWorkbench() {
         <FinanceTable tab={tab} data={scopedData} suppliers={suppliers} />
         <aside className="finance-action-panel" style={{ ...card, padding: 18 }}>
           {tab === 'invoices' && <InvoicePanel {...{ data: scopedData, form, setForm, busy, execute, orderLabel, invoiceLabel }} />}
-          {tab === 'payments' && <PaymentPanel {...{ data: scopedData, form, setForm, busy, execute, invoiceLabel }} />}
+          {tab === 'payments' && <PaymentPanel {...{ data: scopedData, form, setForm, busy, execute, invoiceLabel, role: app.user.role }} />}
           {tab === 'expenses' && <ExpensePanel {...{ data: scopedData, form, setForm, busy, execute, stores }} />}
           {tab === 'banking' && <BankPanel {...{ data: scopedData, form, setForm, busy, execute, stores }} />}
           {tab === 'methods' && <MethodPanel {...{ form, setForm, busy, execute }} />}
@@ -174,17 +175,30 @@ function InvoicePanel({ data, form, setForm, busy, execute, orderLabel, invoiceL
   </Panel>
 }
 
-function PaymentPanel({ data, form, setForm, busy, execute, invoiceLabel }: any) {
+function PaymentPanel({ data, form, setForm, busy, execute, invoiceLabel, role }: any) {
   const payable = data.invoices.filter((row: Row) => ['approved', 'partially_paid'].includes(sid(row.status)))
-  return <Panel title="Supplier settlement" note="Record supplier payments.">
+  const activeRole = sid(role).trim().toLowerCase()
+  const ap = activeRole === 'accounts payable clerk'
+  const finance = activeRole === 'financial manager'
+  const releaseOfficer = finance || activeRole === 'general manager'
+  const payment = data.payments.find((row: Row) => sid(row.id) === sid(form.payment))
+  return <Panel title="Supplier payment instructions" note="Prepare, independently authorize and release payment instructions. A released instruction is NOT a completed bank transfer or a settled invoice.">
     <Field label="Approved invoice"><Select value={form.invoice} change={(v) => setForm({ invoice: v })} rows={payable} label={invoiceLabel} /></Field>
     <Two><Field label="Amount"><Input type="number" value={form.amount} change={(v) => setForm({ ...form, amount: v })} /></Field><Field label="Payment date"><Input type="date" value={form.date} change={(v) => setForm({ ...form, date: v })} /></Field></Two>
     <Field label="Payment method"><Select value={form.method} change={(v) => setForm({ ...form, method: v })} rows={data.methods.filter((r: Row) => r.is_active)} /></Field>
     {data.banks.some((r: Row) => r.is_active) && <Field label="Bank account"><Select value={form.bank} change={(v) => setForm({ ...form, bank: v })} rows={data.banks.filter((r: Row) => r.is_active)} label={(row: Row) => `${sid(row.bank_name)} · ${sid(row.account_number)}`} optional /></Field>}
     <Field label="Reference"><Input value={form.reference} change={(v) => setForm({ ...form, reference: v })} /></Field>
-    <Action disabled={busy || !form.invoice || !form.method || !form.reference} click={() => execute(() => createBackendRecord('supplier-payments', { invoice: form.invoice, amount: number(form.amount), payment_date: form.date || new Date().toISOString().slice(0, 10), payment_method: form.method, bank_account: form.bank || null, reference: form.reference, note: '' }), 'Draft payment created')}>Create payment</Action>
-    <Field label="Draft payment"><Select value={form.payment} change={(v) => setForm({ payment: v })} rows={data.payments.filter((r: Row) => sid(r.status) === 'draft')} label={(row: Row) => `${sid(row.reference)} · ${money(row.amount)}`} /></Field>
-    <Action tone="good" disabled={busy || !form.payment} click={() => execute(() => runBackendAction('supplier-payments', sid(form.payment), 'post'), 'Supplier payment posted')}>Post payment</Action>
+    <Action disabled={!ap || busy || !form.invoice || !form.method || !form.reference} click={() => execute(() => createBackendRecord('supplier-payments', { invoice: form.invoice, amount: number(form.amount), payment_date: form.date || new Date().toISOString().slice(0, 10), payment_method: form.method, bank_account: form.bank || null, reference: form.reference, note: '' }), 'Draft payment created')}>Create payment</Action>
+    <Rule />
+    <Field label="Payment instruction"><Select value={form.payment} change={(v) => setForm({ payment: v })} rows={data.payments.filter((r: Row) => !['cancelled', 'posted'].includes(sid(r.status)))} label={(row: Row) => `${sid(row.reference)} · ${money(row.amount)} · ${sid(row.status)}`} /></Field>
+    {payment && <div style={{padding:'10px 12px',borderRadius:7,background:'var(--surface-2)',fontSize:12,marginBottom:10}}>
+      <strong>Current status: {sid(payment.status).replaceAll('_',' ')}</strong>
+      <div style={{color:'var(--text-muted)',marginTop:4}}>Payment request {sid(payment.reference)} · {money(payment.amount)}. This invoice remains outstanding until independently verified settlement is implemented.</div>
+    </div>}
+    {ap && <Action disabled={busy || !payment || sid(payment.status) !== 'draft'} click={() => execute(() => runBackendAction('supplier-payments', sid(form.payment), 'submit'), 'Payment submitted for independent Finance authorization')}>Submit payment instruction</Action>}
+    {finance && <Action tone="good" disabled={busy || !payment || sid(payment.status) !== 'submitted'} click={() => execute(() => runBackendAction('supplier-payments', sid(form.payment), 'authorize'), 'Payment authorized; awaiting independent release')}>Authorize payment</Action>}
+    {releaseOfficer && <Action disabled={busy || !payment || sid(payment.status) !== 'approved'} click={() => execute(() => runBackendAction('supplier-payments', sid(form.payment), 'release'), 'Payment instruction released; bank transfer is not yet confirmed')}>Release for bank execution</Action>}
+    <div style={{fontSize:11,color:'var(--warn)',marginTop:12}}>Bank or mobile-money execution is not connected. Do not consider an instruction paid merely because it was released.</div>
   </Panel>
 }
 
