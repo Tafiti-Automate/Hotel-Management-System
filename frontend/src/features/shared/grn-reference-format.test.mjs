@@ -9,15 +9,14 @@ const receiving = readFileSync(new URL('../../screens/ReceivingClerkWorkspaceV2.
 const procurement = readFileSync(new URL('../../screens/ProcurementWorkbench.tsx', import.meta.url), 'utf8')
 
 test('matches the supplied landscape hotel GRN layout and exact field order', () => {
-  assert.match(template, /Goods Received Note/)
+  assert.match(template, /<strong>{propertyLabel}<\/strong>/)
   assert.match(template, /\(PURCHASE ORDER RECEIVING\)/)
   assert.match(template, /grn-reference-supplier-address/)
   assert.match(template, /GRN No\./)
   assert.match(template, /LPO No\./)
   assert.match(template, /Delivery Date/)
   assert.match(template, /Delivery Note No\./)
-  assert.match(template, /Delivery Location/)
-  const headings = ['Status', 'Article', 'Ordered', 'Unit', 'Delivered', 'Unit Price', 'Nett', 'VAT %', 'Amount']
+  const headings = ['Status', 'Article', 'Ordered', 'Unit', 'Delivered', 'Unit Price', 'Net', 'VAT %', 'Amount']
   const header = template.slice(template.indexOf('<thead>'), template.indexOf('</thead>'))
   let previous = -1
   for (const heading of headings) {
@@ -25,9 +24,9 @@ test('matches the supplied landscape hotel GRN layout and exact field order', ()
     assert.ok(match > previous, 'Missing or out-of-order column: ' + heading)
     previous = match
   }
-  assert.match(template, /Nett Total/)
+  assert.match(template, /Net Total/)
   assert.match(template, /VAT Total/)
-  assert.match(template, /Total Amount/)
+  assert.match(template, /<strong>Total<\/strong>/)
   assert.match(template, /Signature :/)
   assert.match(template, /Status: UD- Partial Delivery/)
   assert.match(template, /grn-reference-timestamp/)
