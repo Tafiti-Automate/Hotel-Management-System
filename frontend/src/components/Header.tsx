@@ -78,11 +78,15 @@ export default function Header() {
     const timer = window.setInterval(refreshIfVisible, 45_000)
     document.addEventListener('visibilitychange', refreshIfVisible)
     window.addEventListener('focus', refreshIfVisible)
+    // Refresh the bell immediately after a successful local workflow mutation,
+    // rather than making staff wait for the next background poll.
+    window.addEventListener('hotel-workflow-updated', refreshIfVisible)
     return () => {
       notificationRequest.current += 1
       window.clearInterval(timer)
       document.removeEventListener('visibilitychange', refreshIfVisible)
       window.removeEventListener('focus', refreshIfVisible)
+      window.removeEventListener('hotel-workflow-updated', refreshIfVisible)
     }
   }, [app.apiStatus, loadNotifications])
 
