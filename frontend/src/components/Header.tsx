@@ -51,7 +51,7 @@ export default function Header() {
       setNotifications(next)
       setNotificationsError('')
     } catch (error) {
-      if (request === notificationRequest.current && withLoading) setNotificationsError(errorMessage(error))
+      if (request === notificationRequest.current) setNotificationsError(errorMessage(error))
     } finally {
       if (request === notificationRequest.current) setNotificationsLoading(false)
     }
@@ -116,7 +116,9 @@ export default function Header() {
     // the correct role workspace instead of guessing a record URL.
     const message = `${notification.title} ${notification.message}`.toLowerCase()
     const role = app.user.role.toLowerCase()
-    const target = /lpo|purchase order|quotation|procurement|supplier award/.test(message)
+    const target = /supplier payment|invoice|bank settlement|payment instruction/.test(message)
+      ? ['accounts payable clerk', 'financial manager', 'general manager'].includes(role) ? 'workflow-pay' : null
+      : /lpo|purchase order|quotation|procurement|supplier award/.test(message)
       ? ['procurement manager', 'procurement officer', 'financial manager', 'general manager'].includes(role)
         ? 'workflow-procure' : null
       : /goods receipt|grn|receiving/.test(message)
@@ -125,7 +127,7 @@ export default function Header() {
         ? 'workflow-stores' : null
     if (target) {
       setNotificationsOpen(false)
-      app.navTo(target, target === 'workflow-procure' ? 'Procurement' : 'Stores')
+      app.navTo(target, target === 'workflow-pay' ? 'Supplier payments' : target === 'workflow-procure' ? 'Procurement' : 'Stores')
     }
   }
 
@@ -136,7 +138,7 @@ export default function Header() {
       await markAllNotificationsRead()
     } catch (error) {
       setNotifications(previous)
-      setNotificationsError(errorMessage(error))
+      setNotificationsError('Could not mark notifications as read. ' + errorMessage(error))
     }
   }
 
@@ -188,9 +190,9 @@ export default function Header() {
               <header><div><strong>Notifications</strong><span>{unread ? `${unread} unread` : 'All caught up'}</span></div><button className="neo-icon-button" onClick={() => void loadNotifications()} aria-label="Refresh notifications"><Icon name="refresh" size={17} /></button></header>
               <div className="neo-notification-list">
                 {notificationsLoading && <NotificationState icon="progress_activity" title="Loading notifications" />}
-                {!notificationsLoading && notificationsError && <NotificationState icon="error" title="Could not load notifications" detail={notificationsError} action={() => void loadNotifications()} />}
+                {!notificationsLoading && notificationsError && <NotificationState icon="error" title="Notifications may be out of date" detail={notificationsError} action={() => void loadNotifications()} />}
                 {!notificationsLoading && !notificationsError && notifications.length === 0 && <NotificationState icon="notifications_none" title="No notifications yet" detail="Workflow updates and assigned tasks will appear here." />}
-                {!notificationsLoading && !notificationsError && notifications.map((notification) => <button key={notification.id} className={`neo-notification-item ${notification.is_read ? 'is-read' : ''}`} onClick={() => void readNotification(notification)}>
+                {!notificationsLoading && notifications.map((notification) => <button key={notification.id} className={`neo-notification-item ${notification.is_read ? 'is-read' : ''}`} onClick={() => void readNotification(notification)}>
                   <span className="neo-notification-icon"><Icon name={notification.is_read ? 'notifications' : 'notification_important'} size={17} /></span>
                   <span><strong>{notification.title}</strong><small>{notification.message}</small><time>{notificationTime(notification.created_at)}</time></span>
                   {!notification.is_read && <i />}
