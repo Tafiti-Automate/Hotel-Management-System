@@ -555,13 +555,11 @@ export default function ProcurementWorkbench() {
       </div>
       {isProcurementRole ? <div className="procurement-queue-tabs" style={{ ...card, padding: 8, marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 6 }}>
         {([
-          ['allocation', 'New Purchase Requests', procurementQueues.allocation],
+          ['allocation', 'Review Purchase Requests', procurementQueues.allocation],
           ['prepare', 'Prepare LPO', procurementQueues.prepare],
-          ...(role === 'procurement manager' ? [['purchasing', 'Level 1 Approval', procurementQueues.purchasing] as ['allocation' | LpoQueue, string, number]] : []),
-          ['finance', 'Level 2 · Finance', procurementQueues.finance],
-          ['management', 'Level 3 · GM', procurementQueues.management],
-          ['approved', 'Approved to Send', procurementQueues.approved],
-          ['history', 'History', procurementQueues.history],
+          ...(role === 'procurement manager' ? [['purchasing', 'My Approvals', procurementQueues.purchasing] as ['allocation' | LpoQueue, string, number]] : []),
+          ['approved', 'Ready to Send', procurementQueues.approved],
+          ['history', 'Tracking & History', procurementQueues.history + procurementQueues.finance + procurementQueues.management],
         ] as Array<['allocation' | LpoQueue, string, number]>).map(([key, label, count]) => {
           const active = key === 'allocation' ? stage === 'quote' : stage === 'lpo' && lpoQueue === key
           return <button key={key} type="button" className={`procurement-queue-tab${active ? ' is-active' : ''}`} onClick={() => openProcurementQueue(key)} style={{ minWidth: 0, padding: '10px 9px', border: `1px solid ${active ? 'var(--accent)' : 'transparent'}`, borderRadius: 8, background: active ? 'var(--accent-soft)' : 'transparent', color: active ? 'var(--accent)' : 'var(--text-muted)', font: 'inherit', cursor: 'pointer', textAlign: 'left' }}>
