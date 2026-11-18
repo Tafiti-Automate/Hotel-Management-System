@@ -238,3 +238,35 @@ def test_department_store_request_notifies_each_next_role():
         employee=procurement,
         title__contains="ready for Procurement",
     ).exists()
+
+
+@pytest.mark.django_db
+def test_workflow_notifications_deduplicate_per_employee_and_transition():
+    from apps.notifications.services import notify_employee, notify_roles
+    branch = Branch.objects.create(name="AP notification scope")
+    department = Department.objects.create(name="AP notification department")
+    user, employee = create_employee("ap-alert-finance", "AP-ALERT-FIN", department)
+    employee.branch = branch
+    employee.save(update_fields=("branch", "updated_at"))
+    user.groups.add(Group.objects.get_or_create(name="Financial Manager")[0])
+    _, other = create_employee("ap-alert-outsider", "AP-ALERT-OUT", department)
+
+    for _ in range(2):
+        notify_roles(
+            ["Financial Manager"],
+            title="Payment awaiting Finance approval",
+            message="Payment PAY-1 requires review.",
+            branch=branch,
+            deduplication_key="ap-payment:PAY-1:submitted",
+        )
+    assert Notification.objects.filter(
+        employee=employee, deduplication_key="ap-payment:PAY-1:submitted",
+    ).count() == 1
+    assert not Notification.objects.filter(employee=other).exists()
+
+    # A later stage must remain a distinct event; do not suppress legitimate work.
+    notify_employee(
+        employee, title="Payment released", message="Bank instruction issued.",
+        deduplication_key="ap-payment:PAY-1:released",
+    )
+    assert Notification.objects.filter(employee=employee).count() == 2
