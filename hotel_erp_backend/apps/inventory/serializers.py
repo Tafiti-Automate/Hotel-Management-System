@@ -989,6 +989,7 @@ class StoreReturnSerializer(serializers.ModelSerializer):
             "return_no",
             "return_date",
             "inventory_changes_applied",
+            "received_by",
             "created_at",
             "updated_at",
             "created_by",
