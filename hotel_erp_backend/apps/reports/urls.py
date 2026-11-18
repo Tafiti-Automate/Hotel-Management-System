@@ -14,10 +14,12 @@ from apps.reports.views import (
     StockSummaryReportView,
     ControlReportView,
     MaterialsAnalysisReportView,
+    ReturnReconciliationRegisterReportView,
 )
 
 
 urlpatterns = [
+    path("reports/return-reconciliation/", ReturnReconciliationRegisterReportView.as_view(), name="report-return-reconciliation"),
     path("reports/department-requests/", DepartmentRequestRegisterReportView.as_view(), name="report-department-requests"),
     path("reports/store-issues/", StoreIssueRegisterReportView.as_view(), name="report-store-issues"),
     path("reports/purchase-requisitions/", PurchaseRequisitionRegisterReportView.as_view(), name="report-purchase-requisitions"),
