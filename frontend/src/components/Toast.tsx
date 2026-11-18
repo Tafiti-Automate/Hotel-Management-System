@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useApp } from '../state/AppContext'
 import { Icon } from './Icon'
 import './toast-feedback.css'
@@ -6,11 +6,9 @@ import './toast-feedback.css'
 export default function Toast() {
   const app = useApp()
   const message = app.toast
-  const [remaining, setRemaining] = useState(5500)
 
   useEffect(() => {
     if (!message) return
-    setRemaining(5500)
     const timeout = window.setTimeout(app.closeToast, 5500)
     return () => window.clearTimeout(timeout)
   }, [message, app.closeToast])
@@ -25,6 +23,6 @@ export default function Toast() {
     <button type="button" onClick={app.closeToast} aria-label="Dismiss notification" title="Dismiss notification">
       <Icon name="close" size={18} />
     </button>
-    <span className="mc-feedback-toast-progress" aria-hidden="true" style={{ animationDuration: `${remaining}ms` }} />
+    <span className="mc-feedback-toast-progress" aria-hidden="true" style={{ animationDuration: "5500ms" }} />
   </aside>
 }
