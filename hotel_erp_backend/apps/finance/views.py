@@ -296,6 +296,8 @@ class SupplierPaymentViewSet(CreatedByModelMixin, ModelViewSet):
         require_finance_property(self.request.user, serializer.instance.invoice.purchase_order)
         invoice = serializer.validated_data.get("invoice", serializer.instance.invoice)
         require_finance_property(self.request.user, invoice.purchase_order)
+        if serializer.instance.created_by_id != self.request.user.pk:
+            raise PermissionDenied("Only the payment preparer may edit their draft.")
         if serializer.instance.status != SupplierPayment.STATUS_DRAFT:
             raise ValidationError("Payment instructions are locked after submission.")
         super().perform_update(serializer)
@@ -308,9 +310,11 @@ class SupplierPaymentViewSet(CreatedByModelMixin, ModelViewSet):
     def perform_destroy(self, instance):
         require_accounts_payable_action(self.request.user)
         require_finance_property(self.request.user, instance.invoice.purchase_order)
+        if instance.created_by_id != self.request.user.pk:
+            raise PermissionDenied("Only the payment preparer may delete their draft.")
         if instance.status != SupplierPayment.STATUS_DRAFT:
             raise ValidationError(
-                "A posted supplier payment cannot be deleted. Record a controlled reversal instead."
+                "Submitted or settled supplier payments cannot be deleted."
             )
         instance.delete()
 
