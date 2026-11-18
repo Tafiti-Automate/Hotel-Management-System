@@ -89,3 +89,12 @@
 .mode-dark.screen-app .receiving-view-tabs > button.active {
   background: var(--surface-3) !important;
 }
+
+/* Keep native controls, focus indicators and the LPO workspace legible at night. */
+.mode-dark.screen-app { color-scheme: dark; }
+.mode-dark.screen-app :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea) { background-color: var(--surface-2) !important; color: var(--text) !important; border-color: var(--border-2) !important; }
+.mode-dark.screen-app :where(input, select, textarea)::placeholder { color: var(--text-muted) !important; opacity: 1; }
+.mode-dark.screen-app :where(input, select, textarea, button):focus-visible { outline: 2px solid var(--accent) !important; outline-offset: 2px; }
+.mode-dark.screen-app .lpo-summary-card { background: var(--surface) !important; border-color: var(--border) !important; color: var(--text) !important; }
+.mode-dark.screen-app .lpo-summary-card :where(th, td) { border-color: var(--border) !important; }
+.mode-dark.screen-app .mc-feedback-toast { background: var(--surface) !important; color: var(--text) !important; }
