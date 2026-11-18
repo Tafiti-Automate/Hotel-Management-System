@@ -416,7 +416,7 @@ export default function ProcurementWorkbench() {
     'procurement officer': ['quote', 'lpo'],
     'financial manager': ['lpo'],
     'general manager': ['lpo'],
-    'receiving clerk': ['receipt', 'inspect', 'return'],
+    'receiving clerk': ['receipt', 'inspect'],
   }
   const allowedStages = app.user.isSuperuser || role === 'system administrator' ? null : roleStages[role]
   const tabs: Array<[Stage, string, string]> = ([
