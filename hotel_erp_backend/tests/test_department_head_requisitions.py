@@ -725,3 +725,91 @@ def test_department_return_requires_signed_issue_assigned_keeper_and_no_overcred
     assert InventoryBalance.objects.get(
         item=ctx["item"], store=ctx["store"]
     ).quantity_in_stock == before - Decimal("3.0000")
+
+
+@pytest.mark.django_db
+def test_role_by_role_acceptance_blocks_draft_mutations_and_approval_skips(workflow):
+    """Negative staging contract: IT, HOD, Cost Control and Stores cannot
+    change the wrong document state or forge the Supervisor's signature.
+    """
+    ctx = workflow
+    supervisor = ctx["supervisor"][2]
+    hod = ctx["head"][2]
+    cost = ctx["cost"][2]
+    keeper = ctx["keeper"][2]
+    request_id, line_id = _create_supervisor_draft(ctx, "4.0000")
+    admin_user = get_user_model().objects.create_superuser(
+        username="staging-it", employee_code="STAGING-IT",
+        password="staging-only-password",
+    )
+    admin = APIClient()
+    admin.force_authenticate(admin_user)
+    path = f"/api/v1/store-requisitions/{request_id}/"
+    line_path = f"/api/v1/store-requisition-items/{line_id}/"
+    for client in (admin, hod, cost, keeper):
+        assert client.patch(path, {"purpose": "Unauthorized change"}, format="json").status_code == 403
+        assert client.patch(
+            line_path, {"quantity_requested": "1.0000"}, format="json"
+        ).status_code in (403, 404)
+        assert client.delete(path).status_code == 403
+        assert client.post(path + "submit/", {}, format="json").status_code in (403, 404)
+    assert hod.post(
+        path + "department-approve/",
+        {"items": [{"id": line_id, "approved_quantity": "4.0000"}]},
+        format="json",
+    ).status_code == 400
+    assert keeper.post(
+        path + "dispatch-transfer/",
+        {"quantities": {line_id: "1.0000"}}, format="json",
+    ).status_code in (400, 403)
+    assert supervisor.post(path + "submit/", {}, format="json").status_code == 200
+    assert supervisor.patch(
+        path, {"purpose": "Alter submitted requisition"}, format="json"
+    ).status_code == 403
+    assert supervisor.patch(
+        line_path, {"quantity_requested": "1.0000"}, format="json"
+    ).status_code == 403
+    for client in (admin, supervisor, cost, keeper):
+        assert client.post(
+            path + "department-approve/",
+            {"items": [{"id": line_id, "approved_quantity": "4.0000"}]},
+            format="json",
+        ).status_code in (403, 404)
+    assert hod.post(
+        path + "department-approve/",
+        {"items": [{"id": line_id, "approved_quantity": "4.0000"}]},
+        format="json",
+    ).status_code == 200
+    for client in (admin, supervisor, hod, keeper):
+        assert client.post(
+            path + "cost-control-approve/",
+            {"items": [{"id": line_id, "approved_quantity": "4.0000"}]},
+            format="json",
+        ).status_code in (403, 404)
+    assert cost.post(
+        path + "cost-control-approve/",
+        {"items": [{"id": line_id, "approved_quantity": "4.0000"}]},
+        format="json",
+    ).status_code == 200
+    for client in (admin, supervisor, hod, cost):
+        assert client.post(
+            path + "dispatch-transfer/",
+            {"quantities": {line_id: "4.0000"}}, format="json",
+        ).status_code in (403, 404)
+    issued = keeper.post(
+        path + "dispatch-transfer/",
+        {"quantities": {line_id: "4.0000"}}, format="json",
+    )
+    assert issued.status_code == 201, issued.data
+    for client in (admin, hod, cost, keeper):
+        assert client.post(
+            f"/api/v1/stock-issues/{issued.data['id']}/acknowledge/",
+            {}, format="json",
+        ).status_code in (403, 404)
+    assert supervisor.post(
+        f"/api/v1/stock-issues/{issued.data['id']}/acknowledge/",
+        {}, format="json",
+    ).status_code == 200
+    original = StoreRequisitionItem.objects.get(pk=line_id)
+    assert original.quantity_issued == Decimal("4.0000")
+    assert StoreRequisition.objects.get(pk=request_id).status == StoreRequisitionStatus.COMPLETED
