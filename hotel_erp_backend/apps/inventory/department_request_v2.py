@@ -21,10 +21,16 @@ from core.mixins.viewsets import CreatedByModelMixin
 
 SUPERVISOR_ROLES=("Department Supervisor","Outlet Supervisor","Supervisor")
 def emp(user): return getattr(user,"employee_profile",None)
-def is_supervisor(user): return has_role(user,*SUPERVISOR_ROLES)
-def is_hod(user): return has_role(user,"Department Head")
-def is_cost(user): return has_role(user,"Cost Controller")
-def is_keeper(user): return has_role(user,"Store Keeper")
+def operational_role(user,*roles):
+    return bool(
+        user and user.is_authenticated and not user.is_superuser
+        and not user.groups.filter(name="System Administrator").exists()
+        and user.groups.filter(name__in=roles).exists()
+    )
+def is_supervisor(user): return operational_role(user,*SUPERVISOR_ROLES)
+def is_hod(user): return operational_role(user,"Department Head")
+def is_cost(user): return operational_role(user,"Cost Controller")
+def is_keeper(user): return operational_role(user,"Store Keeper")
 def ename(e):
     if not e: return ""
     return e.user.get_full_name() or e.user.username
@@ -91,7 +97,6 @@ class StoreRequisitionItemViewSet(CreatedByModelMixin,ModelViewSet):
     filterset_fields=("requisition","item","unit")
     def get_queryset(self): return super().get_queryset().filter(requisition__in=request_scope(StoreRequisition.objects.all(),self.request.user))
     def _editable(self,r):
-        if self.request.user.is_superuser or has_role(self.request.user,"System Administrator"): return
         e=emp(self.request.user)
         if not(is_supervisor(self.request.user) and e and r.requested_by_id==e.id and r.status in (StoreRequisitionStatus.DRAFT,StoreRequisitionStatus.REJECTED)):
             raise PermissionDenied("Only the Supervisor who created this request can edit its draft Articles.")
@@ -114,7 +119,7 @@ class StoreRequisitionViewSet(CreatedByModelMixin,ModelViewSet):
     filterset_fields=("status","department","store","requested_by")
     def get_queryset(self): return request_scope(super().get_queryset(),self.request.user)
     def perform_create(self,s):
-        if not(self.request.user.is_superuser or has_role(self.request.user,"System Administrator") or is_supervisor(self.request.user)): raise PermissionDenied("Only a Department Supervisor can create a Department request.")
+        if not is_supervisor(self.request.user): raise PermissionDenied("Only a Department Supervisor can create a Department request.")
         s.save(created_by=self.request.user)
     def _supervisor_draft(self,r):
         if self.request.user.is_superuser or has_role(self.request.user,"System Administrator"): return
@@ -226,7 +231,7 @@ class StoreRequisitionViewSet(CreatedByModelMixin,ModelViewSet):
     @action(detail=True,methods=["post"])
     def submit(self,request,pk=None):
         r=self.get_object(); self._supervisor_draft(r)
-        if not(is_supervisor(request.user) or request.user.is_superuser or has_role(request.user,"System Administrator")): raise PermissionDenied("Only the Department Supervisor can submit this request.")
+        if not is_supervisor(request.user): raise PermissionDenied("Only the Department Supervisor can submit this request.")
         try: r.submit(actor=request.user)
         except Exception as e: raise ValidationError(getattr(e,"message_dict",None) or getattr(e,"messages",None) or str(e))
         r.refresh_from_db(); return Response(self._request(r))
