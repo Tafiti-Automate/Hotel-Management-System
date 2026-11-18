@@ -477,6 +477,7 @@ class VendorQuotationSerializer(serializers.ModelSerializer):
 
 
 class PurchaseOrderSerializer(serializers.ModelSerializer):
+    supplier_name = serializers.CharField(source="supplier.name", read_only=True)
     approval_steps = serializers.SerializerMethodField()
     supplier_email = serializers.EmailField(source="supplier.email", read_only=True)
     delivery_due_date = serializers.DateField(read_only=True)
@@ -491,6 +492,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "requisition",
             "source_requisitions",
             "supplier",
+            "supplier_name",
             "ordered_by",
             "store",
             "po_number",
@@ -630,6 +632,9 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
 
 
 class PurchaseOrderItemSerializer(serializers.ModelSerializer):
+    item_name = serializers.CharField(source="item.name", read_only=True)
+    item_sku = serializers.CharField(source="item.sku", read_only=True)
+    unit_name = serializers.CharField(source="unit.name", read_only=True)
     line_total = serializers.DecimalField(
         max_digits=15,
         decimal_places=2,
@@ -644,6 +649,7 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
         model = PurchaseOrderItem
         fields = "__all__"
         read_only_fields = (
+            "item_name", "item_sku", "unit_name",
             "id",
             "base_quantity",
             "line_total",
