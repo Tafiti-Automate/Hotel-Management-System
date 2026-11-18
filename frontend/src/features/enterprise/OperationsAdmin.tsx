@@ -3,7 +3,7 @@ import { Icon } from '../../components/Icon'
 import EnterpriseTable, { type EnterpriseColumn } from '../../components/EnterpriseTable'
 import ConfirmTransaction from '../../components/ConfirmTransaction'
 import {
-  createBackendRecord, errorMessage, runBackendAction, updateBackendRecord, fetchOperationalReport,
+  createBackendRecord, errorMessage, runBackendAction, updateBackendRecord, fetchOperationalReport, readBackendPayload,
 } from '../../lib/api'
 import { useApp } from '../../state/AppContext'
 import { printReturnNote, exportReturnRegister } from './returnDocuments'
@@ -14,6 +14,17 @@ import {
 
 const btn='mc-action'
 const primary='mc-action mc-action-primary'
+async function verifyReturnLedger(type:'supplier'|'department',app:ReturnType<typeof useApp>){
+  try{
+    const result=await readBackendPayload('reports/return-reconciliation?type='+type) as unknown as {count:number;unreconciled_count:number;is_truncated:boolean}
+    const problems=Number(result.unreconciled_count||0)
+    const incomplete=Boolean(result.is_truncated)
+    const msg=`${result.count} recorded return lines checked. ${problems} inventory-ledger mismatch(es).`+
+      (incomplete?' Results limited to the first 1,000 lines; narrow the report in a future full export.':'')
+    app.showWorkflowAlert('Return stock reconciliation',msg,problems||incomplete?'warning':'success')
+  }catch(error){app.showWorkflowAlert('Return reconciliation unavailable',errorMessage(error),'failure')}
+}
+
 function useWrite(reload:()=>Promise<void>) {
   const app=useApp()
   const [busy,setBusy]=useState(false)
@@ -511,6 +522,7 @@ export function EnterpriseDepartmentReturn() {
         <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
           <button type="button" className={btn} disabled={!printed||!printLines.length} onClick={onPrint}><Icon name="print" size={16}/> Print Department Return Note</button>
           <button type="button" className={btn} onClick={()=>exportReturnRegister('department',returns,data['store-return-items']||[])}><Icon name="download" size={16}/> Export Department Return Register</button>
+          <button type="button" className={btn} onClick={()=>void verifyReturnLedger('department',app)}><Icon name="fact_check" size={16}/> Verify stock ledger</button>
         </div>
                 <header className="mc-panel-title">1. Register a physical department return</header>
         <label className="mc-field"><span>Receiving store</span><select value={store} onChange={e=>setStore(e.target.value)}>
@@ -619,6 +631,7 @@ export function EnterpriseSupplierReturn() {
         <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
           <button type="button" className={btn} disabled={!printRecord||!printLines.length} onClick={onPrint}><Icon name="print" size={16}/> Print Supplier Return Note</button>
           <button type="button" className={btn} onClick={()=>exportReturnRegister('supplier',data['supplier-returns']||[],data['supplier-return-items']||[])}><Icon name="download" size={16}/> Export Supplier Return Register</button>
+          <button type="button" className={btn} onClick={()=>void verifyReturnLedger('supplier',app)}><Icon name="fact_check" size={16}/> Verify stock ledger</button>
         </div>
                 <header className="mc-panel-title">1. Create supplier return</header>
         <label className="mc-field"><span>Posted GRN</span><select value={grn} onChange={e=>{setGrn(e.target.value);setStore('')}}>
