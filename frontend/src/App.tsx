@@ -49,7 +49,11 @@ export default function App() {
   }
 
   return (
-    <div className={`application-root screen-${app.screen} mode-${app.mode}`} style={rootStyle}>
+    <div
+      className={`application-root screen-${app.screen} mode-${app.mode}`}
+      data-ui-version="hotel-inventory-control-v1"
+      style={rootStyle}
+    >
       {app.screen === 'login' && <Login />}
       {app.screen === 'launchpad' && <Launchpad />}
       {app.screen === 'app' && <AppShell />}

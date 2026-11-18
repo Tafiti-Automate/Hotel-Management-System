@@ -3,7 +3,7 @@ import { useApp } from '../state/AppContext'
 import { Icon } from './Icon'
 import { Avatar } from './Avatar'
 import CommandPalette from './CommandPalette'
-import { canSwitchBranches, canSwitchModules, isStoresManager } from '../lib/access'
+import { canSwitchBranches, canSwitchModules } from '../lib/access'
 import {
   errorMessage,
   fetchNotifications,
@@ -26,10 +26,6 @@ export default function Header() {
   const [period, setPeriod] = useState<FiscalPeriodContext | null>(null)
   const [periodError, setPeriodError] = useState(false)
 
-  const storesManager = isStoresManager(app.user)
-  const moduleName = storesManager ? 'Stores & Inventory' : app.activeModule === 'hr' ? 'Human Resources' : 'Hotel Operations'
-  const pageTitle = titleForRoute(app.route, app.crumb)
-  const pageDescription = descriptionForRoute(app.route, app.user.role)
   const unread = notifications.filter((notification) => !notification.is_read).length
   const propertyName = app.currentBranch || app.user.branchName || app.user.departmentName || 'Current property'
   const propertyOption = app.data.branches.find((branch) => String(branch.name) === app.currentBranch)
@@ -192,77 +188,8 @@ export default function Header() {
         </div>
       </div>
     </header>
-    <div className="erp-page-heading">
-      <div className="erp-page-heading-main">
-        <div className="neo-breadcrumb"><span>{moduleName}</span><Icon name="chevron_right" size={12} /><strong>{pageTitle}</strong></div>
-        <div className="neo-page-title-row"><h1>{pageTitle}</h1><span>{pageDescription}</span></div>
-      </div>
-      <div className="erp-page-heading-context" aria-label="Current operational context">
-        <span className="erp-heading-cost-center"><Icon name="account_tree" size={15} />{contextName}</span>
-        <span className={'erp-heading-period' + (period?.status === 'closed' ? ' is-closed' : '')}><Icon name="calendar_month" size={15} />{periodLabel}</span>
-      </div>
-    </div>
-
     <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
   </>
-}
-
-function titleForRoute(route: string, crumb: string) {
-  const titles: Record<string, string> = {
-    dashboard: 'Dashboard',
-    'hr-dashboard': 'People dashboard',
-    'workflow-stores': 'Stores workflow',
-    'stock-on-hand': 'Stock on hand',
-    'store-transfers': 'Transfers',
-    'store-inventory': 'Manage inventory',
-    'store-analysis': 'Stock analysis',
-    'store-usage': 'Usage',
-    'store-purchase-requests': 'Purchase requests',
-    'workflow-procure': 'Procurement workbench',
-    'workflow-pay': 'Finance workbench',
-    suppliers: 'Suppliers',
-    supplierItems: 'Supplier quotations',
-    categories: 'Item categories',
-    items: 'Articles',
-    uoms: 'Units & conversions',
-    itemUnits: 'Units & conversions',
-    locations: 'Stores',
-    employees: 'Employees',
-    departments: 'Departments',
-    reports: 'Reports',
-    reportview: 'Report details',
-    'audit-log': 'Audit trail',
-    'access-management': 'User access',
-    'hotel-profile': 'Settings',
-  }
-  return titles[route] || crumb || 'Workspace'
-}
-
-function descriptionForRoute(route: string, role: string) {
-  const descriptions: Record<string, string> = {
-    dashboard: 'Live operational priorities and recent activity',
-    'hr-dashboard': 'People, departments and workforce activity',
-    'workflow-stores': 'Request, approval and issue control',
-    'stock-on-hand': 'Live quantities by store and article',
-    'store-transfers': 'Inter-store movement and receipt control',
-    'store-inventory': 'Stock count and inventory control',
-    'store-analysis': 'Store registers, stock position and movement analysis',
-    'store-usage': 'Consumption and usage analysis',
-    'store-purchase-requests': 'Shortage-driven purchasing requests',
-    'workflow-procure': 'Requisitions, sourcing, LPOs and receiving',
-    'workflow-pay': 'Invoices, matching and supplier payments',
-    suppliers: 'Supplier accounts and trading status',
-    supplierItems: 'Supplier pricing and quotation history',
-    categories: 'Catalogue structure and item classification',
-    items: 'Article master data and inventory setup',
-    uoms: 'Purchasing, base and issue unit conversions',
-    itemUnits: 'Purchasing, base and issue unit conversions',
-    reports: 'Operational and management reporting',
-    'audit-log': 'System activity and accountability',
-    'access-management': 'Roles, accounts and permissions',
-    'hotel-profile': 'Property and application configuration',
-  }
-  return descriptions[route] || role || 'Operations'
 }
 
 function NotificationState({ icon, title, detail, action }: { icon: string; title: string; detail?: string; action?: () => void }) {

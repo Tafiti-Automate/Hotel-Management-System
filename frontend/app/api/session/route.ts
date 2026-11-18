@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-export const SESSION_COOKIE = 'hms_server_session'
+const SESSION_COOKIE = 'hms_server_session'
 const backendOrigin = () => (
   process.env.BACKEND_ORIGIN ||
   (process.env.NODE_ENV !== 'production'

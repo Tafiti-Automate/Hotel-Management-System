@@ -23,14 +23,15 @@ test('shared design covers all five key workspaces and other role screens', () =
   assert.ok(shell.includes('GrnPostingConsole'))
   assert.ok(shell.includes('EnterpriseInvoiceMatching'))
 })
-test('topbar keeps secure property selector while page title has its own row', () => {
+test('topbar keeps secure property selector while each workspace owns one page title', () => {
   assert.ok(!header.split('</header>')[0].includes('<h1>'))
-  assert.ok(header.includes('erp-page-heading'))
+  assert.ok(!header.includes('erp-page-heading'))
   assert.ok(header.includes('neo-property-chip'))
   assert.ok(header.includes('canSwitchBranches(app.user)'))
   assert.ok(header.includes('CommandPalette'))
   assert.ok(sidebar.includes('Materials &amp; Cost Control'))
   assert.ok(shell.includes("content = role === 'department head'"))
+  assert.ok(css.includes('hotel-inventory-control-v1'))
   assert.ok(css.includes('@media print'))
   assert.ok(css.includes(':focus-visible'))
 })
