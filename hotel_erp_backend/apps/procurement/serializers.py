@@ -634,7 +634,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
 class PurchaseOrderItemSerializer(serializers.ModelSerializer):
     item_name = serializers.CharField(source="item.name", read_only=True)
     item_sku = serializers.CharField(source="item.sku", read_only=True)
-    unit_name = serializers.CharField(source="unit.name", read_only=True)
+    unit_name = serializers.CharField(source="unit.name", read_only=True, default=None)
     line_total = serializers.DecimalField(
         max_digits=15,
         decimal_places=2,
