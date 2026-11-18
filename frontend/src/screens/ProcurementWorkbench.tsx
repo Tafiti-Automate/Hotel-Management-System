@@ -1457,7 +1457,7 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, items, ite
         onQuantityChange={setDraftQuantity}
         totalOverride={draftTotal}
       />
-      <Action tone="good" disabled={busy || !draftQuantitiesValid} onClick={() => run(async () => { const result = await saveDraftQuantitiesAndSubmit(); setLpoQueue('purchasing'); return result }, 'LPO submitted for Procurement Manager approval', { order: id(order.id) })}>Submit for Level 1 Approval</Action>
+      <Action tone="good" disabled={busy || !draftQuantitiesValid} onClick={() => run(async () => { const result = await saveDraftQuantitiesAndSubmit(); setLpoQueue('purchasing'); return result }, 'LPO submitted. Awaiting Level 1 Procurement Manager approval', { order: id(order.id) })}>Submit for Level 1 Approval</Action>
     </>}
 
     {lpoQueue === 'purchasing' && order && <>
