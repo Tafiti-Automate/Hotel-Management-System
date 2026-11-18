@@ -133,6 +133,7 @@ def user_has_role(user, *roles):
     return bool(
         user
         and user.is_authenticated
+        and getattr(user, "is_active", False)
         and (user.is_superuser or user.groups.filter(name__in=roles).exists())
     )
 
@@ -157,6 +158,8 @@ def scope_grn_evidence_for_user(queryset, user, *, branch_path, receiving_owner_
     can review their hotel (or their branch when it has no hotel parent).
     The IT role may inspect evidence but cannot mutate receiving documents.
     """
+    if not getattr(user, "is_active", False):
+        return queryset.none()
     if user.is_superuser or user_has_role(user, "System Administrator"):
         return queryset
     employee = getattr(user, "employee_profile", None)

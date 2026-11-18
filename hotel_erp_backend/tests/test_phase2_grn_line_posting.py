@@ -98,6 +98,19 @@ def test_assigned_store_keeper_posts_receipt_with_line_destination_not_po_header
     )
     client = APIClient()
     client.force_authenticate(user=keeper_user)
+
+    # A previously authenticated Store Keeper must lose all GRN actions as
+    # soon as their account is disabled, even if their Employee and store
+    # assignment remain active. A disabled session cannot change stock.
+    keeper_user.is_active = False
+    keeper_user.save(update_fields=("is_active",))
+    assert client.get("/api/v1/grns/unposted-queue/").status_code == 403
+    assert client.get(f"/api/v1/grns/{grn.pk}/verification/").status_code in (403, 404)
+    assert client.post(f"/api/v1/grns/{grn.pk}/post-to-inventory/").status_code in (403, 404)
+    assert StockLedger.objects.filter(reference_id=grn.pk).count() == 0
+    keeper_user.is_active = True
+    keeper_user.save(update_fields=("is_active",))
+
     queue = client.get("/api/v1/grns/unposted-queue/")
     assert queue.status_code == 200, getattr(queue, "data", None)
     assert str(grn.pk) in {str(row["id"]) for row in queue.data}

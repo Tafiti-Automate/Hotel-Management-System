@@ -185,7 +185,7 @@ def _store_keeper_receipt_scope(queryset, user, *, receipt_path="purchase_order"
     Mixed-store receipts must not be visible as a keeper's actionable document.
     """
     employee = getattr(user, "employee_profile", None)
-    if not employee or not employee.is_active or not employee.branch_id:
+    if not getattr(user, "is_active", False) or not employee or not employee.is_active or not employee.branch_id:
         return queryset.none()
     assigned = list(StoreKeeperAssignment.objects.filter(
         employee=employee, is_active=True, store__is_active=True,
