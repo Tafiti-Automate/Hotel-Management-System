@@ -41,6 +41,7 @@ const roleNavigation: Record<string, NavGroup[]> = {
     { heading: 'Stores', items: [
       { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
       { route: 'grn-posting', label: 'Post received GRNs', icon: 'move_to_inbox' },
+      { route: 'receiving-return-new', label: 'Return to supplier', icon: 'assignment_return' },
       { route: 'transfer-dispatch', label: 'Transfer fulfillment', icon: 'local_shipping' },
       { route: 'workflow-stores', label: 'Issue requests', icon: 'inventory' },
       { route: 'store-transfers', label: 'Transfers', icon: 'sync_alt' },
@@ -128,7 +129,6 @@ const roleNavigation: Record<string, NavGroup[]> = {
       { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
       { route: 'workflow-procure', label: 'Receiving & GRN', icon: 'local_shipping' },
       { route: 'receiving-po-detail', label: 'Blind receiving', icon: 'inventory' },
-      { route: 'receiving-return-new', label: 'Return to supplier', icon: 'assignment_return' },
     ] },
     { heading: 'Insights', items: [{ route: 'reports', label: 'Reports', icon: 'bar_chart' }] },
   ],
