@@ -10,7 +10,7 @@ import { useApp } from '../../state/AppContext'
 import { printReturnNote, exportReturnRegister } from './returnDocuments'
 import {
   amount, dateStr, dec, DocumentReference, FormField, StateMessage,
-  StatusPill, str, useBackendRows, WorkspacePage, type ApiRow,
+  StatusPill, str, useBackendRows, WorkspacePage, OperationalSummary, type ApiRow,
 } from './workspaceKit'
 
 const btn='mc-action'
@@ -637,6 +637,11 @@ export function EnterpriseSupplierReturn() {
   return <WorkspacePage section="Stores / Supplier returns" title="Return to supplier"
     subtitle="The assigned Storekeeper returns stock from a posted GRN. Finance separately manages supplier credit approval.">
     <StateMessage loading={loading} error={error||mutationError}/>
+    {!loading&&!error&&<OperationalSummary label="Supplier return workload" metrics={[
+      {label:'Draft returns',value:drafts.length,description:'Require recorded article quantities',tone:drafts.length?'attention':'neutral'},
+      {label:'Awaiting acknowledgement',value:postedReturn.length,description:'Posted dispatches not yet acknowledged',tone:postedReturn.length?'attention':'neutral'},
+      {label:'Posted GRNs',value:postedGrns.length,description:'Potential eligible source receipts'},
+    ]} nextAction={selectedDraft?'Add verified return lines, post with confirmation, then record supplier acknowledgement.':'Select a posted GRN to prepare a supplier return. Stock changes only when the return is posted.'}/>}
     {selectedDraft&&<WorkflowPrerequisite domain="supplier_return" record={selectedDraft} action="apply"/>}
     {selectedDraft&&returnLines.length===0&&<div className="mc-workflow-prerequisite" role="status"><Icon name="info" size={17}/><div><strong>No articles to dispatch</strong><p>This supplier return has no recorded article quantities.</p><small>Next: Add accepted GRN articles and confirm available stock.</small></div></div>}
     {!loading&&!error&&<div className="mc-split mc-admin-split">

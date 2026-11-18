@@ -10,7 +10,7 @@ import {
 import { useApp } from '../../state/AppContext'
 import {
   amount, dateStr, dec, DocumentReference, FormField, StateMessage, StatusPill,
-  str, useBackendRows, WorkspacePage, type ApiRow,
+  str, useBackendRows, WorkspacePage, OperationalSummary, type ApiRow,
 } from './workspaceKit'
 
 const APPROVALS = ['approvals','requisitions','requisition-items','cost-center-budgets'] as const
@@ -102,6 +102,11 @@ export function EnterpriseApprovalInbox() {
   return <WorkspacePage section="Approvals / Authorisation" title="Approval inbox" subtitle={expectedLevel + ' · Assigned pending documents, with independent budget context'}
     actions={<button className={btn} onClick={() => void reload()}><Icon name="refresh" size={15}/> Refresh</button>}>
     <StateMessage loading={loading} error={error || mutationError} />
+    {!loading && !error && <OperationalSummary label="Approval workload" metrics={[
+      {label:'Assigned documents',value:queue.length,description:'Documents returned for your approval level',tone:queue.length?'attention':'neutral'},
+      {label:'Selected for review',value:selected?1:0,description:'Current document and budget impact'},
+      {label:'Unselected in queue',value:queue.length-(selected?1:0),description:'Other assigned documents awaiting review'},
+    ]} nextAction={selected?'Review the document lines and budget impact before approving or rejecting.':'Select a document from the assigned queue to begin review.'}/>}
     {!loading && !error && <div className="mc-split mc-approval-split">
       <div className="mc-dense-panel mc-master-list">
         <header className="mc-panel-title">Pending approval queue <span>{queue.length}</span></header>
@@ -229,6 +234,11 @@ export function EnterpriseQuoteMatrix() {
     actions={<button className={affirmative} disabled={!buyer&&!controller} onClick={()=>{reset();setCreating(true)}}><Icon name="add" size={15}/> New quotation</button>}>
     <StateMessage loading={loading} error={error||mutationError}/>
     {!loading&&!error&&<>
+      <OperationalSummary label="Quotation workload" metrics={[
+        {label:'Approved price records',value:prices.length,description:'Available contracted supplier prices',tone:'success'},
+        {label:'Submitted for review',value:proposals.filter(row=>str(row.status)==='submitted').length,description:'Awaiting Cost Control decision',tone:'attention'},
+        {label:'Draft or rejected quotes',value:proposals.filter(row=>['draft','rejected'].includes(str(row.status))).length,description:'Require Purchasing follow-up'},
+      ]} nextAction={controller?'Review submitted quotations and publish only approved prices.':buyer?'Prepare supplier quotations and submit drafts to Cost Control.':'Quotation publication requires an authorized purchasing or cost-control role.'}/>
       <EnterpriseTable<ApiRow> label="Approved supplier price catalogue" rows={prices} columns={priceColumns}
         onOpen={r=>{reset();setSelection(str(r.id))}}/>
       <div className="mc-split mc-quote-split mc-footer-panel">
@@ -327,8 +337,11 @@ export function EnterprisePurchasingWorkbench() {
     actions={<button className={btn} onClick={()=>void reload()}><Icon name="refresh" size={16}/> Refresh</button>}>
     <StateMessage loading={loading} error={error||mutationError}/>
     {!loading&&!error&&<>
-      <div className="mc-compact-metrics"><div><span>Approved PR lines</span><strong>{lines.length}</strong></div>
-        <div><span>Selected lines</span><strong>{selected.length}</strong></div><div><span>Supplier groups</span><strong>{groups.length}</strong></div></div>
+      <OperationalSummary label="Purchase order preparation" metrics={[
+        {label:'Approved PR lines',value:lines.length,description:'Ready for procurement consolidation'},
+        {label:'Selected lines',value:selected.length,description:'Included in the current proposal'},
+        {label:'Supplier batches',value:groups.length,description:'Grouped by supplier and currency'},
+      ]} nextAction={canGenerate?'Review proposed batches, then confirm LPO generation.':'Select approved lines with valid supplier allocation, pricing and quantities.'}/>
       <EnterpriseTable<ApiRow> label="Approved requisition lines" rows={lines} columns={cols} onSelectionChange={setSelected}/>
       <section className="mc-dense-panel mc-footer-panel"><header className="mc-panel-title">Proposed supplier batches</header>
         <div className="mc-batch-groups">{groups.map(group=><div key={group.name}><strong>{group.name}</strong><span>{group.lines.length} lines</span><b className="mc-num">UGX {amount(group.total)}</b></div>)}</div>

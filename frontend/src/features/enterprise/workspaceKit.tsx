@@ -142,6 +142,28 @@ export function useBackendRows(paths: readonly string[]) {
   return { data, loading, error, reload, setError }
 }
 
+/**
+ * Shared, read-only priority summary for enterprise operational workspaces.
+ * Counts must come from records already authorized and returned by the API.
+ * This component neither changes permissions nor fetches a broader dataset.
+ */
+export function OperationalSummary({ label, metrics, nextAction }: {
+  label: string
+  metrics: { label: string; value: number; description: string; tone?: 'neutral' | 'attention' | 'success' }[]
+  nextAction?: string
+}) {
+  return <section className="mc-operational-summary" aria-label={label}>
+    <div className="mc-operational-summary-metrics">
+      {metrics.map(metric => <div className="ds-panel mc-operational-metric" data-tone={metric.tone || 'neutral'} key={metric.label}>
+        <span>{metric.label}</span>
+        <strong className="ds-number">{metric.value.toLocaleString('en-UG')}</strong>
+        <small>{metric.description}</small>
+      </div>)}
+    </div>
+    {nextAction && <p className="mc-operational-next"><Icon name="info" size={16}/><span>{nextAction}</span></p>}
+  </section>
+}
+
 export function WorkspacePage({ section, title, subtitle, actions, children }: {
   section: string; title: string; subtitle: string; actions?: ReactNode; children: ReactNode
 }) {

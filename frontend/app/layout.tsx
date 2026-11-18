@@ -35,6 +35,8 @@ import '../src/hotel-evergreen-unified.css'
 import '../src/design-foundation.css'
 /* Receiving command-centre refinement; GRN document print overrides remain last. */
 import '../src/receiving-workspace.css'
+/* Shared procurement and supplier-return command-centre presentation. */
+import '../src/procurement-workspace.css'
 /* Page-scoped final fixes: Department Requisitions master/detail + Article selector. */
 import '../src/department-requisitions-fix.css'
 import '../src/market-lists.css'

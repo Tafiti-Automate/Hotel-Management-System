@@ -1,0 +1,94 @@
+/*
+ * Enterprise procurement and supplier-return command centres.
+ * Only styles shared opt-in status and metric components; no posting/approval
+ * rules, role permissions, GRN print geometry or backend API calls changed.
+ */
+.application-root.screen-app .mc-enterprise .mc-operational-summary {
+  display: grid;
+  gap: var(--ds-space-3);
+  min-width: 0;
+  margin-block: var(--ds-space-3) var(--ds-space-4);
+}
+.application-root.screen-app .mc-enterprise .mc-operational-summary-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--ds-space-3);
+}
+.application-root.screen-app .mc-enterprise .mc-operational-metric {
+  display: grid;
+  align-content: start;
+  gap: var(--ds-space-2);
+  box-shadow: none;
+  border-color: var(--ds-border);
+}
+.application-root.screen-app .mc-enterprise .mc-operational-metric > span {
+  color: var(--ds-text-muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+.application-root.screen-app .mc-enterprise .mc-operational-metric > strong {
+  color: var(--ds-text);
+  font-size: clamp(23px, 2vw, 30px);
+  line-height: 1.2;
+}
+.application-root.screen-app .mc-enterprise .mc-operational-metric > small {
+  color: var(--ds-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.application-root.screen-app .mc-enterprise .mc-operational-metric[data-tone="attention"] {
+  border-left: 3px solid var(--ds-warning);
+}
+.application-root.screen-app .mc-enterprise .mc-operational-metric[data-tone="success"] {
+  border-left: 3px solid var(--ds-success);
+}
+.application-root.screen-app .mc-enterprise .mc-operational-next {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ds-space-2);
+  margin: 0;
+  padding: var(--ds-space-3);
+  background: var(--ds-surface-muted);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-control);
+  color: var(--ds-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.application-root.screen-app .mc-enterprise .mc-operational-next > :first-child {
+  flex-shrink: 0;
+}
+/* Keep operational registers legible on desktop and horizontally scrollable on tablets. */
+.application-root.screen-app .mc-enterprise .mc-split > *,
+.application-root.screen-app .mc-enterprise .mc-dense-panel {
+  min-width: 0;
+}
+.application-root.screen-app .mc-enterprise .mc-detail-lines {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.application-root.screen-app .mc-enterprise .mc-detail-lines thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--ds-surface);
+}
+@media (max-width: 900px) {
+  .application-root.screen-app .mc-enterprise .mc-operational-summary-metrics {
+    grid-template-columns: repeat(2, minmax(0,1fr));
+  }
+}
+@media (max-width: 680px) {
+  .application-root.screen-app .mc-enterprise .mc-operational-summary-metrics {
+    grid-template-columns: 1fr;
+  }
+  .application-root.screen-app .mc-enterprise .mc-operational-metric {
+    gap: 4px;
+    padding: var(--ds-space-3);
+  }
+}
+@media print {
+  .application-root.screen-app .mc-enterprise .mc-operational-summary {
+    display: none !important;
+  }
+}
