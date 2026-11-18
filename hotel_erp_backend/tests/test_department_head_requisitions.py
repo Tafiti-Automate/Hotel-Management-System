@@ -642,6 +642,13 @@ def test_department_return_requires_signed_issue_assigned_keeper_and_no_overcred
     assert supervisor.post(
         f"/api/v1/store-returns/{return_id}/apply/", {}, format="json"
     ).status_code in (403, 404)
+    period = FiscalPeriod.objects.get(branch=ctx["branch"])
+    FiscalPeriod.objects.filter(pk=period.pk).update(status=FiscalPeriod.STATUS_CLOSED)
+    locked = keeper.post(
+        f"/api/v1/store-returns/{return_id}/apply/", {}, format="json",
+    )
+    assert locked.status_code == 400, locked.data
+    FiscalPeriod.objects.filter(pk=period.pk).update(status=FiscalPeriod.STATUS_OPEN)
     applied = keeper.post(
         f"/api/v1/store-returns/{return_id}/apply/", {}, format="json",
     )
