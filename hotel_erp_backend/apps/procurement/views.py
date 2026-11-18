@@ -1902,6 +1902,21 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
         order_branch_id = getattr(order.requisition, "branch_id", None)
         if order_branch_id and employee.branch_id != order_branch_id:
             raise PermissionDenied("This LPO belongs to a different branch.")
+        # Enforce maker-checker before either a named-employee or role-queue
+        # approval path can return. Older LPO workflows may assign a named
+        # employee directly, and must not bypass this control.
+        if step.stage == 1 and order.ordered_by_id == employee.pk:
+            procurement_role = step.approver_role or Group.objects.filter(
+                name="Procurement Manager"
+            ).first()
+            if procurement_role and Employee.objects.filter(
+                is_active=True, user__is_active=True,
+                user__groups=procurement_role,
+                branch_id=employee.branch_id,
+            ).exclude(pk=employee.pk).exists():
+                raise PermissionDenied(
+                    "You prepared this LPO. Another assigned Procurement Manager must approve Level 1."
+                )
         if step.approver_id:
             if step.approver_id != employee.id:
                 raise PermissionDenied(f"This stage is assigned to {step.approver}.")
@@ -1911,18 +1926,6 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                 raise PermissionDenied(
                     f"This stage requires the {step.approver_role.name} role."
                 )
-            # Prefer maker-checker when another active Manager exists at
-            # the same property. Single-manager properties retain access.
-            if step.stage == 1 and order.ordered_by_id == employee.pk:
-                another_approver = Employee.objects.filter(
-                    is_active=True, user__is_active=True,
-                    user__groups=step.approver_role,
-                    branch_id=employee.branch_id,
-                ).exclude(pk=employee.pk).exists()
-                if another_approver:
-                    raise PermissionDenied(
-                        "You prepared this LPO. Another assigned Procurement Manager must approve Level 1."
-                    )
             return step
         raise PermissionDenied("This approval stage has no assigned role or employee.")
 
