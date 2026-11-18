@@ -221,7 +221,7 @@ export function EnterpriseStocktakeSheet() {
   }
   const sync=async()=>{
     if(!navigator.onLine){return}
-    const pairs=Object.entries(draft).filter(([_,value])=>/^(\d+)(\.\d{1,2})?$/.test(value))
+    const pairs=Object.entries(draft).filter(([_,value])=>/^(\d+)(\.\d{1,4})?$/.test(value))
     if(!pairs.length)return
     const ok=await execute(async()=>{
       for(const [lineId,value] of pairs)await updateBackendRecord('stock-count-items',lineId,{physical_quantity:value})
@@ -229,10 +229,24 @@ export function EnterpriseStocktakeSheet() {
     if(ok){setDraft({});setUnsynced(false);try{localStorage.removeItem(storageKey)}catch{/* unavailable */}}
   }
   const submit=async()=>execute(()=>runBackendAction('stock-counts',id,'submit'),'Count sheet submitted to Cost Control')
+  const app=useApp()
+  const printBlindCount=()=>{
+    if(!count||!items.length)return
+    const esc=(v:unknown)=>str(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+    const rows=items.map((line,i)=>'<tr><td>'+(i+1)+'</td><td>'+esc(line.bin_location||'—')+'</td><td>'+esc(line.item_name||'Article')+'</td><td>'+
+      esc(line.unit_name||line.unit||'Base')+'</td><td>'+esc(draft[str(line.id)]??line.physical_quantity??'')+'</td></tr>').join('')
+    const html='<!doctype html><html><head><meta charset="utf-8"><title>Blind stocktake '+esc(count.count_no)+
+      '</title><style>@page{size:A4 portrait;margin:14mm}body{font:12px Arial,sans-serif;color:#1a3428}h1{font-size:21px;border-bottom:3px solid #146940;padding-bottom:14px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #b2c1b7;padding:8px;text-align:left}th{background:#eaf1ed}.sig{margin-top:50px;border-top:1px solid #768c7d;padding-top:8px}</style></head><body><h1>BLIND PHYSICAL STOCKTAKE SHEET</h1><p>Count: '+esc(count.count_no)+' · Store: '+esc(count.store_name||count.store)+' · Date: '+esc(count.count_date)+
+      '</p><p>Physical counts only. Theoretical stock and variances are deliberately concealed from counters.</p><table><thead><tr><th>#</th><th>Shelf / Bin</th><th>Article</th><th>Base unit</th><th>Physical count</th></tr></thead><tbody>'+rows+
+      '</tbody></table><div class="sig">Counted by: ____________________ Signature: ____________________ Date: __________</div></body></html>'
+    const popup=window.open('','_blank')
+    if(!popup){app.showWorkflowAlert('Stocktake print blocked','Allow pop-ups for this site and retry.','warning');return}
+    popup.document.write(html);popup.document.close();popup.focus();popup.print()
+  }
   const editable=count&&['draft','in_progress'].includes(str(count.status))
   return <WorkspacePage section="Inventory / Physical count" title="Blind stocktake entry"
     subtitle="Shelf-ordered counts · no theoretical quantity revealed to counters · offline draft saved locally."
-    actions={<button className={btn} disabled={loading} onClick={()=>void reload()}><Icon name="refresh" size={15}/> Refresh</button>}>
+    actions={<><button className={btn} disabled={!count||!items.length} onClick={printBlindCount}><Icon name="print" size={15}/> Print blind count sheet</button><button className={btn} disabled={loading} onClick={()=>void reload()}><Icon name="refresh" size={15}/> Refresh</button></>}>
     <StateMessage loading={loading} error={error||mutationError}/>
     {!loading&&!error&&<label className="mc-field mc-picker"><span>Count session</span><select value={id} onChange={e=>setChosenId(e.target.value)}>
       <option value="">Choose assigned count sheet</option>{(data['stock-counts']||[]).map(row=><option value={str(row.id)} key={str(row.id)}>{str(row.count_no)} · {str(row.store_name||row.store)} · {str(row.status)}</option>)}
@@ -246,7 +260,7 @@ export function EnterpriseStocktakeSheet() {
         <div className="mc-table-scroll"><table className="mc-simple-table"><thead><tr><th>Shelf / Bin</th><th>Article</th><th>Base unit</th><th>Physical count</th></tr></thead>
         <tbody>{items.map((line,index)=><tr key={str(line.id)}><td>{str(line.bin_location)||'—'}</td>
           <td><b>{str(line.item_name||line.item)}</b></td><td>{str(line.unit_name||line.unit||'Base')}</td>
-          <td><input className="mc-count-input" aria-label={'Physical count for '+str(line.item_name||line.item)} type="number" step="0.01" min="0"
+          <td><input className="mc-count-input" aria-label={'Physical count for '+str(line.item_name||line.item)} type="number" step="0.0001" min="0"
             disabled={!editable||busy} value={draft[str(line.id)]??str(line.physical_quantity??'')}
             onChange={event=>update(str(line.id),event.target.value)}
             onKeyDown={event=>{if(event.key==='Enter'){event.preventDefault();(event.currentTarget.closest('tr')?.nextElementSibling?.querySelector('input') as HTMLInputElement|null)?.focus()}}}/>
