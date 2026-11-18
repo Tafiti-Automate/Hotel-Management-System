@@ -687,6 +687,14 @@ def test_department_return_requires_signed_issue_assigned_keeper_and_no_overcred
     assert credited.unit_cost_snapshot == Decimal("2500.0000")
     assert credited.total_cost_snapshot == Decimal("5000.0000")
     assert credited.wac_before == Decimal("3200.0000")
+    # Reporting must reconcile the posted receipt against the immutable ledger.
+    checked = keeper.get("/api/v1/reports/return-reconciliation/?type=department")
+    assert checked.status_code == 200, checked.data
+    registered = [r for r in checked.data["results"] if r["reference"] == created.data["return_no"]]
+    assert len(registered) == 1
+    assert registered[0]["quantity"] == "2.0000"
+    assert registered[0]["ledger_quantity"] == "2.0000"
+    assert registered[0]["reconciled"] is True
     assert InventoryBalance.objects.get(
         item=ctx["item"], store=ctx["store"]
     ).weighted_average_cost == Decimal("3117.6471")
