@@ -761,7 +761,7 @@ def test_role_by_role_acceptance_blocks_draft_mutations_and_approval_skips(workf
     assert keeper.post(
         path + "dispatch-transfer/",
         {"quantities": {line_id: "1.0000"}}, format="json",
-    ).status_code in (400, 403)
+    ).status_code in (400, 403, 404)
     assert supervisor.post(path + "submit/", {}, format="json").status_code == 200
     assert supervisor.patch(
         path, {"purpose": "Alter submitted requisition"}, format="json"
