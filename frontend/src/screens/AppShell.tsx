@@ -46,6 +46,7 @@ const EnterprisePurchaseRequisitionBuilder = lazy(() => import('../features/ente
 const EnterprisePurchaseOrderDetail = lazy(() => import('../features/enterprise/ProcurementFinance').then(module => ({ default: module.EnterprisePurchaseOrderDetail })))
 const EnterpriseBlindReceiving = lazy(() => import('../features/enterprise/OperationsAdmin').then(module => ({ default: module.EnterpriseBlindReceiving })))
 const EnterpriseSupplierReturn = lazy(() => import('../features/enterprise/OperationsAdmin').then(module => ({ default: module.EnterpriseSupplierReturn })))
+const EnterpriseDepartmentReturn = lazy(() => import('../features/enterprise/OperationsAdmin').then(module => ({ default: module.EnterpriseDepartmentReturn })))
 const EnterpriseInvoiceMatching = lazy(() => import('../features/enterprise/ProcurementFinance').then(module => ({ default: module.EnterpriseInvoiceMatching })))
 const EnterpriseBudgetMatrix = lazy(() => import('../features/enterprise/ProcurementFinance').then(module => ({ default: module.EnterpriseBudgetMatrix })))
 const EnterprisePeriodClose = lazy(() => import('../features/enterprise/ProcurementFinance').then(module => ({ default: module.EnterprisePeriodClose })))
@@ -98,6 +99,7 @@ export default function AppShell() {
   else if (route === 'purchasing-order-detail') content = <EnterprisePurchaseOrderDetail />
   else if (route === 'receiving-po-detail') content = <EnterpriseBlindReceiving />
   else if (route === 'receiving-return-new') content = <EnterpriseSupplierReturn />
+  else if (route === 'department-returns-new') content = <EnterpriseDepartmentReturn />
   else if (route === 'finance-invoice-matching') content = <EnterpriseInvoiceMatching />
   else if (route === 'finance-budgets') content = <EnterpriseBudgetMatrix />
   else if (route === 'finance-period-close') content = <EnterprisePeriodClose />
