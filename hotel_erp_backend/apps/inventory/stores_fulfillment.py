@@ -98,6 +98,7 @@ def fulfill_requisition(request_id, keeper, actor, quantities=None):
     if req.status not in (
         StoreRequisitionStatus.APPROVED,
         StoreRequisitionStatus.PARTIALLY_ISSUED,
+        StoreRequisitionStatus.AWAITING_PROCUREMENT,
     ):
         raise ValidationError("Only Cost-Control-approved requests can be dispatched.")
     if not req.store_id or not req.store.is_active:
@@ -300,4 +301,17 @@ def complete_transit_pickup(issue_id, receiver, actor):
         "received_by", "received_by_name", "fulfillment_status",
         "signed_at", "updated_at",
     ])
+    # A dispatched issue is not a completed departmental request until the
+    # supervisor signs, all lines are supplied and no handover is in transit.
+    req = StoreRequisition.objects.select_for_update().get(pk=issue.requisition_id)
+    if (
+        req.status == StoreRequisitionStatus.ISSUED
+        and req.items.exists()
+        and all(line.quantity_issued >= line.quantity_approved for line in req.items.all())
+        and not StockIssue.objects.filter(
+            requisition=req, fulfillment_status=StockIssue.STATUS_TRANSIT,
+        ).exists()
+    ):
+        req.status = StoreRequisitionStatus.COMPLETED
+        req.save(update_fields=["status", "updated_at"])
     return issue
