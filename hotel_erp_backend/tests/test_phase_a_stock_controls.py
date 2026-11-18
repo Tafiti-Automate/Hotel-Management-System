@@ -88,7 +88,7 @@ def test_transfer_requires_approval_and_cannot_be_applied_from_legacy_endpoint()
     foreign = StoreLocation.objects.create(branch=other_branch, name="Foreign hotel store")
     candidate = StockTransferSerializer(data={"from_store": str(from_store.pk), "to_store": str(foreign.pk)})
     assert not candidate.is_valid()
-    assert "Cross-property" in str(candidate.errors)
+    assert "different hotels" in str(candidate.errors)
 
 
 @pytest.mark.django_db
@@ -153,7 +153,7 @@ def test_adjustment_requires_store_maker_and_finance_approver_and_posts_once():
 
     approved = finance.post(f"/api/v1/stock-adjustments/{aid}/approve/")
     assert approved.status_code == 200, approved.data
-    assert approved.data["approved_by"] == str(finance_user.employee_profile.pk)
+    assert str(approved.data["approved_by"]) == str(finance_user.employee_profile.pk)
     assert finance.post(f"/api/v1/stock-adjustments/{aid}/apply/").status_code == 403
 
     posted = keeper.post(f"/api/v1/stock-adjustments/{aid}/apply/")
