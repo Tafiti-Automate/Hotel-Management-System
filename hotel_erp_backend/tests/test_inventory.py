@@ -734,6 +734,11 @@ def test_store_requisition_issue_and_department_return_update_stock():
         quantity=Decimal("10.00"),
     )
     issue.apply_inventory_changes()
+    # This legacy booking test models a completed, signed departmental pickup.
+    StockIssue.objects.filter(pk=issue.pk).update(
+        fulfillment_status=StockIssue.STATUS_COMPLETED,
+        signed_at=timezone.now(),
+    )
 
     requisition.refresh_from_db()
     requisition_item.refresh_from_db()
