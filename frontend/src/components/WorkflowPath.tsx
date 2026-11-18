@@ -9,6 +9,8 @@ export interface WorkflowPathStep {
   icon: string
   disabled?: boolean
   count?: number
+  blockedReason?: string
+  nextAction?: string
 }
 
 interface WorkflowPathProps {
@@ -17,10 +19,11 @@ interface WorkflowPathProps {
   steps: WorkflowPathStep[]
   activeKey: string
   onSelect?: (key: string) => void
+  onBlocked?: (step: WorkflowPathStep) => void
   badge?: string
 }
 
-export function WorkflowPath({ title, summary, steps, activeKey, onSelect, badge = 'Workflow' }: WorkflowPathProps) {
+export function WorkflowPath({ title, summary, steps, activeKey, onSelect, onBlocked, badge = 'Workflow' }: WorkflowPathProps) {
   return (
     <section className="workflow-path" style={container} aria-label={title}>
       <div className="workflow-path-header">
@@ -33,14 +36,17 @@ export function WorkflowPath({ title, summary, steps, activeKey, onSelect, badge
       <div className="workflow-path-steps" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(135px, 1fr))` }}>
         {steps.map((step, index) => {
           const active = step.key === activeKey
-          const clickable = Boolean(onSelect && !step.disabled)
+          const blocked = Boolean(step.disabled || step.blockedReason)
+          const clickable = Boolean((blocked && onBlocked) || (!blocked && onSelect))
           return (
             <button
               key={step.key}
               type="button"
-              disabled={step.disabled}
-              onClick={clickable ? () => onSelect?.(step.key) : undefined}
-              className={`workflow-path-step${active ? ' is-active' : ''}`}
+              disabled={blocked && !onBlocked}
+              aria-disabled={blocked}
+              title={step.blockedReason ? `${step.blockedReason}${step.nextAction ? ' Next: ' + step.nextAction : ''}` : step.description}
+              onClick={clickable ? () => blocked ? onBlocked?.(step) : onSelect?.(step.key) : undefined}
+              className={`workflow-path-step${active ? ' is-active' : ''}${blocked ? ' is-blocked' : ''}`}
               aria-current={active ? 'step' : undefined}
               style={{ cursor: clickable ? 'pointer' : 'default' }}
             >
@@ -48,7 +54,8 @@ export function WorkflowPath({ title, summary, steps, activeKey, onSelect, badge
               <span style={{ minWidth: 0 }}>
                 <span className="workflow-path-actor">{step.actor}</span>
                 <span className="workflow-path-label"><Icon name={step.icon} size={16} />{step.label}{step.count != null && <span style={{ marginLeft: 'auto', minWidth: 21, padding: '2px 6px', borderRadius: 20, color: active ? '#fff' : 'var(--accent)', background: active ? 'var(--accent)' : 'var(--accent-soft)', fontSize: 11.5, fontWeight: 850, textAlign: 'center' }}>{step.count}</span>}</span>
-                <span className="workflow-path-description">{step.description}</span>
+                <span className="workflow-path-description">{step.blockedReason || step.description}</span>
+                {step.blockedReason && <span className="workflow-path-next">Next: {step.nextAction || 'Complete the preceding workflow stage.'}</span>}
               </span>
               {index < steps.length - 1 && <Icon name="chevron_right" size={17} color="var(--text-faint)" style={{ position: 'absolute', right: -13, top: 28, zIndex: 2 }} />}
             </button>
