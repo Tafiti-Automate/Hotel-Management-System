@@ -234,3 +234,73 @@ def test_gl_export_download_rejects_corrupted_payload_without_leaking_financial_
     assert blocked.status_code == 400
     assert b"tampered,financial,record" not in blocked.content
     assert b"integrity check failed" in blocked.content
+
+
+@pytest.mark.django_db
+def test_department_return_reverses_consumption_at_posted_ledger_cost(materials_context):
+    """An accepted departmental return reduces the expense and restores stock in GL."""
+    user, _employee, _department, branch, store, _unit, item = materials_context
+    today = timezone.localdate()
+    period = FiscalPeriod.objects.create(
+        branch=branch, name="Department return GL reversal",
+        start_date=today.replace(day=1), end_date=today,
+    )
+    GLAccountMapping.objects.create(
+        branch=branch, source_type=GLAccountMapping.SOURCE_CONSUMPTION,
+        debit_account="DEPT-EXPENSE", credit_account="STORE-ASSET",
+    )
+    for source, inbound, amount in (
+        (LedgerReferenceType.STOCK_ISSUE, False, Decimal("60.0000")),
+        (LedgerReferenceType.STORE_RETURN, True, Decimal("20.0000")),
+    ):
+        StockLedger.objects.create(
+            item=item, store=store, reference_type=source, reference_id=uuid4(),
+            quantity_in=Decimal("1.0000") if inbound else Decimal("0"),
+            quantity_out=Decimal("0") if inbound else Decimal("1.0000"),
+            unit_cost_snapshot=amount, total_cost_snapshot=amount,
+            wac_before=amount, wac_after=amount,
+        )
+    result = period.inventory_gl_journal_preview()
+    assert result["ready_for_finance_review"], result["blockers"]
+    assert result["debit_total"] == result["credit_total"] == "80.00"
+    rows = result["draft_rows"]
+    assert len(rows) == 4
+    issue = [row for row in rows if row["source"] == LedgerReferenceType.STOCK_ISSUE]
+    returned = [row for row in rows if row["source"] == LedgerReferenceType.STORE_RETURN]
+    assert [(r["account"], r["debit"], r["credit"]) for r in issue] == [
+        ("DEPT-EXPENSE", "60.00", "0.00"),
+        ("STORE-ASSET", "0.00", "60.00"),
+    ]
+    assert [(r["account"], r["debit"], r["credit"]) for r in returned] == [
+        ("STORE-ASSET", "20.00", "0.00"),
+        ("DEPT-EXPENSE", "0.00", "20.00"),
+    ]
+    period.close(user, "Consumption and signed return are reconciled.")
+    export = GLExport.generate(period, user)
+    assert export.row_count == 4
+    assert LedgerReferenceType.STORE_RETURN in export.payload
+
+
+@pytest.mark.django_db
+def test_unvalued_department_return_blocks_finance_export(materials_context):
+    from django.core.exceptions import ValidationError
+    user, _employee, _department, branch, store, _unit, item = materials_context
+    today = timezone.localdate()
+    period = FiscalPeriod.objects.create(
+        branch=branch, name="Unvalued department return",
+        start_date=today.replace(day=1), end_date=today,
+    )
+    GLAccountMapping.objects.create(
+        branch=branch, source_type=GLAccountMapping.SOURCE_CONSUMPTION,
+        debit_account="DEPT-EXPENSE", credit_account="STORE-ASSET",
+    )
+    StockLedger.objects.create(
+        item=item, store=store, reference_type=LedgerReferenceType.STORE_RETURN,
+        reference_id=uuid4(), quantity_in=Decimal("1.0000"),
+    )
+    preview = period.inventory_gl_journal_preview()
+    assert not preview["ready_for_finance_review"]
+    assert any("Missing historical cost" in m for m in preview["blockers"])
+    period.close(user, "Return valuation needs correction before journal export.")
+    with pytest.raises(ValidationError, match="Missing historical cost"):
+        GLExport.generate(period, user)
