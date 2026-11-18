@@ -27,3 +27,31 @@
 .mc-confirm-actions button:focus-visible, .mc-feedback-toast button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 @media (max-width: 520px) { .mc-feedback-toast { top: auto; bottom: max(22px, env(safe-area-inset-bottom)); right: 16px; } .mc-confirm-dialog { padding: 20px; } }
 @media (prefers-reduced-motion: no-preference) { .mc-feedback-toast { animation: mc-feedback-appear .2s ease-out; } @keyframes mc-feedback-appear { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } } }
+
+/* Serious backend warnings/errors: concise, readable and dismiss-only. */
+.mc-alert-backdrop {
+  position: fixed; inset: 0; z-index: 140; display: grid; place-items: center;
+  padding: 20px; background: rgba(9, 24, 25, .58); backdrop-filter: blur(2px);
+}
+.mc-alert-dialog {
+  width: min(440px, 100%); border: 1px solid var(--border);
+  border-radius: 16px; padding: 26px; background: var(--surface);
+  color: var(--text); box-shadow: 0 28px 70px rgba(0,0,0,.28);
+}
+.mc-alert-icon {
+  width: 45px; height: 45px; border-radius: 11px; display: grid; place-items: center;
+  margin-bottom: 16px; background: var(--bad-soft); color: var(--bad);
+}
+.mc-alert-warning .mc-alert-icon { background: var(--warn-soft); color: var(--warn); }
+.mc-alert-success .mc-alert-icon { background: var(--good-soft); color: var(--good); }
+.mc-alert-dialog h2 { font-size: 19px; line-height: 1.3; font-weight: 750; margin: 0 0 10px; }
+.mc-alert-dialog p { color: var(--text-muted); font-size: 13.5px; line-height: 1.6; margin: 0; overflow-wrap: anywhere; }
+.mc-alert-details { padding: 12px 12px 12px 28px; margin: 14px 0 0; border-radius: 9px; background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.mc-alert-actions { display: flex; justify-content: flex-end; margin-top: 22px; }
+.mc-alert-actions button {
+  min-width: 110px; min-height: 42px; padding: 9px 18px; border: 0;
+  border-radius: 9px; background: var(--accent); color: #fff; font: inherit;
+  font-size: 13px; font-weight: 750; cursor: pointer;
+}
+.mc-alert-actions button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 520px) { .mc-alert-dialog { padding: 20px; } .mc-alert-actions button { width: 100%; } }

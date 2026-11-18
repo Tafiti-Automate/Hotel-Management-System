@@ -11,6 +11,10 @@ export default function ConfirmDialog() {
   const cancelRef = useRef<HTMLButtonElement>(null)
   const deleteRef = useRef<HTMLButtonElement>(null)
   const previousFocus = useRef<HTMLElement | null>(null)
+  const busyRef = useRef(app.confirmBusy)
+  const closeRef = useRef(app.closeConfirm)
+  busyRef.current = app.confirmBusy
+  closeRef.current = app.closeConfirm
 
   useEffect(() => {
     if (!target) return
@@ -19,7 +23,7 @@ export default function ConfirmDialog() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault()
-        if (!app.confirmBusy) app.closeConfirm()
+        if (!busyRef.current) closeRef.current()
       }
       if (event.key !== 'Tab') return
       const available = [cancelRef.current, deleteRef.current].filter(
@@ -39,7 +43,7 @@ export default function ConfirmDialog() {
       window.removeEventListener('keydown', onKeyDown)
       previousFocus.current?.focus()
     }
-  }, [target, app.confirmBusy, app.closeConfirm])
+  }, [target?.entity, target?.id])
 
   if (!target) return null
   return <div className="mc-confirm-backdrop" onMouseDown={(event) => {
