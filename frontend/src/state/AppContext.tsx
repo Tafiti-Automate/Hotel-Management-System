@@ -294,6 +294,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const showToast = useCallback((msg: string) => {
     patch({ toast: msg, workflowAlert: null })
+    // The notification centre should reflect new approvals and stock events
+    // without waiting for its periodic poll. Only dispatch after confirmed success.
+    window.dispatchEvent(new Event('hotel-workflow-updated'))
   }, [patch])
 
   const showWorkflowAlert = useCallback((title: string, message: string, tone: WorkflowAlertTone = 'failure') => {
