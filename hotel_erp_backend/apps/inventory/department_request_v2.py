@@ -122,7 +122,8 @@ class StoreRequisitionViewSet(CreatedByModelMixin,ModelViewSet):
         if not is_supervisor(self.request.user): raise PermissionDenied("Only a Department Supervisor can create a Department request.")
         s.save(created_by=self.request.user)
     def _supervisor_draft(self,r):
-        if self.request.user.is_superuser or has_role(self.request.user,"System Administrator"): return
+        # IT administrators may inspect configuration, not mutate operational
+        # requisitions; only the originating Supervisor can edit drafts.
         e=emp(self.request.user)
         if not(is_supervisor(self.request.user) and e and r.requested_by_id==e.id and r.status in (StoreRequisitionStatus.DRAFT,StoreRequisitionStatus.REJECTED)): raise PermissionDenied("Only the Supervisor who created this request can edit its draft.")
     def perform_update(self,s): self._supervisor_draft(s.instance); s.save()
