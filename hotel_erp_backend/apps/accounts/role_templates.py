@@ -153,6 +153,7 @@ ROLE_SPECS = {
             "finance": ["supplierinvoice", "supplierinvoiceitem", "supplierpayment", "suppliercreditnote", "supplierpaymentreconciliation"],
         },
         "view": {
+            "finance": ["paymentmethod"],
             "departments": ["branch", "department"],
             "inventory": ["item", "unitofmeasure"],
             "procurement": [
