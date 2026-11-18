@@ -23,6 +23,7 @@ export default function Header() {
   const [notificationsLoading, setNotificationsLoading] = useState(true)
   const [notificationsError, setNotificationsError] = useState('')
   const notificationRequest = useRef(0)
+  const notificationTriggerRef = useRef<HTMLButtonElement>(null)
   const [propertyMenuOpen, setPropertyMenuOpen] = useState(false)
   const [period, setPeriod] = useState<FiscalPeriodContext | null>(null)
   const [periodError, setPeriodError] = useState(false)
@@ -99,6 +100,7 @@ export default function Header() {
       if (event.key === 'Escape') {
         setProfileOpen(false)
         setNotificationsOpen(false)
+        notificationTriggerRef.current?.focus()
       }
     }
     window.addEventListener('keydown', onShortcut)
@@ -177,7 +179,7 @@ export default function Header() {
         <span className={'neo-fiscal-chip' + (period?.status === 'closed' ? ' is-closed' : '')} title="Current fiscal period"><Icon name="calendar_month" size={14} />{periodLabel}</span>
 
         <div className="neo-popover-anchor">
-          <button type="button" className="neo-header-icon" onClick={() => {
+          <button ref={notificationTriggerRef} type="button" className="neo-header-icon" aria-controls="hotel-notification-panel" onClick={() => {
             setProfileOpen(false)
             setNotificationsOpen((open) => {
               if (!open) void loadNotifications(false)
@@ -189,8 +191,8 @@ export default function Header() {
           </button>
 
           {notificationsOpen && <>
-            <button className="neo-popover-backdrop" aria-label="Close notifications" onClick={() => setNotificationsOpen(false)} />
-            <section className="neo-notification-panel" aria-label="Notifications">
+            <button type="button" tabIndex={-1} className="neo-popover-backdrop" aria-label="Close notifications" onClick={() => {setNotificationsOpen(false);notificationTriggerRef.current?.focus()}} />
+            <section id="hotel-notification-panel" className="neo-notification-panel" role="region" aria-label="Notifications">
               <header><div><strong>Notifications</strong><span>{unread ? `${unread} unread` : 'All caught up'}</span></div><button className="neo-icon-button" onClick={() => void loadNotifications()} aria-label="Refresh notifications"><Icon name="refresh" size={17} /></button></header>
               <div className="neo-notification-list">
                 {notificationsLoading && <NotificationState icon="progress_activity" title="Loading notifications" />}

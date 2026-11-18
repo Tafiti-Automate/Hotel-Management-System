@@ -78,3 +78,21 @@
 .workflow-path-step.is-blocked .workflow-path-number { color: var(--warn); }
 .workflow-path-next { display: block; color: var(--text-muted); font-size: 11px; line-height: 1.4; margin-top: 5px; }
 .mode-dark .mc-workflow-prerequisite { background: var(--surface); border-color: var(--border); border-left-color: var(--warn); }
+
+/* Enterprise workflow accessibility in light and dark appearances. */
+.mc-action:focus-visible,.ds-btn:focus-visible,.mc-count-input:focus-visible,
+.mc-field input:focus-visible,.mc-field select:focus-visible,.mc-field textarea:focus-visible,
+.neo-header-icon:focus-visible,.neo-notification-item:focus-visible,
+.workflow-path-step:focus-visible {
+  outline: 3px solid var(--accent); outline-offset: 3px;
+}
+.mc-field [aria-invalid="true"],.ds-detail [aria-invalid="true"] {
+  border-color: var(--bad) !important; outline-color: var(--bad); box-shadow: 0 0 0 1px var(--bad);
+}
+.mc-workflow-prerequisite strong { font-weight: 750; }
+.mc-workflow-prerequisite small { overflow-wrap: anywhere; }
+.mode-dark .mc-workflow-prerequisite,.mode-dark .ds-alert { background: var(--surface); color: var(--text); }
+.mode-dark .mc-workflow-prerequisite p,.mode-dark .mc-workflow-prerequisite small { color: var(--text-muted); }
+@media (prefers-reduced-motion: reduce) {
+  .workflow-path-step,.mc-workflow-prerequisite { scroll-behavior: auto; transition: none; }
+}

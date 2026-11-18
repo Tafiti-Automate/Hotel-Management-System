@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Icon } from '../components/Icon'
 import ConfirmTransaction from '../components/ConfirmTransaction'
+import WorkflowPrerequisite from '../components/WorkflowPrerequisite'
 import GrnReferenceDocument from '../components/GrnReferenceDocument'
 import { errorMessage, fetchHotels, readBackendPayload, readBackendRecords, runBackendAction, type HotelRecord } from '../lib/api'
 import type { Row } from '../lib/data'
@@ -255,6 +256,7 @@ function Receive({ order, lines, app, busy, act, back, receiptRecorded }: { orde
   return (
     <section className="ds-card ds-detail">
       <button type="button" className="ds-btn ds-btn-secondary" onClick={back}><Icon name="arrow_back" size={15} />Back</button>
+      <WorkflowPrerequisite domain="goods_receipt" record={order} action="receive"/>
       <div className="ds-detail-head"><div><div className="ds-eyebrow">Stage 1 · Blind physical count</div><h2>LPO {id(order.lpo_number || order.po_number)}</h2></div><span className="ds-status info">Approved supplier order</span></div>
       <div className="ds-form-grid">
         <div className="ds-read"><span>Receiving mode</span><strong>Blind count · ordered quantities concealed</strong></div>
@@ -274,9 +276,9 @@ function Receive({ order, lines, app, busy, act, back, receiptRecorded }: { orde
             return <tr key={id(line.id)}>
               <td><strong>{id(item?.name || line.item_name || line.item)}</strong><small>{id(item?.sku || line.item_sku)}</small></td>
               <td><span title="Ordered quantity concealed during blind receiving">***</span></td>
-              <td><input type="number" min="0" step="0.0001" inputMode="decimal" placeholder="Count" aria-label={'Counted quantity for ' + id(item?.name || line.item_name)} value={values[id(line.id)] || ''} onChange={(event) => setValues({ ...values, [id(line.id)]: event.target.value })} /></td>
-              <td><input type="number" min="0" step="0.0001" inputMode="decimal" aria-label={'Rejected quantity for ' + id(item?.name || line.item_name)} value={rejected[id(line.id)] || ''} onChange={(event) => setRejected({ ...rejected, [id(line.id)]: event.target.value })} /></td>
-              <td><input type="text" placeholder="If rejected" aria-label={'Rejection reason for ' + id(item?.name || line.item_name)} value={rejectionReasons[id(line.id)] || ''} onChange={(event) => setRejectionReasons({ ...rejectionReasons, [id(line.id)]: event.target.value })} /></td>
+              <td><input type="number" min="0" step="0.0001" inputMode="decimal" placeholder="Count" aria-label={'Counted quantity for ' + id(item?.name || line.item_name)} aria-invalid={invalidLines.some(entry=>id(entry.id)===id(line.id))} value={values[id(line.id)] || ''} onChange={(event) => setValues({ ...values, [id(line.id)]: event.target.value })} /></td>
+              <td><input type="number" min="0" step="0.0001" inputMode="decimal" aria-label={'Rejected quantity for ' + id(item?.name || line.item_name)} aria-invalid={invalidRejected.some(entry=>id(entry.id)===id(line.id))} value={rejected[id(line.id)] || ''} onChange={(event) => setRejected({ ...rejected, [id(line.id)]: event.target.value })} /></td>
+              <td><input type="text" placeholder="If rejected" aria-label={'Rejection reason for ' + id(item?.name || line.item_name)} aria-invalid={invalidRejected.some(entry=>id(entry.id)===id(line.id))} value={rejectionReasons[id(line.id)] || ''} onChange={(event) => setRejectionReasons({ ...rejectionReasons, [id(line.id)]: event.target.value })} /></td>
               <td><input aria-label={`Batch number for ${id(item?.name || line.item_name)}`} required={Boolean(item?.batchTracking) && n(values[id(line.id)]) > 0} placeholder={item?.batchTracking ? 'Required' : 'Optional'} value={trace.batch_number} onChange={(event) => setTrace('batch_number', event.target.value)} /></td>
               <td><input aria-label={`Expiry date for ${id(item?.name || line.item_name)}`} required={Boolean(item?.expiryTracking) && n(values[id(line.id)]) > 0} type="date" min={new Date().toISOString().slice(0, 10)} value={trace.expiry_date} onChange={(event) => setTrace('expiry_date', event.target.value)} /></td>
               <td><input aria-label={`Delivery temperature for ${id(item?.name || line.item_name)}`} type="number" step="0.1" required={Boolean(item?.requiresDeliveryTemperature) && n(values[id(line.id)]) > 0} placeholder={item?.requiresDeliveryTemperature ? 'Required' : 'Optional'} value={trace.delivery_temperature} onChange={(event) => setTrace('delivery_temperature', event.target.value)} /></td>
@@ -284,9 +286,16 @@ function Receive({ order, lines, app, busy, act, back, receiptRecorded }: { orde
           })}</tbody>
         </table>
       </div>
-      {invalidLines.length > 0 && <div className="ds-alert" role="alert">Enter a valid, non-negative physical count in every Article row.</div>}
-      {invalidRejected.length > 0 && <div className="ds-alert" role="alert">Rejected quantity must not exceed the counted quantity; every rejection needs a reason.</div>}
-      {invalidTracking.length > 0 && <div className="ds-alert" role="alert">Complete required batch numbers, expiry dates and HACCP temperatures for tracked articles.</div>}
+      {(invalidLines.length > 0 || invalidRejected.length > 0 || invalidTracking.length > 0 || !invoice.trim()) && <div className="ds-alert" role="status" aria-live="polite">
+        <strong>Complete the receiving prerequisites</strong>
+        <ul>
+          {!invoice.trim() && <li>Enter the supplier invoice reference.</li>}
+          {invalidLines.length > 0 && <li>Record non-negative physical counts for {invalidLines.length} article row(s).</li>}
+          {invalidRejected.length > 0 && <li>Correct rejected quantities and rejection reasons on {invalidRejected.length} article row(s).</li>}
+          {invalidTracking.length > 0 && <li>Complete batch, expiry and temperature evidence on {invalidTracking.length} tracked article row(s).</li>}
+        </ul>
+        <small>Next: Correct the highlighted lines. Save &amp; lock becomes available when all prerequisites are complete.</small>
+      </div>
       <div className="ds-sticky-action"><span>Ordered quantities remain hidden until this physical count and inspection are saved and permanently locked.</span><ConfirmTransaction title="Save and lock your blind count?" description="The saved quantities, batch details and inspection decisions cannot be changed by the Receiving Clerk. After saving, the system reveals ordered quantities and any delivery differences in a read-only reconciliation. Stores will verify before SOH increases." confirmLabel="Save & lock blind count" className="ds-btn ds-btn-primary" disabled={busy || !invoice.trim() || !positive.length || invalid || false} busy={busy} onConfirm={async () => {
         const receipt = await act(() => runBackendAction('purchase-orders', id(order.id), 'receive-delivery', { supplier_invoice_no: invoice, delivery_note_no: delivery, lines: positive.map((line) => ({ purchase_order_item: id(line.id), quantity_received: n(values[id(line.id)]), quantity_rejected: n(rejected[id(line.id)]), rejection_reason: rejectionReasons[id(line.id)] || '', batch_number: tracking[id(line.id)]?.batch_number || '', expiry_date: tracking[id(line.id)]?.expiry_date || null, delivery_temperature: tracking[id(line.id)]?.delivery_temperature ? Number(tracking[id(line.id)].delivery_temperature) : null })) }), 'GRN recorded · awaiting Store Keeper verification')
         const receiptId = id((receipt as Row | undefined)?.id)
