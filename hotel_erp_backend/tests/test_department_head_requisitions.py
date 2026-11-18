@@ -318,6 +318,7 @@ def test_connected_eight_role_shortage_partial_receipts_and_signed_completion(wo
     gm, _ = extra("General Manager", "GM")
     receiver, _ = extra("Receiving Clerk", "RCV")
     ap, _ = extra("Accounts Payable Clerk", "AP")
+    ap_checker, _ = extra("Accounts Payable Clerk", "AP2")
 
     request_id, line_id = _create_supervisor_draft(ctx, "28.0000")
     for forbidden in (head, keeper, cost, buyer, finance, gm, receiver, ap):
@@ -498,3 +499,71 @@ def test_connected_eight_role_shortage_partial_receipts_and_signed_completion(wo
     assert DepartmentConsumption.objects.filter(
         stock_issue_item__issue__requisition=req,
     ).count() == 3
+
+    # Finance handoff: actual AP API creates, matches and independently approves
+    # the supplier invoice after both accepted GRNs have reached the store.
+    from apps.finance.models import PaymentMethod, SupplierInvoice, SupplierPayment
+    invoice_amount = Decimal("20000.00")
+    assert finance.post(
+        "/api/v1/supplier-invoices/",
+        {
+            "supplier": str(supplier.pk), "purchase_order": str(order.pk),
+            "invoice_number": "E2E-FIN-INV-001", "subtotal": str(invoice_amount),
+            "due_date": str(timezone.localdate()),
+        }, format="json",
+    ).status_code == 403
+    created_invoice = ap.post(
+        "/api/v1/supplier-invoices/",
+        {
+            "supplier": str(supplier.pk), "purchase_order": str(order.pk),
+            "invoice_number": "E2E-FIN-INV-001", "subtotal": str(invoice_amount),
+            "due_date": str(timezone.localdate()),
+        }, format="json",
+    )
+    assert created_invoice.status_code == 201, created_invoice.data
+    invoice_id = created_invoice.data["id"]
+    match = ap.post(
+        f"/api/v1/supplier-invoices/{invoice_id}/match/", {}, format="json",
+    )
+    assert match.status_code == 200, match.data
+    invoice = SupplierInvoice.objects.get(pk=invoice_id)
+    assert invoice.status == SupplierInvoice.STATUS_MATCHED
+    assert invoice.amount_variance == Decimal("0.00")
+    assert ap.post(
+        f"/api/v1/supplier-invoices/{invoice_id}/approve-for-payment/",
+        {}, format="json",
+    ).status_code == 400
+    independent_approval = ap_checker.post(
+        f"/api/v1/supplier-invoices/{invoice_id}/approve-for-payment/",
+        {}, format="json",
+    )
+    assert independent_approval.status_code == 200, independent_approval.data
+    assert invoice_amount == Decimal("8.0000") * po_line.unit_cost
+
+    payment_method = PaymentMethod.objects.create(name="E2E controlled bank transfer")
+    for index, amount in enumerate(("7500.00", "12500.00"), start=1):
+        created_payment = ap.post(
+            "/api/v1/supplier-payments/",
+            {
+                "invoice": invoice_id, "amount": amount,
+                "payment_method": str(payment_method.pk),
+                "reference": f"E2E-PAY-{index:02d}",
+            }, format="json",
+        )
+        assert created_payment.status_code == 201, created_payment.data
+        payment_id = created_payment.data["id"]
+        assert ap.post(
+            f"/api/v1/supplier-payments/{payment_id}/post/",
+            {}, format="json",
+        ).status_code == 400
+        posted_payment = ap_checker.post(
+            f"/api/v1/supplier-payments/{payment_id}/post/",
+            {}, format="json",
+        )
+        assert posted_payment.status_code == 200, posted_payment.data
+    invoice.refresh_from_db()
+    assert invoice.status == SupplierInvoice.STATUS_PAID
+    assert invoice.balance_due == Decimal("0.00")
+    assert SupplierPayment.objects.filter(
+        invoice=invoice, status=SupplierPayment.STATUS_POSTED,
+    ).count() == 2
