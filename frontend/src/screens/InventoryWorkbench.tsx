@@ -4,6 +4,7 @@ import { HelpLabel } from '../components/HelpLabel'
 import { createBackendRecord, deleteBackendPath, errorMessage, readBackendRecords, runBackendAction, updateBackendRecord } from '../lib/api'
 import type { Row } from '../lib/data'
 import { useApp } from '../state/AppContext'
+import WorkflowPrerequisite from '../components/WorkflowPrerequisite'
 
 type Tab = 'requests' | 'issues' | 'transfers' | 'adjustments' | 'counts' | 'returns' | 'reorder' | 'batches' | 'consumption'
 type SupplyTask = 'prepare' | 'department' | 'stores' | 'shortage' | 'issue'
@@ -1010,6 +1011,7 @@ function AdjustmentPanel({ app, data, form, setForm, busy, execute }: any) {
     <Action disabled={!isKeeper || busy || !form.adjustment || id(adjustment?.status) !== 'draft'} click={() => execute(() => runBackendAction('stock-adjustments', id(form.adjustment), 'submit'), 'Stock adjustment submitted')}>Submit adjustment</Action>
     <Action disabled={!isFinance || busy || !form.adjustment || id(adjustment?.status) !== 'pending'} click={() => execute(() => runBackendAction('stock-adjustments', id(form.adjustment), 'approve'), 'Stock adjustment approved')}>Approve adjustment</Action>
     <Action tone="danger" disabled={!isFinance || busy || !form.adjustment || id(adjustment?.status) !== 'pending'} click={() => execute(() => runBackendAction('stock-adjustments', id(form.adjustment), 'reject', { reason: form.reason || '' }), 'Stock adjustment rejected')}>Reject adjustment</Action>
+    {adjustment && isKeeper && <WorkflowPrerequisite domain="stock_adjustment" record={adjustment} action="apply" />}
     <Action tone="good" disabled={!isKeeper || busy || !form.adjustment || id(adjustment?.status) !== 'approved'} click={() => execute(() => runBackendAction('stock-adjustments', id(form.adjustment), 'apply'), 'Stock adjustment applied')}>Apply approved adjustment</Action>
   </Panel>
 }
