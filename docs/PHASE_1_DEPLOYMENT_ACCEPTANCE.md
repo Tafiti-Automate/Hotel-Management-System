@@ -63,3 +63,8 @@ python manage.py audit_role_readiness --json --strict
 It emits one JSON object with `schema_version`, `read_only`, `all_roles_ready`, `ready_role_count`, `required_role_count`, and exactly ten role summaries containing counts of active/assigned, inactive and unassigned accounts plus a blocker code. It does **not** print user names, employee identifiers, emails, role passwords or property details. Without `--strict`, the command returns a non-blocking report; with `--strict`, it exits with an error if any required role is missing or unready. A code-only CI environment without real users must not be treated as ten-role acceptance. Keep exported JSON in access-controlled deployment evidence, not public GitHub commits.
 
 **Acceptance meaning:** ten role assignments passing does *not* prove that the assigned users can execute their full browser journeys. Separate API/GUI actions, property/store scope, migrations, realistic transactions and screen-by-screen signoff still remain essential. This command creates no accounts and does not change inventory.
+
+
+## Finance GL export integrity gate
+
+Before serving an authorized closed-period GL CSV download, the backend recomputes SHA-256 over the exact UTF-8 payload and compares it with the stored export checksum. Missing or mismatched checksums fail closed with HTTP 400 and do not return the financial CSV. The normal download still returns the `X-Content-SHA256` header. This protects against accidental or unauthorized alteration of a stored export; it does not prove that an external accounting package has imported, accepted, or posted the journal. Finance must retain external posting and reconciliation evidence separately.

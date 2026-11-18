@@ -154,10 +154,12 @@ def test_finance_only_gl_export_download_and_list(materials_context):
         branch=branch, name="Private financial evidence",
         start_date=today.replace(day=1), end_date=today,
     )
+    import hashlib
+    payload = "date,source,reference,department,description,account,debit,credit\\n"
     export = GLExport.objects.create(
         period=period, generated_by=original_user,
-        row_count=1, checksum="a" * 64,
-        payload="date,source,reference,department,description,account,debit,credit\\n",
+        row_count=1, checksum=hashlib.sha256(payload.encode("utf-8")).hexdigest(),
+        payload=payload,
     )
     finance_user = get_user_model().objects.create_user(
         username="finance-download-acceptance",
@@ -188,3 +190,47 @@ def test_finance_only_gl_export_download_and_list(materials_context):
     response = client.get(f"/api/v1/gl-exports/{export.pk}/download/")
     assert response.status_code == 200
     assert response["X-Content-SHA256"] == export.checksum
+
+
+@pytest.mark.django_db
+def test_gl_export_download_rejects_corrupted_payload_without_leaking_financial_data(materials_context):
+    import hashlib
+    from django.contrib.auth import get_user_model
+    from django.contrib.auth.models import Group
+    from django.core.management import call_command
+    from rest_framework.test import APIClient
+    from apps.employees.models import Employee
+
+    creator, _employee, department, branch, _store, _unit, _item = materials_context
+    call_command("setup_hotel_roles", verbosity=0)
+    today = timezone.localdate()
+    period = FiscalPeriod.objects.create(
+        branch=branch, name="Tampered export validation",
+        start_date=today.replace(day=1), end_date=today,
+    )
+    original = "date,source,reference,department,description,account,debit,credit\\n"
+    export = GLExport.objects.create(
+        period=period, generated_by=creator, row_count=0,
+        checksum=hashlib.sha256(original.encode("utf-8")).hexdigest(),
+        payload=original,
+    )
+    finance_user = get_user_model().objects.create_user(
+        username="gl-integrity-finance", employee_code="GL-INTEGRITY",
+        password="test-only-password",
+    )
+    finance_user.groups.add(Group.objects.get(name="Financial Manager"))
+    Employee.objects.create(
+        user=finance_user, branch=branch, department=department,
+        designation="Financial Manager",
+    )
+    client = APIClient()
+    client.force_authenticate(user=finance_user)
+    good = client.get(f"/api/v1/gl-exports/{export.pk}/download/")
+    assert good.status_code == 200
+    assert good["X-Content-SHA256"] == export.checksum
+    export.payload = original + "tampered,financial,record\\n"
+    export.save(update_fields=["payload"])
+    blocked = client.get(f"/api/v1/gl-exports/{export.pk}/download/")
+    assert blocked.status_code == 400
+    assert b"tampered,financial,record" not in blocked.content
+    assert b"integrity check failed" in blocked.content

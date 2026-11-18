@@ -1,4 +1,5 @@
 import csv
+import hashlib
 import io
 from decimal import Decimal, InvalidOperation
 from django.db import transaction
@@ -882,6 +883,14 @@ class GLExportViewSet(ReadOnlyModelViewSet):
     @action(detail=True, methods=["get"])
     def download(self, request, pk=None):
         export = self.get_object()
+        # A stored checksum is evidence only when it is revalidated against
+        # the exact bytes about to leave the server. Fail closed on corruption
+        # instead of delivering a silently altered financial journal.
+        digest = hashlib.sha256(export.payload.encode("utf-8")).hexdigest()
+        if not export.checksum or digest != export.checksum:
+            raise ValidationError(
+                "GL export integrity check failed. Contact Finance before importing this journal."
+            )
         response = HttpResponse(export.payload, content_type="text/csv; charset=utf-8")
         response["Content-Disposition"] = (
             f'attachment; filename="gl-export-{export.period.start_date}-{export.period.end_date}.csv"'
