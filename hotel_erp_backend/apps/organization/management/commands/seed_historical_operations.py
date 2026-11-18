@@ -419,7 +419,12 @@ class Command(BaseCommand):
                 quantity=quantity, created_by=admin,
             )
             issue.apply_inventory_changes()
-            StockIssue.objects.filter(pk=issue.pk).update(issue_date=event_date)
+            # Historical sample goods were physically collected by the requester.
+            StockIssue.objects.filter(pk=issue.pk).update(
+                issue_date=event_date,
+                fulfillment_status=StockIssue.STATUS_COMPLETED,
+                signed_at=timezone.make_aware(datetime.combine(event_date, datetime.min.time())),
+            )
 
         for index in range(5):
             item = items[index]
