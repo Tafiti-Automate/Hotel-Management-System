@@ -2632,7 +2632,15 @@ def test_procurement_level_one_requires_another_manager_when_available():
         destination_store=store,
     )
     order.submit_for_approval()
-    assert order.approval_workflow.order_by("stage").first().stage_name == "Procurement Manager Approval"
+    first_step = order.approval_workflow.order_by("stage").first()
+    assert first_step.stage_name == "Procurement Manager Approval"
+    assert first_step.stage == 1
+    assert order.ordered_by_id == employee.pk
+    assert first_step.approver_role_id == role.pk
+    assert Employee.objects.filter(
+        is_active=True, user__is_active=True,
+        user__groups=role, branch=branch,
+    ).exclude(pk=employee.pk).exists(), "Independent reviewer must be eligible"
 
     creator = APIClient()
     creator.force_authenticate(employee.user)
