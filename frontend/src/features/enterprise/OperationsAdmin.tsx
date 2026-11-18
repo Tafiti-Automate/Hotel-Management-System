@@ -536,7 +536,7 @@ export function EnterpriseDepartmentReturn() {
         </select></label>
         <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
           <button type="button" className={btn} disabled={!printed||!printLines.length} onClick={onPrint}><Icon name="print" size={16}/> Print Department Return Note</button>
-          <button type="button" className={btn} onClick={()=>exportReturnRegister('department',returns,data['store-return-items']||[])}><Icon name="download" size={16}/> Export Department Return Register</button>
+          <button type="button" className={btn} onClick={()=>exportReturnRegister('department',returns,data['store-return-items']||[],data.items||[],data.stores||[],data.departments||[])}><Icon name="download" size={16}/> Export Department Return Register</button>
           <button type="button" className={btn} onClick={()=>void verifyReturnLedger('department',app)}><Icon name="fact_check" size={16}/> Verify stock ledger</button>
         </div>
                 <header className="mc-panel-title">1. Register a physical department return</header>
@@ -645,7 +645,7 @@ export function EnterpriseSupplierReturn() {
         </select></label>
         <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
           <button type="button" className={btn} disabled={!printRecord||!printLines.length} onClick={onPrint}><Icon name="print" size={16}/> Print Supplier Return Note</button>
-          <button type="button" className={btn} onClick={()=>exportReturnRegister('supplier',data['supplier-returns']||[],data['supplier-return-items']||[])}><Icon name="download" size={16}/> Export Supplier Return Register</button>
+          <button type="button" className={btn} onClick={()=>exportReturnRegister('supplier',data['supplier-returns']||[],data['supplier-return-items']||[],data.items||[],data.stores||[],app.data.suppliers)}><Icon name="download" size={16}/> Export Supplier Return Register</button>
           <button type="button" className={btn} onClick={()=>void verifyReturnLedger('supplier',app)}><Icon name="fact_check" size={16}/> Verify stock ledger</button>
         </div>
                 <header className="mc-panel-title">1. Create supplier return</header>
