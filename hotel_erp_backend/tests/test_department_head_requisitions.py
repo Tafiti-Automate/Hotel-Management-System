@@ -192,3 +192,90 @@ def test_store_keeper_cannot_edit_supervisor_requested_or_cost_approved_quantiti
     assert line.hod_approved_quantity == Decimal("10.00")
     assert line.quantity_approved == Decimal("6.00")
     assert line.quantity_issued == Decimal("0.00")
+
+
+@pytest.mark.django_db
+def test_requisition_only_orders_the_unavailable_stock_and_keeps_approved_quantity(workflow):
+    ctx = workflow
+    supervisor = ctx["supervisor"][2]
+    head = ctx["head"][2]
+    keeper = ctx["keeper"][2]
+    request_id, line_id = _create_supervisor_draft(ctx, quantity="30.0000")
+    assert supervisor.post(
+        f"/api/v1/store-requisitions/{request_id}/submit/", {}, format="json"
+    ).status_code == 200
+    decision = head.post(
+        f"/api/v1/store-requisitions/{request_id}/department-approve/",
+        {"items": [{"id": line_id, "approved_quantity": "28.0000"}]}, format="json",
+    )
+    assert decision.status_code == 200, decision.data
+    confirmed = keeper.patch(
+        f"/api/v1/store-requisition-items/{line_id}/",
+        {"quantity_approved": "28.0000", "storekeeper_comment": "Purchase only the shortfall"},
+        format="json",
+    )
+    assert confirmed.status_code == 200, confirmed.data
+    purchase = keeper.post(
+        f"/api/v1/store-requisitions/{request_id}/send-to-procurement/",
+        {"reason": "Approved store shortage"}, format="json",
+    )
+    assert purchase.status_code == 200, purchase.data
+    req = StoreRequisition.objects.get(pk=request_id)
+    original = StoreRequisitionItem.objects.get(pk=line_id)
+    assert req.status == StoreRequisitionStatus.AWAITING_PROCUREMENT
+    assert original.base_quantity_requested == Decimal("30.0000")
+    assert original.hod_approved_quantity == Decimal("28.0000")
+    assert original.quantity_approved == Decimal("28.0000")
+    assert original.quantity_issued == Decimal("0.0000")
+    from apps.procurement.models import RequisitionItem
+    sourced = RequisitionItem.objects.get(requisition=req.procurement_requisition)
+    assert sourced.quantity == Decimal("8.0000")
+    assert keeper.post(
+        f"/api/v1/store-requisitions/{request_id}/send-to-procurement/",
+        {}, format="json",
+    ).status_code == 400
+
+
+@pytest.mark.django_db
+def test_full_internal_requisition_closes_only_after_signed_pickup(workflow):
+    ctx = workflow
+    supervisor = ctx["supervisor"][2]
+    request_id, line_id = _create_supervisor_draft(ctx, quantity="5.0000")
+    assert supervisor.post(
+        f"/api/v1/store-requisitions/{request_id}/submit/", {}, format="json"
+    ).status_code == 200
+    hod = ctx["head"][2].post(
+        f"/api/v1/store-requisitions/{request_id}/department-approve/",
+        {"items": [{"id": line_id, "approved_quantity": "5.0000"}]}, format="json",
+    )
+    assert hod.status_code == 200, hod.data
+    cost = ctx["cost"][2].post(
+        f"/api/v1/store-requisitions/{request_id}/cost-control-approve/",
+        {"items": [{"id": line_id, "approved_quantity": "5.0000"}]}, format="json",
+    )
+    assert cost.status_code == 200, cost.data
+    dispatch = ctx["keeper"][2].post(
+        f"/api/v1/store-requisitions/{request_id}/dispatch-transfer/",
+        {"quantities": {line_id: "5.0000"}}, format="json",
+    )
+    assert dispatch.status_code == 201, dispatch.data
+    req = StoreRequisition.objects.get(pk=request_id)
+    assert req.status == StoreRequisitionStatus.ISSUED
+    signed = supervisor.post(
+        f"/api/v1/stock-issues/{dispatch.data['id']}/acknowledge/", {}, format="json",
+    )
+    assert signed.status_code == 200, signed.data
+    req.refresh_from_db()
+    assert req.status == StoreRequisitionStatus.COMPLETED
+
+
+@pytest.mark.django_db
+def test_unrelated_roles_cannot_create_department_requisitions(workflow):
+    ctx = workflow
+    for role in ("head", "cost", "keeper"):
+        denied = ctx[role][2].post(
+            "/api/v1/store-requisitions/",
+            {"purpose": "Unauthorized origin", "store": str(ctx["store"].pk)},
+            format="json",
+        )
+        assert denied.status_code == 403, (role, denied.data)
