@@ -877,6 +877,11 @@ class Command(BaseCommand):
             created_by=employees["stores"].user,
         )
         issue.apply_inventory_changes()
+        # Sample department issue was accepted by the named receiver.
+        StockIssue.objects.filter(pk=issue.pk).update(
+            fulfillment_status=StockIssue.STATUS_COMPLETED,
+            signed_at=timezone.now(),
+        )
 
         store_return = StoreReturn.objects.create(
             department=department,
