@@ -39,7 +39,13 @@ def operational_stores_for_user(user):
     if user.is_superuser or has_role(user,"System Administrator"): return qs
     e=emp(user)
     if not e: return qs.none()
-    if is_keeper(user) or is_cost(user): return hotel_scope(qs,e)
+    if is_keeper(user):
+        assigned=StoreKeeperAssignment.objects.filter(
+            employee=e,is_active=True,store__is_active=True,
+            store__branch_id=e.branch_id,
+        ).values_list("store_id",flat=True)
+        return qs.filter(pk__in=assigned)
+    if is_cost(user): return hotel_scope(qs,e)
     return qs.filter(branch_id=e.branch_id)
 
 def request_scope(qs,user):
