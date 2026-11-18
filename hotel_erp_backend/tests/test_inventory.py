@@ -709,6 +709,13 @@ def test_store_request_requires_department_head_before_store_keeper_review():
 @pytest.mark.django_db
 def test_store_requisition_issue_and_department_return_update_stock():
     department, employee, store, item = create_inventory_operations_context()
+    from apps.inventory.models import InventoryBatch
+    # Original issue must have actual batch-cost evidence: the return may
+    # not invent historical accounting cost from a later catalogue value.
+    InventoryBatch.objects.create(
+        item=item, store=store, quantity=Decimal("40.0000"),
+        remaining_quantity=Decimal("40.0000"), unit_cost=Decimal("1250.00"),
+    )
     requisition = StoreRequisition.objects.create(
         department=department,
         store=store,
