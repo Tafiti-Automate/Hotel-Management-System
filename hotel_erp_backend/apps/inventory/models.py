@@ -2514,6 +2514,8 @@ class StoreReturn(BaseModel):
                     reference_id=store_return.id,
                     unit_cost_snapshot=balance.weighted_average_cost if balance.weighted_average_cost > 0 else None,
                     total_cost_snapshot=(line.base_quantity * balance.weighted_average_cost).quantize(Decimal("0.0001")) if balance.weighted_average_cost > 0 else None,
+                    wac_before=balance.weighted_average_cost if balance.weighted_average_cost > 0 else None,
+                    wac_after=balance.weighted_average_cost if balance.weighted_average_cost > 0 else None,
                     note=f"Signed departmental issue return {store_return.return_no}: {store_return.reason}",
                     created_by=store_return.created_by,
                 )
