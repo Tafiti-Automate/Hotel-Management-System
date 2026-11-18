@@ -2553,11 +2553,10 @@ def test_procurement_review_and_allocate_saves_full_requisition_atomically():
     assert second.procurement_quantity == Decimal("5.0000")
     assert first.procurement_supplier_price_id == first_quote.pk
     assert second.procurement_supplier_price_id == second_quote.pk
-    assert requisition.history.filter(action="procurement_bulk_allocation").exists() or (
-        RequisitionHistory.objects.filter(
-            requisition=requisition, action="procurement_bulk_allocation",
-        ).exists()
-    )
+    from apps.procurement.models import RequisitionHistory
+    assert RequisitionHistory.objects.filter(
+        requisition=requisition, action="procurement_bulk_allocation",
+    ).exists()
 
     # Server validation still blocks increasing the approved quantity.
     increased = client.post(endpoint, {"lines": [
