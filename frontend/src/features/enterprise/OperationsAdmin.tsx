@@ -452,6 +452,82 @@ export function EnterpriseBlindReceiving() {
   </WorkspacePage>
 }
 
+export function EnterpriseDepartmentReturn() {
+  const {data,loading,error,reload}=useBackendRows([
+    'store-returns','store-return-items','stores','departments','items',
+  ])
+  const {execute,busy,error:mutationError}=useWrite(reload)
+  const [store,setStore]=useState('')
+  const [department,setDepartment]=useState('')
+  const [reason,setReason]=useState('')
+  const [draftId,setDraftId]=useState('')
+  const [article,setArticle]=useState('')
+  const [quantity,setQuantity]=useState('')
+  const [conditionNote,setConditionNote]=useState('')
+  const returns=data['store-returns']||[]
+  const lines=(data['store-return-items']||[]).filter(r=>str(r.store_return)===draftId)
+  const draft=returns.find(r=>str(r.id)===draftId&&!r.inventory_changes_applied)
+  const validQuantity=/^\d+(?:\.\d{1,4})?$/.test(quantity.trim())&&Number(quantity)>0
+  const create=async()=>{
+    if(!store||!department||!reason.trim())return
+    const ok=await execute(()=>createBackendRecord('store-returns',{
+      store,department,reason:reason.trim(),
+    }),'Department return draft created')
+    if(ok){setReason('');setStore('');setDepartment('')}
+  }
+  const addLine=async()=>{
+    if(!draft||!article||!validQuantity)return
+    const ok=await execute(()=>createBackendRecord('store-return-items',{
+      store_return:draftId,item:article,quantity,condition_note:conditionNote.trim(),
+    }),'Department return article recorded')
+    if(ok){setArticle('');setQuantity('');setConditionNote('')}
+  }
+  return <WorkspacePage section="Stores / Returns" title="Department returns"
+    subtitle="Accept unused goods only against signed departmental issues. The Storekeeper posts accepted quantities back to stock; the server checks unreturned issued balances.">
+    <StateMessage loading={loading} error={error||mutationError}/>
+    {!loading&&!error&&<div className="mc-split mc-admin-split">
+      <EnterpriseTable<ApiRow> label="Department return register" rows={returns} columns={[
+        {id:'ref',label:'Return',value:r=>str(r.return_no)},
+        {id:'store',label:'Store',value:r=>str(r.store)},
+        {id:'dept',label:'Department',value:r=>str(r.department)},
+        {id:'state',label:'Stock posted',value:r=>r.inventory_changes_applied?'Posted':'Draft',render:r=><StatusPill status={r.inventory_changes_applied?'posted':'draft'}/>},
+      ]}/>
+      <section className="mc-dense-panel mc-form-panel">
+        <header className="mc-panel-title">1. Register a physical department return</header>
+        <label className="mc-field"><span>Receiving store</span><select value={store} onChange={e=>setStore(e.target.value)}>
+          <option value="">Select your assigned store</option>
+          {(data.stores||[]).filter(r=>r.is_active).map(r=><option key={str(r.id)} value={str(r.id)}>{str(r.name)}</option>)}
+        </select></label>
+        <label className="mc-field"><span>Returning department</span><select value={department} onChange={e=>setDepartment(e.target.value)}>
+          <option value="">Select department</option>
+          {(data.departments||[]).map(r=><option key={str(r.id)} value={str(r.id)}>{str(r.name)}</option>)}
+        </select></label>
+        <label className="mc-field"><span>Reason and physical condition</span><textarea rows={2} value={reason} onChange={e=>setReason(e.target.value)} placeholder="Why are the signed-out articles being returned?"/></label>
+        <button className={primary} disabled={busy||!store||!department||!reason.trim()} onClick={()=>void create()}>Create return draft</button>
+        <header className="mc-panel-title">2. Count returned articles</header>
+        <label className="mc-field"><span>Draft return</span><select value={draftId} onChange={e=>{setDraftId(e.target.value);setArticle('');setQuantity('')}}>
+          <option value="">Select draft</option>
+          {returns.filter(r=>!r.inventory_changes_applied).map(r=><option key={str(r.id)} value={str(r.id)}>{str(r.return_no)}</option>)}
+        </select></label>
+        <label className="mc-field"><span>Returned article</span><select value={article} onChange={e=>setArticle(e.target.value)}>
+          <option value="">Select article</option>
+          {(data.items||[]).filter(r=>!lines.some(x=>str(x.item)===str(r.id))).map(r=><option key={str(r.id)} value={str(r.id)}>{str(r.name)}</option>)}
+        </select></label>
+        <label className="mc-field"><span>Quantity in base units (4 decimals)</span><input type="number" min="0" step="0.0001" value={quantity} onChange={e=>setQuantity(e.target.value)}/></label>
+        <label className="mc-field"><span>Condition / inspection note</span><textarea rows={2} value={conditionNote} onChange={e=>setConditionNote(e.target.value)}/></label>
+        <button className={primary} disabled={busy||!draft||!article||!validQuantity} onClick={()=>void addLine()}>Add return line</button>
+        <div className="mc-alert mc-muted">{lines.length} line(s) on selected draft. Quantities exceeding signed, unreturned issues will be rejected by the server.</div>
+        <ConfirmTransaction title="Post department return to stock?"
+          description="This action increases store stock once, records an immutable ledger entry, and locks the return. Verify physical articles and quantities first."
+          confirmLabel="Post return" disabled={busy||!draft||!lines.length} busy={busy}
+          onConfirm={()=>execute(()=>runBackendAction('store-returns',draftId,'apply'),'Department return posted to stock ledger')}>
+          Post accepted return
+        </ConfirmTransaction>
+      </section>
+    </div>}
+  </WorkspacePage>
+}
+
 export function EnterpriseSupplierReturn() {
   const {data,loading,error,reload}=useBackendRows([
     'grns','grn-items','purchase-orders','supplier-returns','supplier-return-items','stores','items',
