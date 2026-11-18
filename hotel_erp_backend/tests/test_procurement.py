@@ -611,8 +611,11 @@ def test_purchase_order_conversion_rounds_down_without_exceeding_approved_quanti
     order = requisition.create_purchase_order(ordered_by=employee)
     order_item = order.items.get()
 
-    assert order_item.quantity == Decimal("4.16")
-    assert order_item.base_quantity == Decimal("99.84")
+    assert order_item.quantity == Decimal("4.1666")
+    assert order_item.base_quantity == Decimal("99.9984")
+    # Four-decimal purchase UOM precision avoids needless shortage while still
+    # rounding down so procurement never exceeds the approved base quantity.
+    assert order_item.base_quantity <= requisition_item.approved_base_quantity
     assert order.quantity_commitment_blockers() == []
 
 
