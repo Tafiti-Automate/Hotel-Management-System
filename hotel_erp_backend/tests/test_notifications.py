@@ -164,6 +164,13 @@ def test_store_keeper_notification_poll_creates_one_expiry_alert_per_milestone()
     assert alerts.count() == 1
     assert "Fresh Milk" in alerts.get().title
     assert store.name in alerts.get().message
+    # Event-driven alerts must work too, not only the notification inbox poll.
+    from apps.notifications.services import notify_storekeepers_for_expiring_batch
+    dispatched = notify_storekeepers_for_expiring_batch(batch)
+    assert len(dispatched) == 1
+    assert Notification.objects.filter(
+        employee=employee, deduplication_key=f"inventory-expiry:{batch.pk}:within_30_days"
+    ).count() == 1
 
 
 @pytest.mark.django_db
