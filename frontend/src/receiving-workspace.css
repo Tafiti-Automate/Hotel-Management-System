@@ -1,0 +1,119 @@
+/*
+ * Receiving workspace — first opt-in command centre migration.
+ * No selectors apply to the GRN reference paper or mutate transaction state.
+ */
+.application-root.screen-app .ds-receiving-workspace {
+  --ds-receiving-row: 46px;
+  width: 100%;
+  min-width: 0;
+}
+.application-root.screen-app .ds-receiving-workspace .ds-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--ds-space-3);
+}
+.application-root.screen-app .ds-receiving-workspace .ds-hero > div:nth-child(2) {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+.application-root.screen-app .ds-receiving-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--ds-space-3);
+}
+.application-root.screen-app .ds-receiving-metric {
+  display: grid;
+  align-content: start;
+  gap: var(--ds-space-2);
+  box-shadow: none;
+}
+.application-root.screen-app .ds-receiving-metric span {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ds-text-muted);
+}
+.application-root.screen-app .ds-receiving-metric strong {
+  font-size: clamp(23px, 2vw, 30px);
+  line-height: 1.2;
+  color: var(--ds-text);
+}
+.application-root.screen-app .ds-receiving-metric small {
+  font-size: 12px;
+  color: var(--ds-text-muted);
+}
+.application-root.screen-app .ds-receiving-filter {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-3) var(--ds-space-4);
+  background: var(--ds-surface);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-panel);
+}
+.application-root.screen-app .ds-receiving-filter label {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ds-text-muted);
+}
+.application-root.screen-app .ds-receiving-filter input[type="search"] {
+  flex: 1 1 220px;
+  min-width: 0;
+  min-height: 38px;
+  padding-inline: 12px;
+  color: var(--ds-text);
+  background: var(--ds-surface);
+  border: 1px solid var(--ds-border-strong);
+  border-radius: var(--ds-radius-control);
+}
+.application-root.screen-app .ds-receiving-workspace .ds-table-scroll {
+  max-width: 100%;
+  outline-offset: -2px;
+}
+.application-root.screen-app .ds-receiving-workspace .ds-table :is(th,td) {
+  vertical-align: middle;
+  min-height: var(--ds-receiving-row);
+}
+.application-root.screen-app .ds-receiving-workspace .ds-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--ds-surface);
+}
+.application-root.screen-app .ds-receiving-workspace .ds-table tbody tr:hover {
+  background: var(--ds-surface-muted);
+}
+.application-root.screen-app .ds-receiving-workspace .ds-receiving-empty {
+  padding: var(--ds-space-6);
+  text-align: center;
+  color: var(--ds-text-muted);
+  white-space: normal;
+}
+.application-root.screen-app .ds-receiving-workspace .ds-table :is(input,textarea) {
+  max-width: 100%;
+}
+.application-root.screen-app .ds-receiving-workspace .ds-table input[aria-invalid="true"] {
+  border-color: var(--ds-danger);
+}
+.application-root.screen-app .ds-receiving-workspace .ds-sticky-action {
+  z-index: 3;
+}
+@media (max-width: 900px) {
+  .application-root.screen-app .ds-receiving-summary {
+    grid-template-columns: repeat(2,minmax(0,1fr));
+  }
+}
+@media (max-width: 680px) {
+  .application-root.screen-app .ds-receiving-summary { grid-template-columns: 1fr; }
+  .application-root.screen-app .ds-receiving-metric { gap: 4px; }
+  .application-root.screen-app .ds-receiving-filter { align-items: stretch; }
+  .application-root.screen-app .ds-receiving-filter label { width: 100%; }
+  .application-root.screen-app .ds-receiving-filter input[type="search"] { flex-basis: 100%; font-size: 16px; }
+  .application-root.screen-app .ds-receiving-workspace .ds-hero-actions { flex-wrap: wrap; }
+  .application-root.screen-app .ds-receiving-workspace .ds-table-scroll { overflow-x: auto; }
+}
+@media print {
+  .application-root.screen-app .ds-receiving-summary,
+  .application-root.screen-app .ds-receiving-filter { display: none !important; }
+}

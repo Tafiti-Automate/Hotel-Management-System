@@ -33,6 +33,8 @@ import '../src/hospitality-precision.css'
 import '../src/hotel-evergreen-unified.css'
 /* Phase 1: canonical semantic tokens and opt-in shared controls; page-specific rules follow. */
 import '../src/design-foundation.css'
+/* Receiving command-centre refinement; GRN document print overrides remain last. */
+import '../src/receiving-workspace.css'
 /* Page-scoped final fixes: Department Requisitions master/detail + Article selector. */
 import '../src/department-requisitions-fix.css'
 import '../src/market-lists.css'

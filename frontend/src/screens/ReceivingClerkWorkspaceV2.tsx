@@ -53,6 +53,7 @@ export default function ReceivingClerkWorkspaceV2() {
   const [selectedGrnId, setSelectedGrnId] = useState('')
   const [previewGrnId, setPreviewGrnId] = useState('')
   const [tab, setTab] = useState<'ready' | 'history'>('ready')
+  const [search, setSearch] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -118,6 +119,12 @@ export default function ReceivingClerkWorkspaceV2() {
     if (linked) setSelectedOrderId(id(linked.id))
   }, [ready, selectedOrderId])
 
+  const query = search.trim().toLocaleLowerCase()
+  const filteredReady = ready.filter((row) => [row.lpo_number, row.po_number, row.supplier, row.expected_date, row.status, (app.data.suppliers as Row[]).find((supplier) => id(supplier.id) === id(row.supplier))?.name].some((value) => id(value).toLocaleLowerCase().includes(query)))
+  const filteredHistory = grns.filter((row) => [row.grn_number, row.lpo_number, row.supplier_name, row.supplier_invoice_no, row.status].some((value) => id(value).toLocaleLowerCase().includes(query)))
+  const awaitingStore = grns.filter((row) => id(row.status) !== 'posted').length
+  const postedCount = grns.length - awaitingStore
+
   const order = ready.find((row) => id(row.id) === selectedOrderId)
   const previewGrn = grns.find((row) => id(row.id) === previewGrnId)
 
@@ -128,7 +135,7 @@ export default function ReceivingClerkWorkspaceV2() {
   }
 
   return (
-    <div className="ds-workspace">
+    <div className="ds-workspace ds-receiving-workspace">
       <header className="ds-hero">
         <span className="ds-hero-icon"><Icon name="move_to_inbox" size={22} /></span>
         <div>
@@ -146,16 +153,28 @@ export default function ReceivingClerkWorkspaceV2() {
           >
             <Icon name="visibility" size={15} /> Preview GRN
           </button>
-          <button type="button" className="ds-btn ds-btn-secondary ds-refresh" onClick={() => void load()}>
+          <button type="button" className="ds-btn ds-btn-secondary ds-refresh" disabled={loading || busy} onClick={() => void load()}>
             <Icon name="refresh" size={15} /> Refresh
           </button>
         </div>
       </header>
 
-      {error && <div className="ds-alert">{error}</div>}
+      {!loading && <section className="ds-receiving-summary" aria-label="Receiving workload">
+        <div className="ds-panel ds-receiving-metric"><span>Ready supplier orders</span><strong className="ds-number">{ready.length}</strong><small>Issued LPOs with outstanding quantities</small></div>
+        <div className="ds-panel ds-receiving-metric"><span>Awaiting Stores</span><strong className="ds-number">{awaitingStore}</strong><small>Receiving records not yet posted</small></div>
+        <div className="ds-panel ds-receiving-metric"><span>Posted GRNs</span><strong className="ds-number">{postedCount}</strong><small>Completed stock receipts</small></div>
+      </section>}
+      {error && <div className="ds-alert" role="alert"><strong>Receiving data could not be refreshed.</strong> {error} <button type="button" className="ds-btn ds-btn-secondary" onClick={() => void load()}>Retry</button></div>}
+      <div className="ds-receiving-filter">
+        <label htmlFor="receiving-register-search">Search {tab === 'ready' ? 'ready LPOs' : 'GRN history'}</label>
+        <input id="receiving-register-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)}
+          placeholder={tab === 'ready' ? 'LPO number, supplier or delivery date' : 'GRN, LPO, supplier or invoice'} />
+        {search && <button type="button" className="ds-btn ds-btn-secondary" onClick={() => setSearch('')}>Clear</button>}
+      </div>
 
-      <nav className="ds-tabs">
+      <nav className="ds-tabs" aria-label="Receiving registers">
         <button
+          type="button" aria-current={tab === 'ready' ? 'page' : undefined}
           className={tab === 'ready' ? 'active' : ''}
           onClick={() => {
             setTab('ready')
@@ -165,17 +184,17 @@ export default function ReceivingClerkWorkspaceV2() {
         >
           Ready LPOs <b>{ready.length}</b>
         </button>
-        <button className={tab === 'history' ? 'active' : ''} onClick={showHistory}>
+        <button type="button" aria-current={tab === 'history' ? 'page' : undefined} className={tab === 'history' ? 'active' : ''} onClick={showHistory}>
           GRN history <b>{grns.length}</b>
         </button>
       </nav>
 
-      {loading ? <div className="ds-empty">Loading receiving records…</div>
+      {loading ? <div className="ds-empty" role="status" aria-live="polite">Loading receiving records…</div>
         : tab === 'history' && previewGrn ? (
           <GrnPreview receipt={previewGrn} lines={grnLines} back={() => setPreviewGrnId('')} />
         )
           : tab === 'history' ? (
-            <History grns={grns} lines={grnLines} selectedId={selectedGrnId} select={setSelectedGrnId} />
+            <History grns={filteredHistory} lines={grnLines} selectedId={selectedGrnId} select={setSelectedGrnId} />
           )
             : order ? (
               <Receive
@@ -193,7 +212,7 @@ export default function ReceivingClerkWorkspaceV2() {
                 }}
               />
             )
-              : <ReadyOrders orders={ready} app={app} select={setSelectedOrderId} />}
+              : <ReadyOrders orders={filteredReady} app={app} select={setSelectedOrderId} /> }
     </div>
   )
 }
@@ -202,10 +221,10 @@ function ReadyOrders({ orders, app, select }: { orders: Row[]; app: any; select:
   return (
     <section className="ds-card">
       <div className="ds-section-head"><div><h2>Issued LPOs ready for supplier delivery</h2><span>Select an LPO to review before GRN.</span></div></div>
-      <div className="ds-table-scroll">
+      <div className="ds-table-scroll" tabIndex={0} role="region" aria-label="Receiving register table">
         <table className="ds-table">
           <thead><tr><th>LPO</th><th>Supplier</th><th>Expected</th><th>Status</th><th /></tr></thead>
-          <tbody>{orders.map((order) => <tr key={id(order.id)}><td><strong>{id(order.lpo_number || order.po_number)}</strong></td><td>{id((app.data.suppliers as Row[]).find((supplier) => id(supplier.id) === id(order.supplier))?.name || order.supplier)}</td> <td>{id(order.expected_date) || '—'}</td><td>{id(order.status).replace(/_/g, ' ')}</td><td><button type="button" className="ds-btn ds-btn-secondary" onClick={() => select(id(order.id))}>Review & receive</button></td></tr>)}</tbody>
+          <tbody>{orders.length === 0 ? <tr><td colSpan={5} className="ds-receiving-empty">No matching LPOs ready for receiving. Change your search or refresh to check for new supplier deliveries.</td></tr> : orders.map((order) => <tr key={id(order.id)}><td><strong>{id(order.lpo_number || order.po_number)}</strong></td><td>{id((app.data.suppliers as Row[]).find((supplier) => id(supplier.id) === id(order.supplier))?.name || order.supplier)}</td> <td>{id(order.expected_date) || '—'}</td><td>{id(order.status).replace(/_/g, ' ')}</td><td><button type="button" className="ds-btn ds-btn-secondary" onClick={() => select(id(order.id))}>Review & receive</button></td></tr>)}</tbody>
         </table>
       </div>
     </section>
@@ -312,7 +331,7 @@ function History({ grns, lines, selectedId, select }: { grns: Row[]; lines: Row[
       <div className="ds-table-scroll">
         <table className="ds-table">
           <thead><tr><th>GRN</th><th>LPO</th><th>Supplier</th><th>Invoice</th><th>Received</th><th>Lines</th><th>Status</th></tr></thead>
-          <tbody>{grns.map((receipt) => {
+          <tbody>{grns.length === 0 ? <tr><td colSpan={7} className="ds-receiving-empty">No matching GRNs. Change your search or refresh the receiving register.</td></tr> : grns.map((receipt) => {
             const selected = id(receipt.id) === selectedId
             return <tr key={id(receipt.id)} className={selected ? 'ds-selectable-row is-selected' : 'ds-selectable-row'} tabIndex={0} aria-selected={selected} onClick={() => select(id(receipt.id))} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(id(receipt.id)) } }}><td><strong>{id(receipt.grn_number)}</strong></td><td>{id(receipt.lpo_number)}</td><td>{id(receipt.supplier_name)}</td><td>{id(receipt.supplier_invoice_no) || '—'}</td><td>{id(receipt.received_date)}</td><td>{lines.filter((line) => id(line.goods_receipt) === id(receipt.id)).length}</td><td><span className={`ds-status ${id(receipt.status) === 'posted' ? 'good' : 'warn'}`}>{receiptStatus(receipt.status)}</span></td></tr>
           })}</tbody>
