@@ -180,6 +180,24 @@ ROLE_SPECS = {
             ],
         },
     },
+    "Receiving Clerk": {
+        "crud": {"procurement": [
+            "goodsreceiptitem", "goodsreceiptnote", "goodsinspection",
+            "goodsinspectionitem", "procurementattachment",
+        ]},
+        "view": {
+            "departments": ["branch", "department"],
+            "inventory": ["item", "storelocation", "unitofmeasure"],
+            "procurement": ["purchaseorder", "purchaseorderitem"],
+            "vendors": ["supplier"],
+        },
+    },
+}
+
+# The original ten Materials Control roles retain their existing acceptance
+# baseline. Hospitality roles are provisioned separately and cannot change
+# procurement and inventory role readiness expectations.
+HOSPITALITY_ROLE_SPECS = {
     # PMS + Simphony-style operational roles. Permissions are confined to
     # hotel operations; existing Materials Control approval duties remain separate.
     "Receptionist": {
@@ -219,18 +237,6 @@ ROLE_SPECS = {
     },
     "F&B Manager": {
         "view": {"hospitality": ["poscheck"], "materials_control": ["recipe", "posimportbatch"], "departments": ["branch"]},
-    },
-    "Receiving Clerk": {
-        "crud": {"procurement": [
-            "goodsreceiptitem", "goodsreceiptnote", "goodsinspection",
-            "goodsinspectionitem", "procurementattachment",
-        ]},
-        "view": {
-            "departments": ["branch", "department"],
-            "inventory": ["item", "storelocation", "unitofmeasure"],
-            "procurement": ["purchaseorder", "purchaseorderitem"],
-            "vendors": ["supplier"],
-        },
     },
 }
 
@@ -319,7 +325,7 @@ def sync_client_roles(*, reset_permissions=True):
     approved operational permission sets are always restored.
     """
     groups = {}
-    for name in ROLE_SPECS:
+    for name in (*ROLE_SPECS, *HOSPITALITY_ROLE_SPECS):
         group, _ = Group.objects.get_or_create(name=name)
         groups[name] = group
 
@@ -353,7 +359,7 @@ def sync_client_roles(*, reset_permissions=True):
             pass
         old_group.delete()
 
-    for name, spec in ROLE_SPECS.items():
+    for name, spec in {**ROLE_SPECS, **HOSPITALITY_ROLE_SPECS}.items():
         groups[name].permissions.set(permissions_for_spec(spec))
 
     return groups

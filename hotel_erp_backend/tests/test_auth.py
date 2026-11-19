@@ -185,7 +185,13 @@ def test_api_login_allows_configured_frontend_origin(client):
 def test_setup_hotel_roles_creates_operational_groups():
     call_command("setup_hotel_roles")
 
-    assert set(Group.objects.values_list("name", flat=True)) == {
+    # The original Materials Control role set remains the acceptance baseline;
+    # additional dedicated hospitality groups are provisioned independently.
+    from apps.accounts.role_templates import ROLE_SPECS, HOSPITALITY_ROLE_SPECS
+    all_roles = set(Group.objects.values_list("name", flat=True))
+    assert set(ROLE_SPECS).issubset(all_roles)
+    assert set(HOSPITALITY_ROLE_SPECS).issubset(all_roles)
+    assert set(ROLE_SPECS) == {
         "System Administrator",
         "Department Supervisor",
         "Department Head",

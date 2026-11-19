@@ -7,6 +7,7 @@ from apps.departments.models import Branch
 from apps.hospitality.models import RoomType, Room, Reservation, POSCheck
 from apps.inventory.models import StoreLocation
 from apps.employees.models import Employee
+from apps.departments.models import Department
 from django.contrib.auth import get_user_model
 
 
@@ -62,7 +63,7 @@ def test_pos_check_rejects_cross_property_room_charge():
     user = get_user_model().objects.create_user(
         username="pos-foundation-operator", employee_code="POS-BASE-01", password="test-password"
     )
-    employee = Employee.objects.create(user=user, branch=a, designation="Bartender")
+    employee = Employee.objects.create(user=user, branch=a, department=Department.objects.create(name="POS Test Department"), designation="Bartender")
     check = POSCheck(branch=a, outlet=outlet, reservation=reservation, opened_by=employee, reference="BAR-001")
     with pytest.raises(ValidationError):
         check.full_clean()
@@ -70,9 +71,9 @@ def test_pos_check_rejects_cross_property_room_charge():
 
 @pytest.mark.django_db
 def test_operational_roles_provisioned_without_granting_materials_control_posting():
-    from apps.accounts.role_templates import ROLE_SPECS
-    assert "Receptionist" in ROLE_SPECS
+    from apps.accounts.role_templates import HOSPITALITY_ROLE_SPECS
+    assert "Receptionist" in HOSPITALITY_ROLE_SPECS
     assert "Bartender" in ROLE_SPECS
     assert "Cashier" in ROLE_SPECS
     assert "Housekeeper" in ROLE_SPECS
-    assert "procurement" not in ROLE_SPECS["Bartender"].get("crud", {})
+    assert "procurement" not in HOSPITALITY_ROLE_SPECS["Bartender"].get("crud", {})
