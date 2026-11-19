@@ -74,3 +74,67 @@ def room_availability(branch_id, arrival, departure, user):
         is_active=True,
         status=Room.STATUS_VACANT,
     ).exclude(pk__in=occupied).select_related("room_type")
+
+
+def register_property_guest(user, name, phone="", email=""):
+    """Create a new shared customer only through a property-scoped guest registration."""
+    from apps.customers.models import Customer
+    from apps.hospitality.models import PropertyGuest
+    employee = assigned_employee(user)
+    if not name.strip():
+        raise ValidationError({"name": "Guest name is required."})
+    with transaction.atomic():
+        # A new Customer is private to the registering property until explicitly
+        # linked elsewhere; no cross-property customer directory is exposed.
+        customer = Customer.objects.create(
+            name=name.strip(), phone=phone.strip(), email=email.strip(), created_by=user,
+        )
+        registration = PropertyGuest.objects.create(
+            branch_id=employee.branch_id, customer=customer, registered_by=employee, created_by=user,
+        )
+    return registration
+
+
+def add_pos_line(user, check, recipe, quantity, client_reference):
+    """One-time draft addition, price snapshotted from published outlet recipe."""
+    from decimal import Decimal
+    from django.db import IntegrityError
+    from django.utils import timezone
+    from apps.hospitality.models import POSCheck, POSOrderLine
+    from apps.materials_control.models import Recipe
+    employee = require_property(user, check.branch_id)
+    require_outlet(employee, check.outlet)
+    if not user.has_perm("hospitality.add_posorderline"):
+        raise PermissionDenied("This role cannot enter orders.")
+    with transaction.atomic():
+        locked = POSCheck.objects.select_for_update().get(pk=check.pk)
+        if locked.status != POSCheck.STATUS_OPEN:
+            raise ValidationError({"check": "Only open checks accept order lines."})
+        existing = POSOrderLine.objects.filter(
+            check=locked, client_reference=client_reference,
+        ).first()
+        if existing:
+            if existing.recipe_id != recipe.pk or existing.quantity != quantity:
+                raise ValidationError({"client_reference": "This request reference was already used for different items."})
+            return existing
+        active = Recipe.objects.select_for_update().filter(
+            pk=recipe.pk, outlet_id=locked.outlet_id,
+            status=Recipe.STATUS_PUBLISHED, is_sub_recipe=False,
+            selling_price__gt=0,
+        ).first()
+        if not active:
+            raise ValidationError({"recipe": "Select a published, priced menu item in this outlet."})
+        unit = active.selling_price
+        total = (quantity * unit).quantize(Decimal("0.01"))
+        line = POSOrderLine(
+            check=locked, recipe=active, client_reference=client_reference,
+            item_name_snapshot=active.name, quantity=quantity,
+            unit_price_snapshot=unit, line_total=total,
+            entered_by=employee, created_by=user,
+        )
+        try:
+            line.full_clean()
+        except DjangoValidationError as error:
+            raise ValidationError(getattr(error, "message_dict", None) or error.messages)
+        line.save()
+        return line

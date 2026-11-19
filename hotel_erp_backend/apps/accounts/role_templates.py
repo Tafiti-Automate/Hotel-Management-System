@@ -201,16 +201,16 @@ HOSPITALITY_ROLE_SPECS = {
     # PMS + Simphony-style operational roles. Permissions are confined to
     # hotel operations; existing Materials Control approval duties remain separate.
     "Receptionist": {
-        "crud": {"hospitality": ["reservation"]},
-        "view": {"hospitality": ["room", "roomtype", "poscheck"], "customers": ["customer"], "departments": ["branch"]},
+        "crud": {"hospitality": ["reservation", "propertyguest"]},
+        "view": {"hospitality": ["room", "roomtype", "poscheck"], "departments": ["branch"]},
     },
     "Reservations Agent": {
-        "crud": {"hospitality": ["reservation"]},
-        "view": {"hospitality": ["room", "roomtype"], "customers": ["customer"], "departments": ["branch"]},
+        "crud": {"hospitality": ["reservation", "propertyguest"]},
+        "view": {"hospitality": ["room", "roomtype"], "departments": ["branch"]},
     },
     "Front Office Manager": {
-        "crud": {"hospitality": ["reservation", "room", "roomtype"]},
-        "view": {"hospitality": ["poscheck"], "customers": ["customer"], "departments": ["branch"]},
+        "crud": {"hospitality": ["reservation", "room", "roomtype", "propertyguest"]},
+        "view": {"hospitality": ["poscheck"], "departments": ["branch"]},
     },
     "Housekeeper": {
         "view": {"hospitality": ["room", "roomtype"], "departments": ["branch"]},
@@ -220,19 +220,19 @@ HOSPITALITY_ROLE_SPECS = {
         "view": {"hospitality": ["room", "roomtype"], "departments": ["branch"]},
     },
     "Bartender": {
-        "crud": {"hospitality": ["poscheck"]},
+        "crud": {"hospitality": ["poscheck", "posorderline"]},
         "view": {"inventory": ["item"], "departments": ["branch"]},
     },
     "Waiter": {
-        "crud": {"hospitality": ["poscheck"]},
+        "crud": {"hospitality": ["poscheck", "posorderline"]},
         "view": {"departments": ["branch"]},
     },
     "Cashier": {
         "change": {"hospitality": ["poscheck"]},
-        "view": {"hospitality": ["reservation"], "departments": ["branch"]},
+        "view": {"hospitality": ["reservation", "posorderline"], "departments": ["branch"]},
     },
     "Bar Supervisor": {
-        "crud": {"hospitality": ["poscheck"]},
+        "crud": {"hospitality": ["poscheck", "posorderline"]},
         "view": {"hospitality": ["reservation"], "departments": ["branch"]},
     },
     "F&B Manager": {

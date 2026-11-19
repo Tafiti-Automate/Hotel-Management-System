@@ -141,3 +141,41 @@ class POSCheck(BaseModel):
             raise ValidationError({"reservation": "Room charge may not cross property boundaries."})
         if self.opened_by_id and self.branch_id and self.opened_by.branch_id != self.branch_id:
             raise ValidationError({"opened_by": "POS operator must belong to the selected property."})
+
+
+class PropertyGuest(BaseModel):
+    """Property-specific visibility for a shared Customer/guest record."""
+    branch = models.ForeignKey("departments.Branch", on_delete=models.PROTECT, related_name="registered_guests")
+    customer = models.ForeignKey("customers.Customer", on_delete=models.PROTECT, related_name="property_registrations")
+    registered_by = models.ForeignKey("employees.Employee", on_delete=models.PROTECT, related_name="registered_hotel_guests")
+
+    class Meta(BaseModel.Meta):
+        constraints = [
+            models.UniqueConstraint(fields=("branch", "customer"), name="unique_guest_property_registration"),
+        ]
+        ordering = ("-created_at",)
+
+
+class POSOrderLine(BaseModel):
+    """Draft POS sales line. No financial, folio or stock posting occurs here."""
+    check = models.ForeignKey(POSCheck, on_delete=models.PROTECT, related_name="order_lines")
+    recipe = models.ForeignKey("materials_control.Recipe", on_delete=models.PROTECT, related_name="pos_draft_lines")
+    client_reference = models.CharField(max_length=80)
+    item_name_snapshot = models.CharField(max_length=180)
+    quantity = models.DecimalField(max_digits=14, decimal_places=4)
+    unit_price_snapshot = models.DecimalField(max_digits=15, decimal_places=2)
+    line_total = models.DecimalField(max_digits=17, decimal_places=2)
+    entered_by = models.ForeignKey("employees.Employee", on_delete=models.PROTECT, related_name="entered_pos_lines")
+
+    class Meta(BaseModel.Meta):
+        constraints = [
+            models.UniqueConstraint(fields=("check", "client_reference"), name="unique_pos_line_client_reference"),
+        ]
+        ordering = ("created_at",)
+
+    def clean(self):
+        super().clean()
+        if self.quantity is not None and self.quantity <= 0:
+            raise ValidationError({"quantity": "Order quantity must be positive."})
+        if self.check_id and self.recipe_id and self.recipe.outlet_id != self.check.outlet_id:
+            raise ValidationError({"recipe": "Menu item belongs to a different outlet."})

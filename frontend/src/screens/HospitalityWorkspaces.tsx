@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Icon } from '../components/Icon'
-import { createBackendRecord, errorMessage, readBackendPayload, readBackendRecords } from '../lib/api'
+import { createBackendRecord, errorMessage, readBackendPayload, readBackendRecords, runBackendAction } from '../lib/api'
 import type { Row } from '../lib/data'
 import { useApp } from '../state/AppContext'
 
@@ -35,6 +35,9 @@ export function ReceptionWorkspace() {
   const [arrival, setArrival] = useState(today())
   const [departure, setDeparture] = useState('')
   const [guest, setGuest] = useState('')
+  const [guests, setGuests] = useState<Row[]>([])
+  const [newGuestName, setNewGuestName] = useState('')
+  const [newGuestPhone, setNewGuestPhone] = useState('')
   const [reference, setReference] = useState('')
   const [room, setRoom] = useState('')
   const [notes, setNotes] = useState('')
@@ -44,15 +47,27 @@ export function ReceptionWorkspace() {
   const load = useCallback(async () => {
     setBusy(true); setError('')
     try {
-      const [roomRows, bookingRows] = await Promise.all([
-        readBackendRecords('hospitality-rooms'), readBackendRecords('hospitality-reservations'),
+      const [roomRows, bookingRows, guestRows] = await Promise.all([
+        readBackendRecords('hospitality-rooms'), readBackendRecords('hospitality-reservations'), readBackendRecords('hospitality-guests'),
       ])
-      setRooms(roomRows); setReservations(bookingRows)
+      setRooms(roomRows); setReservations(bookingRows); setGuests(guestRows)
     } catch (e) { setError(errorMessage(e)) }
     finally { setBusy(false) }
   }, [])
   useEffect(() => { void load() }, [load])
 
+  const registerGuest = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!newGuestName.trim() || !canCreate) return
+    setSaving(true); setError(''); setSuccess('')
+    try {
+      const created = await createBackendRecord('hospitality-guests/register', {name: newGuestName.trim(), phone: newGuestPhone.trim()})
+      setGuest(val(created.id)); setNewGuestName(''); setNewGuestPhone('')
+      setSuccess('Guest registered to your property. Verify identity before accepting a reservation.')
+      await load()
+    } catch (e) { setError(errorMessage(e)) }
+    finally { setSaving(false) }
+  }
   const checkAvailability = useCallback(async () => {
     if (!arrival || !departure || departure <= arrival) { setError('Departure must be after arrival.'); return }
     setBusy(true); setError(''); setAvailabilityReady(false); setRoom('')
@@ -66,7 +81,7 @@ export function ReceptionWorkspace() {
     event.preventDefault()
     if (!canCreate || !propertyId) return
     if (!guest.trim() || !room || !availabilityReady || !reference.trim()) {
-      setError('Choose an available room and enter the existing guest ID and booking reference.')
+      setError('Choose an available room, a registered guest and a booking reference.')
       return
     }
     setSaving(true); setError(''); setSuccess('')
@@ -98,13 +113,19 @@ export function ReceptionWorkspace() {
           {availabilityReady && <div className="hs-available"><strong>{available.length} available room{available.length === 1 ? '' : 's'}</strong>
             {available.length ? <div className="hs-room-chips">{available.map(r => <span key={val(r.id)}>Room {val(r.number)}</span>)}</div> : <p>No eligible rooms found for these dates.</p>}</div>}
         </div>
+        <div className="hs-panel-head hs-panel-divider"><h2>Register guest</h2></div>
+        <form className="hs-panel-body hs-booking-form" onSubmit={e => void registerGuest(e)}>
+          <label>Guest name<input required maxLength={200} disabled={!canCreate || saving} value={newGuestName} onChange={e => setNewGuestName(e.target.value)} placeholder="Full guest name"/></label>
+          <label>Contact number<input maxLength={30} disabled={!canCreate || saving} value={newGuestPhone} onChange={e => setNewGuestPhone(e.target.value)} placeholder="Optional telephone"/></label>
+          <button className="hs-button" type="submit" disabled={!canCreate || saving || !newGuestName.trim()}>Register guest</button>
+        </form>
         <div className="hs-panel-head hs-panel-divider"><h2>New reservation</h2></div>
         <form className="hs-panel-body hs-booking-form" onSubmit={e => void submit(e)}>
           <label>Booking reference<input value={reference} required disabled={!canCreate || saving} onChange={e => setReference(e.target.value)} placeholder="RES-2026-001" maxLength={60}/></label>
-          <label>Existing customer ID<input value={guest} required disabled={!canCreate || saving} onChange={e => setGuest(e.target.value)} placeholder="Customer UUID"/></label>
+          <label>Property guest<select value={guest} required disabled={!canCreate || saving} onChange={e => setGuest(e.target.value)}><option value="">Select registered guest</option>{guests.map(g => <option value={val(g.id)} key={val(g.id)}>{val(g.name)}{g.phone ? ` · ${val(g.phone)}` : ""}</option>)}</select></label>
           <label>Available room<select value={room} required disabled={!canCreate || !availabilityReady || saving} onChange={e => setRoom(e.target.value)}><option value="">Select a verified available room</option>{available.map(r => <option key={val(r.id)} value={val(r.id)}>Room {val(r.number)}</option>)}</select></label>
           <label>Booking notes<textarea rows={2} value={notes} disabled={!canCreate || saving} onChange={e => setNotes(e.target.value)} placeholder="Optional reservation notes"/></label>
-          <Notice message="Guest registration and check-in are not enabled in this phase. Use an existing Customer record ID." kind="info"/>
+          <Notice message="Guest registration is now available. Check-in, identity verification and guest folios remain separate controlled workflows." kind="info"/>
           <button className="hs-button hs-button-primary" disabled={!canCreate || !propertyId || !availabilityReady || !room || !guest.trim() || !reference.trim() || saving} type="submit">{saving ? 'Saving…' : 'Save reservation'}</button>
           {!canCreate && <Notice message="Your role has read-only access to this register." kind="info"/>}
         </form>
@@ -129,11 +150,17 @@ export function BarPosWorkspace() {
   const [tableRef, setTableRef] = useState('')
   const [reference, setReference] = useState('')
   const [notes, setNotes] = useState('')
+  const [selectedCheck, setSelectedCheck] = useState('')
+  const [menu, setMenu] = useState<Row[]>([])
+  const [orderLines, setOrderLines] = useState<Row[]>([])
+  const [selectedRecipe, setSelectedRecipe] = useState('')
+  const [orderQuantity, setOrderQuantity] = useState('1')
   const [busy, setBusy] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const propertyId = app.user.branchId
+  const canAddLine = app.user.permissions.includes('hospitality.add_posorderline')
   const load = useCallback(async () => {
     setBusy(true); setError('')
     try {
@@ -161,6 +188,41 @@ export function BarPosWorkspace() {
     } catch (e) { setError(errorMessage(e)) }
     finally { setSaving(false) }
   }
+  useEffect(() => {
+    if (!outlet) {setMenu([]);setSelectedRecipe('');return}
+    let active = true
+    void (async () => {
+      try {
+        const rows = await readBackendPayload('hospitality-pos-checks/menu?outlet=' + encodeURIComponent(outlet)) as unknown as Row[]
+        if(active) setMenu(rows)
+      } catch(e) {if(active) {setMenu([]);setError(errorMessage(e))}}
+    })()
+    return () => {active=false}
+  },[outlet])
+  useEffect(() => {
+    if (!selectedCheck) {setOrderLines([]); return}
+    let active=true
+    void (async()=>{try {
+      const rows = await readBackendPayload('hospitality-pos-checks/' + encodeURIComponent(selectedCheck) + '/lines') as unknown as Row[]
+      if(active) setOrderLines(rows)
+    }catch(e){if(active) setError(errorMessage(e))}})()
+    return ()=>{active=false}
+  },[selectedCheck])
+  const addOrderLine = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!canAddLine || !selectedCheck || !selectedRecipe) return
+    setSaving(true);setError('');setSuccess('')
+    try {
+      const row = await runBackendAction('hospitality-pos-checks', selectedCheck, 'add-line', {
+        recipe:selectedRecipe, quantity:orderQuantity, client_reference:generateRef('LINE'),
+      })
+      setSuccess(val(row.item_name_snapshot) + ' added as a draft line. No payment or stock deduction was posted.')
+      setOrderQuantity('1')
+      const rows = await readBackendPayload('hospitality-pos-checks/' + encodeURIComponent(selectedCheck) + '/lines') as unknown as Row[]
+      setOrderLines(rows)
+    }catch(e){setError(errorMessage(e))}
+    finally {setSaving(false)}
+  }
   const selectedChecks = checks.filter(r => !outlet || val(r.outlet) === outlet)
   return <div className="hs-workspace">
     <PageHeader eyebrow="Food & beverage · Bar POS" title="Bar & Restaurant Checks"
@@ -183,8 +245,19 @@ export function BarPosWorkspace() {
       <section className="hs-panel">
         <div className="hs-panel-head"><h2>Check register</h2><span>{selectedChecks.length} checks</span></div>
         <div className="hs-table-wrap"><table className="hs-table"><thead><tr><th>Reference</th><th>Outlet</th><th>Tab / table</th><th>Status</th></tr></thead>
-          <tbody>{selectedChecks.map(r => <tr key={val(r.id)}><td><strong>{val(r.reference)}</strong></td><td>{outlets.find(o => val(o.id) === val(r.outlet))?.name || '—'}</td><td>{val(r.table_reference) || 'Walk-in'}</td><td><span className="hs-pill">{val(r.status)}</span></td></tr>)}</tbody></table>{!busy && !selectedChecks.length && <div className="hs-empty">No checks for the selected outlet.</div>}</div>
-        <Notice message="Orders, tenders, receipts, room charges, settlement and inventory depletion remain disabled until their transaction controls are implemented." kind="info"/>
+          <tbody>{selectedChecks.map(r => <tr key={val(r.id)} className={selectedCheck===val(r.id) ? "hs-selected" : ""}><td><button type="button" className="hs-link" onClick={() => setSelectedCheck(val(r.id))}>{val(r.reference)}</button></td><td>{outlets.find(o => val(o.id) === val(r.outlet))?.name || '—'}</td><td>{val(r.table_reference) || 'Walk-in'}</td><td><span className="hs-pill">{val(r.status)}</span></td></tr>)}</tbody></table>{!busy && !selectedChecks.length && <div className="hs-empty">No checks for the selected outlet.</div>}</div>
+        <div className="hs-panel-head hs-panel-divider"><h2>Draft order lines</h2><span>Not yet a posted sale</span></div>
+        <div className="hs-panel-body">
+          <label>Active POS check<select value={selectedCheck} onChange={e => setSelectedCheck(e.target.value)}><option value="">Select an open check</option>{selectedChecks.filter(row=>row.status==='open').map(row=><option value={val(row.id)} key={val(row.id)}>{val(row.reference)}</option>)}</select></label>
+          <form className="hs-order-form" onSubmit={e => void addOrderLine(e)}>
+            <label>Published menu item<select value={selectedRecipe} onChange={e=>setSelectedRecipe(e.target.value)} disabled={!canAddLine || !selectedCheck}><option value="">Choose product</option>{menu.map(row=><option key={val(row.id)} value={val(row.id)}>{val(row.name)} · {val(row.price)}</option>)}</select></label>
+            <label>Quantity<input type="number" step="0.0001" min="0.0001" value={orderQuantity} onChange={e=>setOrderQuantity(e.target.value)} disabled={!canAddLine || !selectedCheck}/></label>
+            <button className="hs-button hs-button-primary" disabled={!canAddLine || !selectedCheck || !selectedRecipe || saving || Number(orderQuantity)<=0} type="submit">{saving?'Adding…':'Add draft order item'}</button>
+          </form>
+          <div className="hs-table-wrap"><table className="hs-table"><thead><tr><th>Menu item</th><th>Qty</th><th>Unit price</th><th>Line total</th></tr></thead><tbody>{orderLines.map(line=><tr key={val(line.id)}><td>{val(line.item_name_snapshot)}</td><td>{val(line.quantity)}</td><td>{val(line.unit_price_snapshot)}</td><td>{val(line.line_total)}</td></tr>)}</tbody></table></div>
+          <strong className="hs-order-total">Draft total: {orderLines.reduce((sum,row)=>sum+Number(row.line_total||0),0).toLocaleString('en-UG',{maximumFractionDigits:2})}</strong>
+        </div>
+        <Notice message="Draft ordering is enabled. Tenders, receipts, room charges, settlement and inventory depletion remain disabled until financial controls are implemented." kind="info"/>
       </section>
     </div>
   </div>

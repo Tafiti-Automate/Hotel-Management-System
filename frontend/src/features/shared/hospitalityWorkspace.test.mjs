@@ -22,7 +22,7 @@ test('hospitality forms only call protected transaction endpoints', () => {
  assert.ok(screen.includes("createBackendRecord('hospitality-pos-checks'"))
  assert.ok(screen.includes('hospitality-reservations/availability?'))
  assert.ok(screen.includes('hospitality-pos-checks/outlets'))
- assert.ok(!screen.includes('runBackendAction('))
+ assert.ok(screen.includes("'add-line'"))
  assert.ok(!screen.includes("createBackendRecord('sales'"))
 })
 test('hospitality styles remain scoped and imported before GRN print', () => {
@@ -31,3 +31,5 @@ test('hospitality styles remain scoped and imported before GRN print', () => {
  assert.ok(style.includes('.hs-workspace'))
  assert.ok(layout.indexOf("hospitality-workspaces.css") < layout.indexOf("grn-reference-exact.css"))
 })
+
+test('Phase 1D guest registration and draft POS orders are connected without financial posting',()=>{const screen=read('screens/HospitalityWorkspaces.tsx');assert.ok(screen.includes('hospitality-guests/register'));assert.ok(screen.includes("readBackendRecords('hospitality-guests')"));assert.ok(screen.includes("'add-line'"));assert.ok(screen.includes('hospitality-pos-checks/menu?outlet='));assert.ok(screen.includes('Draft total:'))})

@@ -1,7 +1,7 @@
 """Narrow operational serializers: no guest PII beyond the customer identifier."""
 from rest_framework import serializers
 
-from apps.hospitality.models import POSCheck, Reservation, Room, RoomType
+from apps.hospitality.models import POSCheck, POSOrderLine, PropertyGuest, Reservation, Room, RoomType
 
 
 class RoomTypeSerializer(serializers.ModelSerializer):
@@ -46,3 +46,21 @@ class POSCheckSerializer(serializers.ModelSerializer):
             "table_reference", "status", "opened_by", "notes", "created_at",
         )
         read_only_fields = ("id", "status", "opened_by", "created_at")
+
+
+class PropertyGuestSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source="customer_id", read_only=True)
+    name = serializers.CharField(source="customer.name", read_only=True)
+    phone = serializers.CharField(source="customer.phone", read_only=True)
+    email = serializers.EmailField(source="customer.email", read_only=True)
+
+    class Meta:
+        model = PropertyGuest
+        fields = ("id", "name", "phone", "email")
+
+
+class POSOrderLineSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = POSOrderLine
+        fields = ("id", "check", "recipe", "item_name_snapshot", "quantity", "unit_price_snapshot", "line_total", "created_at")
+        read_only_fields = fields
