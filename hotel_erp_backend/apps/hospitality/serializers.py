@@ -62,5 +62,5 @@ class PropertyGuestSerializer(serializers.ModelSerializer):
 class POSOrderLineSerializer(serializers.ModelSerializer):
     class Meta:
         model = POSOrderLine
-        fields = ("id", "check", "recipe", "item_name_snapshot", "quantity", "unit_price_snapshot", "line_total", "created_at")
+        fields = ("id", "pos_check", "recipe", "item_name_snapshot", "quantity", "unit_price_snapshot", "line_total", "created_at")
         read_only_fields = fields

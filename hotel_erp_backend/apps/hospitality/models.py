@@ -158,7 +158,7 @@ class PropertyGuest(BaseModel):
 
 class POSOrderLine(BaseModel):
     """Draft POS sales line. No financial, folio or stock posting occurs here."""
-    check = models.ForeignKey(POSCheck, on_delete=models.PROTECT, related_name="order_lines")
+    pos_check = models.ForeignKey(POSCheck, on_delete=models.PROTECT, related_name="order_lines")
     recipe = models.ForeignKey("materials_control.Recipe", on_delete=models.PROTECT, related_name="pos_draft_lines")
     client_reference = models.CharField(max_length=80)
     item_name_snapshot = models.CharField(max_length=180)
@@ -169,7 +169,7 @@ class POSOrderLine(BaseModel):
 
     class Meta(BaseModel.Meta):
         constraints = [
-            models.UniqueConstraint(fields=("check", "client_reference"), name="unique_pos_line_client_reference"),
+            models.UniqueConstraint(fields=("pos_check", "client_reference"), name="unique_pos_line_client_reference"),
         ]
         ordering = ("created_at",)
 
@@ -177,5 +177,5 @@ class POSOrderLine(BaseModel):
         super().clean()
         if self.quantity is not None and self.quantity <= 0:
             raise ValidationError({"quantity": "Order quantity must be positive."})
-        if self.check_id and self.recipe_id and self.recipe.outlet_id != self.check.outlet_id:
+        if self.pos_check_id and self.recipe_id and self.recipe.outlet_id != self.pos_check.outlet_id:
             raise ValidationError({"recipe": "Menu item belongs to a different outlet."})

@@ -36,7 +36,7 @@ class Migration(migrations.Migration):
                 ("quantity", models.DecimalField(max_digits=14, decimal_places=4)),
                 ("unit_price_snapshot", models.DecimalField(max_digits=15, decimal_places=2)),
                 ("line_total", models.DecimalField(max_digits=17, decimal_places=2)),
-                ("check", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="order_lines", to="hospitality.poscheck")),
+                ("pos_check", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="order_lines", to="hospitality.poscheck")),
                 ("recipe", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="pos_draft_lines", to="materials_control.recipe")),
                 ("entered_by", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="entered_pos_lines", to="employees.employee")),
                 ("created_by", models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name="created_%(class)ss", to=settings.AUTH_USER_MODEL)),
@@ -49,6 +49,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name="posorderline",
-            constraint=models.UniqueConstraint(fields=("check", "client_reference"), name="unique_pos_line_client_reference"),
+            constraint=models.UniqueConstraint(fields=("pos_check", "client_reference"), name="unique_pos_line_client_reference"),
         ),
     ]

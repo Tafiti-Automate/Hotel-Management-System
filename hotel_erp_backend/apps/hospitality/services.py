@@ -111,7 +111,7 @@ def add_pos_line(user, check, recipe, quantity, client_reference):
         if locked.status != POSCheck.STATUS_OPEN:
             raise ValidationError({"check": "Only open checks accept order lines."})
         existing = POSOrderLine.objects.filter(
-            check=locked, client_reference=client_reference,
+            pos_check=locked, client_reference=client_reference,
         ).first()
         if existing:
             if existing.recipe_id != recipe.pk or existing.quantity != quantity:
@@ -127,7 +127,7 @@ def add_pos_line(user, check, recipe, quantity, client_reference):
         unit = active.selling_price
         total = (quantity * unit).quantize(Decimal("0.01"))
         line = POSOrderLine(
-            check=locked, recipe=active, client_reference=client_reference,
+            pos_check=locked, recipe=active, client_reference=client_reference,
             item_name_snapshot=active.name, quantity=quantity,
             unit_price_snapshot=unit, line_total=total,
             entered_by=employee, created_by=user,

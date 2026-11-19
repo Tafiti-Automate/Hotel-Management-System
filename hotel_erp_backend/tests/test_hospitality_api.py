@@ -147,10 +147,10 @@ def test_pos_draft_order_line_pricing_idempotency_and_outlet_scope(operational_c
     assert Decimal(created.data["line_total"]) == Decimal("30000.00")
     repeat = c["bartender"].post(url, line, format="json")
     assert repeat.status_code == 201
-    assert POSOrderLine.objects.filter(check_id=pk).count() == 1
+    assert POSOrderLine.objects.filter(pos_check_id=pk).count() == 1
     altered = c["bartender"].post(url, {**line, "quantity": "3"}, format="json")
     assert altered.status_code == 400
     assert c["bartender"].post(url, {**line, "quantity": "-1", "client_reference": "tap-002"}, format="json").status_code == 400
     assert c["other"].get(f"/api/v1/hospitality-pos-checks/{pk}/").status_code in (403, 404)
-    assert POSOrderLine.objects.get(check_id=pk).unit_price_snapshot == Decimal("12000.00")
+    assert POSOrderLine.objects.get(pos_check_id=pk).unit_price_snapshot == Decimal("12000.00")
     assert c["bartender"].get(f"/api/v1/hospitality-pos-checks/{pk}/lines/").status_code == 200
