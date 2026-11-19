@@ -54,12 +54,16 @@ test('no fabricated ordered values, supplier price or financial amount in blind 
 })
 
 
-test('Storekeeper owns supplier return and Receiving Clerk has no posting access', () => {
+test('Cost Controller owns supplier returns; Store Keeper and Receiving Clerk cannot manage them', () => {
   const roleTemplates = readFileSync(new URL('../../../../hotel_erp_backend/apps/accounts/role_templates.py', import.meta.url), 'utf8')
+  const controllerRole = roleTemplates.slice(roleTemplates.indexOf('"Cost Controller": {'), roleTemplates.indexOf('"Store Keeper": {'))
   const storeRole = roleTemplates.slice(roleTemplates.indexOf('"Store Keeper": {'), roleTemplates.indexOf('"Procurement Manager": {'))
   const receivingRole = roleTemplates.slice(roleTemplates.indexOf('"Receiving Clerk": {'))
-  assert.match(storeRole, /"supplierreturn", "supplierreturnitem"/)
+  assert.match(controllerRole, /"supplierreturn", "supplierreturnitem"/)
+  assert.doesNotMatch(storeRole, /"supplierreturn", "supplierreturnitem"/)
   assert.doesNotMatch(receivingRole, /"supplierreturn", "supplierreturnitem"/)
+  assert.ok(procurement.includes("'cost controller': ['request', 'quote', 'return']"))
+  assert.ok(procurement.includes("if (role === 'cost controller') return 'return'"))
   assert.ok(procurement.includes("'receiving clerk': ['receipt', 'inspect']"))
   const returnScreen = readFileSync(new URL('../enterprise/OperationsAdmin.tsx', import.meta.url), 'utf8')
   assert.ok(returnScreen.includes('section="Stores / Supplier returns"'))

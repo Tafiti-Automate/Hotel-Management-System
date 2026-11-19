@@ -652,7 +652,7 @@ export function EnterpriseSupplierReturn() {
     if(ok){setArticle('');setQuantity('')}
   }
   return <WorkspacePage section="Stores / Supplier returns" title="Return to supplier"
-    subtitle="The assigned Storekeeper returns stock from a posted GRN. Finance separately manages supplier credit approval.">
+    subtitle="Only the Cost Controller can return stock from a posted GRN. Finance separately manages supplier credit approval.">
     <StateMessage loading={loading} error={error||mutationError}/>
     {!loading&&!error&&<OperationalSummary label="Supplier return workload" metrics={[
       {label:'Draft returns',value:drafts.length,description:'Require recorded article quantities',tone:drafts.length?'attention':'neutral'},
