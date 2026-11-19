@@ -75,4 +75,5 @@ def test_empty_application_data_preserves_superuser_and_rebuilds_roles():
     assert restored_admin.is_superuser
     assert restored_admin.check_password("admin-password")
     assert not Group.objects.filter(name="Temporary Demo Group").exists()
-    assert set(Group.objects.values_list("name", flat=True)) == set(ROLE_SPECS)
+    from apps.accounts.role_templates import HOSPITALITY_ROLE_SPECS
+    assert set(Group.objects.values_list("name", flat=True)) == set(ROLE_SPECS) | set(HOSPITALITY_ROLE_SPECS)

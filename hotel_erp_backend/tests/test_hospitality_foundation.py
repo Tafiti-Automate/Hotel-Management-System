@@ -73,7 +73,7 @@ def test_pos_check_rejects_cross_property_room_charge():
 def test_operational_roles_provisioned_without_granting_materials_control_posting():
     from apps.accounts.role_templates import HOSPITALITY_ROLE_SPECS
     assert "Receptionist" in HOSPITALITY_ROLE_SPECS
-    assert "Bartender" in ROLE_SPECS
-    assert "Cashier" in ROLE_SPECS
-    assert "Housekeeper" in ROLE_SPECS
+    assert "Bartender" in HOSPITALITY_ROLE_SPECS
+    assert "Cashier" in HOSPITALITY_ROLE_SPECS
+    assert "Housekeeper" in HOSPITALITY_ROLE_SPECS
     assert "procurement" not in HOSPITALITY_ROLE_SPECS["Bartender"].get("crud", {})

@@ -79,7 +79,9 @@ def test_pos_checks_require_assigned_outlet_and_disallow_room_charge(operational
     assert created.status_code == 201, created.data
     assert created.data["status"] == "open"
     assert c["bartender"].patch(endpoint + str(created.data["id"]) + "/", {"status": "settled"}, format="json").status_code == 405
-    assert c["front"].get(endpoint).status_code == 403
+    front_response = c["front"].get(endpoint)
+    assert front_response.status_code == 200
+    assert front_response.data["count"] == 0  # Property-scoped and not assigned to the outlet
     assert POSCheck.objects.get(reference="BAR-001").status == "open"
     reservation = Reservation.objects.create(
         branch=c["a"], customer=c["guest"], room=c["room_a"], reference="ROOM-POS-001",
