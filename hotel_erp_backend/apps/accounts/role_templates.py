@@ -60,7 +60,7 @@ ROLE_SPECS = {
         "crud": {
             "vendors": ["supplier"],
             "inventory": ["category", "item", "itemunitprice", "supplieritemprice", "unitofmeasure"],
-            "procurement": ["procurementattachment", "supplierreturn", "supplierreturnitem"],
+            "procurement": ["procurementattachment", "supplierreturn", "supplierreturnitem", "supplierreturnrequest"],
             "materials_control": [
                 "wasterecord", "recipe", "recipeingredient", "posplumapping",
                 "posimportbatch", "possaleline",
@@ -103,9 +103,11 @@ ROLE_SPECS = {
             ],
             "procurement": [
                 "goodsreceiptnote", "goodsreceiptitem", "purchaseorder", "purchaseorderitem",
+                "supplierreturnrequest",
             ],
             "vendors": ["supplier"],
         },
+        "add": {"procurement": ["supplierreturnrequest"]},
     },
     "Procurement Manager": {
         "crud": {
@@ -180,6 +182,7 @@ ROLE_SPECS = {
         },
     },
     "Receiving Clerk": {
+        "add": {"procurement": ["supplierreturnrequest"]},
         "crud": {"procurement": [
             "goodsreceiptitem", "goodsreceiptnote", "goodsinspection",
             "goodsinspectionitem", "procurementattachment",
@@ -187,7 +190,7 @@ ROLE_SPECS = {
         "view": {
             "departments": ["branch", "department"],
             "inventory": ["item", "storelocation", "unitofmeasure"],
-            "procurement": ["purchaseorder", "purchaseorderitem"],
+            "procurement": ["purchaseorder", "purchaseorderitem", "supplierreturnrequest"],
             "vendors": ["supplier"],
         },
     },

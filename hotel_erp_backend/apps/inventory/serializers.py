@@ -460,7 +460,7 @@ class InventoryBalanceSerializer(serializers.ModelSerializer):
     class Meta:
         model = InventoryBalance
         fields = "__all__"
-        read_only_fields = ("id", "is_below_reorder", "available_quantity", "reserved_allocations", "calculated_reserved_quantity", "reservation_variance", "created_at", "updated_at", "created_by")
+        read_only_fields = ("id", "is_below_reorder", "available_quantity", "quantity_quarantined", "reserved_allocations", "calculated_reserved_quantity", "reservation_variance", "created_at", "updated_at", "created_by")
 
 
 class SupplierItemPriceSerializer(serializers.ModelSerializer):

@@ -21,6 +21,7 @@ from apps.procurement.models import (
     RequisitionItem,
     SupplierReturn,
     SupplierReturnItem,
+    SupplierReturnRequest,
     VendorQuotation,
     VendorQuotationItem,
 )
@@ -1126,6 +1127,34 @@ class SupplierReturnSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"supplier": "The supplier must match the supplier on the goods receipt's LPO."}
             )
+        return attrs
+
+
+
+class SupplierReturnRequestSerializer(serializers.ModelSerializer):
+    grn_number = serializers.CharField(source="goods_receipt.grn_number", read_only=True)
+    article_name = serializers.CharField(source="goods_receipt_item.item.name", read_only=True)
+    store_name = serializers.CharField(source="store.name", read_only=True)
+    supplier_name = serializers.CharField(source="goods_receipt.purchase_order.supplier.name", read_only=True)
+    reporter_name = serializers.CharField(source="reported_by.user.username", read_only=True)
+
+    class Meta:
+        model = SupplierReturnRequest
+        fields = "__all__"
+        read_only_fields = (
+            "id", "status", "reported_by", "review_note", "reviewed_by", "reviewed_at",
+            "dispatched_by", "dispatched_at", "supplier_return",
+            "supplier_acknowledged_at", "supplier_acknowledged_by", "credit_note_number",
+            "created_at", "updated_at", "created_by",
+        )
+
+    def validate(self, attrs):
+        if not str(attrs.get("reason") or "").strip():
+            raise serializers.ValidationError({"reason": "Provide the reason for returning the goods."})
+        receipt = attrs.get("goods_receipt")
+        receipt_item = attrs.get("goods_receipt_item")
+        if receipt and receipt_item and receipt_item.goods_receipt_id != receipt.pk:
+            raise serializers.ValidationError({"goods_receipt_item": "Article is not on this GRN."})
         return attrs
 
 

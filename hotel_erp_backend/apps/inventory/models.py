@@ -453,6 +453,11 @@ class InventoryBalance(BaseModel):
         default=Decimal("0.00"),
         validators=[validate_non_negative_decimal],
     )
+    quantity_quarantined = models.DecimalField(
+        max_digits=14, decimal_places=4, default=Decimal("0.0000"),
+        validators=[validate_non_negative_decimal],
+        help_text="Reported supplier-return stock withheld from usable inventory.",
+    )
     weighted_average_cost = models.DecimalField(
         max_digits=15, decimal_places=4, default=Decimal("0.0000"),
         validators=[validate_non_negative_decimal],
@@ -484,7 +489,13 @@ class InventoryBalance(BaseModel):
 
     @property
     def available_quantity(self):
-        return max(self.quantity_in_stock - self.quantity_reserved, Decimal("0.00"))
+        return max(self.quantity_in_stock - self.quantity_reserved - self.quantity_quarantined, Decimal("0.00"))
+
+    def save(self, *args, **kwargs):
+        if (self.quantity_quarantined > 0 and
+                self.quantity_in_stock < self.quantity_reserved + self.quantity_quarantined):
+            raise ValidationError("Stock cannot be issued below reserved and quarantined quantities.")
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.item} @ {self.store}: {self.quantity_in_stock}"

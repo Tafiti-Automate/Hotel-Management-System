@@ -180,7 +180,7 @@ export default function StockOnHand() {
 
     <section className="soh-kpis" aria-label="Stock summary">
       <Kpi label="Inventory value" value={money(inventoryValue)} detail={selectedStore ? id(selectedStore.name) : 'All visible stores'} />
-      <Kpi label="Available value" value={money(availableValue)} detail="Excludes reserved stock" />
+      <Kpi label="Available value" value={money(availableValue)} detail="Excludes reserved and quarantined stock" />
       <Kpi label="Stocked Articles" value={String(stockedCount)} detail={`${visible.length} balance record${visible.length === 1 ? '' : 's'}`} />
       <Kpi label="Low / reorder" value={String(lowCount)} detail="Needs Store Keeper attention" warn={lowCount > 0} />
     </section>
@@ -304,6 +304,7 @@ export default function StockOnHand() {
       <div className="soh-drawer-grid">
         <Detail label="Stock on Hand" value={`${displayQuantity(selected, selected.quantity_in_stock)} ${displayUnit(selected)}`} />
         <Detail label="Reserved (pending allocation)" value={displayQuantity(selected, selected.quantity_reserved)} />
+        <Detail label="Quarantined (supplier returns)" value={displayQuantity(selected, selected.quantity_quarantined)} />
         <Detail label="Issued / transferred to date" value={displayQuantity(selected, selected.issued_transferred_quantity)} />
         <Detail label="Available" value={displayQuantity(selected, selected.available_quantity)} />
         <Detail label="Amount / unit" value={money(num(selected.unit_amount))} />
@@ -314,7 +315,7 @@ export default function StockOnHand() {
         <Detail label="Last balance update" value={updatedAt(selected.last_updated)} />
         <Detail label="Cost basis" value="Weighted current GRN batch cost" />
       </div>
-      <div className="soh-drawer-note"><Icon name="info" size={16} /><span>Issued / transferred is cumulative outbound movement, not currently reserved stock. Reserved stock remains physically on hand and reduces Available quantity. Cost is weighted from the remaining posted GRN batches.</span></div>
+      <div className="soh-drawer-note"><Icon name="info" size={16} /><span>Issued / transferred is cumulative outbound movement, not currently reserved stock. Reserved and quarantined stock remain physically on hand and reduce Available quantity. Cost is weighted from the remaining posted GRN batches.</span></div>
     </aside></>}
   </div>
 }

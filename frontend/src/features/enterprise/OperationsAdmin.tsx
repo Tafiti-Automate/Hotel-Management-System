@@ -8,6 +8,7 @@ import {
 } from '../../lib/api'
 import { useApp } from '../../state/AppContext'
 import { printReturnNote, exportReturnRegister } from './returnDocuments'
+import { SupplierReturnReviewQueue } from './SupplierReturnRequests'
 import {
   amount, dateStr, dec, DocumentReference, FormField, StateMessage,
   StatusPill, str, useBackendRows, WorkspacePage, OperationalSummary, type ApiRow,
@@ -651,8 +652,9 @@ export function EnterpriseSupplierReturn() {
     }),'Return article added')
     if(ok){setArticle('');setQuantity('')}
   }
-  return <WorkspacePage section="Stores / Supplier returns" title="Return to supplier"
-    subtitle="Only the Cost Controller can return stock from a posted GRN. Finance separately manages supplier credit approval.">
+  return <WorkspacePage section="Cost Control / Supplier returns" title="Return to supplier"
+    subtitle="Review reported problems, authorize supplier returns, and reconcile stock and supplier acknowledgement.">
+    <SupplierReturnReviewQueue />
     <StateMessage loading={loading} error={error||mutationError}/>
     {!loading&&!error&&<OperationalSummary label="Supplier return workload" metrics={[
       {label:'Draft returns',value:drafts.length,description:'Require recorded article quantities',tone:drafts.length?'attention':'neutral'},

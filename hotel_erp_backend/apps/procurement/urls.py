@@ -1,5 +1,7 @@
 from rest_framework.routers import DefaultRouter
 
+from apps.procurement.supplier_return_requests import SupplierReturnRequestViewSet
+
 from apps.procurement.transaction_controls import (
     GoodsReceiptItemViewSet,
     GoodsReceiptNoteViewSet,
@@ -34,6 +36,7 @@ router.register("grn-items", GoodsReceiptItemViewSet, basename="grn-item")
 router.register("goods-inspections", GoodsInspectionViewSet, basename="goods-inspection")
 router.register("goods-inspection-items", GoodsInspectionItemViewSet, basename="goods-inspection-item")
 router.register("supplier-returns", SupplierReturnViewSet, basename="supplier-return")
+router.register("supplier-return-requests", SupplierReturnRequestViewSet, basename="supplier-return-request")
 router.register("supplier-return-items", SupplierReturnItemViewSet, basename="supplier-return-item")
 router.register("procurement-attachments", ProcurementAttachmentViewSet, basename="procurement-attachment")
 router.register("procurement-communications", ProcurementCommunicationViewSet, basename="procurement-communication")

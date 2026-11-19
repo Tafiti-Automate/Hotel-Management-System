@@ -3105,6 +3105,72 @@ class SupplierReturnItem(BaseModel):
         return f"{self.supplier_return} - {self.item} x {self.base_quantity}"
 
 
+
+class SupplierReturnRequest(BaseModel):
+    """Traceable report of goods requiring vendor disposition.
+
+    A receiving rejection never enters inventory. A stock-on-hand report holds
+    its quantity separately from approved department reservations until review.
+    """
+    SOURCE_RECEIVING = "receiving_rejection"
+    SOURCE_STOCK = "stock_on_hand"
+    SOURCE_CHOICES = (
+        (SOURCE_RECEIVING, "Rejected at receiving"),
+        (SOURCE_STOCK, "Already posted to store"),
+    )
+    STATUS_PENDING = "pending"
+    STATUS_APPROVED = "approved"
+    STATUS_REJECTED = "rejected"
+    STATUS_DISPATCHED = "dispatched"
+    STATUS_CHOICES = (
+        (STATUS_PENDING, "Awaiting Cost Controller"),
+        (STATUS_APPROVED, "Approved for dispatch"),
+        (STATUS_REJECTED, "Not approved"),
+        (STATUS_DISPATCHED, "Dispatched to supplier"),
+    )
+    goods_receipt = models.ForeignKey(
+        GoodsReceiptNote, on_delete=models.PROTECT, related_name="return_requests",
+    )
+    goods_receipt_item = models.ForeignKey(
+        GoodsReceiptItem, on_delete=models.PROTECT, related_name="return_requests",
+    )
+    store = models.ForeignKey(
+        "inventory.StoreLocation", on_delete=models.PROTECT, related_name="supplier_return_requests",
+    )
+    reported_by = models.ForeignKey(
+        "employees.Employee", on_delete=models.PROTECT, related_name="reported_supplier_returns",
+    )
+    quantity = models.DecimalField(max_digits=14, decimal_places=4, validators=[validate_positive_decimal])
+    source = models.CharField(max_length=25, choices=SOURCE_CHOICES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    reason = models.TextField()
+    evidence_note = models.TextField(blank=True)
+    review_note = models.TextField(blank=True)
+    reviewed_by = models.ForeignKey(
+        "employees.Employee", on_delete=models.PROTECT, related_name="reviewed_supplier_returns",
+        null=True, blank=True,
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    dispatched_by = models.ForeignKey(
+        "employees.Employee", on_delete=models.PROTECT, related_name="dispatched_supplier_return_requests",
+        null=True, blank=True,
+    )
+    dispatched_at = models.DateTimeField(null=True, blank=True)
+    supplier_return = models.OneToOneField(
+        SupplierReturn, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="source_report",
+    )
+    supplier_acknowledged_at = models.DateTimeField(null=True, blank=True)
+    supplier_acknowledged_by = models.CharField(max_length=150, blank=True)
+    credit_note_number = models.CharField(max_length=100, blank=True)
+
+    class Meta(BaseModel.Meta):
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"Return request {self.pk} ({self.status})"
+
+
 class ProcurementAttachment(BaseModel):
     DOCUMENT_SUPPLIER_CATALOGUE = "supplier_catalogue"
     DOCUMENT_PURCHASE_REQUISITION = "purchase_requisition"
