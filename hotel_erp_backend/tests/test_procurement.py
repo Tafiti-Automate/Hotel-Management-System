@@ -2862,7 +2862,8 @@ def test_multiple_partial_grns_can_share_invoice_with_distinct_delivery_notes():
     assert len({receipt.grn_number for receipt in receipts}) == 3
     assert all(receipt.blind_count_locked_at for receipt in receipts)
     assert not InventoryBalance.objects.filter(item=item, store=store).exists()
-    assert physical_receipt(invoice="INV-NEW", delivery="DN-NEW").status_code == 400
+    # A fully received LPO is intentionally hidden from Receiving Clerk scope.
+    assert physical_receipt(invoice="INV-NEW", delivery="DN-NEW").status_code == 404
 
 
 @pytest.mark.django_db
