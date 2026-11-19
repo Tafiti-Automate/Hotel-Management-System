@@ -180,6 +180,46 @@ ROLE_SPECS = {
             ],
         },
     },
+    # PMS + Simphony-style operational roles. Permissions are confined to
+    # hotel operations; existing Materials Control approval duties remain separate.
+    "Receptionist": {
+        "crud": {"hospitality": ["reservation"]},
+        "view": {"hospitality": ["room", "roomtype", "poscheck"], "customers": ["customer"], "departments": ["branch"]},
+    },
+    "Reservations Agent": {
+        "crud": {"hospitality": ["reservation"]},
+        "view": {"hospitality": ["room", "roomtype"], "customers": ["customer"], "departments": ["branch"]},
+    },
+    "Front Office Manager": {
+        "crud": {"hospitality": ["reservation", "room", "roomtype"]},
+        "view": {"hospitality": ["poscheck"], "customers": ["customer"], "departments": ["branch"]},
+    },
+    "Housekeeper": {
+        "view": {"hospitality": ["room", "roomtype"], "departments": ["branch"]},
+    },
+    "Housekeeping Supervisor": {
+        "change": {"hospitality": ["room"]},
+        "view": {"hospitality": ["room", "roomtype"], "departments": ["branch"]},
+    },
+    "Bartender": {
+        "crud": {"hospitality": ["poscheck"]},
+        "view": {"inventory": ["item"], "departments": ["branch"]},
+    },
+    "Waiter": {
+        "crud": {"hospitality": ["poscheck"]},
+        "view": {"departments": ["branch"]},
+    },
+    "Cashier": {
+        "change": {"hospitality": ["poscheck"]},
+        "view": {"hospitality": ["reservation"], "departments": ["branch"]},
+    },
+    "Bar Supervisor": {
+        "crud": {"hospitality": ["poscheck"]},
+        "view": {"hospitality": ["reservation"], "departments": ["branch"]},
+    },
+    "F&B Manager": {
+        "view": {"hospitality": ["poscheck"], "materials_control": ["recipe", "posimportbatch"], "departments": ["branch"]},
+    },
     "Receiving Clerk": {
         "crud": {"procurement": [
             "goodsreceiptitem", "goodsreceiptnote", "goodsinspection",

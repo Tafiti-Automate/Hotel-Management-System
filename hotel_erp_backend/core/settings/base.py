@@ -49,6 +49,7 @@ LOCAL_APPS = [
     "apps.reports",
     "apps.audit_logs",
     "apps.materials_control",
+    "apps.hospitality",
 ]
 
 INSTALLED_APPS = JAZZMIN_APPS + DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
