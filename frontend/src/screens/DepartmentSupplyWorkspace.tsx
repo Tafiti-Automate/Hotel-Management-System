@@ -72,7 +72,15 @@ function Read({k,v}:{k:string;v:string}){return <div className="ds-read"><span>{
 function printIssue(issue:Row,r:Row,items:Row[]){
  const w=window.open('','_blank');if(!w)return;
  const clean=escapeHtml;
- const lines=items.map(x=>`<tr><td>${clean(x.item_name)}</td><td>${clean(q(x.base_quantity))}</td><td>${clean(x.unit_name)}</td></tr>`).join('');
- w.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>${clean(issue.issue_no)}</title><style>body{font:13px Arial;padding:35px;color:#0f172a}h1{color:#1d4ed8}table{width:100%;border-collapse:collapse;margin-top:25px}td,th{border:1px solid #cbd5e1;padding:9px;text-align:left}.sig{margin-top:60px;display:flex;justify-content:space-between}.sig span{width:30%;border-top:1px solid #334155;padding-top:8px}</style></head><body><h1>Department Transfer / Issue Voucher</h1><p><b>${clean(issue.issue_no)}</b> · Request ${clean(r.requisition_no)} · ${clean(r.department_name)}</p><p>Store: ${clean(issue.store_name)} · System date: ${clean(issue.issue_date)}</p><table><tr><th>Article</th><th>Quantity</th><th>UOM</th></tr>${lines}</table><div class="sig"><span>Store Keeper</span><span>Department HOD</span><span>Receiver</span></div></body></html>`);
+ const currency=(value:number)=>value.toLocaleString('en-UG',{minimumFractionDigits:2,maximumFractionDigits:2});
+ const posted=Boolean(issue.inventory_changes_applied);
+ const priced=items.every(x=>x.dispatched_unit_cost!==null&&x.dispatched_unit_cost!==undefined&&x.dispatched_unit_cost!=='');
+ const lines=items.map(x=>{
+   const quantity=n(x.base_quantity);
+   const unit=posted&&x.dispatched_unit_cost!=null&&x.dispatched_unit_cost!==''?n(x.dispatched_unit_cost):null;
+   return `<tr><td>${clean(x.item_name)}</td><td>${clean(q(x.base_quantity))}</td><td>${clean(x.unit_name)}</td><td style="text-align:right">${unit===null?'Pending dispatch':clean(currency(unit))}</td><td style="text-align:right">${unit===null?'—':clean(currency(quantity*unit))}</td></tr>`;
+ }).join('');
+ const total=posted&&priced?items.reduce((sum,x)=>sum+n(x.base_quantity)*n(x.dispatched_unit_cost),0):null;
+ w.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>${clean(issue.issue_no)}</title><style>@page{size:A4 portrait;margin:14mm}body{font:13px Arial;color:#0f172a}h1{color:#1d4ed8}table{width:100%;border-collapse:collapse;margin-top:25px}td,th{border:1px solid #cbd5e1;padding:9px;text-align:left}.sig{margin-top:60px;display:flex;justify-content:space-between}.sig span{width:30%;border-top:1px solid #334155;padding-top:8px}</style></head><body><h1>Department Transfer / Issue Voucher</h1><p><b>${clean(issue.issue_no)}</b> · Request ${clean(r.requisition_no)} · ${clean(r.department_name)}</p><p>Store: ${clean(issue.store_name)} · System date: ${clean(issue.issue_date)}</p><table><thead><tr><th>Article</th><th>Quantity</th><th>UOM</th><th>Unit Cost (UGX)</th><th>Total Cost (UGX)</th></tr></thead><tbody>${lines}</tbody><tfoot><tr><th colspan="4">Grand Total Cost Issued (UGX)</th><th style="text-align:right">${total===null?'Pending dispatch':clean(currency(total))}</th></tr></tfoot></table><p><small>${posted?'Valued at the recorded dispatch-time unit costs.':'Draft transfer: costs become final when stock is dispatched.'}</small></p><div class="sig"><span>Store Keeper</span><span>Department HOD</span><span>Receiver</span></div></body></html>`);
  w.document.close();w.focus();w.print();
 }
