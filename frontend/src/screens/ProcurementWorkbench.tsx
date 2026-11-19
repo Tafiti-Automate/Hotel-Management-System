@@ -1449,7 +1449,7 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, items, ite
 
     {lpoQueue === 'prepare' && order && canManage && <>
       <LpoSummary
-        order={order}
+        supplierEmail={registeredSupplierEmail} order={order}
         lines={lines}
         names={names}
         quantityValue={draftQuantity}
@@ -1461,7 +1461,7 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, items, ite
     </>}
 
     {lpoQueue === 'purchasing' && order && <>
-      <LpoSummary order={order} lines={lines} names={names} />
+      <LpoSummary supplierEmail={registeredSupplierEmail} order={order} lines={lines} names={names} />
       {!canDecidePurchasing && <div style={{ padding: '10px 11px', borderRadius: 7, background: 'var(--warn-soft)', color: 'var(--warn)', fontSize: 11.3, fontWeight: 700 }}>Awaiting Procurement Manager decision</div>}
       {canDecidePurchasing && <>
         {quantityReview('purchasing', 'Procurement Manager')}
@@ -1471,7 +1471,7 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, items, ite
     </>}
 
     {lpoQueue === 'finance' && order && <>
-      <LpoSummary order={order} lines={lines} names={names} />
+      <LpoSummary supplierEmail={registeredSupplierEmail} order={order} lines={lines} names={names} />
       {!canDecideFinance && <div style={{ padding: '10px 11px', borderRadius: 7, background: 'var(--warn-soft)', color: 'var(--warn)', fontSize: 11.3, fontWeight: 700 }}>Awaiting Financial Manager decision</div>}
       {canDecideFinance && <>
         {quantityReview('finance', 'Financial Manager')}
@@ -1489,7 +1489,7 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, items, ite
           <ReadOnlyValue label="Finance decision" value={id(financeStep?.status) === 'approved' ? `Approved by ${id(financeStep?.approver_name) || 'Financial Manager'}` : 'Finance review completed'} />
         </div>
       })()}
-      <LpoSummary order={order} lines={lines} names={names} />
+      <LpoSummary supplierEmail={registeredSupplierEmail} order={order} lines={lines} names={names} />
       {!canDecideManagement && <div style={{ padding: '10px 11px', borderRadius: 7, background: 'var(--warn-soft)', color: 'var(--warn)', fontSize: 11.3, fontWeight: 700 }}>Awaiting General Manager decision</div>}
       {canDecideManagement && <>
         {quantityReview('management', 'General Manager')}
@@ -1499,7 +1499,7 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, items, ite
     </>}
 
     {lpoQueue === 'approved' && order && canManage && <>
-      <LpoSummary order={order} lines={lines} names={names} />
+      <LpoSummary supplierEmail={registeredSupplierEmail} order={order} lines={lines} names={names} />
       <div style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 9 }}>Download the controlled LPO to print or share with the supplier. After successful download, it will automatically appear in the Receiving Clerk's queue. Supplier email is not required.</div>
       <Action tone="good" disabled={busy || id(order.status) !== 'approved'} onClick={() => run(async () => {
         await downloadControlledPurchaseOrder(id(order.id))
@@ -1523,7 +1523,7 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, items, ite
           }, id(order.status) === 'approved' ? 'LPO downloaded and released to Receiving Clerk' : 'Controlled LPO copy downloaded', { ...form })}>Download {id(order.next_print_classification) || 'controlled'} LPO{id(order.status) === 'approved' ? ' & release to Receiving' : ''}</Action>
         </div>
       </div>}
-      <LpoSummary order={order} lines={lines} names={names} />
+      <LpoSummary supplierEmail={registeredSupplierEmail} order={order} lines={lines} names={names} />
       {role === 'general manager' ? (() => {
         const decision = managementApprovalStep(order)
         return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8 }}>
@@ -1545,7 +1545,7 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, items, ite
 
 function friendlyLpoStatus(status: string, steps: Row[]) { if (status === 'pending_approval') { const pending = steps.find((step) => id(step.status) === 'pending'); if (/(purchasing manager|procurement manager|purchasing)/i.test(id(pending?.stage_name))) return 'Level 1 · Procurement Manager'; if (/finance/i.test(id(pending?.stage_name))) return 'Level 2 · Financial Manager'; if (/(general manager|management)/i.test(id(pending?.stage_name))) return 'Level 3 · General Manager'; return 'Awaiting Approval' } if (status === 'approved') return 'Approved · Download & Release'; if (status === 'issued') return 'Not Received'; if (status === 'partially_received') return 'Partially Received'; if (status === 'received') return 'Received'; return status.replace(/_/g, ' ') }
 
-function LpoSummary({ order, lines, names, quantityValue, quantityMax, onQuantityChange, totalOverride }: { order: Row; lines: Row[]; names: Record<string, Map<string, string>>; quantityValue?: (row: Row) => number; quantityMax?: (row: Row) => number; onQuantityChange?: (row: Row, value: unknown) => void; totalOverride?: number }) {
+function LpoSummary({ order, lines, names, supplierEmail, quantityValue, quantityMax, onQuantityChange, totalOverride }: { order: Row; lines: Row[]; names: Record<string, Map<string, string>>; supplierEmail?: string; quantityValue?: (row: Row) => number; quantityMax?: (row: Row) => number; onQuantityChange?: (row: Row, value: unknown) => void; totalOverride?: number }) {
   const approvalSteps = Array.isArray(order.approval_steps) ? order.approval_steps as Row[] : []
   // The Purchase Order API provides human-readable labels. The global item
   // catalogue can be unavailable for Procurement accounts; never show UUIDs.
@@ -1558,7 +1558,7 @@ function LpoSummary({ order, lines, names, quantityValue, quantityMax, onQuantit
   return <section className="lpo-summary-card" style={{ margin: '10px 0 14px', overflow: 'hidden', border: '1px solid var(--border)', borderRadius: 8 }}>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8, padding: 11, background: 'var(--surface-2)' }}>
       <ReadOnlyValue label="LPO number" value={id(order.lpo_number) || id(order.po_number)} />
-      <ReadOnlyValue label="Supplier" value={supplierName} />
+      <div><ReadOnlyValue label="Supplier" value={supplierName} /><div style={{ marginTop: 5, fontSize: 11, color: "var(--text-muted)" }}><strong>Supplier email: </strong>{supplierEmail || "No email registered"}</div></div>
       <ReadOnlyValue label="Status" value={friendlyLpoStatus(id(order.status), approvalSteps)} />
       <ReadOnlyValue label="Net Amount" value={money(totalOverride ?? order.total_amount)} />
       {totalOverride == null && <ReadOnlyValue label="VAT (selected Articles)" value={money(order.vat_total)} />}
