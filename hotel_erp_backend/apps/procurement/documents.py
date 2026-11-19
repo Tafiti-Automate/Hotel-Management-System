@@ -269,7 +269,7 @@ def build_purchase_order_pdf(
             Paragraph(_text(unit_name), normal),
             Paragraph(_money(line.unit_cost), right),
             Paragraph(_money(line_net), right),
-            Paragraph(f"{(line_rate * Decimal('100')):g}%", right),
+            Paragraph(f"{(line_rate * Decimal('100')).normalize():g}%", right),
             Paragraph(_money(line_amount), right),
         ])
     lines = Table(
