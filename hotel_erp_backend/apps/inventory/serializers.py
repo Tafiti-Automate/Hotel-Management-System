@@ -725,6 +725,28 @@ class StoreRequisitionItemSerializer(serializers.ModelSerializer):
     item_name = serializers.CharField(source="item.name", read_only=True)
     shortage_quantity = serializers.SerializerMethodField()
     line_status = serializers.SerializerMethodField()
+    estimated_unit_cost = serializers.SerializerMethodField()
+    estimated_total_cost = serializers.SerializerMethodField()
+
+    def _valuation_cost(self, obj):
+        if not obj.requisition.store_id:
+            return None
+        balance = InventoryBalance.objects.filter(
+            item_id=obj.item_id, store_id=obj.requisition.store_id
+        ).first()
+        return balance.weighted_average_cost if balance else None
+
+    def get_estimated_unit_cost(self, obj):
+        return self._valuation_cost(obj)
+
+    def get_estimated_total_cost(self, obj):
+        cost = self._valuation_cost(obj)
+        if cost is None:
+            return None
+        quantity = obj.hod_approved_quantity
+        if quantity is None:
+            quantity = obj.base_quantity_requested or obj.quantity_requested
+        return cost * quantity
 
     def get_shortage_quantity(self, obj):
         approved = obj.quantity_approved or Decimal("0.00")

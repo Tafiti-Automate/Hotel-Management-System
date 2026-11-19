@@ -688,6 +688,8 @@ function RequestDetails({ request, lines, data }: { request: Row; lines: Row[]; 
             <QuantityTrail label="HOD" value={line.hod_approved_quantity ?? line.base_quantity_requested} />
             <QuantityTrail label="Stores" value={line.quantity_approved} />
             <QuantityTrail label="Issued" value={line.quantity_issued} />
+            <div className="hod-quantity-trail"><span>Unit cost (UGX)</span><strong>{line.estimated_unit_cost == null ? 'Not valued' : formatCost(line.estimated_unit_cost)}</strong></div>
+            <div className="hod-quantity-trail"><span>Total cost (UGX)</span><strong>{line.estimated_total_cost == null ? 'Not valued' : formatCost(line.estimated_total_cost)}</strong></div>
           </div>)}
           {!lines.length && <div className="hod-line-empty">No Articles recorded.</div>}
         </div>
@@ -767,6 +769,7 @@ function FlowStep({ icon, label, detail, active = false }: { icon: string; label
 }
 function FlowArrow() { return <Icon name="arrow_forward" size={16} /> }
 function Info({ label, value }: { label: string; value: string }) { return <div className="hod-info-box"><span>{label}</span><strong>{value || '—'}</strong></div> }
+function formatCost(value: unknown) { const amount = Number(value); return Number.isFinite(amount) ? new Intl.NumberFormat('en-UG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount) : '—' }
 function QuantityTrail({ label, value }: { label: string; value: unknown }) { return <div className="hod-quantity-trail"><span>{label}</span><strong>{formatQty(value)}</strong></div> }
 
 function StatusBadge({ status }: { status: string }) {
