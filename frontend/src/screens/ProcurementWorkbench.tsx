@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Icon } from '../components/Icon'
 import ConfirmTransaction from '../components/ConfirmTransaction'
-import WorkflowPrerequisite from '../components/WorkflowPrerequisite'
 import { HelpLabel } from '../components/HelpLabel'
 import LpoPreviewModal from '../components/LpoPreviewModal'
 import GrnReferenceDocument from '../components/GrnReferenceDocument'

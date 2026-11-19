@@ -1760,7 +1760,7 @@ class PurchaseOrder(BaseModel):
             blockers.append("The LPO validity date has expired.")
         if not self.print_records.exists():
             blockers.append("Download the controlled ORIGINAL/COPY LPO before releasing it.")
-        return {"can_proceed": not blockers, "blockers": blockers}
+        return {"can_proceed": not blockers, "blockers": blockers, "warnings": []}
 
     def release_for_receiving(self, *, released_by):
         """Issue a printed LPO internally without any supplier email delivery."""
