@@ -138,3 +138,70 @@ def add_pos_line(user, check, recipe, quantity, client_reference):
             raise ValidationError(getattr(error, "message_dict", None) or error.messages)
         line.save()
         return line
+
+
+def transition_reservation(user, reservation, operation):
+    """Perform reservation check-in/cancellation with a property-level lock."""
+    from django.utils import timezone
+    from apps.hospitality.models import PropertyGuest
+    employee = require_property(user, reservation.branch_id)
+    if not user.groups.filter(name__in=("Receptionist", "Front Office Manager")).exists() or not user.has_perm("hospitality.change_reservation"):
+        raise PermissionDenied("Authorized front office role required.")
+    with transaction.atomic():
+        Branch.objects.select_for_update().get(pk=reservation.branch_id)
+        booked = Reservation.objects.select_for_update().get(pk=reservation.pk)
+        if booked.status != Reservation.STATUS_RESERVED:
+            raise ValidationError({"status": "Only reserved bookings can be checked in or cancelled."})
+        if operation == "cancel":
+            booked.status = Reservation.STATUS_CANCELLED
+            booked.save(update_fields=("status", "updated_at"))
+            return booked
+        if operation != "check-in":
+            raise ValidationError({"operation": "Unsupported operation."})
+        local_date = timezone.localdate()
+        if not booked.arrival_date <= local_date < booked.departure_date:
+            raise ValidationError({"arrival_date": "Check-in requires the current date to be within the reserved stay."})
+        if not PropertyGuest.objects.filter(branch_id=booked.branch_id, customer_id=booked.customer_id).exists():
+            raise ValidationError({"customer": "Guest must be registered at this property."})
+        if not booked.room_id:
+            raise ValidationError({"room": "Assign a room before check-in."})
+        room = Room.objects.select_for_update().get(pk=booked.room_id)
+        if not room.is_active or room.status != Room.STATUS_VACANT or room.housekeeping_status not in ("clean", "inspected"):
+            raise ValidationError({"room": "Room must be vacant, active and clean or inspected."})
+        if Reservation.objects.filter(room_id=room.pk, status=Reservation.STATUS_CHECKED_IN).exclude(pk=booked.pk).exists():
+            raise ValidationError({"room": "This room already has a checked-in guest."})
+        booked.status = Reservation.STATUS_CHECKED_IN
+        booked.checked_in_at = timezone.now()
+        booked.checked_in_by = employee
+        room.status = Room.STATUS_OCCUPIED
+        room.save(update_fields=("status", "updated_at"))
+        booked.save(update_fields=("status", "checked_in_at", "checked_in_by", "updated_at"))
+        return booked
+
+
+def void_pos_order_line(user, pos_check, line_id, reason):
+    """Supervisor-only reversible-in-accounting draft correction: never delete evidence."""
+    from django.utils import timezone
+    from apps.hospitality.models import POSCheck, POSOrderLine
+    employee = require_property(user, pos_check.branch_id)
+    require_outlet(employee, pos_check.outlet)
+    if not user.groups.filter(name="Bar Supervisor").exists() or not user.has_perm("hospitality.change_posorderline"):
+        raise PermissionDenied("Bar Supervisor approval is required.")
+    reason = str(reason).strip()
+    if not 8 <= len(reason) <= 250:
+        raise ValidationError({"reason": "Give an explanation of 8 to 250 characters."})
+    with transaction.atomic():
+        locked = POSCheck.objects.select_for_update().get(pk=pos_check.pk)
+        if locked.status != POSCheck.STATUS_OPEN:
+            raise ValidationError({"check": "Closed checks cannot be adjusted."})
+        try:
+            line = POSOrderLine.objects.select_for_update().get(pk=line_id, pos_check=locked)
+        except (POSOrderLine.DoesNotExist, TypeError, ValueError):
+            raise ValidationError({"line": "Line does not belong to this check."})
+        if line.voided_at:
+            raise ValidationError({"line": "Line has already been voided."})
+        line.voided_at = timezone.now()
+        line.voided_by = employee
+        line.void_reason = reason
+        line.save(update_fields=("voided_at", "voided_by", "void_reason", "updated_at"))
+        return line

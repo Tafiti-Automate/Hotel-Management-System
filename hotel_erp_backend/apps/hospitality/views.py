@@ -14,7 +14,7 @@ from apps.hospitality.serializers import (
     POSCheckSerializer, POSOrderLineSerializer, PropertyGuestSerializer, ReservationSerializer, RoomSerializer, RoomTypeSerializer,
 )
 from apps.hospitality.services import (
-    add_pos_line, assigned_employee, register_property_guest, require_outlet, require_property, room_availability, save_reservation,
+    add_pos_line, assigned_employee, register_property_guest, require_outlet, require_property, room_availability, save_reservation, transition_reservation, void_pos_order_line,
 )
 from apps.materials_control.models import OutletAssignment, Recipe
 from rest_framework.permissions import IsAuthenticated
@@ -115,6 +115,16 @@ class ReservationViewSet(PropertyScopedMixin, viewsets.ModelViewSet):
         reservation = save_reservation(payload, self.request.user, instance=previous)
         serializer.instance = reservation
 
+    @action(detail=True, methods=("post",), url_path="check-in")
+    def check_in(self, request, pk=None):
+        reservation = transition_reservation(request.user, self.get_object(), "check-in")
+        return Response(self.get_serializer(reservation).data)
+
+    @action(detail=True, methods=("post",), url_path="cancel")
+    def cancel(self, request, pk=None):
+        reservation = transition_reservation(request.user, self.get_object(), "cancel")
+        return Response(self.get_serializer(reservation).data)
+
     @action(detail=False, methods=("get",), url_path="availability")
     def availability(self, request):
         branch_id = self.property_id()
@@ -189,6 +199,11 @@ class POSCheckViewSet(PropertyScopedMixin, viewsets.ModelViewSet):
             outlet__branch_id=employee.branch_id,
         ).select_related("outlet").order_by("outlet__name")
         return Response([{"id": str(row.outlet_id), "name": row.outlet.name} for row in assignments])
+
+    @action(detail=True, methods=("post",), url_path="void-line")
+    def void_line(self, request, pk=None):
+        line = void_pos_order_line(request.user, self.get_object(), request.data.get("line"), request.data.get("reason", ""))
+        return Response(POSOrderLineSerializer(line).data)
 
     def perform_create(self, serializer):
         payload = serializer.validated_data

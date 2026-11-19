@@ -33,3 +33,5 @@ test('hospitality styles remain scoped and imported before GRN print', () => {
 })
 
 test('Phase 1D guest registration and draft POS orders are connected without financial posting',()=>{const screen=read('screens/HospitalityWorkspaces.tsx');assert.ok(screen.includes('hospitality-guests/register'));assert.ok(screen.includes("readBackendRecords('hospitality-guests')"));assert.ok(screen.includes("'add-line'"));assert.ok(screen.includes('hospitality-pos-checks/menu?outlet='));assert.ok(screen.includes('Draft total:'))})
+
+test('Phase 1E workspaces expose guarded check-in and supervisor void, without checkout',()=>{const screen=read('screens/HospitalityWorkspaces.tsx');assert.ok(screen.includes("'check-in'"));assert.ok(screen.includes("'void-line'"));assert.ok(screen.includes('!row.voided_at'));assert.ok(!screen.includes("'check-out'"))})

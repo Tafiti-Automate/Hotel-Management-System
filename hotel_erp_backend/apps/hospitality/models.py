@@ -78,6 +78,8 @@ class Reservation(BaseModel):
     adults = models.PositiveSmallIntegerField(default=1)
     children = models.PositiveSmallIntegerField(default=0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_RESERVED)
+    checked_in_at = models.DateTimeField(null=True, blank=True)
+    checked_in_by = models.ForeignKey("employees.Employee", on_delete=models.PROTECT, related_name="hotel_checkins", null=True, blank=True)
     notes = models.TextField(blank=True)
 
     class Meta(BaseModel.Meta):
@@ -166,6 +168,9 @@ class POSOrderLine(BaseModel):
     unit_price_snapshot = models.DecimalField(max_digits=15, decimal_places=2)
     line_total = models.DecimalField(max_digits=17, decimal_places=2)
     entered_by = models.ForeignKey("employees.Employee", on_delete=models.PROTECT, related_name="entered_pos_lines")
+    voided_at = models.DateTimeField(null=True, blank=True)
+    voided_by = models.ForeignKey("employees.Employee", on_delete=models.PROTECT, related_name="voided_pos_lines", null=True, blank=True)
+    void_reason = models.CharField(max_length=250, blank=True)
 
     class Meta(BaseModel.Meta):
         constraints = [

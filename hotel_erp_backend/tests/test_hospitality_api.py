@@ -154,3 +154,92 @@ def test_pos_draft_order_line_pricing_idempotency_and_outlet_scope(operational_c
     assert c["other"].get(f"/api/v1/hospitality-pos-checks/{pk}/").status_code in (403, 404)
     assert POSOrderLine.objects.get(pos_check_id=pk).unit_price_snapshot == Decimal("12000.00")
     assert c["bartender"].get(f"/api/v1/hospitality-pos-checks/{pk}/lines/").status_code == 200
+
+
+@pytest.mark.django_db
+def test_checked_in_room_is_occupied_and_double_checkin_is_blocked(operational_context):
+    from django.utils import timezone
+    c = operational_context
+    c["room_a"].housekeeping_status = "inspected"
+    c["room_a"].save()
+    today = timezone.localdate()
+    booking = Reservation.objects.create(
+        branch=c["a"], room=c["room_a"], customer=c["guest"],
+        reference="CHECKIN-PHASE1E",
+        arrival_date=today, departure_date=today + timedelta(days=2),
+    )
+    endpoint = f"/api/v1/hospitality-reservations/{booking.pk}/check-in/"
+    result = c["front"].post(endpoint, {}, format="json")
+    assert result.status_code == 200, result.data
+    booking.refresh_from_db()
+    c["room_a"].refresh_from_db()
+    assert booking.status == Reservation.STATUS_CHECKED_IN
+    assert booking.checked_in_by_id == c["front_person"].pk
+    assert booking.checked_in_at
+    assert c["room_a"].status == Room.STATUS_OCCUPIED
+    assert c["front"].post(endpoint, {}, format="json").status_code == 400
+    assert c["other"].post(endpoint, {}, format="json").status_code == 404
+    assert c["front"].post(
+        f"/api/v1/hospitality-reservations/{booking.pk}/cancel/", {}, format="json",
+    ).status_code == 400
+
+
+@pytest.mark.django_db
+def test_dirty_room_cannot_be_checked_in_and_reservation_can_be_cancelled(operational_context):
+    from django.utils import timezone
+    c = operational_context
+    today = timezone.localdate()
+    booking = Reservation.objects.create(
+        branch=c["a"], room=c["room_a"], customer=c["guest"],
+        reference="CANCEL-PHASE1E",
+        arrival_date=today, departure_date=today + timedelta(days=1),
+    )
+    endpoint = f"/api/v1/hospitality-reservations/{booking.pk}/"
+    assert c["front"].post(endpoint + "check-in/", {}, format="json").status_code == 400
+    cancelled = c["front"].post(endpoint + "cancel/", {}, format="json")
+    assert cancelled.status_code == 200, cancelled.data
+    assert cancelled.data["status"] == "cancelled"
+    assert c["front"].post(endpoint + "cancel/", {}, format="json").status_code == 400
+    assert c["room_a"].status == Room.STATUS_VACANT
+
+
+@pytest.mark.django_db
+def test_supervisor_void_preserves_price_and_requires_reason(operational_context):
+    from decimal import Decimal
+    from apps.materials_control.models import Recipe
+    c = operational_context
+    user = get_user_model().objects.create_user(
+        username="bar-supervisor-api", employee_code="API-BAR-SUP",
+        password="test-password",
+    )
+    user.groups.add(Group.objects.get(name="Bar Supervisor"))
+    supervisor = Employee.objects.create(
+        user=user, branch=c["a"], department=c["department"], designation="Bar Supervisor",
+    )
+    OutletAssignment.objects.create(employee=supervisor, outlet=c["outlet_a"])
+    client = APIClient()
+    client.force_authenticate(user=user)
+    recipe = Recipe.objects.create(
+        name="Phase 1E lemonade", outlet=c["outlet_a"],
+        yield_quantity=Decimal("1.0000"), target_food_cost_percent=Decimal("25.00"),
+        selling_price=Decimal("10000.00"), status=Recipe.STATUS_PUBLISHED,
+    )
+    opened = c["bartender"].post("/api/v1/hospitality-pos-checks/", {
+        "branch": str(c["a"].pk), "outlet": str(c["outlet_a"].pk), "reference": "POS-VOID-TEST",
+    }, format="json")
+    assert opened.status_code == 201
+    endpoint = f"/api/v1/hospitality-pos-checks/{opened.data['id']}/"
+    line = c["bartender"].post(endpoint + "add-line/", {
+        "recipe": str(recipe.pk), "quantity": "2", "client_reference": "first-tap",
+    }, format="json")
+    assert line.status_code == 201
+    payload = {"line": line.data["id"], "reason": "Customer cancelled item"}
+    assert c["bartender"].post(endpoint + "void-line/", payload, format="json").status_code == 403
+    assert client.post(endpoint + "void-line/", {"line": line.data["id"], "reason": "No"}, format="json").status_code == 400
+    voided = client.post(endpoint + "void-line/", payload, format="json")
+    assert voided.status_code == 200, voided.data
+    original = POSOrderLine.objects.get(pk=line.data["id"])
+    assert original.voided_by_id == supervisor.pk
+    assert original.void_reason == payload["reason"]
+    assert original.line_total == Decimal("20000.00")
+    assert client.post(endpoint + "void-line/", payload, format="json").status_code == 400

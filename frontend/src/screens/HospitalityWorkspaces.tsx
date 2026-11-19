@@ -43,6 +43,20 @@ export function ReceptionWorkspace() {
   const [notes, setNotes] = useState('')
   const [availabilityReady, setAvailabilityReady] = useState(false)
   const propertyId = app.user.branchId
+  const canCheckIn = ['receptionist', 'front office manager'].includes(app.user.role.toLowerCase()) && app.user.permissions.includes('hospitality.change_reservation')
+  const changeBookingStatus = async (id: string, action: 'check-in' | 'cancel') => {
+    const message = action === 'check-in'
+      ? 'Confirm guest identity and room readiness before checking in this reservation?'
+      : 'Cancel this reservation? This will release the room allocation.'
+    if (!window.confirm(message)) return
+    setSaving(true); setError(''); setSuccess('')
+    try {
+      await runBackendAction('hospitality-reservations', id, action)
+      setSuccess(action === 'check-in' ? 'Guest checked in; room marked occupied.' : 'Reservation cancelled.')
+      await load()
+    } catch (e) { setError(errorMessage(e)) }
+    finally { setSaving(false) }
+  }
 
   const load = useCallback(async () => {
     setBusy(true); setError('')
@@ -132,10 +146,10 @@ export function ReceptionWorkspace() {
       </section>
       <section className="hs-panel">
         <div className="hs-panel-head"><h2>Reservation register</h2><span>{reservations.length} records</span></div>
-        <div className="hs-table-wrap"><table className="hs-table"><thead><tr><th>Reference</th><th>Room</th><th>Arrival</th><th>Departure</th><th>Status</th></tr></thead>
-          <tbody>{reservations.map(r => <tr key={val(r.id)}><td><strong>{val(r.reference)}</strong></td><td>{rooms.find(roomRow => val(roomRow.id) === val(r.room))?.number || 'Unassigned'}</td><td>{val(r.arrival_date)}</td><td>{val(r.departure_date)}</td><td><span className="hs-pill">{val(r.status).replaceAll('_',' ')}</span></td></tr>)}</tbody>
+        <div className="hs-table-wrap"><table className="hs-table"><thead><tr><th>Reference</th><th>Room</th><th>Arrival</th><th>Departure</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody>{reservations.map(r => <tr key={val(r.id)}><td><strong>{val(r.reference)}</strong></td><td>{rooms.find(roomRow => val(roomRow.id) === val(r.room))?.number || 'Unassigned'}</td><td>{val(r.arrival_date)}</td><td>{val(r.departure_date)}</td><td><span className="hs-pill">{val(r.status).replaceAll('_',' ')}</span></td><td>{canCheckIn && r.status === 'reserved' && <div className="hs-inline-actions"><button className="hs-button" disabled={saving} onClick={() => void changeBookingStatus(val(r.id), 'check-in')}>Check in</button><button className="hs-button" disabled={saving} onClick={() => void changeBookingStatus(val(r.id), 'cancel')}>Cancel</button></div>}</td></tr>)}</tbody>
         </table>{!busy && !reservations.length && <div className="hs-empty">No reservations found for your assigned property.</div>}</div>
-        <Notice message="Booking records are operational. Check-in, checkout and room-charge posting are not yet enabled." kind="info"/>
+        <Notice message="Check-in and cancellation are controlled. Checkout and room-charge posting remain disabled until folio settlement is available." kind="info"/>
       </section>
     </div>
   </div>
@@ -161,6 +175,7 @@ export function BarPosWorkspace() {
   const [success, setSuccess] = useState('')
   const propertyId = app.user.branchId
   const canAddLine = app.user.permissions.includes('hospitality.add_posorderline')
+  const canVoidLine = app.user.role.toLowerCase() === 'bar supervisor' && app.user.permissions.includes('hospitality.change_posorderline')
   const load = useCallback(async () => {
     setBusy(true); setError('')
     try {
@@ -223,6 +238,19 @@ export function BarPosWorkspace() {
     }catch(e){setError(errorMessage(e))}
     finally {setSaving(false)}
   }
+  const voidLine = async (lineId: string) => {
+    if (!selectedCheck || !canVoidLine) return
+    const reason = window.prompt('Enter the reason for voiding this draft item (at least 8 characters):')
+    if (reason === null) return
+    if (reason.trim().length < 8) {setError('Provide a reason of at least 8 characters.');return}
+    setSaving(true);setError('');setSuccess('')
+    try {
+      await runBackendAction('hospitality-pos-checks', selectedCheck, 'void-line', {line:lineId, reason:reason.trim()})
+      setSuccess('Draft item voided with supervisor audit record.')
+      setOrderLines(await readBackendPayload('hospitality-pos-checks/' + encodeURIComponent(selectedCheck) + '/lines') as unknown as Row[])
+    }catch(e){setError(errorMessage(e))}
+    finally{setSaving(false)}
+  }
   const selectedChecks = checks.filter(r => !outlet || val(r.outlet) === outlet)
   return <div className="hs-workspace">
     <PageHeader eyebrow="Food & beverage · Bar POS" title="Bar & Restaurant Checks"
@@ -254,8 +282,8 @@ export function BarPosWorkspace() {
             <label>Quantity<input type="number" step="0.0001" min="0.0001" value={orderQuantity} onChange={e=>setOrderQuantity(e.target.value)} disabled={!canAddLine || !selectedCheck}/></label>
             <button className="hs-button hs-button-primary" disabled={!canAddLine || !selectedCheck || !selectedRecipe || saving || Number(orderQuantity)<=0} type="submit">{saving?'Adding…':'Add draft order item'}</button>
           </form>
-          <div className="hs-table-wrap"><table className="hs-table"><thead><tr><th>Menu item</th><th>Qty</th><th>Unit price</th><th>Line total</th></tr></thead><tbody>{orderLines.map(line=><tr key={val(line.id)}><td>{val(line.item_name_snapshot)}</td><td>{val(line.quantity)}</td><td>{val(line.unit_price_snapshot)}</td><td>{val(line.line_total)}</td></tr>)}</tbody></table></div>
-          <strong className="hs-order-total">Draft total: {orderLines.reduce((sum,row)=>sum+Number(row.line_total||0),0).toLocaleString('en-UG',{maximumFractionDigits:2})}</strong>
+          <div className="hs-table-wrap"><table className="hs-table"><thead><tr><th>Menu item</th><th>Qty</th><th>Unit price</th><th>Line total</th><th>Status</th></tr></thead><tbody>{orderLines.map(line=><tr key={val(line.id)}><td>{val(line.item_name_snapshot)}</td><td>{val(line.quantity)}</td><td>{val(line.unit_price_snapshot)}</td><td>{val(line.line_total)}</td><td>{line.voided_at ? <span className="hs-pill">Voided — {val(line.void_reason)}</span> : canVoidLine ? <button className="hs-button" disabled={saving} type="button" onClick={() => void voidLine(val(line.id))}>Void</button> : <span className="hs-pill">Draft</span>}</td></tr>)}</tbody></table></div>
+          <strong className="hs-order-total">Draft total: {orderLines.filter(row=>!row.voided_at).reduce((sum,row)=>sum+Number(row.line_total||0),0).toLocaleString('en-UG',{maximumFractionDigits:2})}</strong>
         </div>
         <Notice message="Draft ordering is enabled. Tenders, receipts, room charges, settlement and inventory depletion remain disabled until financial controls are implemented." kind="info"/>
       </section>

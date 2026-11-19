@@ -21,10 +21,10 @@ class ReservationSerializer(serializers.ModelSerializer):
         model = Reservation
         fields = (
             "id", "reference", "branch", "customer", "room",
-            "arrival_date", "departure_date", "adults", "children", "status", "notes",
+            "arrival_date", "departure_date", "adults", "children", "status", "checked_in_at", "notes",
             "created_at",
         )
-        read_only_fields = ("id", "status", "created_at")
+        read_only_fields = ("id", "status", "checked_in_at", "created_at")
 
     def validate(self, attrs):
         branch = attrs.get("branch", getattr(self.instance, "branch", None))
@@ -62,5 +62,5 @@ class PropertyGuestSerializer(serializers.ModelSerializer):
 class POSOrderLineSerializer(serializers.ModelSerializer):
     class Meta:
         model = POSOrderLine
-        fields = ("id", "pos_check", "recipe", "item_name_snapshot", "quantity", "unit_price_snapshot", "line_total", "created_at")
+        fields = ("id", "pos_check", "recipe", "item_name_snapshot", "quantity", "unit_price_snapshot", "line_total", "voided_at", "void_reason", "created_at")
         read_only_fields = fields
