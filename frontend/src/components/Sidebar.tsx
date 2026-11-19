@@ -71,6 +71,7 @@ const roleNavigation: Record<string, NavGroup[]> = {
     ] },
     { heading: 'Control desk', items: [
       { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
+      { route: 'stock-on-hand', label: 'Stock on Hand', icon: 'inventory_2' },
       { route: 'workflow-stores', label: 'Request control', icon: 'fact_check' },
       { route: 'waste-control', label: 'Waste audit', icon: 'delete_sweep' },
       { route: 'recipes-production', label: 'Recipe costing', icon: 'menu_book' },

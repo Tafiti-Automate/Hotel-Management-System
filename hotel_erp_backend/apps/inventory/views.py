@@ -139,9 +139,11 @@ def scope_financial_stock_audit(queryset, user, store_lookup="store"):
     if not employee or not employee.is_active or not employee.branch_id:
         return queryset.none()
     branch = employee.branch
+    # An empty lookup means queryset is already a StoreLocation queryset.
+    prefix = f"{store_lookup}__" if store_lookup else ""
     if getattr(branch, "hotel_id", None):
-        return queryset.filter(**{f"{store_lookup}__branch__hotel_id": branch.hotel_id})
-    return queryset.filter(**{f"{store_lookup}__branch_id": branch.pk})
+        return queryset.filter(**{f"{prefix}branch__hotel_id": branch.hotel_id})
+    return queryset.filter(**{f"{prefix}branch_id": branch.pk})
 
 
 def scope_store_requisitions(queryset, user):
@@ -447,6 +449,8 @@ class StoreLocationViewSet(CreatedByModelMixin, ModelViewSet):
             self.request.user, "System Administrator", "General Manager"
         ):
             return queryset.filter(pk__in=assigned_store_ids(self.request.user))
+        if has_role(self.request.user, "Cost Controller"):
+            return scope_financial_stock_audit(queryset, self.request.user, store_lookup="")
         return queryset
 
 
@@ -489,6 +493,8 @@ class InventoryBalanceViewSet(ReadOnlyModelViewSet):
             self.request.user, "System Administrator", "General Manager"
         ):
             return queryset.filter(store_id__in=assigned_store_ids(self.request.user))
+        if has_role(self.request.user, "Cost Controller"):
+            return scope_financial_stock_audit(queryset, self.request.user)
         return queryset
 
     @action(detail=True, methods=["post"], url_path="reconcile-reservation")

@@ -104,7 +104,7 @@ const strictRoleRoutes: Record<string, Set<string>> = {
   supervisor: new Set([ 'waste-new', 'dashboard', 'detail', 'workflow-stores', 'new-store-request', 'incoming-pickup', 'waste-control']),
   'department head': new Set([ 'market-lists', 'purchasing-pr-new', 'recipes-detail', 'purchasing-order-detail','dashboard', 'detail', 'workflow-stores', 'waste-control', 'recipes-production', 'reports', 'reportview']),
   'store keeper': new Set([ 'supplier-return-report', 'department-returns-new', 'stocktake-sheet','dashboard', 'detail', 'workflow-stores', 'grn-posting', 'transfer-dispatch', 'stock-on-hand', 'store-transfers', 'locations', 'store-inventory', 'store-analysis', 'store-usage', 'store-purchase-requests', 'reports', 'reportview']),
-  'cost controller': new Set(['receiving-return-new', 'locations', 'departments', 'purchasing-quotes', 'pos-reconciliation', 'recipes-detail', 'stocktake-variance', 'store-inventory','dashboard', 'detail', 'workflow-stores', 'waste-control', 'recipes-production', 'pos-control', 'items', 'categories', 'uoms', 'itemUnits', 'suppliers', 'supplierItems', 'reports', 'reportview', 'menu-engineering']),
+  'cost controller': new Set(['stock-on-hand', 'receiving-return-new', 'locations', 'departments', 'purchasing-quotes', 'pos-reconciliation', 'recipes-detail', 'stocktake-variance', 'store-inventory','dashboard', 'detail', 'workflow-stores', 'waste-control', 'recipes-production', 'pos-control', 'items', 'categories', 'uoms', 'itemUnits', 'suppliers', 'supplierItems', 'reports', 'reportview', 'menu-engineering']),
   'procurement manager': new Set([ 'purchasing-workbench', 'purchasing-quotes', 'purchasing-order-detail','dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
   'procurement officer': new Set([ 'purchasing-workbench', 'purchasing-quotes', 'purchasing-order-detail','dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
   'financial manager': new Set([ 'finance-invoice-matching', 'finance-budgets', 'finance-period-close', 'purchasing-order-detail', 'stocktake-variance','dashboard', 'detail', 'workflow-procure', 'approval-inbox', 'workflow-pay', 'finance-governance', 'reports', 'reportview', 'menu-engineering']),
@@ -215,7 +215,7 @@ export function canAccessRoute(user: AccessUser, route: string): boolean {
   if (route === 'workflow-stores') {
     return ['department supervisor', 'outlet supervisor', 'supervisor', 'department head', 'cost controller', 'store keeper'].includes(role)
   }
-  if (route === 'stock-on-hand' && role !== 'store keeper') return false
+  if (route === 'stock-on-hand' && !['store keeper', 'cost controller'].includes(role)) return false
   if (route === 'store-purchase-requests' && role !== 'store keeper') return false
   if (route === 'storeRequisitions') return false
   // Catalogue group ownership is explicitly assigned to the Cost Controller

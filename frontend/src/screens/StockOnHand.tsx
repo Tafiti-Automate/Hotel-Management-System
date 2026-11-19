@@ -25,6 +25,7 @@ function updatedAt(value: unknown) {
 
 export default function StockOnHand() {
   const app = useApp()
+  const isCostController = app.user.role.trim().toLowerCase() === 'cost controller'
   const [balances, setBalances] = useState<Row[]>([])
   const [stores, setStores] = useState<Row[]>([])
   const [unpostedGrns, setUnpostedGrns] = useState<Row[]>([])
@@ -168,7 +169,7 @@ export default function StockOnHand() {
         <div>
           <div className="soh-eyebrow">Inventory control</div>
           <h1>Stock on Hand</h1>
-          <p>Live posted inventory by store. Filter the stock position the same way Stores controls Stock on Hand.</p>
+          <p>Live posted inventory balances, available quantities and valuation by store. Cost Control can review stock without posting movements.</p>
         </div>
       </div>
       <button className="soh-refresh" type="button" onClick={() => void load()} disabled={loading}>
@@ -204,7 +205,7 @@ export default function StockOnHand() {
       </button>
       {optionsOpen && <div className="soh-option-grid">
         <div className="soh-option-fields">
-          <label>Cost Center / Store<select value={storeId} onChange={(event) => setStoreId(event.target.value)}><option value="">All assigned stores</option>{storeOptions.map((store) => <option key={id(store.id)} value={id(store.id)}>{id(store.name)}</option>)}</select></label>
+          <label>Cost Center / Store<select value={storeId} onChange={(event) => setStoreId(event.target.value)}><option value="">{isCostController ? 'All property stores' : 'All assigned stores'}</option>{storeOptions.map((store) => <option key={id(store.id)} value={id(store.id)}>{id(store.name)}</option>)}</select></label>
           <div className="soh-option-checks"><label><input type="checkbox" checked={withSubStores} onChange={(event) => setWithSubStores(event.target.checked)} />With Sub Cost Centers</label><label><input type="checkbox" checked={sortByStore} onChange={(event) => { setSortByStore(event.target.checked); setSortBy(event.target.checked ? 'store' : 'article') }} />Sort by Cost Center / Store</label></div>
           <label>Over Group<select value={majorGroup} onChange={(event) => { setMajorGroup(event.target.value); setCategory('') }}><option value="">All Over Groups</option>{majorGroups.map((group) => <option key={id(group.id)} value={id(group.name)}>{id(group.name)}</option>)}</select></label>
           <label>Major Group<select value={majorGroup} onChange={(event) => { setMajorGroup(event.target.value); setCategory('') }}><option value="">All Major Groups</option>{majorGroups.map((group) => <option key={id(group.id)} value={id(group.name)}>{id(group.name)}</option>)}</select></label>
@@ -219,7 +220,7 @@ export default function StockOnHand() {
           <fieldset><legend>Sorted by</legend><label><input type="radio" checked={sortBy === 'article'} onChange={() => setSortBy('article')} />Article</label><label><input type="radio" checked={sortBy === 'store'} onChange={() => setSortBy('store')} />Storage Location</label><label><input type="radio" checked={sortBy === 'quantity'} onChange={() => setSortBy('quantity')} />Lowest SOH</label><label><input type="radio" checked={sortBy === 'value'} onChange={() => setSortBy('value')} />Stock Value</label></fieldset>
           <fieldset><legend>Evaluation by</legend><label><input type="radio" checked={evaluation === 'ave'} onChange={() => setEvaluation('ave')} />AVE</label><label><input type="radio" checked={evaluation === 'price'} onChange={() => setEvaluation('price')} />Price</label><label><input type="radio" checked={evaluation === 'epi'} onChange={() => setEvaluation('epi')} />EPI</label><label><input type="radio" checked={evaluation === 'exp'} onChange={() => setEvaluation('exp')} />Exp.</label></fieldset>
         </div>
-        <footer className="soh-option-footer"><span>{withSubStores ? 'Assigned stores are included in this control.' : 'Live results only include stores assigned to your account.'}</span><button type="button" onClick={() => setOptionsOpen(false)}>Apply</button></footer>
+        <footer className="soh-option-footer"><span>{isCostController ? 'Read-only inventory oversight for stores within your property.' : withSubStores ? 'Assigned stores are included in this control.' : 'Live results only include stores assigned to your account.'}</span><button type="button" onClick={() => setOptionsOpen(false)}>Apply</button></footer>
       </div>}
     </section>
 
