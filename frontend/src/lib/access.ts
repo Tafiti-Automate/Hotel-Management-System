@@ -55,9 +55,13 @@ const routePermissions: Record<string, string[]> = {
   'audit-log': ['audit_logs.view_auditlog'],
   'access-management': ['accounts.view_user', 'auth.view_group'],
   'hotel-profile': ['organization.view_hotel'],
+  'front-desk-reservations': ['hospitality.view_reservation'],
+  'bar-pos': ['hospitality.view_poscheck'],
 }
 
 const enterpriseRoleRoutes: Record<string, string[]> = {
+  'front-desk-reservations': ['receptionist', 'reservations agent', 'front office manager'],
+  'bar-pos': ['bartender', 'waiter', 'bar supervisor', 'cashier'],
   'purchasing-workbench': ['procurement officer', 'procurement manager'],
   'purchasing-quotes': ['procurement officer', 'procurement manager', 'cost controller'],
   'purchasing-pr-new': ['department head'],
@@ -87,6 +91,13 @@ const adminAllowedRoutes = new Set([
 const hrApps = new Set(['employees', 'departments', 'accounts'])
 
 const strictRoleRoutes: Record<string, Set<string>> = {
+  receptionist: new Set(['front-desk-reservations']),
+  'reservations agent': new Set(['front-desk-reservations']),
+  'front office manager': new Set(['front-desk-reservations']),
+  bartender: new Set(['bar-pos']),
+  waiter: new Set(['bar-pos']),
+  cashier: new Set(['bar-pos']),
+  'bar supervisor': new Set(['bar-pos']),
   'department supervisor': new Set([ 'waste-new', 'dashboard', 'detail', 'workflow-stores', 'new-store-request', 'incoming-pickup', 'waste-control']),
   'outlet supervisor': new Set([ 'waste-new', 'dashboard', 'detail', 'workflow-stores', 'new-store-request', 'incoming-pickup', 'waste-control']),
   supervisor: new Set([ 'waste-new', 'dashboard', 'detail', 'workflow-stores', 'new-store-request', 'incoming-pickup', 'waste-control']),
@@ -183,6 +194,9 @@ export function canAccessRoute(user: AccessUser, route: string): boolean {
   const strict = strictRoleRoutes[role]
   if (strict && !strict.has(route)) return false
 
+  if (requiredRoles && (route === 'front-desk-reservations' || route === 'bar-pos')) {
+    return routePermissions[route].some(permission => user.permissions.includes(permission))
+  }
   if (requiredRoles) return true
   if (route === 'new-store-request' || route === 'incoming-pickup') {
     return ['department supervisor', 'outlet supervisor', 'supervisor'].includes(roleKey(user))
@@ -230,6 +244,13 @@ export function operationsLandingFor(user: AccessUser): { route: string; crumb: 
     'accounts payable clerk': { route: 'workflow-pay', crumb: 'Supplier invoices & payment' },
     'general manager': { route: 'dashboard', crumb: 'Final approvals dashboard' },
     'receiving clerk': { route: 'dashboard', crumb: 'Receiving dashboard' },
+    receptionist: { route: 'front-desk-reservations', crumb: 'Reception desk' },
+    'reservations agent': { route: 'front-desk-reservations', crumb: 'Reservations desk' },
+    'front office manager': { route: 'front-desk-reservations', crumb: 'Front office' },
+    bartender: { route: 'bar-pos', crumb: 'Bar POS' },
+    waiter: { route: 'bar-pos', crumb: 'Restaurant orders' },
+    cashier: { route: 'bar-pos', crumb: 'Cashier POS register' },
+    'bar supervisor': { route: 'bar-pos', crumb: 'Bar supervisor' },
   }
   const preferred = roleLanding[role]
   if (preferred && canAccessRoute(user, preferred.route)) return preferred

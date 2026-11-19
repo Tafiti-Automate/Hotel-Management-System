@@ -37,6 +37,7 @@ import '../src/design-foundation.css'
 import '../src/receiving-workspace.css'
 /* Shared procurement and supplier-return command-centre presentation. */
 import '../src/procurement-workspace.css'
+import '../src/hospitality-workspaces.css'
 /* Page-scoped final fixes: Department Requisitions master/detail + Article selector. */
 import '../src/department-requisitions-fix.css'
 import '../src/market-lists.css'

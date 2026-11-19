@@ -99,6 +99,15 @@ class POSCheckViewSet(PropertyScopedMixin, viewsets.ModelViewSet):
         ).values_list("outlet_id", flat=True)
         return super().get_queryset().filter(outlet_id__in=outlet_ids)
 
+    @action(detail=False, methods=("get",), url_path="outlets")
+    def outlets(self, request):
+        employee = assigned_employee(request.user)
+        assignments = OutletAssignment.objects.filter(
+            employee=employee, is_active=True, outlet__is_active=True,
+            outlet__branch_id=employee.branch_id,
+        ).select_related("outlet").order_by("outlet__name")
+        return Response([{"id": str(row.outlet_id), "name": row.outlet.name} for row in assignments])
+
     def perform_create(self, serializer):
         payload = serializer.validated_data
         employee = require_property(self.request.user, payload["branch"].pk)

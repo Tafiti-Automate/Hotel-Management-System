@@ -8,6 +8,13 @@ interface NavItem { route: string; label: string; icon?: string }
 interface NavGroup { heading: string; items: NavItem[] }
 
 const roleNavigation: Record<string, NavGroup[]> = {
+  receptionist: [{ heading: 'Front office', items: [{ route: 'front-desk-reservations', label: 'Reservations desk', icon: 'hotel' }] }],
+  'reservations agent': [{ heading: 'Reservations', items: [{ route: 'front-desk-reservations', label: 'Room availability & bookings', icon: 'event_available' }] }],
+  'front office manager': [{ heading: 'Front office', items: [{ route: 'front-desk-reservations', label: 'Reservation management', icon: 'hotel' }] }],
+  bartender: [{ heading: 'Bar', items: [{ route: 'bar-pos', label: 'Open bar checks', icon: 'point_of_sale' }] }],
+  waiter: [{ heading: 'Restaurant', items: [{ route: 'bar-pos', label: 'Restaurant checks', icon: 'restaurant' }] }],
+  cashier: [{ heading: 'Cashier', items: [{ route: 'bar-pos', label: 'POS check register', icon: 'receipt_long' }] }],
+  'bar supervisor': [{ heading: 'Bar supervision', items: [{ route: 'bar-pos', label: 'Bar check register', icon: 'point_of_sale' }] }],
   'department supervisor': [
     { heading: 'Department', items: [
       { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },

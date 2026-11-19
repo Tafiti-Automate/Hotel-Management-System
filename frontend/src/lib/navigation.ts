@@ -4,7 +4,7 @@
  * state until their backend-backed deep-link contracts are defined.
  */
 export const workspaceRoutes = [
-  'dashboard', 'hr-dashboard', 'workflow-stores', 'workflow-procure',
+  'dashboard', 'hr-dashboard', 'front-desk-reservations', 'bar-pos', 'workflow-stores', 'workflow-procure',
   'workflow-pay', 'workflow-consume', 'workflow-configure',
   'waste-control', 'recipes-production', 'pos-control',
   'finance-governance', 'integration-control',
@@ -37,6 +37,8 @@ const registeredRoutes = new Set<string>(workspaceRoutes)
  */
 const semanticPaths: Partial<Record<WorkspaceRoute, string>> = {
   dashboard: '/dashboard',
+  'front-desk-reservations': '/front-desk/reservations',
+  'bar-pos': '/bar/pos',
   'workflow-stores': '/transfers/requisitions',
   'purchasing-workbench': '/purchasing/workbench',
   'purchasing-quotes': '/purchasing/quotes',
@@ -122,6 +124,8 @@ export function pathForRoute(route: string): string | null {
 export function labelForRoute(route: string): string {
   const special: Record<string, string> = {
     dashboard: 'Overview',
+    'front-desk-reservations': 'Front desk reservations',
+    'bar-pos': 'Bar and restaurant POS',
     'new-store-request': 'New internal requisition',
     'incoming-pickup': 'Confirm pickup',
     'grn-posting': 'Post received GRNs',

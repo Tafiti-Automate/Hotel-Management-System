@@ -32,6 +32,8 @@ const AuditLog = lazy(() => import('./AuditLog'))
 const AccessManagement = lazy(() => import('./AccessManagement'))
 const SupplierManagement = lazy(() => import('./SupplierManagement'))
 const SupplierQuotationOptionOne = lazy(() => import('./SupplierQuotationOptionOne'))
+const ReceptionWorkspace = lazy(() => import('./HospitalityWorkspaces').then(module => ({default: module.ReceptionWorkspace})))
+const BarPosWorkspace = lazy(() => import('./HospitalityWorkspaces').then(module => ({default: module.BarPosWorkspace})))
 const UnitManagement = lazy(() => import('./UnitManagement'))
 const MaterialsControl = lazy(() => import('./MaterialsControl'))
 const InternalRequestBuilder = lazy(() => import('./OutletWorkflow').then((module) => ({ default: module.InternalRequestBuilder })))
@@ -93,6 +95,8 @@ export default function AppShell() {
   </section>
   else if (route === 'dashboard') content = <Dashboard />
   else if (route === 'hr-dashboard') content = <HRDashboard />
+  else if (route === 'front-desk-reservations') content = <ReceptionWorkspace />
+  else if (route === 'bar-pos') content = <BarPosWorkspace />
   else if (route === 'purchasing-workbench') content = <EnterprisePurchasingWorkbench />
   else if (route === 'purchasing-quotes') content = <EnterpriseQuoteMatrix />
   else if (route === 'purchasing-pr-new') content = <EnterprisePurchaseRequisitionBuilder />

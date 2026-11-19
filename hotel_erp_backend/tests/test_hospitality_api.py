@@ -73,6 +73,10 @@ def test_pos_checks_require_assigned_outlet_and_disallow_room_charge(operational
         "branch": str(c["a"].pk), "outlet": str(c["outlet_b"].pk), "reference": "BAR-UNASSIGNED",
     }, format="json")
     assert wrong.status_code == 403
+    outlet_list = c["bartender"].get(endpoint + "outlets/")
+    assert outlet_list.status_code == 200
+    assert [row["id"] for row in outlet_list.data] == [str(c["outlet_a"].pk)]
+    assert c["front"].get(endpoint + "outlets/").data == []
     created = c["bartender"].post(endpoint, {
         "branch": str(c["a"].pk), "outlet": str(c["outlet_a"].pk), "reference": "BAR-001",
     }, format="json")
