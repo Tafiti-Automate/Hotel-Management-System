@@ -36,6 +36,7 @@ export function ReceptionWorkspace() {
   const [departure, setDeparture] = useState('')
   const [guest, setGuest] = useState('')
   const [guests, setGuests] = useState<Row[]>([])
+  const [folios, setFolios] = useState<Row[]>([])
   const [newGuestName, setNewGuestName] = useState('')
   const [newGuestPhone, setNewGuestPhone] = useState('')
   const [reference, setReference] = useState('')
@@ -44,6 +45,16 @@ export function ReceptionWorkspace() {
   const [availabilityReady, setAvailabilityReady] = useState(false)
   const propertyId = app.user.branchId
   const canCheckIn = ['receptionist', 'front office manager'].includes(app.user.role.toLowerCase()) && app.user.permissions.includes('hospitality.change_reservation')
+  const openFolio = async (id: string) => {
+    if (!app.user.permissions.includes('hospitality.add_guestfolio')) return
+    setSaving(true); setError(''); setSuccess('')
+    try {
+      await createBackendRecord('hospitality-folios/open', {reservation: id})
+      setSuccess('Guest folio opened. No accommodation, POS charge or payment has been posted.')
+      await load()
+    } catch(e) {setError(errorMessage(e))}
+    finally {setSaving(false)}
+  }
   const changeBookingStatus = async (id: string, action: 'check-in' | 'cancel') => {
     const message = action === 'check-in'
       ? 'Confirm guest identity and room readiness before checking in this reservation?'
@@ -61,10 +72,10 @@ export function ReceptionWorkspace() {
   const load = useCallback(async () => {
     setBusy(true); setError('')
     try {
-      const [roomRows, bookingRows, guestRows] = await Promise.all([
-        readBackendRecords('hospitality-rooms'), readBackendRecords('hospitality-reservations'), readBackendRecords('hospitality-guests'),
+      const [roomRows, bookingRows, guestRows, folioRows] = await Promise.all([
+        readBackendRecords('hospitality-rooms'), readBackendRecords('hospitality-reservations'), readBackendRecords('hospitality-guests'), app.user.permissions.includes('hospitality.view_guestfolio') ? readBackendRecords('hospitality-folios') : Promise.resolve([] as Row[]),
       ])
-      setRooms(roomRows); setReservations(bookingRows); setGuests(guestRows)
+      setRooms(roomRows); setReservations(bookingRows); setGuests(guestRows); setFolios(folioRows)
     } catch (e) { setError(errorMessage(e)) }
     finally { setBusy(false) }
   }, [])
@@ -146,8 +157,8 @@ export function ReceptionWorkspace() {
       </section>
       <section className="hs-panel">
         <div className="hs-panel-head"><h2>Reservation register</h2><span>{reservations.length} records</span></div>
-        <div className="hs-table-wrap"><table className="hs-table"><thead><tr><th>Reference</th><th>Room</th><th>Arrival</th><th>Departure</th><th>Status</th><th>Action</th></tr></thead>
-          <tbody>{reservations.map(r => <tr key={val(r.id)}><td><strong>{val(r.reference)}</strong></td><td>{rooms.find(roomRow => val(roomRow.id) === val(r.room))?.number || 'Unassigned'}</td><td>{val(r.arrival_date)}</td><td>{val(r.departure_date)}</td><td><span className="hs-pill">{val(r.status).replaceAll('_',' ')}</span></td><td>{canCheckIn && r.status === 'reserved' && <div className="hs-inline-actions"><button className="hs-button" disabled={saving} onClick={() => void changeBookingStatus(val(r.id), 'check-in')}>Check in</button><button className="hs-button" disabled={saving} onClick={() => void changeBookingStatus(val(r.id), 'cancel')}>Cancel</button></div>}</td></tr>)}</tbody>
+        <div className="hs-table-wrap"><table className="hs-table"><thead><tr><th>Reference</th><th>Room</th><th>Arrival</th><th>Departure</th><th>Status</th><th>Folio</th><th>Action</th></tr></thead>
+          <tbody>{reservations.map(r => <tr key={val(r.id)}><td><strong>{val(r.reference)}</strong></td><td>{rooms.find(roomRow => val(roomRow.id) === val(r.room))?.number || 'Unassigned'}</td><td>{val(r.arrival_date)}</td><td>{val(r.departure_date)}</td><td><span className="hs-pill">{val(r.status).replaceAll('_',' ')}</span></td><td>{folios.some(f => val(f.reservation) === val(r.id)) ? <span className="hs-pill">Open · posting disabled</span> : r.status === 'checked_in' && app.user.permissions.includes('hospitality.add_guestfolio') ? <button type="button" className="hs-button" disabled={saving} onClick={() => void openFolio(val(r.id))}>Open folio</button> : '—'}</td><td>{canCheckIn && r.status === 'reserved' && <div className="hs-inline-actions"><button className="hs-button" disabled={saving} onClick={() => void changeBookingStatus(val(r.id), 'check-in')}>Check in</button><button className="hs-button" disabled={saving} onClick={() => void changeBookingStatus(val(r.id), 'cancel')}>Cancel</button></div>}</td></tr>)}</tbody>
         </table>{!busy && !reservations.length && <div className="hs-empty">No reservations found for your assigned property.</div>}</div>
         <Notice message="Check-in and cancellation are controlled. Checkout and room-charge posting remain disabled until folio settlement is available." kind="info"/>
       </section>
@@ -165,6 +176,8 @@ export function BarPosWorkspace() {
   const [reference, setReference] = useState('')
   const [notes, setNotes] = useState('')
   const [selectedCheck, setSelectedCheck] = useState('')
+  const [cashierSessions, setCashierSessions] = useState<Row[]>([])
+  const [openingFloat, setOpeningFloat] = useState('0.00')
   const [menu, setMenu] = useState<Row[]>([])
   const [orderLines, setOrderLines] = useState<Row[]>([])
   const [selectedRecipe, setSelectedRecipe] = useState('')
@@ -175,15 +188,16 @@ export function BarPosWorkspace() {
   const [success, setSuccess] = useState('')
   const propertyId = app.user.branchId
   const canAddLine = app.user.permissions.includes('hospitality.add_posorderline')
+  const canOpenSession = app.user.role.toLowerCase() === 'cashier' && app.user.permissions.includes('hospitality.add_cashiersession')
   const canVoidLine = app.user.role.toLowerCase() === 'bar supervisor' && app.user.permissions.includes('hospitality.change_posorderline')
   const load = useCallback(async () => {
     setBusy(true); setError('')
     try {
-      const [outletRows, checkRows] = await Promise.all([
+      const [outletRows, checkRows, sessionRows] = await Promise.all([
         readBackendPayload('hospitality-pos-checks/outlets') as unknown as Promise<Row[]>,
-        readBackendRecords('hospitality-pos-checks'),
+        readBackendRecords('hospitality-pos-checks'), app.user.permissions.includes('hospitality.view_cashiersession') ? readBackendRecords('hospitality-cashier-sessions') : Promise.resolve([] as Row[]),
       ])
-      setOutlets(outletRows); setChecks(checkRows)
+      setOutlets(outletRows); setChecks(checkRows); setCashierSessions(sessionRows)
       setOutlet(current => outletRows.some(r => val(r.id) === current) ? current : val(outletRows[0]?.id))
     } catch (e) { setError(errorMessage(e)) }
     finally { setBusy(false) }
@@ -251,6 +265,17 @@ export function BarPosWorkspace() {
     }catch(e){setError(errorMessage(e))}
     finally{setSaving(false)}
   }
+  const openCashier = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!canOpenSession || !outlet) return
+    setSaving(true);setError('');setSuccess('')
+    try {
+      await createBackendRecord('hospitality-cashier-sessions/open', {outlet,opening_float:openingFloat})
+      setSuccess('Till session opened. No customer payment has been captured.')
+      await load()
+    } catch(e) {setError(errorMessage(e))}
+    finally {setSaving(false)}
+  }
   const selectedChecks = checks.filter(r => !outlet || val(r.outlet) === outlet)
   return <div className="hs-workspace">
     <PageHeader eyebrow="Food & beverage · Bar POS" title="Bar & Restaurant Checks"
@@ -285,7 +310,13 @@ export function BarPosWorkspace() {
           <div className="hs-table-wrap"><table className="hs-table"><thead><tr><th>Menu item</th><th>Qty</th><th>Unit price</th><th>Line total</th><th>Status</th></tr></thead><tbody>{orderLines.map(line=><tr key={val(line.id)}><td>{val(line.item_name_snapshot)}</td><td>{val(line.quantity)}</td><td>{val(line.unit_price_snapshot)}</td><td>{val(line.line_total)}</td><td>{line.voided_at ? <span className="hs-pill">Voided — {val(line.void_reason)}</span> : canVoidLine ? <button className="hs-button" disabled={saving} type="button" onClick={() => void voidLine(val(line.id))}>Void</button> : <span className="hs-pill">Draft</span>}</td></tr>)}</tbody></table></div>
           <strong className="hs-order-total">Draft total: {orderLines.filter(row=>!row.voided_at).reduce((sum,row)=>sum+Number(row.line_total||0),0).toLocaleString('en-UG',{maximumFractionDigits:2})}</strong>
         </div>
-        <Notice message="Draft ordering is enabled. Tenders, receipts, room charges, settlement and inventory depletion remain disabled until financial controls are implemented." kind="info"/>
+        {canOpenSession && <div className="hs-panel-head hs-panel-divider"><h2>Cashier till session</h2><span>Custody only, no payment posting</span></div>}
+        {canOpenSession && <form className="hs-panel-body hs-order-form" onSubmit={e => void openCashier(e)}>
+          <label>Opening cash float<input type="number" step="0.01" min="0" value={openingFloat} onChange={e=>setOpeningFloat(e.target.value)} disabled={saving || cashierSessions.some(x=>x.status==='open')}/></label>
+          <button className="hs-button hs-button-primary" type="submit" disabled={saving || !outlet || cashierSessions.some(x=>x.status==='open')}>Open cashier session</button>
+          <span className="hs-pill">{cashierSessions.find(x=>x.status==='open') ? 'Till open' : 'No open till'}</span>
+        </form>}
+        <Notice message="Draft ordering and cashier shift opening are available. Payments, receipts, room charges, session closing, settlement and stock depletion remain disabled until financial controls are implemented." kind="info"/>
       </section>
     </div>
   </div>

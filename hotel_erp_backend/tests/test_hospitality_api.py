@@ -243,3 +243,55 @@ def test_supervisor_void_preserves_price_and_requires_reason(operational_context
     assert original.void_reason == payload["reason"]
     assert original.line_total == Decimal("20000.00")
     assert client.post(endpoint + "void-line/", payload, format="json").status_code == 400
+
+@pytest.mark.django_db
+def test_folio_requires_checkin_and_is_single_per_reservation(operational_context):
+    from django.utils import timezone
+    from apps.hospitality.models import GuestFolio
+    c = operational_context
+    current = timezone.localdate()
+    booking = Reservation.objects.create(
+        branch=c["a"],room=c["room_a"],customer=c["guest"],reference="FOLIO-1F",
+        arrival_date=current,departure_date=current + timedelta(days=2),
+    )
+    url="/api/v1/hospitality-folios/open/"
+    assert c["front"].post(url,{"reservation":str(booking.pk)},format="json").status_code==400
+    c["room_a"].housekeeping_status="inspected"
+    c["room_a"].save()
+    checked=c["front"].post(f"/api/v1/hospitality-reservations/{booking.pk}/check-in/",{},format="json")
+    assert checked.status_code==200,checked.data
+    one=c["front"].post(url,{"reservation":str(booking.pk)},format="json")
+    assert one.status_code==200,one.data
+    assert one.data["balance"] is None
+    two=c["front"].post(url,{"reservation":str(booking.pk)},format="json")
+    assert two.status_code==200
+    assert one.data["id"]==two.data["id"]
+    assert GuestFolio.objects.filter(reservation=booking).count()==1
+    assert c["other"].get("/api/v1/hospitality-folios/").data["count"]==0
+    assert c["other"].post(url,{"reservation":str(booking.pk)},format="json").status_code==400
+    assert c["bartender"].post(url,{"reservation":str(booking.pk)},format="json").status_code==403
+
+
+@pytest.mark.django_db
+def test_cashier_sessions_require_assigned_outlet_and_single_open_shift(operational_context):
+    from apps.hospitality.models import CashierSession
+    c=operational_context
+    user=get_user_model().objects.create_user(username="phase-1f-cashier",employee_code="API-1F-CASH",password="test-password")
+    user.groups.add(Group.objects.get(name="Cashier"))
+    employee=Employee.objects.create(user=user,branch=c["a"],department=c["department"],designation="Cashier")
+    OutletAssignment.objects.create(employee=employee,outlet=c["outlet_a"])
+    api=APIClient()
+    api.force_authenticate(user=user)
+    url="/api/v1/hospitality-cashier-sessions/open/"
+    assert c["bartender"].post(url,{"outlet":str(c["outlet_a"].pk),"opening_float":"0"},format="json").status_code==403
+    assert api.post(url,{"outlet":str(c["outlet_b"].pk),"opening_float":"0"},format="json").status_code==403
+    assert api.post(url,{"outlet":str(c["outlet_a"].pk),"opening_float":"-5"},format="json").status_code==400
+    opened=api.post(url,{"outlet":str(c["outlet_a"].pk),"opening_float":"50000.00"},format="json")
+    assert opened.status_code==201,opened.data
+    assert opened.data["status"]=="open"
+    assert opened.data["opening_float"]=="50000.00"
+    assert api.post(url,{"outlet":str(c["outlet_a"].pk),"opening_float":"0"},format="json").status_code==400
+    assert CashierSession.objects.filter(cashier=employee,status="open").count()==1
+    assert api.get("/api/v1/hospitality-cashier-sessions/").data["count"]==1
+    assert c["other"].get("/api/v1/hospitality-cashier-sessions/").status_code==403
+    assert api.patch("/api/v1/hospitality-cashier-sessions/"+opened.data["id"]+"/",{"status":"closed"},format="json").status_code==405

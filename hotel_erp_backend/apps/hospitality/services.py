@@ -205,3 +205,55 @@ def void_pos_order_line(user, pos_check, line_id, reason):
         line.void_reason = reason
         line.save(update_fields=("voided_at", "voided_by", "void_reason", "updated_at"))
         return line
+
+
+def open_guest_folio(user, reservation):
+    """Create once for a currently checked-in guest without financial postings."""
+    from apps.hospitality.models import GuestFolio, PropertyGuest
+    employee = require_property(user, reservation.branch_id)
+    if not user.groups.filter(name__in=("Receptionist", "Front Office Manager")).exists():
+        raise PermissionDenied("Only authorized front office staff can open folios.")
+    if not user.has_perm("hospitality.add_guestfolio"):
+        raise PermissionDenied("Guest folio creation permission required.")
+    with transaction.atomic():
+        Branch.objects.select_for_update().get(pk=reservation.branch_id)
+        locked = Reservation.objects.select_for_update().get(pk=reservation.pk)
+        if locked.status != Reservation.STATUS_CHECKED_IN:
+            raise ValidationError({"reservation": "A folio can only be opened for a checked-in guest."})
+        if not PropertyGuest.objects.filter(branch_id=locked.branch_id, customer_id=locked.customer_id).exists():
+            raise ValidationError({"reservation": "Guest must be registered at this property."})
+        folio, _ = GuestFolio.objects.get_or_create(
+            reservation=locked, defaults={
+                "branch_id":locked.branch_id, "opened_by":employee, "created_by":user,
+            },
+        )
+        if folio.branch_id != employee.branch_id:
+            raise PermissionDenied("Guest folio is outside your property.")
+        return folio
+
+
+def open_cashier_session(user, outlet, opening_float):
+    """Record till custody with a property lock; not a receipt or payment."""
+    from decimal import Decimal
+    from django.utils import timezone
+    from apps.hospitality.models import CashierSession
+    employee = assigned_employee(user)
+    if not user.groups.filter(name="Cashier").exists() or not user.has_perm("hospitality.add_cashiersession"):
+        raise PermissionDenied("Cashier role and session creation permission required.")
+    require_outlet(employee, outlet)
+    if opening_float < Decimal("0") or opening_float > Decimal("9999999999999.99"):
+        raise ValidationError({"opening_float": "Opening float must be a valid nonnegative monetary amount."})
+    with transaction.atomic():
+        Branch.objects.select_for_update().get(pk=employee.branch_id)
+        if CashierSession.objects.filter(cashier=employee, status=CashierSession.STATUS_OPEN).exists():
+            raise ValidationError({"cashier": "Close the existing cashier session before opening another."})
+        session = CashierSession(
+            branch_id=employee.branch_id, outlet=outlet, cashier=employee,
+            opened_at=timezone.now(), opening_float=opening_float, created_by=user,
+        )
+        try:
+            session.full_clean()
+        except DjangoValidationError as exc:
+            raise ValidationError(getattr(exc, "message_dict", None) or exc.messages)
+        session.save()
+        return session

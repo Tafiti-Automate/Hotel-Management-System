@@ -1,7 +1,7 @@
 """Narrow operational serializers: no guest PII beyond the customer identifier."""
 from rest_framework import serializers
 
-from apps.hospitality.models import POSCheck, POSOrderLine, PropertyGuest, Reservation, Room, RoomType
+from apps.hospitality.models import CashierSession, GuestFolio, POSCheck, POSOrderLine, PropertyGuest, Reservation, Room, RoomType
 
 
 class RoomTypeSerializer(serializers.ModelSerializer):
@@ -63,4 +63,28 @@ class POSOrderLineSerializer(serializers.ModelSerializer):
     class Meta:
         model = POSOrderLine
         fields = ("id", "pos_check", "recipe", "item_name_snapshot", "quantity", "unit_price_snapshot", "line_total", "voided_at", "void_reason", "created_at")
+        read_only_fields = fields
+
+
+class GuestFolioSerializer(serializers.ModelSerializer):
+    balance = serializers.SerializerMethodField()
+
+    class Meta:
+        model = GuestFolio
+        fields = ("id", "branch", "reservation", "status", "opened_by", "created_at", "balance")
+        read_only_fields = fields
+
+    def get_balance(self, obj):
+        # Posting journal is not yet available. Zero must not be presented
+        # as a settled guest balance: it is an uninitialized ledger.
+        return None
+
+
+class CashierSessionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CashierSession
+        fields = (
+            "id", "branch", "outlet", "cashier", "opened_at", "opening_float",
+            "status", "closed_at", "closing_count", "note",
+        )
         read_only_fields = fields

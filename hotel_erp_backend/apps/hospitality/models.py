@@ -184,3 +184,55 @@ class POSOrderLine(BaseModel):
             raise ValidationError({"quantity": "Order quantity must be positive."})
         if self.pos_check_id and self.recipe_id and self.recipe.outlet_id != self.pos_check.outlet_id:
             raise ValidationError({"recipe": "Menu item belongs to a different outlet."})
+
+
+class GuestFolio(BaseModel):
+    """Unique accommodation folio container; postings remain disabled."""
+    branch = models.ForeignKey("departments.Branch", on_delete=models.PROTECT, related_name="guest_folios")
+    reservation = models.OneToOneField(Reservation, on_delete=models.PROTECT, related_name="folio")
+    opened_by = models.ForeignKey("employees.Employee", on_delete=models.PROTECT, related_name="opened_guest_folios")
+    status = models.CharField(max_length=16, choices=[("open", "Open"), ("closed", "Closed")], default="open")
+
+    class Meta(BaseModel.Meta):
+        ordering = ("-created_at",)
+
+    def clean(self):
+        super().clean()
+        if self.reservation_id and self.branch_id and self.reservation.branch_id != self.branch_id:
+            raise ValidationError({"reservation": "Guest folio belongs to another hotel property."})
+        if self.reservation_id and self.reservation.status != Reservation.STATUS_CHECKED_IN:
+            raise ValidationError({"reservation": "A guest folio requires an active checked-in reservation."})
+
+
+class CashierSession(BaseModel):
+    """Till custody record, not a financial receipt or settlement."""
+    STATUS_OPEN = "open"
+    STATUS_CLOSED = "closed"
+    branch = models.ForeignKey("departments.Branch", on_delete=models.PROTECT, related_name="cashier_sessions")
+    outlet = models.ForeignKey("inventory.StoreLocation", on_delete=models.PROTECT, related_name="cashier_sessions")
+    cashier = models.ForeignKey("employees.Employee", on_delete=models.PROTECT, related_name="cashier_sessions")
+    opened_at = models.DateTimeField()
+    opening_float = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    status = models.CharField(max_length=16, choices=[(STATUS_OPEN, "Open"), (STATUS_CLOSED, "Closed")], default=STATUS_OPEN)
+    closed_at = models.DateTimeField(null=True, blank=True)
+    closed_by = models.ForeignKey("employees.Employee", on_delete=models.PROTECT, related_name="closed_cashier_sessions", null=True, blank=True)
+    closing_count = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    note = models.CharField(max_length=250, blank=True)
+
+    class Meta(BaseModel.Meta):
+        ordering = ("-opened_at",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("cashier",), condition=models.Q(status="open"),
+                name="unique_open_cashier_session_per_employee",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.opening_float is not None and self.opening_float < 0:
+            raise ValidationError({"opening_float": "Opening float cannot be negative."})
+        if self.outlet_id and self.branch_id and self.outlet.branch_id != self.branch_id:
+            raise ValidationError({"outlet": "Till outlet belongs to another property."})
+        if self.cashier_id and self.branch_id and self.cashier.branch_id != self.branch_id:
+            raise ValidationError({"cashier": "Cashier must work at the same property."})

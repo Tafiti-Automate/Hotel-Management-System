@@ -9,12 +9,12 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
-from apps.hospitality.models import POSCheck, POSOrderLine, PropertyGuest, Reservation, Room, RoomType
+from apps.hospitality.models import CashierSession, GuestFolio, POSCheck, POSOrderLine, PropertyGuest, Reservation, Room, RoomType
 from apps.hospitality.serializers import (
-    POSCheckSerializer, POSOrderLineSerializer, PropertyGuestSerializer, ReservationSerializer, RoomSerializer, RoomTypeSerializer,
+    CashierSessionSerializer, GuestFolioSerializer, POSCheckSerializer, POSOrderLineSerializer, PropertyGuestSerializer, ReservationSerializer, RoomSerializer, RoomTypeSerializer,
 )
 from apps.hospitality.services import (
-    add_pos_line, assigned_employee, register_property_guest, require_outlet, require_property, room_availability, save_reservation, transition_reservation, void_pos_order_line,
+    add_pos_line, assigned_employee, open_cashier_session, open_guest_folio, register_property_guest, require_outlet, require_property, room_availability, save_reservation, transition_reservation, void_pos_order_line,
 )
 from apps.materials_control.models import OutletAssignment, Recipe
 from rest_framework.permissions import IsAuthenticated
@@ -76,6 +76,59 @@ class RoomViewSet(PropertyScopedMixin, viewsets.ReadOnlyModelViewSet):
     queryset = Room.objects.select_related("room_type", "branch")
     serializer_class = RoomSerializer
     http_method_names = ("get", "head", "options")
+
+
+class GuestFolioViewSet(PropertyScopedMixin, viewsets.ReadOnlyModelViewSet):
+    queryset = GuestFolio.objects.select_related("reservation")
+    serializer_class = GuestFolioSerializer
+    http_method_names = ("get", "post", "head", "options")
+
+    @action(detail=False, methods=("post",), url_path="open")
+    def open(self, request):
+        reservation_id = request.data.get("reservation")
+        try:
+            reservation = Reservation.objects.get(
+                pk=reservation_id, branch_id=self.property_id(),
+            )
+        except (Reservation.DoesNotExist, ValueError, TypeError):
+            raise ValidationError({"reservation": "Valid reservation at your property required."})
+        folio = open_guest_folio(request.user, reservation)
+        return Response(self.get_serializer(folio).data, status=200)
+
+
+class CashierSessionViewSet(PropertyScopedMixin, viewsets.ReadOnlyModelViewSet):
+    queryset = CashierSession.objects.select_related("outlet", "cashier")
+    serializer_class = CashierSessionSerializer
+    http_method_names = ("get", "post", "head", "options")
+
+    def get_queryset(self):
+        employee = assigned_employee(self.request.user)
+        base = super().get_queryset()
+        if self.request.user.groups.filter(name="Cashier").exists():
+            return base.filter(cashier=employee)
+        if self.request.user.groups.filter(name__in=("Bar Supervisor", "F&B Manager")).exists():
+            outlet_ids = OutletAssignment.objects.filter(
+                employee=employee, is_active=True,
+                outlet__is_active=True, outlet__branch_id=employee.branch_id,
+            ).values_list("outlet_id", flat=True)
+            return base.filter(outlet_id__in=outlet_ids)
+        return base.none()
+
+    @action(detail=False, methods=("post",), url_path="open")
+    def open(self, request):
+        from apps.inventory.models import StoreLocation
+        try:
+            outlet = StoreLocation.objects.get(pk=request.data.get("outlet"))
+        except (StoreLocation.DoesNotExist, ValueError, TypeError):
+            raise ValidationError({"outlet": "Valid assigned outlet required."})
+        try:
+            amount = Decimal(str(request.data.get("opening_float", "")))
+        except (InvalidOperation, TypeError, ValueError):
+            raise ValidationError({"opening_float": "Valid monetary amount required."})
+        if not amount.is_finite() or amount.as_tuple().exponent < -2:
+            raise ValidationError({"opening_float": "Opening float supports at most two decimals."})
+        session = open_cashier_session(request.user, outlet, amount)
+        return Response(self.get_serializer(session).data, status=201)
 
 
 class ReservationViewSet(PropertyScopedMixin, viewsets.ModelViewSet):
