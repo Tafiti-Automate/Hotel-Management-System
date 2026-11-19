@@ -123,7 +123,7 @@ export default function SupplierReturnReporter() {
           <div>{str(r.grn_number)} · {str(r.store_name)} · {str(r.supplier_name)}</div>
           <div>Reason: {str(r.reason)}</div>
           <div>Status: <strong>{str(r.status)}</strong></div>
-          {r.review_note && <small>Cost Controller: {str(r.review_note)}</small>}
+          {Boolean(r.review_note) && <small>Cost Controller: {str(r.review_note)}</small>}
         </div>)}
       </section>
     </div>}
@@ -172,7 +172,7 @@ export function SupplierReturnReviewQueue() {
         <div>Source: {str(selected.source) === 'receiving_rejection' ? 'Rejected at receiving (not in Stock on Hand)' : 'Accepted stock (quarantined)'}</div>
         <div>Reason: {str(selected.reason)} · Evidence: {str(selected.evidence_note) || 'None recorded'}</div>
         <div>Status: <strong>{str(selected.status)}</strong></div>
-        {selected.review_note && <div>Decision: {str(selected.review_note)}</div>}
+        {Boolean(selected.review_note) && <div>Decision: {str(selected.review_note)}</div>}
       </div>}
       {selected && str(selected.status) === 'pending' && <>
         <label className={inputClass}><span>Review note (required to reject)</span>
