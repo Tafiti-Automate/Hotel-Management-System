@@ -2394,7 +2394,7 @@ class GoodsReceiptNoteViewSet(CreatedByModelMixin, ModelViewSet):
             raise PermissionDenied("Only an active, assigned Receiving Clerk can create or post a GRN.")
         if receipt and (
             receipt.received_by_id != employee.pk
-            or receipt.purchase_order.requisition.branch_id != employee.branch_id
+            or receipt.purchase_order.store.branch.hotel_id != employee.branch.hotel_id
         ):
             raise PermissionDenied("Only the Receiving Clerk who opened this property's GRN can change it.")
         if purchase_order and purchase_order.requisition.branch_id != employee.branch_id:

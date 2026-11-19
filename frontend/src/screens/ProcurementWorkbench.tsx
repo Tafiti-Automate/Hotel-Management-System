@@ -1685,7 +1685,7 @@ function ReturnPanel({ data, form, setForm, busy, run, receiptLabel, names, stor
   return <Panel title="Supplier return" note="Record supplier returns.">
     <Field label="Original GRN"><Select value={form.receipt} onChange={(v) => setForm({ ...form, receipt: v, return: '', item: '', quantity: '' })} rows={postedReceipts} label={receiptLabel} /></Field>
     <Field label="Store"><Select value={form.store} onChange={(v) => setForm({ ...form, store: v })} rows={stores} /></Field>
-    <Hint>The signed-in Storekeeper is recorded as the return author. Only posted GRNs are eligible.</Hint>
+    <Hint>The signed-in Cost Controller is recorded as the return author. Only posted GRNs are eligible.</Hint>
     <Field label="Reason"><Input value={form.reason} onChange={(v) => setForm({ ...form, reason: v })} /></Field>
     <Action disabled={busy || id(receipt?.status) !== 'posted' || !form.store || !order?.supplier || !id(form.reason).trim()} onClick={() => run(() => createBackendRecord('supplier-returns', { supplier: order.supplier, goods_receipt: form.receipt, store: form.store, reason: form.reason, return_date: new Date().toISOString().slice(0, 10) }), 'Supplier return created')}>Create return</Action>
     {!receiptItems.length && form.receipt && <Hint>This GRN has no delivered lines.</Hint>}
