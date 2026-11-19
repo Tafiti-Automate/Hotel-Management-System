@@ -20,3 +20,13 @@ cashier tender allocations, recipe depletion, refunds, and exact-once GL posting
 only then enable room charges and final guest checkout.
 
 Deployment: one consolidated branch commit, full GitHub Actions verification.
+
+## Phase 1F follow-up: custody-only cashier close
+
+A cashier may close their own active assigned-outlet till with a counted amount,
+optional handover note, recorded employee and timestamp. Repeated close is
+rejected; unauthorized and cross-property access is blocked. Closing a till
+is **not** settlement, cash variance reconciliation or revenue recognition.
+The counted cash cannot yet be matched to expected tender totals because POS
+payments and tender journals are not live. The UI/API must not label a closed
+session as a reconciled shift. No guest checkout is enabled.

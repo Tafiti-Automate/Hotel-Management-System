@@ -14,7 +14,7 @@ from apps.hospitality.serializers import (
     CashierSessionSerializer, GuestFolioSerializer, POSCheckSerializer, POSOrderLineSerializer, PropertyGuestSerializer, ReservationSerializer, RoomSerializer, RoomTypeSerializer,
 )
 from apps.hospitality.services import (
-    add_pos_line, assigned_employee, open_cashier_session, open_guest_folio, register_property_guest, require_outlet, require_property, room_availability, save_reservation, transition_reservation, void_pos_order_line,
+    add_pos_line, assigned_employee, close_cashier_session, open_cashier_session, open_guest_folio, register_property_guest, require_outlet, require_property, room_availability, save_reservation, transition_reservation, void_pos_order_line,
 )
 from apps.materials_control.models import OutletAssignment, Recipe
 from rest_framework.permissions import IsAuthenticated
@@ -129,6 +129,17 @@ class CashierSessionViewSet(PropertyScopedMixin, viewsets.ReadOnlyModelViewSet):
             raise ValidationError({"opening_float": "Opening float supports at most two decimals."})
         session = open_cashier_session(request.user, outlet, amount)
         return Response(self.get_serializer(session).data, status=201)
+
+    @action(detail=True, methods=("post",), url_path="close")
+    def close(self, request, pk=None):
+        session = self.get_object()
+        try:
+            count = Decimal(str(request.data.get("closing_count", "")))
+        except (InvalidOperation, ValueError, TypeError):
+            raise ValidationError({"closing_count": "Valid cash count required."})
+        closed = close_cashier_session(request.user, session, count, request.data.get("note", ""))
+        return Response(self.get_serializer(closed).data)
+
 
 
 class ReservationViewSet(PropertyScopedMixin, viewsets.ModelViewSet):

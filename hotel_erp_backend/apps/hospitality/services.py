@@ -257,3 +257,35 @@ def open_cashier_session(user, outlet, opening_float):
             raise ValidationError(getattr(exc, "message_dict", None) or exc.messages)
         session.save()
         return session
+
+
+def close_cashier_session(user, session, closing_count, note):
+    """Close till custody only; does NOT reconcile sales, collect money or post revenue."""
+    from decimal import Decimal
+    from django.utils import timezone
+    from apps.hospitality.models import CashierSession
+    employee = require_property(user, session.branch_id)
+    if not user.groups.filter(name="Cashier").exists() or not user.has_perm("hospitality.change_cashiersession"):
+        raise PermissionDenied("Cashier session change permission required.")
+    if session.cashier_id != employee.pk:
+        raise PermissionDenied("Only the owning cashier can close their till.")
+    require_outlet(employee, session.outlet)
+    if not closing_count.is_finite() or closing_count < Decimal("0") or closing_count > Decimal("9999999999999.99") or closing_count.as_tuple().exponent < -2:
+        raise ValidationError({"closing_count": "Closing count must be a nonnegative amount with at most two decimals."})
+    note = str(note).strip()
+    if len(note) > 250:
+        raise ValidationError({"note": "Maximum 250 characters."})
+    with transaction.atomic():
+        Branch.objects.select_for_update().get(pk=session.branch_id)
+        locked = CashierSession.objects.select_for_update().get(pk=session.pk)
+        if locked.status != CashierSession.STATUS_OPEN:
+            raise ValidationError({"status": "Session is already closed."})
+        if locked.cashier_id != employee.pk:
+            raise PermissionDenied("Only the owning cashier can close their till.")
+        locked.status = CashierSession.STATUS_CLOSED
+        locked.closed_at = timezone.now()
+        locked.closed_by = employee
+        locked.closing_count = closing_count
+        locked.note = note
+        locked.save(update_fields=("status", "closed_at", "closed_by", "closing_count", "note", "updated_at"))
+        return locked

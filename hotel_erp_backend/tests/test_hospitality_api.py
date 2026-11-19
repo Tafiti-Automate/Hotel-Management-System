@@ -1,5 +1,6 @@
 """Property-scoped REST and booking integrity smoke tests."""
 from datetime import date, timedelta
+from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.management import call_command
@@ -295,3 +296,39 @@ def test_cashier_sessions_require_assigned_outlet_and_single_open_shift(operatio
     assert api.get("/api/v1/hospitality-cashier-sessions/").data["count"]==1
     assert c["other"].get("/api/v1/hospitality-cashier-sessions/").status_code==403
     assert api.patch("/api/v1/hospitality-cashier-sessions/"+opened.data["id"]+"/",{"status":"closed"},format="json").status_code==405
+
+
+@pytest.mark.django_db
+def test_cashier_closing_records_count_without_financial_posting(operational_context):
+    from apps.hospitality.models import CashierSession
+    c = operational_context
+    user = get_user_model().objects.create_user(
+        username="phase-1f-closing-cashier", employee_code="API-CLOSE-CASH", password="test-password",
+    )
+    user.groups.add(Group.objects.get(name="Cashier"))
+    employee = Employee.objects.create(
+        user=user, branch=c["a"], department=c["department"], designation="Cashier",
+    )
+    OutletAssignment.objects.create(employee=employee, outlet=c["outlet_a"])
+    client = APIClient()
+    client.force_authenticate(user=user)
+    opened = client.post("/api/v1/hospitality-cashier-sessions/open/", {
+        "outlet": str(c["outlet_a"].pk), "opening_float": "10000.00",
+    }, format="json")
+    assert opened.status_code == 201, opened.data
+    close_url = f"/api/v1/hospitality-cashier-sessions/{opened.data['id']}/close/"
+    assert client.post(close_url, {"closing_count": "-1"}, format="json").status_code == 400
+    assert client.post(close_url, {"closing_count": "1.234"}, format="json").status_code == 400
+    assert c["bartender"].post(close_url, {"closing_count": "10000"}, format="json").status_code in (403, 404)
+    closed = client.post(close_url, {"closing_count": "10000.00", "note": "Till handed to manager"}, format="json")
+    assert closed.status_code == 200, closed.data
+    assert closed.data["status"] == "closed"
+    record = CashierSession.objects.get(pk=opened.data["id"])
+    assert record.closed_by_id == employee.pk
+    assert record.closed_at is not None
+    assert record.closing_count == Decimal("10000.00")
+    assert client.post(close_url, {"closing_count": "10000"}, format="json").status_code == 400
+    reopened = client.post("/api/v1/hospitality-cashier-sessions/open/", {
+        "outlet": str(c["outlet_a"].pk), "opening_float": "10000.00",
+    }, format="json")
+    assert reopened.status_code == 201
