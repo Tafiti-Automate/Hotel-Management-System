@@ -200,15 +200,22 @@ export function EnterpriseArticleMaster() {
   </WorkspacePage>
 }
 
-const STOCKTAKE=['stock-counts','stock-count-items','items','inventory-balances'] as const
+const STOCKTAKE=['stock-counts','stock-count-items','items','inventory-balances','stores'] as const
 export function EnterpriseStocktakeSheet() {
   const {data,loading,error,reload}=useBackendRows(STOCKTAKE)
   const {execute,busy,error:mutationError}=useWrite(reload)
   const pathId=typeof window==='undefined'?'':window.location.pathname.split('/').filter(Boolean).at(-1)||''
   const [chosenId,setChosenId]=useState('')
+  const [selectedStore,setSelectedStore]=useState('')
+  const [countNote,setCountNote]=useState('')
+  const [search,setSearch]=useState('')
   const id=chosenId||pathId
   const count=(data['stock-counts']||[]).find(row=>str(row.id)===id)
-  const items=(data['stock-count-items']||[]).filter(row=>str(row.stock_count)===id).sort((a,b)=>str(a.bin_location||a.item_name).localeCompare(str(b.bin_location||b.item_name)))
+  const storeOptions=(data.stores||[])
+  const rawItems=(data['stock-count-items']||[]).filter(row=>str(row.stock_count)===id)
+  const articlesById=new Map((data.items||[]).map(article=>[str(article.id),article]))
+  const items=rawItems.filter(line=>!search.trim()||[str(line.item_name||articlesById.get(str(line.item))?.name),str(line.item_sku||articlesById.get(str(line.item))?.sku),str(line.bin_location)].join(' ').toLowerCase().includes(search.toLowerCase())).sort((a,b)=>str(a.bin_location||a.item_name).localeCompare(str(b.bin_location||b.item_name)))
+  const completed=rawItems.filter(line=>line.physical_quantity!==null&&line.physical_quantity!==undefined).length
   const storageKey='mc-blind-count-'+id
   const [draft,setDraft]=useState<Record<string,string>>({})
   const [unsynced,setUnsynced]=useState(false)
@@ -216,6 +223,15 @@ export function EnterpriseStocktakeSheet() {
     if(typeof window==='undefined'||!id)return
     try{const saved=window.localStorage.getItem(storageKey);if(saved){setDraft(JSON.parse(saved) as Record<string,string>);setUnsynced(true)}}catch{setDraft({})}
   },[id,storageKey])
+  const createSheet=async()=>{
+    if(!selectedStore){app.showWorkflowAlert('Select a store','Choose the store to count before opening a session.','warning');return}
+    const saved=await execute(async()=>{
+      const created=await createBackendRecord('stock-counts',{store:selectedStore,note:countNote.trim()})
+      setChosenId(str(created.id))
+      await runBackendAction('stock-counts',str(created.id),'populate')
+    },'Stocktake session created and linked to the selected store')
+    if(saved){setCountNote('');setSearch('')}
+  }
   const update=(lineId:string,value:string)=>{
     const next={...draft,[lineId]:value}
     setDraft(next);setUnsynced(true)
@@ -252,15 +268,16 @@ export function EnterpriseStocktakeSheet() {
     <StateMessage loading={loading} error={error||mutationError}/>
     {count&&<WorkflowPrerequisite domain="stock_count" record={count} action="submit"/>}
     {count&&editable&&unsynced&&<div className="mc-workflow-prerequisite" role="status"><Icon name="info" size={17}/><div><strong>Unsynced physical counts</strong><p>Changes on this device are not yet saved to the server.</p><small>Next: Sync saved counts before submitting.</small></div></div>}
+    {!loading&&!error&&<section className="mc-dense-panel" aria-label="Start stocktake session"><header className="mc-panel-title">Start physical stocktake <small>All assigned stores</small></header><div className="mc-count-setup"><label className="mc-field"><span>Store / location</span><select value={selectedStore} onChange={e=>setSelectedStore(e.target.value)}><option value="">Select store to count</option>{storeOptions.map(row=><option value={str(row.id)} key={str(row.id)}>{str(row.name)}</option>)}</select></label><label className="mc-field"><span>Count note (optional)</span><input value={countNote} onChange={e=>setCountNote(e.target.value)} placeholder="e.g. Monthly count — Main Store"/></label><button className={primary} disabled={busy||!selectedStore} onClick={()=>void createSheet()}><Icon name="add" size={16}/> Create stocktake</button></div><p className="mc-help">Select an assigned store. The system captures its recorded quantities privately; counters enter what they actually find.</p></section>}
     {!loading&&!error&&<label className="mc-field mc-picker"><span>Count session</span><select value={id} onChange={e=>setChosenId(e.target.value)}>
       <option value="">Choose assigned count sheet</option>{(data['stock-counts']||[]).map(row=><option value={str(row.id)} key={str(row.id)}>{str(row.count_no)} · {str(row.store_name||row.store)} · {str(row.status)}</option>)}
     </select></label>}
-    {!loading&&!error&&(!count?<StateMessage empty>Choose a valid stocktake session to count articles.</StateMessage>:<>
+    {!loading&&!error&&(!count?<StateMessage empty>Create a stocktake for your store above, or choose an existing count session.</StateMessage>:<>
       <section className="mc-dense-panel mc-stocktake-head">
         <div><strong>{str(count.count_no)}</strong><small>{str(count.store_name||count.store)} · {dateStr(count.count_date)}</small></div><StatusPill status={count.status}/>
         <div className={unsynced?'mc-state mc-state-warn':'mc-state'}>{unsynced?'Local changes not synced':'Count sheet synced'}</div>
       </section>
-      <section className="mc-dense-panel mc-count-grid"><header className="mc-panel-title">Physical shelf count <small>{items.length} articles</small></header>
+      <section className="mc-dense-panel mc-count-grid"><header className="mc-panel-title">Physical shelf count <small>{completed} / {rawItems.length} recorded</small></header><label className="mc-field"><span>Search article by name, code or bin</span><input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search this store’s articles…"/></label>
         <div className="mc-table-scroll"><table className="mc-simple-table"><thead><tr><th>Shelf / Bin</th><th>Article</th><th>Base unit</th><th>Physical count</th></tr></thead>
         <tbody>{items.map((line,index)=><tr key={str(line.id)}><td>{str(line.bin_location)||'—'}</td>
           <td><b>{str(line.item_name||line.item)}</b></td><td>{str(line.unit_name||line.unit||'Base')}</td>
@@ -272,7 +289,7 @@ export function EnterpriseStocktakeSheet() {
         <div className="mc-decision-bar"><button className={btn} disabled={!unsynced||busy||!navigator.onLine} onClick={()=>void sync()}>
             <Icon name="sync" size={16}/> Sync saved counts</button>
           <ConfirmTransaction title="Submit blind count?" description="Confirm all shelf and bottle quantities have synced. Django will lock this count sheet for review."
-            confirmLabel="Submit count sheet" className={primary} disabled={busy||!editable||unsynced} busy={busy} onConfirm={submit}>
+            confirmLabel="Submit count sheet" className={primary} disabled={busy||!editable||unsynced||completed!==rawItems.length||!rawItems.length} busy={busy} onConfirm={submit}>
             <Icon name="fact_check" size={16}/> Submit for review</ConfirmTransaction></div>
       </section>
     </>)}
@@ -748,8 +765,9 @@ export function EnterpriseStocktakeVariance() {
   const pathId=typeof window==='undefined'?'':window.location.pathname.split('/').filter(Boolean).at(-2)||''
   const [chosenId,setChosenId]=useState('')
   const id=chosenId||pathId
-  const count=(data['stock-counts']||[]).find(r=>str(r.id)===id)
-  const lines=(data['stock-count-items']||[]).filter(r=>str(r.stock_count)===id)
+  const eligibleCounts=(data['stock-counts']||[]).filter(r=>['submitted','approved','applied'].includes(str(r.status)))
+  const count=eligibleCounts.find(r=>str(r.id)===id)
+  const lines=count?(data['stock-count-items']||[]).filter(r=>str(r.stock_count)===id):[]
   const [selectedItem,setSelectedItem]=useState('')
   const ledger=(data['stock-ledger']||[]).filter(r=>str(r.item)===selectedItem)
   const cols:EnterpriseColumn<ApiRow>[]=[
@@ -766,9 +784,9 @@ export function EnterpriseStocktakeVariance() {
     actions={<button className={btn} onClick={()=>void reload()}><Icon name="refresh" size={15}/> Refresh</button>}>
     <StateMessage loading={loading} error={error}/>
     {!loading&&!error&&<label className="mc-field mc-picker"><span>Stocktake session</span><select value={id} onChange={e=>setChosenId(e.target.value)}>
-      <option value="">Choose count session</option>{(data['stock-counts']||[]).map(row=><option value={str(row.id)} key={str(row.id)}>{str(row.count_no)} · {str(row.store_name||row.store)}</option>)}
+      <option value="">Choose count session</option>{eligibleCounts.map(row=><option value={str(row.id)} key={str(row.id)}>{str(row.count_no)} · {str(row.store_name||row.store)} · {str(row.status)}</option>)}
     </select></label>}
-    {!loading&&!error&&<>
+    {!loading&&!error&&(!count?<StateMessage empty>No submitted stocktakes yet. Store Keepers must complete and submit physical counts before variances are available.</StateMessage>:<>
       <div className="mc-compact-metrics"><div><span>Counted Articles</span><strong>{countLines}</strong></div>
         <div><span>Negative variances</span><strong>{lines.filter(r=>dec(r.physical_quantity)<dec(r.system_quantity)).length}</strong></div>
         <div><span>Positive variances</span><strong>{lines.filter(r=>dec(r.physical_quantity)>dec(r.system_quantity)).length}</strong></div></div>
@@ -782,7 +800,7 @@ export function EnterpriseStocktakeVariance() {
             <td className="mc-num">{amount(row.quantity_in)}</td><td className="mc-num">{amount(row.quantity_out)}</td></tr>)}</tbody></table></div>
       </section>}
       <div className="mc-alert mc-muted">Variance values and audit trails are read from Django. The stock ledger remains the authoritative transaction source; this view does not apply adjustments without approval.</div>
-    </>}
+    </>)}
   </WorkspacePage>
 }
 

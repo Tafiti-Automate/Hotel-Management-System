@@ -56,7 +56,7 @@ const roleNavigation: Record<string, NavGroup[]> = {
       { route: 'stock-on-hand', label: 'Stock on Hand Control', icon: 'inventory_2' },
       { route: 'locations', label: 'Stores & locations', icon: 'warehouse' },
       { route: 'store-inventory', label: 'Manage inventory', icon: 'fact_check' },
-      { route: 'stocktake-sheet', label: 'Blind stocktake', icon: 'playlist_add_check' },
+      { route: 'stocktake-sheet', label: 'Physical stocktake', icon: 'playlist_add_check' },
       { route: 'store-purchase-requests', label: 'Purchase requests', icon: 'shopping_cart' },
     ] },
     { heading: 'Insights', items: [

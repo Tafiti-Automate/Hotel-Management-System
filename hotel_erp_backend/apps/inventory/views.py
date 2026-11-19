@@ -1642,6 +1642,10 @@ class StockCountViewSet(CreatedByModelMixin, ModelViewSet):
         instance.delete()
 
     def perform_create(self, serializer):
+        # Physical counting is never available to IT administrators or
+        # unassigned staff even when they have generic model permissions.
+        if not self._is_store_keeper():
+            raise PermissionDenied("Only an assigned Store Keeper may create a stocktake.")
         store = serializer.validated_data["store"]
         if self._is_store_keeper() and store.pk not in set(assigned_store_ids(self.request.user)):
             raise PermissionDenied("Choose a store assigned to your Store Keeper account.")
@@ -1735,10 +1739,14 @@ class StockCountItemViewSet(CreatedByModelMixin, ModelViewSet):
 
     def perform_create(self, serializer):
         self._require_editable_count(serializer.validated_data["stock_count"])
+        if "physical_quantity" not in serializer.validated_data:
+            raise ValidationError("Explicit physical count required (zero is valid).")
         super().perform_create(serializer)
 
     def perform_update(self, serializer):
         self._require_editable_count(serializer.instance.stock_count)
+        if serializer.validated_data.get("physical_quantity", "unchanged") is None:
+            raise ValidationError("Physical count cannot be blank; enter zero if none was found.")
         if ("stock_count" in serializer.validated_data
                 and serializer.validated_data["stock_count"].pk != serializer.instance.stock_count_id):
             raise ValidationError("An existing count line cannot be moved to another count.")

@@ -1019,7 +1019,7 @@ class StockCountItemSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         user = getattr(request, "user", None)
         if user and user.is_authenticated and user.groups.filter(
-            name__in=("Department Supervisor", "Outlet Supervisor", "Supervisor")
+            name__in=("Department Supervisor", "Outlet Supervisor", "Supervisor", "Store Keeper")
         ).exists():
             for field in (
                 "system_quantity", "variance", "variance_value",
@@ -1042,6 +1042,8 @@ class StockCountSerializer(serializers.ModelSerializer):
             "id",
             "count_no",
             "count_date",
+            "conducted_by",
+            "approved_by",
             "status",
             "inventory_changes_applied",
             "created_at",

@@ -2639,7 +2639,7 @@ class StockCount(BaseModel):
             StockCountItem.objects.get_or_create(
                 stock_count=self,
                 item=balance.item,
-                defaults={"system_quantity": balance.quantity_in_stock, "physical_quantity": balance.quantity_in_stock},
+                defaults={"system_quantity": balance.quantity_in_stock, "physical_quantity": None},
             )
 
     def submit(self):
@@ -2647,6 +2647,8 @@ class StockCount(BaseModel):
             raise ValidationError("Only draft or in-progress stock counts can be submitted.")
         if not self.items.exists():
             raise ValidationError("Stock count must include at least one item.")
+        if self.items.filter(physical_quantity__isnull=True).exists():
+            raise ValidationError("Record a physical count for every article before submitting. Enter 0 when physically absent.")
         self.status = StockCountStatus.SUBMITTED
         self.save(update_fields=["status", "updated_at"])
 
@@ -2670,6 +2672,8 @@ class StockCount(BaseModel):
             stock_count = StockCount.objects.select_for_update().get(pk=self.pk)
             if stock_count.status != StockCountStatus.APPROVED:
                 raise ValidationError("Only approved stock counts can be applied.")
+            if stock_count.items.filter(physical_quantity__isnull=True).exists():
+                raise ValidationError("Physical quantities must be completed before stock can be adjusted.")
             items = list(stock_count.items.select_related("item").all())
             if not items:
                 raise ValidationError("Stock count must include at least one item.")
@@ -2722,7 +2726,7 @@ class StockCountItem(BaseModel):
     stock_count = models.ForeignKey(StockCount, on_delete=models.CASCADE, related_name="items")
     item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="stock_count_items")
     system_quantity = models.DecimalField(max_digits=14, decimal_places=4, default=Decimal("0.00"), validators=[validate_non_negative_decimal])
-    physical_quantity = models.DecimalField(max_digits=14, decimal_places=4, default=Decimal("0.00"), validators=[validate_non_negative_decimal])
+    physical_quantity = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True, default=None, validators=[validate_non_negative_decimal])
     note = models.TextField(blank=True)
 
     class Meta(BaseModel.Meta):
@@ -2733,7 +2737,7 @@ class StockCountItem(BaseModel):
 
     @property
     def variance(self):
-        return self.physical_quantity - self.system_quantity
+        return None if self.physical_quantity is None else self.physical_quantity - self.system_quantity
 
     def __str__(self):
         return f"{self.stock_count} - {self.item}"
