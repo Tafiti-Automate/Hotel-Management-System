@@ -155,7 +155,6 @@ export default function ProcurementWorkbench() {
   const [message, setMessage] = useState('')
   const [selectedRecord, setSelectedRecord] = useState<Row | null>(null)
   const [lpoQueue, setLpoQueue] = useState<LpoQueue>(() => defaultLpoQueue(role))
-  const [confirmedSupplierEmailOrder, setConfirmedSupplierEmailOrder] = useState('')
   const knownApprovedOrderIds = useRef<Set<string>>(new Set())
   const can = useCallback(
     (permission: string) => app.user.isSuperuser || app.user.permissions.includes(permission),
@@ -1300,6 +1299,7 @@ function QuotePanel({ data, form, setForm, busy, run, names, suppliers, supplier
 
 function LpoPanel({ data, form, setForm, busy, run, names, suppliers, items, itemUnits, canManage, role, userName, lpoQueue, setLpoQueue }: any) {
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [confirmedSupplierEmailOrder, setConfirmedSupplierEmailOrder] = useState('')
   const activeOrderRequisitions = new Set(
     data.orders.filter((row: Row) => id(row.status) !== 'cancelled').map((row: Row) => id(row.requisition)),
   )
