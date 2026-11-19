@@ -2666,3 +2666,64 @@ def test_procurement_level_one_requires_another_manager_when_available():
     assert approved.status_code == 200, approved.data
     order.refresh_from_db()
     assert order.status == POStatus.PENDING_APPROVAL
+
+
+@pytest.mark.django_db
+def test_printed_approved_lpo_without_supplier_email_reaches_receiving_queue():
+    employee, department, supplier, item = create_procurement_context()
+    branch = Branch.objects.create(name="Offline Supplier Receiving Branch")
+    employee.branch = branch
+    employee.save(update_fields=("branch", "updated_at"))
+    supplier.email = ""
+    supplier.save(update_fields=("email", "updated_at"))
+    purchasing, _ = Group.objects.get_or_create(name="Procurement Manager")
+    purchasing.permissions.add(Permission.objects.get(codename="change_purchaseorder"))
+    employee.user.groups.add(purchasing)
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee, department=department, branch=branch,
+        reason="Physical supplier purchase", status=PRStatus.APPROVED,
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition, item=item,
+        quantity=Decimal("2.0000"), approved_quantity=Decimal("2.0000"),
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition, supplier=supplier, ordered_by=employee,
+    )
+    PurchaseOrderItem.objects.create(
+        purchase_order=order, item=item, quantity=Decimal("2.0000"),
+        unit_cost=Decimal("30000.00"),
+    )
+    authorize_order_for_test(order)
+    client = APIClient()
+    client.force_authenticate(employee.user)
+    release_url = f"/api/v1/purchase-orders/{order.pk}/release-for-receiving/"
+    # Cannot release an unapproved LPO or bypass the controlled download.
+    assert client.post(release_url, {}, format="json").status_code == 400
+    order.record_print(printed_by=employee.user)
+    assert order.manual_release_readiness()["can_proceed"]
+    released = client.post(release_url, {}, format="json")
+    assert released.status_code == 200, released.data
+    order.refresh_from_db()
+    assert order.status == POStatus.ISSUED
+    assert order.sent_to_email == ""
+    assert order.email_status == "not_sent"
+    assert order.sent_by_id == employee.pk
+    assert client.post(release_url, {}, format="json").status_code == 400
+    # The receiving clerk sees the released LPO through their existing blind queue.
+    clerk_user = get_user_model().objects.create_user(
+        username="offline-lpo-receiver", employee_code="OFFLINE-LPO-REC",
+        password="test-pass-123",
+    )
+    clerk_employee = Employee.objects.create(
+        user=clerk_user, department=department, branch=branch, designation="Receiving Clerk",
+    )
+    receiving, _ = Group.objects.get_or_create(name="Receiving Clerk")
+    clerk_user.groups.add(receiving)
+    client.force_authenticate(clerk_user)
+    response = client.get("/api/v1/requisitions/workspace/?stage=receipt")
+    assert response.status_code == 200, response.data
+    assert str(order.pk) in [row["id"] for row in response.data["orders"]]
+    visible = next(row for row in response.data["orders"] if row["id"] == str(order.pk))
+    assert "total_amount" not in visible
+    assert "unit_cost" not in response.data["orderItems"][0]

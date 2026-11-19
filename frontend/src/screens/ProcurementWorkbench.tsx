@@ -1501,10 +1501,13 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, items, ite
 
     {lpoQueue === 'approved' && order && canManage && <>
       <LpoSummary order={order} lines={lines} names={names} />
-      <Action disabled={busy} onClick={() => run(() => downloadControlledPurchaseOrder(id(order.id)), `${id(order.next_print_classification) || 'Controlled'} LPO downloaded`, { ...form })}>Download {id(order.next_print_classification) || 'controlled'} LPO</Action>
-      <ReadOnlyValue label="Supplier email" value={registeredSupplierEmail || 'No supplier email registered'} />
-      <WorkflowPrerequisite domain="purchase_order" record={order} action="issue" />
-      <Action tone="good" disabled={busy || !registeredSupplierEmail || id(order.status) !== 'approved'} onClick={() => run(async () => { const result = await runBackendAction('purchase-orders', id(order.id), 'issue'); setLpoQueue('history'); return result }, 'LPO emailed to supplier and lead time started', (result: unknown) => ({ order: id((result as Row).id) }))}>Email LPO to Supplier</Action>
+      <div style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 9 }}>Download the controlled LPO to print or share with the supplier. After successful download, it will automatically appear in the Receiving Clerk's queue. Supplier email is not required.</div>
+      <Action tone="good" disabled={busy || id(order.status) !== 'approved'} onClick={() => run(async () => {
+        await downloadControlledPurchaseOrder(id(order.id))
+        const released = await runBackendAction('purchase-orders', id(order.id), 'release-for-receiving')
+        setLpoQueue('history')
+        return released
+      }, 'LPO downloaded and released to Receiving Clerk (no email needed)', (result: unknown) => ({ order: id((result as Row).id) }))}>Download {id(order.next_print_classification) || 'controlled'} LPO &amp; release to Receiving</Action>
     </>}
 
     {lpoQueue === 'history' && order && <>
@@ -1512,9 +1515,13 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, items, ite
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
           <div>
             <div style={{ color: 'var(--text)', fontWeight: 800, fontSize: 11.5 }}>{num(order.print_count) > 0 ? 'Controlled LPO copy available' : 'Original LPO still available'}</div>
-            <div style={{ marginTop: 3, color: 'var(--text-muted)', fontSize: 10.5 }}>{num(order.print_count) > 0 ? `${id(order.print_count)} controlled print${num(order.print_count) === 1 ? '' : 's'} recorded.` : 'The supplier email did not consume the controlled ORIGINAL print.'}</div>
+            <div style={{ marginTop: 3, color: 'var(--text-muted)', fontSize: 10.5 }}>{num(order.print_count) > 0 ? `${id(order.print_count)} controlled print${num(order.print_count) === 1 ? '' : 's'} recorded.` : 'Controlled ORIGINAL/COPY downloads are recorded. Supplier email is optional.'}</div>
           </div>
-          <Action disabled={busy} onClick={() => run(() => downloadControlledPurchaseOrder(id(order.id)), `${id(order.next_print_classification) || 'Controlled'} LPO downloaded`, { ...form })}>Download {id(order.next_print_classification) || 'controlled'} LPO</Action>
+          <Action disabled={busy} onClick={() => run(async () => {
+            await downloadControlledPurchaseOrder(id(order.id))
+            if (id(order.status) !== 'approved') return order
+            return runBackendAction('purchase-orders', id(order.id), 'release-for-receiving')
+          }, id(order.status) === 'approved' ? 'LPO downloaded and released to Receiving Clerk' : 'Controlled LPO copy downloaded', { ...form })}>Download {id(order.next_print_classification) || 'controlled'} LPO{id(order.status) === 'approved' ? ' & release to Receiving' : ''}</Action>
         </div>
       </div>}
       <LpoSummary order={order} lines={lines} names={names} />
@@ -1537,7 +1544,7 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, items, ite
   </Panel>
 }
 
-function friendlyLpoStatus(status: string, steps: Row[]) { if (status === 'pending_approval') { const pending = steps.find((step) => id(step.status) === 'pending'); if (/(purchasing manager|procurement manager|purchasing)/i.test(id(pending?.stage_name))) return 'Level 1 · Procurement Manager'; if (/finance/i.test(id(pending?.stage_name))) return 'Level 2 · Financial Manager'; if (/(general manager|management)/i.test(id(pending?.stage_name))) return 'Level 3 · General Manager'; return 'Awaiting Approval' } if (status === 'approved') return 'Approved · Print & Send'; if (status === 'issued') return 'Not Received'; if (status === 'partially_received') return 'Partially Received'; if (status === 'received') return 'Received'; return status.replace(/_/g, ' ') }
+function friendlyLpoStatus(status: string, steps: Row[]) { if (status === 'pending_approval') { const pending = steps.find((step) => id(step.status) === 'pending'); if (/(purchasing manager|procurement manager|purchasing)/i.test(id(pending?.stage_name))) return 'Level 1 · Procurement Manager'; if (/finance/i.test(id(pending?.stage_name))) return 'Level 2 · Financial Manager'; if (/(general manager|management)/i.test(id(pending?.stage_name))) return 'Level 3 · General Manager'; return 'Awaiting Approval' } if (status === 'approved') return 'Approved · Download & Release'; if (status === 'issued') return 'Not Received'; if (status === 'partially_received') return 'Partially Received'; if (status === 'received') return 'Received'; return status.replace(/_/g, ' ') }
 
 function LpoSummary({ order, lines, names, quantityValue, quantityMax, onQuantityChange, totalOverride }: { order: Row; lines: Row[]; names: Record<string, Map<string, string>>; quantityValue?: (row: Row) => number; quantityMax?: (row: Row) => number; onQuantityChange?: (row: Row, value: unknown) => void; totalOverride?: number }) {
   const approvalSteps = Array.isArray(order.approval_steps) ? order.approval_steps as Row[] : []

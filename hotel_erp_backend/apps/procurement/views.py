@@ -1997,6 +1997,36 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
             raise_drf_validation_error(error)
         return Response(self.get_serializer(order).data)
 
+    @action(detail=True, methods=["post"], url_path="release-for-receiving")
+    def release_for_receiving(self, request, pk=None):
+        """Release a controlled downloaded LPO to Receiving Clerk without email."""
+        self._require_procurement_manager(request)
+        employee = getattr(request.user, "employee_profile", None)
+        if not employee or not employee.is_active or not employee.branch_id:
+            raise PermissionDenied("An active, branch-assigned Procurement employee is required.")
+        with transaction.atomic():
+            order = PurchaseOrder.objects.select_for_update().get(pk=self.get_object().pk)
+            enforce_readiness(order.manual_release_readiness())
+            try:
+                order.release_for_receiving(released_by=employee)
+            except DjangoValidationError as error:
+                raise_drf_validation_error(error)
+        try:
+            from apps.notifications.services import notify_roles
+            notify_roles(
+                ["Receiving Clerk"],
+                branch=order.requisition.branch,
+                title=f"LPO {order.lpo_number} ready for receiving",
+                message=(
+                    "An approved LPO was downloaded for the supplier and "
+                    "released internally. Open your Receiving queue to record delivery."
+                ),
+                created_by=request.user,
+            )
+        except Exception:
+            logger.exception("Could not notify Receiving Clerk for LPO %s", order.lpo_number)
+        return Response(self.get_serializer(order).data)
+
     @action(detail=True, methods=["post"])
     def issue(self, request, pk=None):
         order = self.get_object()

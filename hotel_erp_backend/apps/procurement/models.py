@@ -1370,7 +1370,7 @@ class PurchaseOrder(BaseModel):
 
     @property
     def delivery_due_date(self):
-        """The supplier clock starts only once the LPO email has actually sent."""
+        """The delivery lead-time clock starts when an approved LPO is released."""
         if not self.sent_at:
             return None
         return (self.sent_at + timedelta(days=self.lead_time_days or 0)).date()
@@ -1743,6 +1743,60 @@ class PurchaseOrder(BaseModel):
         self.supplier_acknowledged_at = timezone.now()
         self.supplier_acknowledged_by = acknowledged_by
         self.save(update_fields=["supplier_acknowledged_at", "supplier_acknowledged_by", "updated_at"])
+
+    def manual_release_readiness(self):
+        """PDF-based internal dispatch: the supplier need not have email."""
+        blockers = []
+        if self.status != POStatus.APPROVED:
+            blockers.append("Only a finally approved LPO can be released for receiving.")
+        if self.requisition.status not in (PRStatus.APPROVED, PRStatus.PARTIALLY_ORDERED):
+            blockers.append("The originating requisition must be approved.")
+        if not self.supplier_id:
+            blockers.append("A supplier is required.")
+        if not self.items.exists():
+            blockers.append("Add at least one approved LPO article.")
+        blockers.extend(self.quantity_commitment_blockers())
+        if self.valid_until and self.valid_until < timezone.localdate():
+            blockers.append("The LPO validity date has expired.")
+        if not self.print_records.exists():
+            blockers.append("Download the controlled ORIGINAL/COPY LPO before releasing it.")
+        return {"can_proceed": not blockers, "blockers": blockers}
+
+    def release_for_receiving(self, *, released_by):
+        """Issue a printed LPO internally without any supplier email delivery."""
+        readiness = self.manual_release_readiness()
+        if readiness["blockers"]:
+            raise ValidationError(readiness["blockers"])
+        if not released_by or not released_by.is_active:
+            raise ValidationError("An active Procurement employee must release the LPO.")
+        if self.requisition.branch_id and released_by.branch_id != self.requisition.branch_id:
+            raise ValidationError("The releasing employee must belong to this branch.")
+        self.full_clean()
+        self.status = POStatus.ISSUED
+        self.sent_at = timezone.now()
+        self.sent_by = released_by
+        self.sent_to_email = ""
+        self.email_status = "not_sent"
+        self.last_email_error = ""
+        if not self.expected_date and self.lead_time_days:
+            self.expected_date = self.delivery_due_date
+        self.save(update_fields=[
+            "status", "sent_at", "sent_by", "sent_to_email", "email_status",
+            "last_email_error", "expected_date", "updated_at",
+        ])
+        self.record_activity(
+            action="released_to_receiving",
+            actor=released_by.user,
+            previous_status=POStatus.APPROVED,
+            new_status=POStatus.ISSUED,
+            metadata={
+                "delivery_method": "download_print",
+                "controlled_copy_count": self.print_records.count(),
+                "lead_time_days": self.lead_time_days,
+            },
+        )
+        for requisition in self._all_source_requisitions():
+            requisition.sync_fulfillment_status(actor=released_by.user)
 
     def issue_readiness(self):
         blockers = []
