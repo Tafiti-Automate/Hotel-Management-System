@@ -154,6 +154,7 @@ export default function ProcurementWorkbench() {
   const [message, setMessage] = useState('')
   const [selectedRecord, setSelectedRecord] = useState<Row | null>(null)
   const [lpoQueue, setLpoQueue] = useState<LpoQueue>(() => defaultLpoQueue(role))
+  const [confirmedSupplierEmailOrder, setConfirmedSupplierEmailOrder] = useState('')
   const knownApprovedOrderIds = useRef<Set<string>>(new Set())
   const can = useCallback(
     (permission: string) => app.user.isSuperuser || app.user.permissions.includes(permission),
@@ -1501,8 +1502,17 @@ function LpoPanel({ data, form, setForm, busy, run, names, suppliers, items, ite
 
     {lpoQueue === 'approved' && order && canManage && <>
       <LpoSummary supplierEmail={registeredSupplierEmail} order={order} lines={lines} names={names} />
-      <div style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 9 }}>Download the controlled LPO to print or share with the supplier. After successful download, it will automatically appear in the Receiving Clerk's queue. Supplier email is not required.</div>
-      <Action tone="good" disabled={busy || id(order.status) !== 'approved'} onClick={() => run(async () => {
+      <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', marginBottom: 12, background: 'var(--surface-2)' }}>
+        <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 6 }}>Confirm supplier contact before releasing LPO</div>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 5 }}>Registered supplier email</div>
+        <div style={{ fontWeight: 750, fontSize: 15, overflowWrap: 'anywhere' }}>{registeredSupplierEmail || 'No supplier email registered'}</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 7 }}>Verify the supplier details above. The LPO is downloaded for printing or manual sharing; no email is sent automatically. After download, the LPO enters the Receiving Clerk's queue.</div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 12, fontSize: 12, fontWeight: 650, cursor: 'pointer' }}>
+          <input type="checkbox" checked={confirmedSupplierEmailOrder === id(order.id)} onChange={(event) => setConfirmedSupplierEmailOrder(event.target.checked ? id(order.id) : '')} />
+          I have checked the supplier contact details and confirm release of this LPO.
+        </label>
+      </div>
+      <Action tone="good" disabled={busy || id(order.status) !== 'approved' || confirmedSupplierEmailOrder !== id(order.id)} onClick={() => run(async () => {
         await downloadControlledPurchaseOrder(id(order.id))
         const released = await runBackendAction('purchase-orders', id(order.id), 'release-for-receiving')
         setLpoQueue('history')
