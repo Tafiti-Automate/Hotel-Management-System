@@ -1052,7 +1052,16 @@ class StoreReturnSerializer(serializers.ModelSerializer):
 
 
 class StockCountItemSerializer(serializers.ModelSerializer):
+    # Expose article master details alongside the relational item UUID.
+    # Blind counters can identify goods without viewing theoretical stock.
+    item_name = serializers.CharField(source="item.name", read_only=True)
+    item_sku = serializers.CharField(source="item.sku", read_only=True)
+    unit_name = serializers.SerializerMethodField()
     variance = serializers.DecimalField(max_digits=14, decimal_places=4, read_only=True)
+
+    def get_unit_name(self, instance):
+        unit = instance.item.base_unit
+        return (unit.abbreviation or unit.name) if unit else instance.item.unit
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

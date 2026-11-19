@@ -39,6 +39,17 @@ def test_count_requires_physical_entry_and_stays_distinct_from_stock_balance():
     count_id=result.data["id"]
     assert client.post(f"/api/v1/stock-counts/{count_id}/populate/", {}, format="json").status_code == 200
     line=StockCountItem.objects.get(stock_count_id=count_id,item=item)
+    # Store Keeper sees the article master name, SKU and actual count unit,
+    # never only the raw UUID or confidential theoretical quantities.
+    response = client.get(f"/api/v1/stock-count-items/?stock_count={count_id}")
+    assert response.status_code == 200, response.data
+    records = response.data["results"]
+    assert len(records) == 1
+    assert records[0]["item"] == str(item.pk)
+    assert records[0]["item_name"] == "Count Bottle Water"
+    assert records[0]["item_sku"] == "ST-COUNT-WATER-001"
+    assert records[0]["unit_name"] == "bottle"
+    assert "system_quantity" not in records[0]
     assert line.system_quantity == Decimal("15")
     assert line.physical_quantity is None
     assert client.post(f"/api/v1/stock-counts/{count_id}/submit/", {}, format="json").status_code == 400

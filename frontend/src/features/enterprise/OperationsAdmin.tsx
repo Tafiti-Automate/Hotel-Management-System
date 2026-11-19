@@ -215,7 +215,10 @@ export function EnterpriseStocktakeSheet() {
   const storeOptions=(data.stores||[])
   const rawItems=(data['stock-count-items']||[]).filter(row=>str(row.stock_count)===id)
   const articlesById=new Map((data.items||[]).map(article=>[str(article.id),article]))
-  const items=rawItems.filter(line=>!search.trim()||[str(line.item_name||articlesById.get(str(line.item))?.name),str(line.item_sku||articlesById.get(str(line.item))?.sku),str(line.bin_location)].join(' ').toLowerCase().includes(search.toLowerCase())).sort((a,b)=>str(a.bin_location||a.item_name).localeCompare(str(b.bin_location||b.item_name)))
+  const articleName=(line:ApiRow)=>str(line.item_name||articlesById.get(str(line.item))?.name)||'Article name unavailable'
+  const articleSku=(line:ApiRow)=>str(line.item_sku||articlesById.get(str(line.item))?.sku)
+  const articleUnit=(line:ApiRow)=>str(line.unit_name||articlesById.get(str(line.item))?.base_unit_abbreviation||articlesById.get(str(line.item))?.unit)||'Base'
+  const items=rawItems.filter(line=>!search.trim()||[articleName(line),articleSku(line),str(line.bin_location)].join(' ').toLowerCase().includes(search.trim().toLowerCase())).sort((a,b)=>str(a.bin_location||articleName(a)).localeCompare(str(b.bin_location||articleName(b))))
   const completed=rawItems.filter(line=>line.physical_quantity!==null&&line.physical_quantity!==undefined).length
   const storageKey='mc-blind-count-'+id
   const [draft,setDraft]=useState<Record<string,string>>({})
@@ -252,8 +255,8 @@ export function EnterpriseStocktakeSheet() {
   const printBlindCount=()=>{
     if(!count||!items.length)return
     const esc=(v:unknown)=>str(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
-    const rows=items.map((line,i)=>'<tr><td>'+(i+1)+'</td><td>'+esc(line.bin_location||'—')+'</td><td>'+esc(line.item_name||'Article')+'</td><td>'+
-      esc(line.unit_name||line.unit||'Base')+'</td><td>'+esc(draft[str(line.id)]??line.physical_quantity??'')+'</td></tr>').join('')
+    const rows=items.map((line,i)=>'<tr><td>'+(i+1)+'</td><td>'+esc(line.bin_location||'—')+'</td><td>'+esc(articleName(line))+'</td><td>'+
+      esc(articleUnit(line))+'</td><td>'+esc(draft[str(line.id)]??line.physical_quantity??'')+'</td></tr>').join('')
     const html='<!doctype html><html><head><meta charset="utf-8"><title>Blind stocktake '+esc(count.count_no)+
       '</title><style>@page{size:A4 portrait;margin:14mm}body{font:12px Arial,sans-serif;color:#1a3428}h1{font-size:21px;border-bottom:3px solid #146940;padding-bottom:14px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #b2c1b7;padding:8px;text-align:left}th{background:#eaf1ed}.sig{margin-top:50px;border-top:1px solid #768c7d;padding-top:8px}</style></head><body><h1>BLIND PHYSICAL STOCKTAKE SHEET</h1><p>Count: '+esc(count.count_no)+' · Store: '+esc(count.store_name||count.store)+' · Date: '+esc(count.count_date)+
       '</p><p>Physical counts only. Theoretical stock and variances are deliberately concealed from counters.</p><table><thead><tr><th>#</th><th>Shelf / Bin</th><th>Article</th><th>Base unit</th><th>Physical count</th></tr></thead><tbody>'+rows+
@@ -281,8 +284,8 @@ export function EnterpriseStocktakeSheet() {
       <section className="mc-dense-panel mc-count-grid"><header className="mc-panel-title">Physical shelf count <small>{completed} / {rawItems.length} recorded</small></header><label className="mc-field"><span>Search article by name, code or bin</span><input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search this store’s articles…"/></label>
         <div className="mc-table-scroll"><table className="mc-simple-table"><thead><tr><th>Shelf / Bin</th><th>Article</th><th>Base unit</th><th>Physical count</th></tr></thead>
         <tbody>{items.map((line,index)=><tr key={str(line.id)}><td>{str(line.bin_location)||'—'}</td>
-          <td><b>{str(line.item_name||line.item)}</b></td><td>{str(line.unit_name||line.unit||'Base')}</td>
-          <td><input className="mc-count-input" aria-label={'Physical count for '+str(line.item_name||line.item)} type="number" step="0.0001" min="0"
+          <td><b>{articleName(line)}</b>{articleSku(line)&&<small className="mc-muted">{articleSku(line)}</small>}</td><td>{articleUnit(line)}</td>
+          <td><input className="mc-count-input" aria-label={'Physical count for '+articleName(line)} type="number" step="0.0001" min="0"
             disabled={!editable||busy} value={draft[str(line.id)]??str(line.physical_quantity??'')}
             onChange={event=>update(str(line.id),event.target.value)}
             onKeyDown={event=>{if(event.key==='Enter'){event.preventDefault();(event.currentTarget.closest('tr')?.nextElementSibling?.querySelector('input') as HTMLInputElement|null)?.focus()}}}/>
@@ -770,10 +773,12 @@ export function EnterpriseStocktakeVariance() {
   const eligibleCounts=(data['stock-counts']||[]).filter(r=>['submitted','approved','applied'].includes(str(r.status)))
   const count=eligibleCounts.find(r=>str(r.id)===id)
   const lines=count?(data['stock-count-items']||[]).filter(r=>str(r.stock_count)===id):[]
+  const articlesById=new Map((data.items||[]).map(article=>[str(article.id),article]))
+  const articleName=(line:ApiRow)=>str(line.item_name||articlesById.get(str(line.item))?.name)||'Article name unavailable'
   const [selectedItem,setSelectedItem]=useState('')
   const ledger=(data['stock-ledger']||[]).filter(r=>str(r.item)===selectedItem)
   const cols:EnterpriseColumn<ApiRow>[]=[
-    {id:'item',label:'Article',value:r=>str(r.item_name||r.item)},
+    {id:'item',label:'Article',value:r=>articleName(r)},
     {id:'system',label:'Theoretical SOH',value:r=>dec(r.system_quantity),numeric:true},
     {id:'physical',label:'Actual count',value:r=>dec(r.physical_quantity),numeric:true},
     {id:'variance',label:'Variance Qty',value:r=>dec(r.physical_quantity)-dec(r.system_quantity),numeric:true,

@@ -1738,7 +1738,7 @@ class StockCountViewSet(CreatedByModelMixin, ModelViewSet):
 
 
 class StockCountItemViewSet(CreatedByModelMixin, ModelViewSet):
-    queryset = StockCountItem.objects.select_related("stock_count", "item")
+    queryset = StockCountItem.objects.select_related("stock_count", "item", "item__base_unit")
     serializer_class = StockCountItemSerializer
     filterset_fields = ("stock_count", "item")
     search_fields = ("stock_count__count_no", "item__name", "item__sku")
