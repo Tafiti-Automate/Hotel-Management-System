@@ -2712,45 +2712,24 @@ class SupplierReturnViewSet(CreatedByModelMixin, ModelViewSet):
     ordering_fields = ("return_no", "return_date", "status", "created_at")
 
     def _require_storekeeper_owner(self, supplier_return=None, *, store=None):
-        from apps.inventory.models import StoreKeeperAssignment
+        # Historical method name retained for supplier-return item callers.
+        # Supplier returns are exclusively controlled by the Cost Controller.
         user = self.request.user
         employee = getattr(user, "employee_profile", None)
-        if (
-            user.is_superuser
-            or not user_has_role(user, "Store Keeper")
-            or user_has_role(user, "System Administrator")
-            or not employee or not employee.is_active or not employee.branch_id
-        ):
-            raise PermissionDenied("Only an assigned Store Keeper may process supplier returns.")
+        if not user_has_role(user, "Cost Controller") or not employee or not employee.is_active or not employee.branch_id:
+            raise PermissionDenied("Only the Cost Controller may process supplier returns.")
         target_store = store or (supplier_return.store if supplier_return is not None else None)
-        if target_store is not None and (
-            target_store.branch_id != employee.branch_id
-            or not StoreKeeperAssignment.objects.filter(
-                employee=employee, store=target_store, is_active=True,
-                store__is_active=True,
-            ).exists()
-        ):
-            raise PermissionDenied("Supplier return belongs to a store outside your active assignment.")
+        if target_store is not None and target_store.branch.hotel_id != employee.branch.hotel_id:
+            raise PermissionDenied("Supplier return belongs to a different hotel.")
         return employee
 
     def get_queryset(self):
         queryset = super().get_queryset()
         user = self.request.user
         employee = getattr(user, "employee_profile", None)
-        if user.is_superuser or user_has_role(user, "System Administrator"):
-            return queryset
-        if not employee or not employee.is_active or not employee.branch_id:
+        if not user_has_role(user, "Cost Controller") or not employee or not employee.is_active or not employee.branch_id:
             return queryset.none()
-        if user_has_role(user, "Store Keeper"):
-            from apps.inventory.models import StoreKeeperAssignment
-            assigned = StoreKeeperAssignment.objects.filter(
-                employee=employee, is_active=True, store__is_active=True,
-            ).values_list("store_id", flat=True)
-            return queryset.filter(store_id__in=assigned, store__branch_id=employee.branch_id)
-        branch = employee.branch
-        if getattr(branch, "hotel_id", None):
-            return queryset.filter(store__branch__hotel_id=branch.hotel_id)
-        return queryset.filter(store__branch_id=branch.pk)
+        return queryset.filter(store__branch__hotel_id=employee.branch.hotel_id)
 
     def perform_create(self, serializer):
         receipt = serializer.validated_data["goods_receipt"]
@@ -2824,23 +2803,9 @@ class SupplierReturnItemViewSet(CreatedByModelMixin, ModelViewSet):
         queryset = super().get_queryset()
         user = self.request.user
         employee = getattr(user, "employee_profile", None)
-        if user.is_superuser or user_has_role(user, "System Administrator"):
-            return queryset
-        if not employee or not employee.is_active or not employee.branch_id:
+        if not user_has_role(user, "Cost Controller") or not employee or not employee.is_active or not employee.branch_id:
             return queryset.none()
-        if user_has_role(user, "Store Keeper"):
-            from apps.inventory.models import StoreKeeperAssignment
-            assigned = StoreKeeperAssignment.objects.filter(
-                employee=employee, is_active=True, store__is_active=True,
-            ).values_list("store_id", flat=True)
-            return queryset.filter(
-                supplier_return__store_id__in=assigned,
-                supplier_return__store__branch_id=employee.branch_id,
-            )
-        branch = employee.branch
-        if getattr(branch, "hotel_id", None):
-            return queryset.filter(supplier_return__store__branch__hotel_id=branch.hotel_id)
-        return queryset.filter(supplier_return__store__branch_id=branch.pk)
+        return queryset.filter(supplier_return__store__branch__hotel_id=employee.branch.hotel_id)
 
     def _require_draft_return(self, supplier_return):
         employee = SupplierReturnViewSet._require_storekeeper_owner(

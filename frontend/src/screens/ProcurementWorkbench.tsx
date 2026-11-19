@@ -417,13 +417,14 @@ export default function ProcurementWorkbench() {
     'financial manager': ['lpo'],
     'general manager': ['lpo'],
     'receiving clerk': ['receipt', 'inspect'],
+    'cost controller': ['request', 'quote', 'return'],
   }
-  const allowedStages = app.user.isSuperuser || role === 'system administrator' ? null : roleStages[role]
+  const allowedStages = roleStages[role]
   const tabs: Array<[Stage, string, string]> = ([
     ['request', '1', 'Requisition'], ['quote', '2', 'Supplier allocation'],
     ['lpo', '3', 'LPO approval'], ['receipt', '4', role === 'receiving clerk' ? '1. Receive goods' : 'Receiving & GRN'],
     ['inspect', '5', role === 'receiving clerk' ? '2. Confirm & post GRN' : 'Inspection'], ['return', '6', 'Supplier return'],
-  ] as Array<[Stage, string, string]>).filter(([key]) => can(stagePermissions[key].view) && (!allowedStages || allowedStages.includes(key)))
+  ] as Array<[Stage, string, string]>).filter(([key]) => can(stagePermissions[key].view) && (key !== 'return' || role === 'cost controller') && (!allowedStages || allowedStages.includes(key)))
   const stageGuidance: Record<Stage, { actor: string; description: string; icon: string }> = {
     request: { actor: 'Requester', description: 'Add every required article, then submit the requisition.', icon: 'playlist_add' },
     quote: { actor: 'Procurement', description: 'Select a supplier quotation.', icon: 'compare_arrows' },
