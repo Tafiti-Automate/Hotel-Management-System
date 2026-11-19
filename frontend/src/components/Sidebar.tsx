@@ -72,6 +72,7 @@ const roleNavigation: Record<string, NavGroup[]> = {
       { route: 'waste-control', label: 'Waste audit', icon: 'delete_sweep' },
       { route: 'recipes-production', label: 'Recipe costing', icon: 'menu_book' },
       { route: 'pos-reconciliation', label: 'POS reconciliation', icon: 'point_of_sale' },
+      { route: 'stocktake-sheet', label: 'Stocktake sessions', icon: 'playlist_add_check' },
       { route: 'stocktake-variance', label: 'Stocktake variances', icon: 'analytics' },
       { route: 'menu-engineering', label: 'Menu sales analysis', icon: 'scatter_plot' },
     ] },
