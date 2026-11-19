@@ -140,6 +140,7 @@ export default function ProcurementWorkbench() {
   const isProcurementRole = ['procurement manager', 'procurement officer'].includes(role)
   const [stage, setStage] = useState<Stage>(() => {
     if (role === 'receiving clerk') return 'receipt'
+    if (role === 'cost controller') return 'return'
     if (['procurement manager', 'procurement officer'].includes(role)) return 'quote'
     if (['financial manager', 'general manager'].includes(role)) return 'lpo'
     if (app.user.isSuperuser) return 'request'

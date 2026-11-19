@@ -60,7 +60,7 @@ ROLE_SPECS = {
         "crud": {
             "vendors": ["supplier"],
             "inventory": ["category", "item", "itemunitprice", "supplieritemprice", "unitofmeasure"],
-            "procurement": ["procurementattachment"],
+            "procurement": ["procurementattachment", "supplierreturn", "supplierreturnitem"],
             "materials_control": [
                 "wasterecord", "recipe", "recipeingredient", "posplumapping",
                 "posimportbatch", "possaleline",
@@ -76,7 +76,7 @@ ROLE_SPECS = {
                 "stockcount", "stockcountitem", "stockledger",
                 "stockadjustment", "stockadjustmentitem",
             ],
-            "procurement": ["vendorquotation", "vendorquotationitem"],
+            "procurement": ["vendorquotation", "vendorquotationitem", "goodsreceiptnote", "goodsreceiptitem", "purchaseorder", "purchaseorderitem"],
         },
     },
     "Store Keeper": {
@@ -92,7 +92,6 @@ ROLE_SPECS = {
                 "stockadjustment", "stockadjustmentitem",
                 "storereturn", "storereturnitem",
             ],
-            "procurement": ["supplierreturn", "supplierreturnitem"],
         },
         "view": {
             "departments": ["department", "branch"],
