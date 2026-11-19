@@ -48,7 +48,6 @@ const roleNavigation: Record<string, NavGroup[]> = {
     { heading: 'Stores', items: [
       { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
 
-      { route: 'receiving-return-new', label: 'Return to supplier', icon: 'assignment_return' },
       { route: 'department-returns-new', label: 'Department returns', icon: 'assignment_return' },
       { route: 'transfer-dispatch', label: 'Transfer fulfillment', icon: 'local_shipping' },
       { route: 'workflow-stores', label: 'Issue requests', icon: 'inventory' },
@@ -66,6 +65,9 @@ const roleNavigation: Record<string, NavGroup[]> = {
     ] },
   ],
   'cost controller': [
+    { heading: 'Supplier returns', items: [
+      { route: 'receiving-return-new', label: 'Return to supplier', icon: 'assignment_return' },
+    ] },
     { heading: 'Control desk', items: [
       { route: 'dashboard', label: 'Overview', icon: 'space_dashboard' },
       { route: 'workflow-stores', label: 'Request control', icon: 'fact_check' },
