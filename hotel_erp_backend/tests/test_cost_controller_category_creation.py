@@ -27,8 +27,10 @@ def client_for_group(name, suffix):
 @pytest.mark.django_db
 def test_cost_controller_can_create_major_and_item_group_without_stale_permission_grants():
     client, user = client_for_group("Cost Controller", "cost")
-    # Reproduces a Cost Controller whose role exists but the production Django
-    # permissions have not yet been synchronized.
+    # Existing test fixtures provision the canonical role with all grants.
+    # Remove ONLY this isolated test group's permissions to reproduce the
+    # real-world drift where role assignment exists before permission sync.
+    user.groups.get(name="Cost Controller").permissions.clear()
     assert not user.has_perm("inventory.add_category")
     major = client.post(
         "/api/v1/categories/",
@@ -95,7 +97,9 @@ def test_other_employee_cannot_create_or_change_groups_with_view_only_permission
 
 
 @pytest.mark.django_db
-def test_category_user_without_role_cannot_read_ungranted_catalogue():
+def test_department_supervisor_can_read_but_cannot_create_catalogue_groups():
     client, _ = client_for_group("Department Supervisor", "ungranted")
-    assert client.get("/api/v1/categories/").status_code == 403
+    # Department Supervisor already receives view_category under the
+    # approved role template. This fixture must preserve read-only access.
+    assert client.get("/api/v1/categories/").status_code == 200
     assert client.post("/api/v1/categories/", {"name": "Unapproved"}, format="json").status_code == 403
