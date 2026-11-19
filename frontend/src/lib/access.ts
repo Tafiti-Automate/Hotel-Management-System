@@ -217,6 +217,10 @@ export function canAccessRoute(user: AccessUser, route: string): boolean {
   if (route === 'stock-on-hand' && role !== 'store keeper') return false
   if (route === 'store-purchase-requests' && role !== 'store keeper') return false
   if (route === 'storeRequisitions') return false
+  // Catalogue group ownership is explicitly assigned to the Cost Controller
+  // role, even if its Django permission template has not yet been synced.
+  // The API verifies actual server-side role membership before any writes.
+  if (route === 'categories' && role === 'cost controller') return true
   if (route === 'dashboard' || route === 'detail') return true
   if (route === 'reports' || route === 'reportview') return hasReportAccess(user)
   const required = routePermissions[route]

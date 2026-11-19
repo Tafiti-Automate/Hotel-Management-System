@@ -212,7 +212,12 @@ export default function InventoryCatalogue() {
       app.showWorkflowAlert('Create a Major Group first', 'An Item Group must belong to a Major Group.', 'warning')
       return
     }
-    app.openCreate('categories', 'Item Grouping', 'itemGroup')
+    app.openCreate(
+      'categories',
+      'Item Grouping',
+      'itemGroup',
+      roots.length === 1 ? { parent: id(roots[0].name) } : undefined,
+    )
   }
   const openItem = () => {
     if (!itemGroupCount) {

@@ -10,6 +10,7 @@ from django.utils import timezone
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
+from core.permissions.roles import HotelDjangoModelPermissions
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
@@ -194,7 +195,25 @@ class CostControllerAuthorityMixin:
         super().perform_destroy(instance)
 
 
+class CatalogueGroupPermission(HotelDjangoModelPermissions):
+    """Authorize catalogue read/write to canonical Cost Controllers by role.
+
+    Live role assignments can precede a permissions-template sync. Other
+    employees still need inventory.view_category to read; they cannot create,
+    alter or delete groups unless the master-data role check passes as well.
+    """
+
+    def has_permission(self, request, view):
+        if (
+            getattr(request.user, "is_active", False)
+            and has_role(request.user, *MASTER_DATA_ROLES)
+        ):
+            return True
+        return super().has_permission(request, view)
+
+
 class CategoryViewSet(CostControllerAuthorityMixin, CreatedByModelMixin, ModelViewSet):
+    permission_classes = (CatalogueGroupPermission,)
     queryset = Category.objects.select_related("parent")
     serializer_class = CategorySerializer
     filterset_fields = ("parent", "is_active")

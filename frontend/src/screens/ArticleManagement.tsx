@@ -48,6 +48,9 @@ export default function ArticleManagement() {
   const canAddItem = app.user.isSuperuser || app.user.permissions.includes('inventory.add_item') || (!permissionMetadata && app.user.isStaff)
   const canEditItem = app.user.isSuperuser || app.user.permissions.includes('inventory.change_item') || (!permissionMetadata && app.user.isStaff)
   const canAddQuote = app.user.isSuperuser || app.user.permissions.includes('inventory.add_supplieritemprice') || (!permissionMetadata && app.user.isStaff)
+  const canManageGroups = app.user.isSuperuser
+    || app.user.role.trim().toLowerCase() === 'cost controller'
+    || app.user.permissions.includes('inventory.add_category')
 
   const roots = useMemo(
     () => categories.filter((category) => !category.parentId).sort((a, b) => text(a.name).localeCompare(text(b.name))),
@@ -159,6 +162,7 @@ export default function ArticleManagement() {
         <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 13 }}>Stock and article controls.</p>
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {canManageGroups && <button type="button" onClick={() => app.navTo('categories', 'Major & Item Groups')} style={secondary}><Icon name="account_tree" size={17} />Major & Item Groups</button>}
         <button type="button" onClick={exportCsv} style={secondary}><Icon name="download" size={17} />Export CSV</button>
         {canAddItem && <button type="button" onClick={addItem} style={primary}><Icon name="add" size={17} />Add item</button>}
       </div>

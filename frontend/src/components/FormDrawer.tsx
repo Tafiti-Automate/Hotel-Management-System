@@ -224,6 +224,22 @@ export default function FormDrawer() {
       app.showWorkflowAlert('Purpose required', 'Enter the reason for this store request before continuing.', 'warning')
       return
     }
+    if (f.entity === 'categories') {
+      const name = String(values.name || '').trim()
+      if (!name) {
+        app.showWorkflowAlert('Group name required', 'Enter a Major Group or Item Group name before saving.', 'warning')
+        return
+      }
+      out.name = name
+      const alreadyExists = app.data.categories.find(
+        (category) => String(category.name).trim().toLocaleLowerCase() === name.toLocaleLowerCase()
+          && String(category.id) !== String(f.id || ''),
+      )
+      if (alreadyExists) {
+        app.showWorkflowAlert('Group name already in use', 'A group with this name already exists. Select it from the catalogue, or enter a distinct name.', 'warning')
+        return
+      }
+    }
     if (f.entity === 'categories' && !f.id) {
       if (f.preset === 'majorGroup') {
         out.parent = ''
