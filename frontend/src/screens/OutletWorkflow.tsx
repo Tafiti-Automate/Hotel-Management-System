@@ -11,6 +11,7 @@ type Source = {
   lines: Row[]
   stores: Row[]
   balances: Row[]
+  destinations: Row[]
   items: Row[]
   units: Row[]
   issues: Row[]
@@ -18,7 +19,7 @@ type Source = {
 }
 type DraftLine = { key: number; article: string; unit: string; quantity: string; remarks: string }
 const empty: Source = {
-  requests: [], lines: [], stores: [], balances: [],
+  requests: [], lines: [], stores: [], balances: [], destinations: [],
   items: [], units: [], issues: [], issueItems: [],
 }
 const sid = (value: unknown) => String(value ?? '')
@@ -52,15 +53,31 @@ function useOutletWorkflow() {
 export function InternalRequestBuilder() {
   const { app, data, loading, error, setError } = useOutletWorkflow()
   const [store, setStore] = useState('')
+  const [storeSearch, setStoreSearch] = useState('')
+  const [destination, setDestination] = useState('')
+  const [destinationSearch, setDestinationSearch] = useState('')
+  const storeSearchRef = useRef<HTMLInputElement>(null)
+  const destinationSearchRef = useRef<HTMLInputElement>(null)
   const [purpose, setPurpose] = useState('')
   const [rows, setRows] = useState<DraftLine[]>([newLine(1)])
   const [busy, setBusy] = useState(false)
   const nextId = useRef(2)
   const tableRef = useRef<HTMLTableElement>(null)
 
+  const storeLabel = (row: Row) =>
+    [sid(row.name), sid(row.branch_name)].filter(Boolean).join(' · ')
   useEffect(() => {
-    if (!store && data.stores.length === 1) setStore(sid(data.stores[0].id))
-  }, [data.stores, store])
+    if (!store && !storeSearch && data.stores.length === 1) {
+      setStore(sid(data.stores[0].id))
+      setStoreSearch(storeLabel(data.stores[0]))
+    }
+  }, [data.stores, store, storeSearch])
+  useEffect(() => {
+    if (!destination && !destinationSearch && data.destinations.length === 1) {
+      setDestination(sid(data.destinations[0].id))
+      setDestinationSearch(sid(data.destinations[0].name))
+    }
+  }, [data.destinations, destination, destinationSearch])
 
   const articleMap = useMemo(
     () => new Map(data.items.map((item) => [articleLabel(item), item])),
@@ -85,7 +102,14 @@ export function InternalRequestBuilder() {
     return entries.some((row) => row.in_stock === true || Number(row.available || 0) > 0)
   }
   const validate = () => {
-    if (!store) return 'Select the issuing store.'
+    if (!store || !data.stores.some((row) => sid(row.id) === store && storeLabel(row) === storeSearch)) {
+      return 'Search and select a valid issuing store.'
+    }
+    if (!destination || !data.destinations.some(
+      (row) => sid(row.id) === destination && sid(row.name) === destinationSearch,
+    )) {
+      return 'Search and select your authorized destination cost center.'
+    }
     const prepared = rows.map((row) => {
       const item = articleMap.get(row.article)
       return { item: sid(item?.id), unit: row.unit || sid(item?.base_unit), quantity: row.quantity, remarks: row.remarks }
@@ -111,7 +135,7 @@ export function InternalRequestBuilder() {
         }
       })
       const draft = await createBackendRecord('store-requisitions/create-with-lines', {
-        store, purpose, lines: prepared, submit,
+        store, destination_department: destination, purpose, lines: prepared, submit,
       })
       app.showToast(submit
         ? sid(draft.requisition_no) + ' submitted to Department Head'
@@ -139,13 +163,45 @@ export function InternalRequestBuilder() {
         <div className="bp-panel-title"><h2>Request details</h2><span className="bp-state">New draft</span></div>
         <div className="bp-fields">
           <label>Source store <b>*</b>
-            <select value={store} disabled={busy} onChange={(event) => setStore(event.target.value)}>
-              <option value="">Select issuing store</option>
-              {data.stores.map((row) => <option key={sid(row.id)} value={sid(row.id)}>{sid(row.name)}</option>)}
-            </select>
+            <span className="bp-search-combo" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <input ref={storeSearchRef} type="search" list="bp-store-search-options"
+                aria-label="Search source store" autoComplete="off"
+                value={storeSearch} disabled={busy}
+                onChange={(event) => {
+                  const value = event.target.value
+                  setStoreSearch(value)
+                  setStore(sid(data.stores.find((row) => storeLabel(row) === value)?.id))
+                }}
+                placeholder="Search for an issuing store" />
+              <button type="button" className="bp-quiet" aria-label="Search source stores"
+                disabled={busy} onClick={() => storeSearchRef.current?.focus()}>
+                <Icon name="search" size={18} />
+              </button>
+            </span>
+            <datalist id="bp-store-search-options">
+              {data.stores.map((row) => <option key={sid(row.id)} value={storeLabel(row)} />)}
+            </datalist>
           </label>
-          <label>Destination cost center
-            <input readOnly value={app.user.departmentName || 'Assigned department'} />
+          <label>Destination cost center <b>*</b>
+            <span className="bp-search-combo" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <input ref={destinationSearchRef} type="search" list="bp-cost-center-options"
+                aria-label="Search destination cost center" autoComplete="off"
+                value={destinationSearch} disabled={busy}
+                onChange={(event) => {
+                  const value = event.target.value
+                  setDestinationSearch(value)
+                  setDestination(sid(data.destinations.find((row) => sid(row.name) === value)?.id))
+                }}
+                placeholder="Search authorized cost center" />
+              <button type="button" className="bp-quiet" aria-label="Search destination cost centers"
+                disabled={busy} onClick={() => destinationSearchRef.current?.focus()}>
+                <Icon name="search" size={18} />
+              </button>
+            </span>
+            <datalist id="bp-cost-center-options">
+              {data.destinations.map((row) => <option key={sid(row.id)} value={sid(row.name)} />)}
+            </datalist>
+            <small className="bp-muted">Only your assigned cost center is authorized for this requisition.</small>
           </label>
           <label className="bp-grow">Purpose / shift note
             <input value={purpose} disabled={busy} maxLength={300} onChange={(event) => setPurpose(event.target.value)} placeholder="e.g. Breakfast service restocking" />

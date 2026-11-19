@@ -160,7 +160,72 @@ class StoreRequisitionViewSet(CreatedByModelMixin,ModelViewSet):
             })
             for x in balances
         ]
-        return Response({"requests":[self._request(x) for x in requests],"lines":[self._line(x) for x in lines],"stores":[{"id":str(x.pk),"name":x.name,"branch_name":str(x.branch or "")} for x in stores],"balances":balance_info,"items":[{"id":str(x.pk),"name":x.name,"sku":x.sku,"base_unit":str(x.base_unit_id or "")} for x in items],"units":[{"id":str(x.pk),"name":x.name,"abbreviation":x.abbreviation} for x in units],"issues":[{"id":str(x.pk),"issue_no":x.issue_no,"requisition":str(x.requisition_id),"store":str(x.store_id),"store_name":x.store.name,"issued_by_name":ename(x.issued_by),"issue_date":x.issue_date,"inventory_changes_applied":x.inventory_changes_applied,"received_by":str(x.received_by_id or ""),"received_by_name":x.received_by_name,"fulfillment_status":x.fulfillment_status,"dispatched_at":x.dispatched_at,"signed_at":x.signed_at} for x in issues],"issueItems":[{"id":str(x.pk),"issue":str(x.issue_id),"item_name":x.item.name,"base_quantity":x.base_quantity,"unit_name":x.unit.abbreviation if x.unit_id else ""} for x in issue_items],"grns":grns,"grnItems":grn_items})
+        viewer = emp(request.user)
+        authorized_valuation = (
+            is_keeper(request.user)
+            or is_cost(request.user)
+            or operational_role(request.user, "Financial Manager", "General Manager")
+        )
+        issue_rows = []
+        for issue in issues:
+            row = {
+                "id": str(issue.pk), "issue_no": issue.issue_no,
+                "requisition": str(issue.requisition_id), "store": str(issue.store_id),
+                "store_name": issue.store.name, "issued_by_name": ename(issue.issued_by),
+                "issue_date": issue.issue_date,
+                "inventory_changes_applied": issue.inventory_changes_applied,
+                "received_by": str(issue.received_by_id or ""),
+                "received_by_name": issue.received_by_name,
+                "fulfillment_status": issue.fulfillment_status,
+                "dispatched_at": issue.dispatched_at, "signed_at": issue.signed_at,
+                "department_name": issue.requisition.department.name,
+                "requisition_no": issue.requisition.requisition_no,
+            }
+            if authorized_valuation:
+                issue_lines = [line for line in issue_items if line.issue_id == issue.pk]
+                row["total_issued_cost"] = str(sum(
+                    (line.base_quantity * line.dispatched_unit_cost for line in issue_lines),
+                    Decimal("0.0000"),
+                ).quantize(Decimal("0.01")))
+            issue_rows.append(row)
+        issue_line_rows = []
+        for line in issue_items:
+            entry = {
+                "id": str(line.pk), "issue": str(line.issue_id),
+                "item_name": line.item.name, "base_quantity": line.base_quantity,
+                "unit_name": line.unit.abbreviation if line.unit_id else "",
+            }
+            if authorized_valuation:
+                entry["dispatched_unit_cost"] = str(line.dispatched_unit_cost)
+                entry["line_total_cost"] = str(
+                    (line.base_quantity * line.dispatched_unit_cost).quantize(Decimal("0.01"))
+                )
+            issue_line_rows.append(entry)
+        destinations = (
+            [{"id": str(viewer.department_id), "name": viewer.department.name}]
+            if is_supervisor(request.user) and viewer and viewer.department_id
+            else []
+        )
+        return Response({
+            "requests": [self._request(x) for x in requests],
+            "lines": [self._line(x) for x in lines],
+            "stores": [
+                {"id": str(x.pk), "name": x.name, "branch_name": str(x.branch or "")}
+                for x in stores
+            ],
+            "destinations": destinations,
+            "balances": balance_info,
+            "items": [
+                {"id": str(x.pk), "name": x.name, "sku": x.sku, "base_unit": str(x.base_unit_id or "")}
+                for x in items
+            ],
+            "units": [
+                {"id": str(x.pk), "name": x.name, "abbreviation": x.abbreviation}
+                for x in units
+            ],
+            "issues": issue_rows, "issueItems": issue_line_rows,
+            "grns": grns, "grnItems": grn_items,
+        })
     @staticmethod
     def _request(r): return {"id":str(r.pk),"requisition_no":r.requisition_no,"department":str(r.department_id),"department_name":r.department.name,"store":str(r.store_id or ""),"store_name":r.store.name if r.store_id else "","requested_by":str(r.requested_by_id),"requester_name":ename(r.requested_by),"status":r.status,"purpose":r.purpose,"required_date":r.required_date,"rejection_reason":r.rejection_reason,"department_approved_at":r.department_approved_at,"approved_at":r.approved_at,"created_at":r.created_at}
     @staticmethod
@@ -177,6 +242,13 @@ class StoreRequisitionViewSet(CreatedByModelMixin,ModelViewSet):
         employee = emp(request.user)
         if not employee or not employee.is_active or not employee.department_id or not employee.branch_id:
             raise PermissionDenied("An active supervisor with a department and property is required.")
+        requested_destination = str(request.data.get("destination_department") or "").strip()
+        if requested_destination and requested_destination != str(employee.department_id):
+            raise ValidationError({
+                "destination_department": (
+                    "You may request stock only for your assigned destination cost center."
+                ),
+            })
         store = StoreLocation.objects.filter(
             pk=request.data.get("store"), branch_id=employee.branch_id, is_active=True
         ).first()

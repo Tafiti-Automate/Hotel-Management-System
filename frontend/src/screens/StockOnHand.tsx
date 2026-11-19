@@ -27,6 +27,7 @@ export default function StockOnHand() {
   const app = useApp()
   const [balances, setBalances] = useState<Row[]>([])
   const [stores, setStores] = useState<Row[]>([])
+  const [unpostedGrns, setUnpostedGrns] = useState<Row[]>([])
   const [storeId, setStoreId] = useState('')
   const [query, setQuery] = useState('')
   const [articleId, setArticleId] = useState('')
@@ -51,14 +52,18 @@ export default function StockOnHand() {
     setLoading(true)
     setError('')
     try {
-      const [balanceResult, storeResult] = await Promise.allSettled([
+      const [balanceResult, storeResult, grnResult] = await Promise.allSettled([
         readBackendRecords('inventory-balances'),
         readBackendRecords('stores'),
+        app.user.role.trim().toLowerCase() === 'store keeper'
+          ? readBackendRecords('grns/unposted-queue')
+          : Promise.resolve([] as Row[]),
       ])
       if (balanceResult.status === 'rejected') throw balanceResult.reason
       setBalances(balanceResult.value)
       if (storeResult.status === 'fulfilled') setStores(storeResult.value)
       else setStores([])
+      setUnpostedGrns(grnResult.status === 'fulfilled' ? grnResult.value : [])
     } catch (reason) {
       const detail = errorMessage(reason)
       setError(detail)
@@ -136,6 +141,11 @@ export default function StockOnHand() {
     })
   }, [balances, storeId, articleId, majorGroup, category, categoryToMajor, query, lowOnly, stockState, sortBy])
 
+  const relevantUnposted = storeId
+    ? unpostedGrns.filter((grn) =>
+        Array.isArray(grn.lines) && grn.lines.some((line: Row) => id(line.store) === storeId),
+      )
+    : unpostedGrns
   const inventoryValue = visible.reduce((total, row) => total + num(row.total_value), 0)
   const availableValue = visible.reduce((total, row) => total + num(row.available_value), 0)
   const lowCount = visible.filter((row) => Boolean(row.is_below_reorder)).length
@@ -175,6 +185,18 @@ export default function StockOnHand() {
       <Kpi label="Low / reorder" value={String(lowCount)} detail="Needs Store Keeper attention" warn={lowCount > 0} />
     </section>
 
+    {relevantUnposted.length > 0 && <section role="status"
+      style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12, margin: '0 0 14px', padding: '12px 15px', background: 'var(--warn-soft)', border: '1px solid var(--border)', borderRadius: 9, color: 'var(--text)' }}>
+      <Icon name="inventory" size={19} color="var(--warn)" />
+      <span style={{ flex: 1, fontSize: 12.5 }}>
+        <strong>{relevantUnposted.length} received GRN{relevantUnposted.length === 1 ? '' : 's'} awaiting Storekeeper posting.</strong>
+        {' '}Partial deliveries do not increase Stock on Hand until accepted quantities are posted. Check the GRN destination store and fiscal period.
+      </span>
+      <button type="button" onClick={() => app.navTo('grn-posting', 'Post received GRNs')}
+        style={{ padding: '8px 11px', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface)', color: 'var(--accent)', cursor: 'pointer', fontWeight: 700 }}>
+        Open GRN posting
+      </button>
+    </section>}
     <section className="soh-options" aria-label="Stock on Hand Control options">
       <button type="button" className="soh-options-title" onClick={() => setOptionsOpen((value) => !value)} aria-expanded={optionsOpen}>
         <span><Icon name="tune" size={17} /><strong>Advanced stock controls</strong><small>Store, article, unit and valuation criteria</small></span>
@@ -253,13 +275,13 @@ export default function StockOnHand() {
             <div className="soh-table-wrap">
               <table className="soh-table">
                 <thead><tr>
-                  <th>Article</th><th>Store</th><th className="num">SOH</th><th className="num">Reserved</th><th className="num">Available</th><th>UOM</th><th className="num">Amount / unit</th><th className="num">{evaluation === 'exp' ? 'Expiry value' : evaluation === 'epi' ? 'EPI value' : evaluation === 'price' ? 'Price value' : 'AVE value'}</th><th>Status</th>
+                  <th>Article</th><th>Store</th><th className="num">SOH</th><th className="num" title="Cumulative stock physically issued to departments or transferred out of this store; excludes pending reservations.">Issued / transferred</th><th className="num">Available</th><th>UOM</th><th className="num">Amount / unit</th><th className="num">{evaluation === 'exp' ? 'Expiry value' : evaluation === 'epi' ? 'EPI value' : evaluation === 'price' ? 'Price value' : 'AVE value'}</th><th>Status</th>
                 </tr></thead>
                 <tbody>{visible.map((row) => <tr key={id(row.id)} onClick={() => setSelected(row)}>
                   <td><strong>{id(row.item_name) || 'Article'}</strong><span>{id(row.item_sku) || '—'}{row.category_name ? ` · ${id(row.category_name)}` : ''}</span></td>
                   <td><strong>{id(row.store_name) || 'Store'}</strong><span>{id(row.branch_name)}</span></td>
                   <td className="num strong">{displayQuantity(row, row.quantity_in_stock)}</td>
-                  <td className="num">{displayQuantity(row, row.quantity_reserved)}</td>
+                  <td className="num">{displayQuantity(row, row.issued_transferred_quantity)}</td>
                   <td className="num strong">{displayQuantity(row, row.available_quantity)}</td>
                   <td>{displayUnit(row)}</td>
                   <td className="num">{money(num(row.unit_amount))}</td>
@@ -281,7 +303,8 @@ export default function StockOnHand() {
       <div className="soh-drawer-head"><div><span>Stock balance</span><h2>{id(selected.item_name)}</h2><p>{id(selected.item_sku)} · {id(selected.store_name)}</p></div><button onClick={() => setSelected(null)} aria-label="Close"><Icon name="close" size={18} /></button></div>
       <div className="soh-drawer-grid">
         <Detail label="Stock on Hand" value={`${displayQuantity(selected, selected.quantity_in_stock)} ${displayUnit(selected)}`} />
-        <Detail label="Reserved" value={displayQuantity(selected, selected.quantity_reserved)} />
+        <Detail label="Reserved (pending allocation)" value={displayQuantity(selected, selected.quantity_reserved)} />
+        <Detail label="Issued / transferred to date" value={displayQuantity(selected, selected.issued_transferred_quantity)} />
         <Detail label="Available" value={displayQuantity(selected, selected.available_quantity)} />
         <Detail label="Amount / unit" value={money(num(selected.unit_amount))} />
         <Detail label="Total stock value" value={money(num(selected.total_value))} strong />
@@ -291,7 +314,7 @@ export default function StockOnHand() {
         <Detail label="Last balance update" value={updatedAt(selected.last_updated)} />
         <Detail label="Cost basis" value="Weighted current GRN batch cost" />
       </div>
-      <div className="soh-drawer-note"><Icon name="info" size={16} /><span>Amount / unit is the weighted cost of the remaining received batches. Total value = current SOH × amount / unit.</span></div>
+      <div className="soh-drawer-note"><Icon name="info" size={16} /><span>Issued / transferred is cumulative outbound movement, not currently reserved stock. Reserved stock remains physically on hand and reduces Available quantity. Cost is weighted from the remaining posted GRN batches.</span></div>
     </aside></>}
   </div>
 }

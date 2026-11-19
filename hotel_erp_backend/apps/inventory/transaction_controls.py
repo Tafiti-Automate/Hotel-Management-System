@@ -7,14 +7,16 @@ and read-only Stock on Hand valuation fields used by the Stores workspace.
 
 from decimal import Decimal
 
-from django.db.models import Prefetch
+from django.db.models import Prefetch, OuterRef, Subquery, Sum, DecimalField, Value
+from django.db.models.functions import Coalesce
 from rest_framework import serializers
 
 from apps.inventory.department_request_api import (
     ControlledStoreRequisitionItemSerializer as BaseStoreRequisitionItemSerializer,
     StoreRequisitionItemViewSet as BaseStoreRequisitionItemViewSet,
 )
-from apps.inventory.models import InventoryBatch, StoreLocation
+from apps.inventory.models import InventoryBatch, StockLedger, StoreLocation
+from core.constants.choices import LedgerReferenceType
 from apps.inventory.serializers import (
     InventoryBalanceSerializer as BaseInventoryBalanceSerializer,
 )
@@ -91,6 +93,9 @@ class StoreKeeperInventoryBalanceSerializer(BaseInventoryBalanceSerializer):
     total_value = serializers.SerializerMethodField()
     available_value = serializers.SerializerMethodField()
     last_received_date = serializers.SerializerMethodField()
+    issued_transferred_quantity = serializers.DecimalField(
+        source="_issued_transferred_quantity", max_digits=20, decimal_places=4, read_only=True,
+    )
 
     def _valuation(self, balance):
         cache = getattr(self, "_soh_valuation_cache", {})
@@ -180,10 +185,32 @@ class InventoryBalanceViewSet(BaseInventoryBalanceViewSet):
         ).only(
             "item_id", "store_id", "remaining_quantity", "unit_cost", "received_date", "created_at"
         ).order_by("received_date", "created_at")
+        quantity_field = DecimalField(max_digits=20, decimal_places=4)
+        outbound = (
+            StockLedger.objects.filter(
+                item_id=OuterRef("item_id"), store_id=OuterRef("store_id"),
+                quantity_out__gt=0,
+                reference_type__in=(
+                    LedgerReferenceType.STOCK_ISSUE,
+                    LedgerReferenceType.STOCK_TRANSFER,
+                    LedgerReferenceType.TRANSIT_DISPATCH,
+                ),
+            )
+            .order_by()
+            .values("item_id", "store_id")
+            .annotate(total=Sum("quantity_out"))
+            .values("total")[:1]
+        )
         return queryset.select_related(
             "item", "item__base_unit", "item__category", "store", "store__branch"
         ).prefetch_related(
             Prefetch("item__inventory_batches", queryset=active_batches, to_attr="_soh_batches")
+        ).annotate(
+            _issued_transferred_quantity=Coalesce(
+                Subquery(outbound, output_field=quantity_field),
+                Value(Decimal("0.0000"), output_field=quantity_field),
+                output_field=quantity_field,
+            ),
         )
 
     def get_queryset(self):

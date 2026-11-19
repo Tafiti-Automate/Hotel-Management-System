@@ -64,8 +64,8 @@ def test_assigned_store_keeper_posts_receipt_with_line_destination_not_po_header
         reason="Restaurant goods purchase", status=PRStatus.APPROVED,
     )
     source_line = RequisitionItem.objects.create(
-        requisition=pr, item=item, quantity=Decimal("4.00"),
-        approved_quantity=Decimal("4.00"), destination_store=destination,
+        requisition=pr, item=item, quantity=Decimal("10.00"),
+        approved_quantity=Decimal("10.00"), destination_store=destination,
     )
     # No PO header store: per-line assignment must drive Store Keeper visibility.
     po = PurchaseOrder.objects.create(
@@ -74,7 +74,7 @@ def test_assigned_store_keeper_posts_receipt_with_line_destination_not_po_header
     )
     po_line = PurchaseOrderItem.objects.create(
         purchase_order=po, requisition_item=source_line,
-        item=item, quantity=Decimal("4.00"), unit_cost=Decimal("100.00"),
+        item=item, quantity=Decimal("10.00"), unit_cost=Decimal("100.00"),
         destination_store=destination,
     )
     # A real LPO is composed while draft, then authorized and issued.
@@ -88,6 +88,9 @@ def test_assigned_store_keeper_posts_receipt_with_line_destination_not_po_header
         quantity_received=Decimal("4.00"), unit_cost=Decimal("100.00"),
     )
     assert receipt_line.store_id == destination.pk
+    # A physical GRN is NOT yet posted stock: even a partial LPO delivery
+    # leaves SOH unchanged until Stores verifies and posts the accepted count.
+    assert InventoryBalance.objects.filter(item=item, store=destination).count() == 0
     inspection = GoodsInspection.objects.create(
         goods_receipt=grn, inspected_by=requester,
     )
@@ -121,7 +124,15 @@ def test_assigned_store_keeper_posts_receipt_with_line_destination_not_po_header
     assert grn.status == "posted"
     balance = InventoryBalance.objects.get(item=item, store=destination)
     assert balance.quantity_in_stock == Decimal("4.00")
+    po.refresh_from_db()
+    assert po.status == POStatus.PARTIALLY_RECEIVED
     assert StockLedger.objects.filter(reference_id=grn.pk).count() == 1
+    stock_response = client.get("/api/v1/inventory-balances/")
+    assert stock_response.status_code == 200, stock_response.data
+    stock_rows = stock_response.data.get("results", stock_response.data)
+    matching = next(row for row in stock_rows if str(row["item"]) == str(item.pk) and str(row["store"]) == str(destination.pk))
+    assert Decimal(matching["quantity_in_stock"]) == Decimal("4.00")
+    assert Decimal(matching["issued_transferred_quantity"]) == Decimal("0.0000")
     repeated = client.post(f"/api/v1/grns/{grn.pk}/post-to-inventory/")
     assert repeated.status_code == 400, getattr(repeated, "data", None)
     assert StockLedger.objects.filter(reference_id=grn.pk).count() == 1

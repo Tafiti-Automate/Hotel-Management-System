@@ -3,7 +3,8 @@ import { Icon } from '../components/Icon'
 import ConfirmTransaction from '../components/ConfirmTransaction'
 import WorkflowPrerequisite from '../components/WorkflowPrerequisite'
 import { escapeHtml } from '../features/shared/html'
-import { createBackendRecord, errorMessage, readBackendRecords, runBackendAction } from '../lib/api'
+import { createBackendRecord, errorMessage, readBackendPayload, readBackendRecords, runBackendAction } from '../lib/api'
+import { money } from '../lib/theme'
 import { useApp } from '../state/AppContext'
 import '../operational-blueprint.css'
 
@@ -185,12 +186,52 @@ function printBatch(type: 'picking' | 'packing', selected: PickRequest[], valueF
   return true
 }
 
+
+/** Valued internal Stores copy. Outlet pickup documents remain quantity-only. */
+function printValuedTransfer(issue: Row, lines: Row[], propertyName: string): boolean {
+  if (!lines.length) return false
+  const cells = lines.map((line, index) =>
+    '<tr><td>' + (index + 1) + '</td><td>' + escapeHtml(ident(line.item_name)) +
+    '</td><td>' + escapeHtml(qty(line.base_quantity)) + '</td><td>' +
+    escapeHtml(ident(line.unit_name)) + '</td><td style="text-align:right">' +
+    escapeHtml(money(Number(line.dispatched_unit_cost || 0))) +
+    '</td><td style="text-align:right">' +
+    escapeHtml(money(Number(line.line_total_cost || 0))) + '</td></tr>'
+  ).join('')
+  const html = '<!doctype html><html><head><meta charset="utf-8">' +
+    '<title>Valued Issue Voucher ' + escapeHtml(ident(issue.issue_no)) + '</title>' +
+    '<style>@page{size:A4 portrait;margin:14mm}body{font:12px Arial,sans-serif;color:#19342a}' +
+    'h1{font-size:20px}table{width:100%;border-collapse:collapse;margin-top:25px}' +
+    'td,th{padding:9px;border:1px solid #b8c8bf}th{background:#eef4f0;text-align:left}' +
+    '.sig{display:flex;gap:20px;margin-top:50px}.sig div{flex:1;border-top:1px solid #466354;padding-top:8px}' +
+    '</style></head><body><small>' + escapeHtml(propertyName) + ' · Stores / Cost Control</small>' +
+    '<h1>Department Transfer / Valued Issue Voucher</h1><p>Issue: <b>' +
+    escapeHtml(ident(issue.issue_no)) + '</b> · Request: ' +
+    escapeHtml(ident(issue.requisition_no)) + '</p><p>Source: ' +
+    escapeHtml(ident(issue.store_name)) + ' · Destination: ' +
+    escapeHtml(ident(issue.department_name)) + '</p><table><thead><tr>' +
+    '<th>#</th><th>Article</th><th>Quantity</th><th>UOM</th><th>Unit cost</th><th>Issued value</th>' +
+    '</tr></thead><tbody>' + cells + '</tbody><tfoot><tr><th colspan="5">Total cost issued (UGX)</th><th style="text-align:right">' +
+    escapeHtml(money(Number(issue.total_issued_cost || 0))) +
+    '</th></tr></tfoot></table><p>Actual dispatch-time cost snapshots; no future repricing.</p>' +
+    '<div class="sig"><div>Storekeeper</div><div>Department HOD</div><div>Receiver</div></div></body></html>'
+  const popup = window.open('', '_blank')
+  if (!popup) return false
+  popup.document.write(html)
+  popup.document.close()
+  popup.focus()
+  popup.print()
+  return true
+}
+
 export function TransferDispatchConsole() {
   const { app, items: requests, loading, error, setError, refresh } = useStorekeeperQueue<PickRequest>('store-requisitions/fulfillment-queue')
   const [selected, setSelected] = useState<string[]>([])
   const [quantities, setQuantities] = useState<Record<string, Record<string, string>>>({})
   const [search, setSearch] = useState('')
   const [busy, setBusy] = useState(false)
+  const [valuedIssues, setValuedIssues] = useState<Row[]>([])
+  const [valuedLines, setValuedLines] = useState<Row[]>([])
   const filtered = useMemo(() => requests.filter((record) =>
     [record.reference, record.department, record.store]
       .some((field) => field.toLowerCase().includes(search.toLowerCase()))
@@ -228,6 +269,30 @@ export function TransferDispatchConsole() {
       })
       app.showToast((Array.isArray(results) ? results.length : chosen.length) + ' transfer(s) dispatched to virtual transit')
       setSelected([]); setQuantities({})
+      // The dispatch has already committed. A failed *read back* must not
+      // encourage anyone to repeat an irreversible stock issue.
+      try {
+        const issueIds = new Set(
+          (Array.isArray(results) ? results : []).map((row: Row) => ident(row.id)),
+        )
+        const latest = await readBackendPayload('store-requisitions/workflow')
+        setValuedIssues(
+          (Array.isArray(latest.issues) ? latest.issues : [] as Row[])
+            .filter((row: Row) => issueIds.has(ident(row.id))),
+        )
+        setValuedLines(
+          (Array.isArray(latest.issueItems) ? latest.issueItems : [] as Row[])
+            .filter((row: Row) => issueIds.has(ident(row.issue))),
+        )
+      } catch {
+        setValuedIssues([])
+        setValuedLines([])
+        app.showWorkflowAlert(
+          'Dispatch successful — valuation unavailable',
+          'The stock transfer was posted. Refresh Stores to retrieve the historical valued issue voucher; do not dispatch it again.',
+          'warning',
+        )
+      }
       await refresh()
       await app.refreshData()
     } catch (cause) {
@@ -246,6 +311,23 @@ export function TransferDispatchConsole() {
     <div className="sk-kpis"><div><span>Ready to fulfill</span><strong>{requests.length}</strong></div>
       <div><span>Selected requisitions</span><strong>{chosen.length}</strong></div>
       <div><span>Base units to dispatch</span><strong>{qty(linesTotal)}</strong></div></div>
+    {valuedIssues.length > 0 && <section className="bp-panel" aria-label="Issued transfer valuation">
+      <div className="bp-panel-title"><div><h2>Issued / transferred valuation</h2>
+        <p>Actual cost recorded at dispatch. Only authorized Stores staff can see this valued copy; departmental pickup copies remain quantity-only.</p></div>
+        <strong>{money(valuedIssues.reduce((sum, row) => sum + Number(row.total_issued_cost || 0), 0))} total issued</strong>
+      </div>
+      {valuedIssues.map((issue) => {
+        const lines = valuedLines.filter((row) => ident(row.issue) === ident(issue.id))
+        return <div key={ident(issue.id)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', gap: 12, borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
+          <span><strong>{ident(issue.issue_no)}</strong> · {ident(issue.department_name)} · {money(Number(issue.total_issued_cost || 0))}</span>
+          <button type="button" className="bp-quiet" onClick={() => {
+            if (!printValuedTransfer(issue, lines, app.currentBranch)) {
+              app.showWorkflowAlert('Unable to print valued issue', 'Allow pop-up windows and retry.', 'warning')
+            }
+          }}><Icon name="print" size={16} /> Print valued issue voucher</button>
+        </div>
+      })}
+    </section>}
     <section className="bp-panel">
       <div className="bp-panel-title"><div><h2>Approved department requests</h2><p>Only Cost-Control-approved requests for your assigned stores appear here.</p></div>
         <input className="sk-filter" aria-label="Search requisitions" placeholder="Filter store, request or department…" value={search} onChange={(event) => setSearch(event.target.value)} /></div>
