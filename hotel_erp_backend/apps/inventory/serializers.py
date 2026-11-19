@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import models, transaction
-from django.db.models import Count
+from django.db.models import Count, Sum
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -399,6 +399,23 @@ class InventoryBalanceSerializer(serializers.ModelSerializer):
     reserved_allocations = serializers.SerializerMethodField()
     calculated_reserved_quantity = serializers.SerializerMethodField()
     reservation_variance = serializers.SerializerMethodField()
+    issued_transferred_quantity = serializers.SerializerMethodField()
+
+    def get_issued_transferred_quantity(self, balance):
+        # Posted outbound stock movements are the source of truth; pending
+        # requisitions/reservations must not be counted as issued stock.
+        # Exclude sales, waste, returns to vendors and adjustments.
+        from core.constants.choices import LedgerReferenceType
+        result = StockLedger.objects.filter(
+            item_id=balance.item_id,
+            store_id=balance.store_id,
+            reference_type__in=(
+                LedgerReferenceType.STOCK_ISSUE,
+                LedgerReferenceType.STOCK_TRANSFER,
+                LedgerReferenceType.TRANSIT_DISPATCH,
+            ),
+        ).aggregate(total=Sum("quantity_out"))
+        return result["total"] or Decimal("0.0000")
 
     def get_reserved_allocations(self, balance):
         cache = getattr(self, "_reserved_allocations_cache", {})
