@@ -5,6 +5,7 @@ import WorkflowPrerequisite from '../components/WorkflowPrerequisite'
 import { escapeHtml } from '../features/shared/html'
 import { createBackendRecord, errorMessage, readBackendPayload, readBackendRecords, runBackendAction } from '../lib/api'
 import { money } from '../lib/theme'
+import type { Row } from '../lib/data'
 import { useApp } from '../state/AppContext'
 import '../operational-blueprint.css'
 
