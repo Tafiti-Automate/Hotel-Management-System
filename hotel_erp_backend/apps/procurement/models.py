@@ -2278,28 +2278,43 @@ class GoodsReceiptNote(BaseModel):
             POStatus.PARTIALLY_RECEIVED,
         ):
             raise ValidationError("Goods can only be received against a sent purchase order.")
+        # One invoice may cover several actual truck deliveries/GRNs.
+        # Keep a unique physical delivery-note reference per supplier, while
+        # allowing that invoice number on multiple genuinely distinct GRNs.
+        # Never permit a second GRN using an existing invoice alone: without
+        # a separate supplier delivery note it cannot be distinguished safely.
+        self.delivery_note_no = (self.delivery_note_no or "").strip()
+        self.supplier_invoice_no = (self.supplier_invoice_no or "").strip()
         if self.delivery_note_no:
             duplicate = GoodsReceiptNote.objects.filter(
                 purchase_order__supplier=self.purchase_order.supplier,
-                delivery_note_no__iexact=self.delivery_note_no.strip(),
+                delivery_note_no__iexact=self.delivery_note_no,
             )
             if self.pk:
                 duplicate = duplicate.exclude(pk=self.pk)
             if duplicate.exists():
-                raise ValidationError(
-                    {"delivery_note_no": "This supplier delivery note has already been received."}
-                )
-        if self.supplier_invoice_no:
-            duplicate = GoodsReceiptNote.objects.filter(
+                raise ValidationError({
+                    "delivery_note_no": (
+                        "This supplier delivery note is already recorded on a GRN. "
+                        "Open GRN History to inspect it; do not receive the same delivery twice."
+                    ),
+                })
+        if self.supplier_invoice_no and not self.delivery_note_no:
+            previous_invoice = GoodsReceiptNote.objects.filter(
                 purchase_order__supplier=self.purchase_order.supplier,
-                supplier_invoice_no__iexact=self.supplier_invoice_no.strip(),
+                supplier_invoice_no__iexact=self.supplier_invoice_no,
             )
             if self.pk:
-                duplicate = duplicate.exclude(pk=self.pk)
-            if duplicate.exists():
-                raise ValidationError(
-                    {"supplier_invoice_no": "This supplier invoice has already been recorded on a GRN."}
-                )
+                previous_invoice = previous_invoice.exclude(pk=self.pk)
+            if previous_invoice.exists():
+                raise ValidationError({
+                    "delivery_note_no": (
+                        "This supplier invoice is already linked to a GRN. "
+                        "For a different physical delivery under the same invoice, enter "
+                        "its distinct genuine supplier delivery note number, or inspect "
+                        "the existing receipt in GRN History."
+                    ),
+                })
 
     def post_to_inventory(self, posted_by=None):
         readiness = self.posting_readiness()

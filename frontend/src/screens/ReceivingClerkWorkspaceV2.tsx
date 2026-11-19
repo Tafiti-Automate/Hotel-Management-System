@@ -200,6 +200,7 @@ export default function ReceivingClerkWorkspaceV2() {
               <Receive
                 order={order}
                 lines={lines.filter((line) => id(line.purchase_order) === id(order.id))}
+                previousGrns={grns.filter((receipt) => id(receipt.purchase_order) === id(order.id))}
                 app={app}
                 busy={busy}
                 act={act}
@@ -231,7 +232,7 @@ function ReadyOrders({ orders, app, select }: { orders: Row[]; app: any; select:
   )
 }
 
-function Receive({ order, lines, app, busy, act, back, receiptRecorded }: { order: Row; lines: Row[]; app: any; busy: boolean; act: any; back: () => void; receiptRecorded: (receiptId: string) => void }) {
+function Receive({ order, lines, previousGrns, app, busy, act, back, receiptRecorded }: { order: Row; lines: Row[]; previousGrns: Row[]; app: any; busy: boolean; act: any; back: () => void; receiptRecorded: (receiptId: string) => void }) {
   const [invoice, setInvoice] = useState('')
   const [delivery, setDelivery] = useState('')
   const [values, setValues] = useState<Record<string, string>>({})
@@ -249,6 +250,17 @@ function Receive({ order, lines, app, busy, act, back, receiptRecorded }: { orde
     setRejectionReasons({})
     setTracking(nextTracking)
   }, [order.id])
+
+  const previouslyUsedInvoice = invoice.trim()
+    ? previousGrns.find((receipt) => id(receipt.supplier_invoice_no).trim().toLowerCase() === invoice.trim().toLowerCase())
+    : undefined
+  const previouslyUsedDeliveryNote = delivery.trim()
+    ? previousGrns.find((receipt) => id(receipt.delivery_note_no).trim().toLowerCase() === delivery.trim().toLowerCase())
+    : undefined
+  const missingDocumentReference = !invoice.trim() && !delivery.trim()
+  const needsDistinctDeliveryNote = Boolean(previouslyUsedInvoice && !delivery.trim())
+  const reusedDeliveryNote = Boolean(previouslyUsedDeliveryNote)
+  const invalidReference = missingDocumentReference || needsDistinctDeliveryNote || reusedDeliveryNote
 
   const items = new Map<string, Row>((app.data.items as Row[]).map((item: Row) => [id(item.id), item]))
   const positive = lines.filter((line) => n(values[id(line.id)]) > 0)
@@ -282,9 +294,16 @@ function Receive({ order, lines, app, busy, act, back, receiptRecorded }: { orde
         <div className="ds-read"><span>Expected delivery</span><strong>{id(order.expected_date) || '—'}</strong></div>
         <div className="ds-read"><span>GRN date/time</span><strong>Automatic when saved</strong></div>
         <div className="ds-read"><span>Status</span><strong>{id(order.status)}</strong></div>
-        <label>Supplier invoice *<input value={invoice} onChange={(event) => setInvoice(event.target.value)} /></label>
-        <label>Delivery note<input value={delivery} onChange={(event) => setDelivery(event.target.value)} /></label>
+        <label>Supplier invoice (if supplied)<input value={invoice} maxLength={100} onChange={(event) => setInvoice(event.target.value)} placeholder="Supplier's actual invoice reference" /></label>
+        <label>Delivery note (if supplied)<input value={delivery} maxLength={100} onChange={(event) => setDelivery(event.target.value)} placeholder="Unique delivery reference for this shipment" /></label>
       </div>
+      <p className="ds-receiving-reference-help">Provide at least one genuine supplier document reference. A supplier invoice may cover multiple deliveries, but each additional delivery using that invoice must have its own distinct delivery note. Never invent a reference to bypass a duplicate warning.</p>
+      {(needsDistinctDeliveryNote || reusedDeliveryNote) && <div className="ds-alert" role="alert">
+        <strong>Delivery reference needs attention</strong>
+        {reusedDeliveryNote
+          ? <p>Delivery note {delivery.trim()} is already recorded on GRN {id(previouslyUsedDeliveryNote?.grn_number) || 'in History'}. Inspect the previous receipt before creating another.</p>
+          : <p>Invoice {invoice.trim()} is already linked to GRN {id(previouslyUsedInvoice?.grn_number) || 'in History'}. If this is a separate delivery, enter its genuine unique delivery note. Otherwise review GRN History.</p>}
+      </div>}
       <div className="ds-table-scroll">
         <table className="ds-table">
           <thead><tr><th>Article</th><th>Ordered</th><th>Counted qty</th><th>Rejected qty</th><th>Rejection reason</th><th>Batch / lot</th><th>Expiry</th><th>Temp °C</th></tr></thead>
@@ -305,18 +324,18 @@ function Receive({ order, lines, app, busy, act, back, receiptRecorded }: { orde
           })}</tbody>
         </table>
       </div>
-      {(invalidLines.length > 0 || invalidRejected.length > 0 || invalidTracking.length > 0 || !invoice.trim()) && <div className="ds-alert" role="status" aria-live="polite">
+      {(invalidLines.length > 0 || invalidRejected.length > 0 || invalidTracking.length > 0 || missingDocumentReference) && <div className="ds-alert" role="status" aria-live="polite">
         <strong>Complete the receiving prerequisites</strong>
         <ul>
-          {!invoice.trim() && <li>Enter the supplier invoice reference.</li>}
+          {missingDocumentReference && <li>Enter the supplier invoice reference or the supplier delivery note reference.</li>}
           {invalidLines.length > 0 && <li>Record non-negative physical counts for {invalidLines.length} article row(s).</li>}
           {invalidRejected.length > 0 && <li>Correct rejected quantities and rejection reasons on {invalidRejected.length} article row(s).</li>}
           {invalidTracking.length > 0 && <li>Complete batch, expiry and temperature evidence on {invalidTracking.length} tracked article row(s).</li>}
         </ul>
         <small>Next: Correct the highlighted lines. Save &amp; lock becomes available when all prerequisites are complete.</small>
       </div>}
-      <div className="ds-sticky-action"><span>Ordered quantities remain hidden until this physical count and inspection are saved and permanently locked.</span><ConfirmTransaction title="Save and lock your blind count?" description="The saved quantities, batch details and inspection decisions cannot be changed by the Receiving Clerk. After saving, the system reveals ordered quantities and any delivery differences in a read-only reconciliation. Stores will verify before SOH increases." confirmLabel="Save & lock blind count" className="ds-btn ds-btn-primary" disabled={busy || !invoice.trim() || !positive.length || invalid || false} busy={busy} onConfirm={async () => {
-        const receipt = await act(() => runBackendAction('purchase-orders', id(order.id), 'receive-delivery', { supplier_invoice_no: invoice, delivery_note_no: delivery, lines: positive.map((line) => ({ purchase_order_item: id(line.id), quantity_received: n(values[id(line.id)]), quantity_rejected: n(rejected[id(line.id)]), rejection_reason: rejectionReasons[id(line.id)] || '', batch_number: tracking[id(line.id)]?.batch_number || '', expiry_date: tracking[id(line.id)]?.expiry_date || null, delivery_temperature: tracking[id(line.id)]?.delivery_temperature ? Number(tracking[id(line.id)].delivery_temperature) : null })) }), 'GRN recorded · awaiting Store Keeper verification')
+      <div className="ds-sticky-action"><span>Ordered quantities remain hidden until this physical count and inspection are saved and permanently locked.</span><ConfirmTransaction title="Save and lock your blind count?" description="The saved quantities, batch details and inspection decisions cannot be changed by the Receiving Clerk. After saving, the system reveals ordered quantities and any delivery differences in a read-only reconciliation. Stores will verify before SOH increases." confirmLabel="Save & lock blind count" className="ds-btn ds-btn-primary" disabled={busy || invalidReference || !positive.length || invalid} busy={busy} onConfirm={async () => {
+        const receipt = await act(() => runBackendAction('purchase-orders', id(order.id), 'receive-delivery', { supplier_invoice_no: invoice.trim(), delivery_note_no: delivery.trim(), lines: positive.map((line) => ({ purchase_order_item: id(line.id), quantity_received: n(values[id(line.id)]), quantity_rejected: n(rejected[id(line.id)]), rejection_reason: rejectionReasons[id(line.id)] || '', batch_number: tracking[id(line.id)]?.batch_number || '', expiry_date: tracking[id(line.id)]?.expiry_date || null, delivery_temperature: tracking[id(line.id)]?.delivery_temperature ? Number(tracking[id(line.id)].delivery_temperature) : null })) }), 'GRN recorded · awaiting Store Keeper verification')
         const receiptId = id((receipt as Row | undefined)?.id)
         if (receiptId) receiptRecorded(receiptId)
       }}>Generate GRN</ConfirmTransaction></div>

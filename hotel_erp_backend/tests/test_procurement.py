@@ -2798,3 +2798,111 @@ def test_no_vat_article_creates_zero_vat_lpo_and_tax_preference_serializes():
     assert order.vat_total == Decimal("0.00")
     assert order.gross_total == Decimal("300000.00")
     assert PurchaseOrderSerializer(order).data["vat_total"] == "0.00"
+
+
+@pytest.mark.django_db
+def test_multiple_partial_grns_can_share_invoice_with_distinct_delivery_notes():
+    """One invoice can accompany several separate Matooke-style deliveries."""
+    employee, department, supplier, item = create_procurement_context()
+    branch = Branch.objects.create(name="Partial Invoice Reuse Branch")
+    store = StoreLocation.objects.create(branch=branch, name="Kitchen Receiving Store")
+    employee.branch = branch
+    employee.save(update_fields=("branch", "updated_at"))
+    receiving, _ = Group.objects.get_or_create(name="Receiving Clerk")
+    employee.user.groups.add(receiving)
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee, department=department, branch=branch,
+        reason="Split supplier deliveries", status=PRStatus.APPROVED,
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition, item=item,
+        quantity=Decimal("3.0000"), approved_quantity=Decimal("3.0000"),
+        destination_store=store,
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition, supplier=supplier,
+        ordered_by=employee, store=store, po_number="GRN-SPLIT-001",
+    )
+    line = PurchaseOrderItem.objects.create(
+        purchase_order=order, item=item, unit=item.base_unit,
+        quantity=Decimal("3.0000"), unit_cost=Decimal("30000.00"),
+    )
+    authorize_order_for_test(order)
+    order.issue(sent_by=employee, sent_to_email=supplier.email)
+    client = APIClient()
+    client.force_authenticate(employee.user)
+    endpoint = f"/api/v1/purchase-orders/{order.pk}/receive-delivery/"
+    def physical_receipt(invoice="", delivery="", quantity="1.0000"):
+        return client.post(endpoint, {
+            "supplier_invoice_no": invoice,
+            "delivery_note_no": delivery,
+            "lines": [{
+                "purchase_order_item": str(line.pk),
+                "quantity_received": quantity,
+            }],
+        }, format="json")
+    assert physical_receipt().status_code == 400
+    first = physical_receipt(invoice="INV-SPLIT-001", delivery="DN-SPLIT-001")
+    assert first.status_code == 201, first.data
+    order.refresh_from_db()
+    assert order.status == POStatus.PARTIALLY_RECEIVED
+    assert physical_receipt(invoice="INV-SPLIT-001").status_code == 400
+    assert physical_receipt(invoice="INV-SPLIT-001", delivery="DN-SPLIT-001").status_code == 400
+    second = physical_receipt(invoice="INV-SPLIT-001", delivery="DN-SPLIT-002")
+    assert second.status_code == 201, second.data
+    assert first.data["id"] != second.data["id"]
+    # A third physical delivery must not exceed the approved LPO balance.
+    assert physical_receipt(invoice="INV-SPLIT-001", delivery="DN-SPLIT-003", quantity="2.0000").status_code == 400
+    third = physical_receipt(delivery="DN-SPLIT-003")
+    assert third.status_code == 201, third.data
+    order.refresh_from_db()
+    assert order.status == POStatus.RECEIVED
+    receipts = list(GoodsReceiptNote.objects.filter(purchase_order=order))
+    assert len(receipts) == 3
+    assert len({receipt.grn_number for receipt in receipts}) == 3
+    assert all(receipt.blind_count_locked_at for receipt in receipts)
+    assert not InventoryBalance.objects.filter(item=item, store=store).exists()
+    assert physical_receipt(invoice="INV-NEW", delivery="DN-NEW").status_code == 400
+
+
+@pytest.mark.django_db
+def test_same_invoice_across_lpos_requires_distinct_delivery_evidence():
+    employee, department, supplier, item = create_procurement_context()
+    branch = Branch.objects.create(name="Repeat Article Branch")
+    employee.branch = branch
+    employee.save(update_fields=("branch", "updated_at"))
+    for index in ("A", "B"):
+        requisition = PurchaseRequisition.objects.create(
+            requester=employee, department=department, branch=branch,
+            reason="Repeat article delivery " + index, status=PRStatus.APPROVED,
+        )
+        RequisitionItem.objects.create(
+            requisition=requisition, item=item,
+            quantity=Decimal("2.0000"), approved_quantity=Decimal("2.0000"),
+        )
+        order = PurchaseOrder.objects.create(
+            requisition=requisition, supplier=supplier,
+            ordered_by=employee, po_number="REPEAT-ARTICLE-" + index,
+        )
+        PurchaseOrderItem.objects.create(
+            purchase_order=order, item=item,
+            quantity=Decimal("2.0000"), unit_cost=Decimal("30000.00"),
+        )
+        authorize_order_for_test(order)
+        order.issue(sent_by=employee, sent_to_email=supplier.email)
+    orders = list(PurchaseOrder.objects.filter(po_number__startswith="REPEAT-ARTICLE-").order_by("po_number"))
+    from apps.procurement.models import GoodsReceiptNote
+    GoodsReceiptNote.objects.create(
+        purchase_order=orders[0], received_by=employee, supplier_invoice_no="INV-REPEAT",
+        delivery_note_no="DELIVERY-A",
+    )
+    unproven = GoodsReceiptNote(
+        purchase_order=orders[1], received_by=employee, supplier_invoice_no="INV-REPEAT",
+    )
+    with pytest.raises(ValidationError):
+        unproven.full_clean()
+    separate = GoodsReceiptNote(
+        purchase_order=orders[1], received_by=employee, supplier_invoice_no="INV-REPEAT",
+        delivery_note_no="DELIVERY-B",
+    )
+    separate.full_clean()

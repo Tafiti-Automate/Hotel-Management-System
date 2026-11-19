@@ -1611,8 +1611,15 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
         payload_lines = request.data.get("lines") or []
         short_delivery_reason = str(request.data.get("short_delivery_reason") or "").strip()
 
-        if not supplier_invoice_no:
-            raise ValidationError({"supplier_invoice_no": "Enter the supplier invoice number."})
+        # Receiving is a record of a physical delivery, not necessarily an
+        # invoice-matching event. Suppliers may deliver before invoicing.
+        if not supplier_invoice_no and not delivery_note_no:
+            raise ValidationError({
+                "supplier_invoice_no": (
+                    "Enter the genuine supplier invoice number or a delivery note "
+                    "reference for this physical delivery."
+                ),
+            })
         if not isinstance(payload_lines, list) or not payload_lines:
             raise ValidationError({"lines": "Enter the quantity received for at least one LPO item."})
 
