@@ -730,7 +730,7 @@ function LegacyApproval({
             return <div className="hod-legacy-line" key={lineId}>
               <div className="hod-line-copy"><strong>{id(line.item_name) || itemName(data, line.item)}</strong><span>Requested: {formatQty(max)} {unitAbbr(data, line.unit)}</span></div>
               <label><span>Approved quantity</span><input type="number" min="0" max={max} step="0.01" value={quantities[lineId] ?? ''} onChange={(event) => setQuantities({ ...quantities, [lineId]: event.target.value })} /></label>
-              {current === 0 && <label className="span-2"><span>Line rejection reason</span><input value={reasons[lineId] || ''} onChange={(event) => setReasons({ ...reasons, [lineId]: event.target.value })} placeholder="Required when approving zero" /></label>}
+              {current < max && <label className="span-2"><span>{current === 0 ? 'Reason for rejecting this article *' : 'Reason for quantity reduction *'}</span><input required aria-label={`Reason for reducing ${id(line.item_name) || itemName(data, line.item)}`} value={reasons[lineId] || ''} onChange={(event) => setReasons({ ...reasons, [lineId]: event.target.value })} placeholder={current === 0 ? 'Explain why this article is rejected' : 'e.g. Still in stock'} /></label>}
             </div>
           })}
         </div>
