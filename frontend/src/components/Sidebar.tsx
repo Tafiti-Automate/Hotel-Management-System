@@ -80,6 +80,8 @@ const roleNavigation: Record<string, NavGroup[]> = {
       { route: 'suppliers', label: 'Suppliers', icon: 'local_shipping' },
       { route: 'purchasing-quotes', label: 'Supplier quote approvals', icon: 'request_quote' },
       { route: 'supplierItems', label: 'Supplier prices', icon: 'receipt_long' },
+      { route: 'locations', label: 'Stores management', icon: 'warehouse' },
+      { route: 'departments', label: 'Departments management', icon: 'account_tree' },
       { route: 'categories', label: 'Major & Item Groups', icon: 'category' },
       { route: 'items', label: 'Articles', icon: 'inventory_2' },
       { route: 'uoms', label: 'Units & conversions', icon: 'straighten' },
