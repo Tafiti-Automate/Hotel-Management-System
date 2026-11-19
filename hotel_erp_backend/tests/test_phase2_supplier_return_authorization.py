@@ -66,3 +66,38 @@ def test_supplier_return_lines_cannot_be_changed_for_another_hotel():
     with patch("apps.procurement.views.user_has_role", return_value=True):
         with pytest.raises(PermissionDenied, match="different hotel"):
             view._require_draft_return(_supplier_return(hotel_id=9))
+
+def test_supplier_return_creation_allows_other_branch_of_same_hotel():
+    view = SupplierReturnViewSet()
+    view.request = SimpleNamespace(user=_user(branch_id=1, hotel_id=5))
+    receipt = SimpleNamespace(
+        status="posted",
+        purchase_order=SimpleNamespace(
+            store_id=10,
+            store=SimpleNamespace(branch=SimpleNamespace(hotel_id=5)),
+        ),
+    )
+    serializer = SimpleNamespace(
+        validated_data={"goods_receipt": receipt, "store": _supplier_return().store},
+        save=lambda **kwargs: kwargs,
+    )
+    with patch("apps.procurement.views.user_has_role", return_value=True):
+        assert view.perform_create(serializer) is None
+
+
+def test_supplier_return_creation_rejects_another_hotel():
+    view = SupplierReturnViewSet()
+    view.request = SimpleNamespace(user=_user(hotel_id=5))
+    receipt = SimpleNamespace(
+        status="posted",
+        purchase_order=SimpleNamespace(
+            store_id=10,
+            store=SimpleNamespace(branch=SimpleNamespace(hotel_id=9)),
+        ),
+    )
+    serializer = SimpleNamespace(
+        validated_data={"goods_receipt": receipt, "store": _supplier_return().store},
+    )
+    with patch("apps.procurement.views.user_has_role", return_value=True):
+        with pytest.raises(ValidationError, match="posted GRN"):
+            view.perform_create(serializer)

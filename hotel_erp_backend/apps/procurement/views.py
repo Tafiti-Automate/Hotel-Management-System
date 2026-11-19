@@ -2669,7 +2669,7 @@ class GoodsInspectionItemViewSet(CreatedByModelMixin, ModelViewSet):
             user.is_superuser or not user_has_role(user, *RECEIVING_ROLES)
             or not employee or not employee.is_active or not employee.branch_id
             or inspection.goods_receipt.received_by_id != employee.pk
-            or inspection.goods_receipt.purchase_order.requisition.branch_id != employee.branch_id
+            or inspection.goods_receipt.purchase_order.store.branch.hotel_id != employee.branch.hotel_id
         ):
             raise PermissionDenied(
                 "Only the active Receiving Clerk assigned to this property's GRN can record inspection lines."

@@ -3011,10 +3011,18 @@ class SupplierReturn(BaseModel):
                 stock_on_hand = balance.quantity_in_stock if balance else Decimal("0.00")
                 if stock_on_hand < quantity:
                     raise ValidationError("Insufficient stock on hand for the supplier return.")
-            for line in items:
-                balance = InventoryBalance.objects.select_for_update().get(item=line.item, store=supplier_return.store)
-                balance.quantity_in_stock -= line.base_quantity
+            # Deduct each article once, even when the draft contains multiple
+            # lines for the same article. Keep all deductions inside the transaction.
+            for item_id, quantity in requested.items():
+                balance = InventoryBalance.objects.select_for_update().get(
+                    item_id=item_id, store=supplier_return.store
+                )
+                balance.quantity_in_stock -= quantity
                 balance.save(update_fields=["quantity_in_stock", "updated_at"])
+            for line in items:
+                balance = InventoryBalance.objects.get(
+                    item_id=line.item_id, store=supplier_return.store
+                )
                 # Inventory leaves at the store's transaction-time WAC.
                 # Supplier credit valuation is separately based on original
                 # invoiced/received value, and may differ from current WAC.
