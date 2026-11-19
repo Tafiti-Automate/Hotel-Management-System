@@ -55,3 +55,21 @@ test('quotation workspace keeps selection visible and preserves compact keyboard
  assert.match(css,/min-width:740px/)
  assert.match(css,/quote-v2-summary :is\(span,strong,small\)/)
 })
+
+
+test('quotation article explorer uses true green major folders and yellow subfolders',()=>{
+ const ui=readFileSync(new URL('../../screens/SupplierQuotationOptionOne.tsx',import.meta.url),'utf8')
+ const style=readFileSync(new URL('../../quotation-option-one.css',import.meta.url),'utf8')
+ assert.match(ui,/function TreeFolder\(/)
+ assert.match(ui,/<svg viewBox="0 0 28 24"/)
+ assert.match(ui,/<TreeFolder kind="main" expanded=\{open\}/)
+ assert.match(ui,/<TreeFolder kind="sub" expanded=\{groupOpen\}/)
+ assert.match(ui,/aria-expanded=\{open\}/)
+ assert.match(ui,/aria-expanded=\{groupOpen\}/)
+ assert.match(ui,/<Icon name="inventory_2" size=\{15\}/)
+ assert.doesNotMatch(ui,/<Icon name="folder"/)
+ assert.match(style,/\.quote-v2-folder-icon\{/)
+ assert.match(style,/--folder-face:#218d53/)
+ assert.match(style,/\.quote-v2-folder-icon\.is-sub\{/)
+ assert.match(style,/--folder-face:#ebba37/)
+})

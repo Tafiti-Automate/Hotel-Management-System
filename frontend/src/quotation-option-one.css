@@ -118,3 +118,32 @@
   .quote-v2-summary-grid{grid-template-columns:minmax(0,1fr)}
   .quote-v2-review-panel dl{grid-template-columns:minmax(0,1fr)}
 }
+
+
+/* True filled folder silhouettes: green major groups, yellow item groups. */
+.quote-v2-folder-icon{
+  --folder-back:#17663f;
+  --folder-face:#218d53;
+  --folder-sheen:rgba(255,255,255,.34);
+  display:inline-flex;align-items:center;justify-content:center;
+  flex:0 0 25px;width:25px;height:25px;
+}
+.quote-v2-folder-icon.is-sub{
+  --folder-back:#ab7415;
+  --folder-face:#ebba37;
+  --folder-sheen:rgba(255,255,255,.55);
+  flex-basis:23px;width:23px;height:23px;
+}
+.quote-v2-tree-root>.quote-v2-folder-icon,.quote-v2-tree-group-btn>.quote-v2-folder-icon{flex:0 0 25px;min-width:25px;width:25px;height:25px;overflow:visible}
+.quote-v2-tree-root>.quote-v2-folder-icon.is-sub,.quote-v2-tree-group-btn>.quote-v2-folder-icon.is-sub{flex-basis:23px;min-width:23px;width:23px;height:23px}
+.quote-v2-folder-svg{display:block;width:100%;height:100%;overflow:visible;filter:drop-shadow(0 1px 1px rgba(0,0,0,.10))}
+.quote-v2-folder-tab{fill:var(--folder-back)}
+.quote-v2-folder-face{fill:var(--folder-face)}
+.quote-v2-folder-sheen{fill:none;stroke:var(--folder-sheen);stroke-width:1.3;stroke-linecap:round}
+.quote-v2-tree-root,.quote-v2-tree-group-btn{gap:8px}
+.quote-v2-tree-root>span:not(.quote-v2-folder-icon),.quote-v2-tree-group-btn>span:not(.quote-v2-folder-icon){min-width:0}
+.quote-v2-tree-root:focus-visible,.quote-v2-tree-group-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.quote-v2-tree-root[aria-expanded="true"]>.quote-v2-folder-icon,.quote-v2-tree-group-btn[aria-expanded="true"]>.quote-v2-folder-icon{transform:translateY(-1px)}
+.quote-v2-tree-group-btn{color:var(--text-muted)}
+.quote-v2-tree-root:hover .quote-v2-folder-svg,.quote-v2-tree-group-btn:hover .quote-v2-folder-svg{filter:drop-shadow(0 2px 2px rgba(0,0,0,.14))}
+@media(max-width:780px){.quote-v2-folder-icon{flex-basis:24px;width:24px;height:24px}.quote-v2-folder-icon.is-sub{flex-basis:22px;width:22px;height:22px}}

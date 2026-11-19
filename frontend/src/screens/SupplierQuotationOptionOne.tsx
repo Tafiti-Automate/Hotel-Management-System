@@ -20,6 +20,24 @@ function articleKeyFromItem(item: Row) {
   return text(item.id) || `name:${key(item.name)}`
 }
 
+
+/**
+ * Filled, native folder silhouettes for the category hierarchy.
+ * The shared Icon component deliberately maps "folder" to inventory_2
+ * because its bundled font omits a real folder glyph.
+ */
+function TreeFolder({ kind, expanded }: { kind: 'main' | 'sub'; expanded: boolean }) {
+  return <span className={`quote-v2-folder-icon is-${kind}`} aria-hidden="true">
+    <svg viewBox="0 0 28 24" focusable="false" className="quote-v2-folder-svg">
+      <path className="quote-v2-folder-tab" d="M2.4 5.1c0-1.1.9-2 2-2h5.8c.55 0 1.05.23 1.42.63l1.9 2.05h9.9c1.18 0 2.12.94 2.12 2.12v10.54c0 1.52-1.18 2.67-2.7 2.67H5.12c-1.5 0-2.72-1.2-2.72-2.7V5.1Z" />
+      {expanded
+        ? <path className="quote-v2-folder-face" d="M5.05 9.6h18.7c1.35 0 2.25 1.12 1.93 2.38l-1.83 7.04c-.24.99-1.1 1.64-2.1 1.64H4.2c-1.44 0-2.4-1.28-2.03-2.64l1.77-6.78c.24-.96 1.04-1.64 2.1-1.64Z" />
+        : <path className="quote-v2-folder-face" d="M2.4 9.16h23.14v9.26c0 1.52-1.18 2.67-2.7 2.67H5.12c-1.5 0-2.72-1.2-2.72-2.7V9.16Z" />}
+      <path className="quote-v2-folder-sheen" d={expanded ? "M5.65 11.7h17.05" : "M4.55 11.2h18.7"} />
+    </svg>
+  </span>
+}
+
 export default function SupplierQuotationOptionOne() {
   const app = useApp()
   const categories = app.data.categories || []
@@ -260,7 +278,7 @@ export default function SupplierQuotationOptionOne() {
             const groups = (childrenByParent.get(rootId) || []).filter((group) => (itemsByCategory.get(text(group.id)) || []).some((item) => eligibleItemIds.has(text(item.id))))
             if (!rootItems.length && !groups.length) return null
             const open = expanded.has(rootId)
-            return <section key={rootId} className="quote-v2-tree-section"><button type="button" className="quote-v2-tree-root" onClick={() => toggle(rootId)}><Icon name={open ? 'expand_more' : 'chevron_right'} size={16} /><Icon name="folder" size={15} /><span>{text(root.name)}</span><small>{rootItems.length + groups.reduce((total, group) => total + (itemsByCategory.get(text(group.id)) || []).filter((item) => eligibleItemIds.has(text(item.id))).length, 0)}</small></button>{open && <div className="quote-v2-tree-children">{rootItems.map(renderArticle)}{groups.map((group) => { const groupId = text(group.id); const groupItems = (itemsByCategory.get(groupId) || []).filter((item) => eligibleItemIds.has(text(item.id))); const groupOpen = expanded.has(groupId); return <div key={groupId} className="quote-v2-tree-group"><button type="button" className="quote-v2-tree-group-btn" onClick={() => toggle(groupId)}><Icon name={groupOpen ? 'expand_more' : 'chevron_right'} size={15} /><Icon name="folder" size={14} /><span>{text(group.name)}</span><small>{groupItems.length}</small></button>{groupOpen && <div className="quote-v2-tree-articles">{groupItems.map(renderArticle)}</div>}</div> })}</div>}</section>
+            return <section key={rootId} className="quote-v2-tree-section"><button type="button" className="quote-v2-tree-root" aria-expanded={open} title={`Major group: ${text(root.name)}`} onClick={() => toggle(rootId)}><Icon name={open ? 'expand_more' : 'chevron_right'} size={16} /><TreeFolder kind="main" expanded={open} /><span>{text(root.name)}</span><small>{rootItems.length + groups.reduce((total, group) => total + (itemsByCategory.get(text(group.id)) || []).filter((item) => eligibleItemIds.has(text(item.id))).length, 0)}</small></button>{open && <div className="quote-v2-tree-children">{rootItems.map(renderArticle)}{groups.map((group) => { const groupId = text(group.id); const groupItems = (itemsByCategory.get(groupId) || []).filter((item) => eligibleItemIds.has(text(item.id))); const groupOpen = expanded.has(groupId); return <div key={groupId} className="quote-v2-tree-group"><button type="button" className="quote-v2-tree-group-btn" aria-expanded={groupOpen} title={`Item group: ${text(group.name)}`} onClick={() => toggle(groupId)}><Icon name={groupOpen ? 'expand_more' : 'chevron_right'} size={15} /><TreeFolder kind="sub" expanded={groupOpen} /><span>{text(group.name)}</span><small>{groupItems.length}</small></button>{groupOpen && <div className="quote-v2-tree-articles">{groupItems.map(renderArticle)}</div>}</div> })}</div>}</section>
           })}
           {!eligibleItems.length && <div className="quote-v2-empty-small"><Icon name="search_off" size={20} /><strong>No matching articles</strong><span>Change the search or filters.</span></div>}
         </div>
