@@ -36,3 +36,85 @@
 .application-root.screen-app .quote-v2-uom small,.application-root.screen-app .quote-v2-base-hint,.application-root.screen-app .quote-v2-ineligible{display:block;color:var(--text-muted);font-size:10px;line-height:1.4;margin-top:3px}
 .application-root.screen-app .quote-v2-ineligible{color:var(--bad)}
 .application-root.screen-app .quote-v2-selection-reason{padding:10px 12px;font-size:11px;line-height:1.5;color:var(--text-muted);background:var(--surface-2);border-top:1px solid var(--border)}
+
+/* Enterprise quotation comparison refinement — compact, responsive, legible. */
+.quote-v2{min-height:0}
+.quote-v2-layout{grid-template-columns:minmax(250px,290px) minmax(0,1fr) minmax(245px,275px);align-items:start;min-height:0}
+.quote-v2-explorer{max-height:calc(100vh - 180px);min-height:420px}
+.quote-v2-main{gap:11px}
+.quote-v2-comparison{flex:0 0 auto}
+.quote-v2-table-wrap{flex:initial;max-height:min(58vh,540px);overflow:auto;scrollbar-gutter:stable}
+.quote-v2-table-guidance{margin:0;padding:7px 12px;color:var(--text-muted);background:var(--surface-2);font-size:11px;line-height:1.4;border-bottom:1px solid var(--border)}
+.application-root.screen-app .quote-v2-table{width:100%;min-width:740px;table-layout:fixed;font-size:11px}
+.application-root.screen-app .quote-v2-table :is(th,td){padding:11px 9px!important;vertical-align:middle}
+.application-root.screen-app .quote-v2-table :is(th,td):nth-child(1){width:27%}
+.application-root.screen-app .quote-v2-table :is(th,td):nth-child(2){width:17%}
+.application-root.screen-app .quote-v2-table :is(th,td):nth-child(3){width:16%}
+.application-root.screen-app .quote-v2-table :is(th,td):nth-child(4){width:16%}
+.application-root.screen-app .quote-v2-table :is(th,td):nth-child(5){width:16%;min-width:0;white-space:normal}
+.application-root.screen-app .quote-v2-table :is(th,td):nth-child(6){width:8%;white-space:normal}
+.application-root.screen-app .quote-v2-table th{font-size:10px!important;line-height:1.35;white-space:normal}
+.application-root.screen-app .quote-v2-table td{font-size:11px!important;line-height:1.4}
+.quote-v2-number{text-align:right!important;font-variant-numeric:tabular-nums}
+.quote-v2-number .quote-v2-price{font-size:11.5px;letter-spacing:-.02em}
+.quote-v2-lead{font-variant-numeric:tabular-nums;white-space:nowrap}
+.quote-v2-supplier-button{display:block;width:100%;padding:2px 0;border:0;border-radius:3px;background:transparent;color:var(--text);font-size:11.5px;font-weight:800;line-height:1.35;text-align:left;cursor:pointer;overflow-wrap:anywhere}
+.quote-v2-supplier-button:hover{color:var(--accent);text-decoration:underline;text-underline-offset:2px}
+.quote-v2-supplier-button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.quote-v2-supplier-button[aria-pressed="true"]{color:var(--accent)}
+.quote-v2-supplier-cell small{margin-top:4px;font-size:10px;overflow-wrap:anywhere}
+.quote-v2-uom strong{display:block;color:var(--text);font-size:11px}
+.application-root.screen-app .quote-v2-uom small{font-size:10px;white-space:normal}
+.quote-v2-lowest-badge{font-size:9px;letter-spacing:.02em}
+.quote-v2-summary-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.quote-v2-summary{min-height:83px;padding:11px 12px}
+.quote-v2-summary :is(span,strong,small){white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+.quote-v2-summary span{color:var(--text-muted);font-size:10px;line-height:1.35}
+.quote-v2-summary strong{font-size:15px;line-height:1.3;letter-spacing:-.015em}
+.quote-v2-summary small{color:var(--text-muted);font-size:10.5px;line-height:1.4}
+.quote-v2-article.is-active{outline:1px solid color-mix(in srgb,var(--accent) 32%,var(--border));outline-offset:-1px}
+.quote-v2-article-copy strong{font-size:11.5px}
+.quote-v2-article-copy small,.quote-v2-article-count{font-size:10px}
+.quote-v2-tree-root{font-size:11.5px!important}
+.quote-v2-tree-group-btn{font-size:11px!important}
+.quote-v2-explorer-head strong{font-size:13px}
+.quote-v2-explorer-head small{font-size:11px;color:var(--text-muted)}
+.quote-v2-search input{font-size:12px!important}
+.quote-v2-choice small,.quote-v2-choice span{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.4}
+.quote-v2-choice small{font-size:10px}
+.quote-v2-choice strong{font-size:12px}
+.quote-v2-choice span{font-size:10.5px}
+.quote-v2-check strong{font-size:10.5px}
+.quote-v2-check small{font-size:11px;color:var(--text-muted);line-height:1.4}
+.quote-v2-decision-card header h3{font-size:13px!important}
+.quote-v2-action{font-size:11px!important;min-height:39px}
+.quote-v2-note p{font-size:10.5px}
+.quote-v2-validity{font-size:10px;line-height:1.4}
+.quote-v2-expiry-alert{display:flex;align-items:flex-start;gap:8px;margin:8px 3px;padding:9px;border:1px solid color-mix(in srgb,var(--warn) 32%,var(--border));border-radius:8px;background:var(--warn-soft);color:var(--text);font-size:11px;line-height:1.45}
+.quote-v2-expiry-alert>svg,.quote-v2-expiry-alert>span:first-child{flex:none;color:var(--warn)}
+.quote-v2-review-panel{border:1px solid var(--border);border-radius:10px;background:var(--surface);padding:12px 14px;box-shadow:0 1px 3px rgba(15,23,42,.025)}
+.quote-v2-review-panel header{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.quote-v2-review-panel header span{color:var(--text-muted);font-size:11px;font-weight:780;text-transform:uppercase;letter-spacing:.035em}
+.quote-v2-review-panel header strong{min-width:0;overflow-wrap:anywhere;color:var(--text);font-size:12px}
+.quote-v2-review-panel dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 16px;margin:0}
+.quote-v2-review-panel dt{margin-bottom:2px;color:var(--text-muted);font-size:10px}
+.quote-v2-review-panel dd{margin:0;color:var(--text);font-size:11px;font-weight:700;overflow-wrap:anywhere}
+.quote-v2-review-panel p{margin:11px 0 0;padding-top:8px;border-top:1px solid var(--border);color:var(--text-muted);font-size:10.5px;line-height:1.5}
+@media(max-width:1380px){
+  .quote-v2-layout{grid-template-columns:minmax(225px,275px) minmax(0,1fr)}
+  .quote-v2-decision{grid-column:2}
+}
+@media(max-width:1060px){
+  .quote-v2-layout{grid-template-columns:minmax(205px,245px) minmax(0,1fr)}
+  .quote-v2-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:780px){
+  .quote-v2-layout{display:flex;flex-direction:column}
+  .quote-v2-explorer{max-height:350px;min-height:0}
+  .quote-v2-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .quote-v2-review-panel dl{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+}
+@media(max-width:450px){
+  .quote-v2-summary-grid{grid-template-columns:minmax(0,1fr)}
+  .quote-v2-review-panel dl{grid-template-columns:minmax(0,1fr)}
+}

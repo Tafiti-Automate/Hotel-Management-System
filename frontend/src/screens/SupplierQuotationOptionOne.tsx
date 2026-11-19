@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { currencyMoney } from '../lib/theme'
 import { businessDate, comparableQuote, rankedQuotes } from '../lib/quotationComparison'
@@ -34,6 +34,7 @@ export default function SupplierQuotationOptionOne() {
   const [selectedArticleId, setSelectedArticleId] = useState('')
   const [selectedQuoteId, setSelectedQuoteId] = useState('')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const activeArticleRef = useRef<HTMLButtonElement | null>(null)
 
   const permissionMetadata = app.user.permissions.length > 0
   const canAdd = app.user.isSuperuser || app.user.permissions.includes('inventory.add_supplieritemprice') || (!permissionMetadata && app.user.isStaff)
@@ -147,6 +148,24 @@ export default function SupplierQuotationOptionOne() {
   const selectedItem = items.find((item) => text(item.id) === selectedArticleId) || null
   const selectedCategory = selectedItem ? categories.find((category) => text(category.id) === text(selectedItem.categoryId)) : null
   const selectedMajor = selectedCategory?.parentId ? categories.find((category) => text(category.id) === text(selectedCategory.parentId)) : null
+
+  // Reveal the selected article on first load and after changing filters.
+  useEffect(() => {
+    if (!selectedArticleId || !selectedCategory) return
+    setExpanded((current) => {
+      const categoryId = text(selectedCategory.id)
+      const majorId = text(selectedMajor?.id)
+      if (current.has(categoryId) && (!majorId || current.has(majorId))) return current
+      const next = new Set(current)
+      next.add(categoryId)
+      if (majorId) next.add(majorId)
+      return next
+    })
+  }, [selectedArticleId, selectedCategory?.id, selectedMajor?.id])
+
+  useEffect(() => {
+    if (selectedArticleId) activeArticleRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [selectedArticleId, expanded])
   const articleQuotes = useMemo(() => {
     if (!selectedItem) return []
     return quotesByArticle.get(articleKeyFromItem(selectedItem)) || quotesByArticle.get(`name:${key(selectedItem.name)}`) || []
@@ -154,7 +173,8 @@ export default function SupplierQuotationOptionOne() {
   const compared = useMemo(() => articleQuotes.map(quote=>comparableQuote(quote,selectedItem,app.data.itemUnits||[],today)),
     [articleQuotes,selectedItem,app.data.itemUnits,today])
   const filteredQuotes = useMemo(() => compared.filter(row => quoteMatchesFilters(row.quote)), [compared, supplierFilter, statusFilter])
-  const eligibleQuotes = compared.filter(row=>row.eligible)
+  // The filters also scope recommendations and totals; never recommend a hidden supplier.
+  const eligibleQuotes = filteredQuotes.filter(row=>row.eligible)
   const ranked = rankedQuotes(eligibleQuotes)
   const eligibleCurrencies = new Set(eligibleQuotes.map(row=>row.currency))
   const comparisonCurrency = eligibleCurrencies.size===1 ? Array.from(eligibleCurrencies)[0] : ''
@@ -170,7 +190,8 @@ export default function SupplierQuotationOptionOne() {
       return
     }
     if (!selectedQuoteId || !filteredQuotes.some((row) => text(row.quote.id) === selectedQuoteId)) {
-      setSelectedQuoteId(text(recommendedQuote?.id || filteredQuotes[0].quote.id))
+      const visibleRecommendation = filteredQuotes.find((row) => text(row.quote.id) === text(recommendedQuote?.id))
+      setSelectedQuoteId(text((visibleRecommendation || filteredQuotes[0]).quote.id))
     }
   }, [filteredQuotes, recommendedQuote, selectedQuoteId])
 
@@ -207,7 +228,7 @@ export default function SupplierQuotationOptionOne() {
     if (!eligibleItemIds.has(itemId)) return null
     const quoteCount = (quotesByArticle.get(articleKeyFromItem(item)) || quotesByArticle.get(`name:${key(item.name)}`) || []).length
     const active = selectedArticleId === itemId
-    return <button key={itemId} type="button" className={`quote-v2-article ${active ? 'is-active' : ''}`} onClick={() => chooseItem(item)}>
+    return <button key={itemId} ref={active ? activeArticleRef : undefined} aria-pressed={active} type="button" className={`quote-v2-article ${active ? 'is-active' : ''}`} onClick={() => chooseItem(item)}>
       <span className="quote-v2-article-icon"><Icon name="inventory_2" size={15} /></span>
       <span className="quote-v2-article-copy"><strong>{text(item.name)}</strong><small>{text(item.sku) || 'No SKU'}</small></span>
       <span className="quote-v2-article-count">{quoteCount}</span>
@@ -249,33 +270,48 @@ export default function SupplierQuotationOptionOne() {
         {selectedItem ? <>
           <section className="quote-v2-selected-card">
             <div className="quote-v2-selected-top"><div className="quote-v2-product-mark"><Icon name="inventory_2" size={21} /></div><div className="quote-v2-selected-copy"><span>Selected article</span><h2>{text(selectedItem.name)}</h2><p>{[selectedMajor?.name, selectedCategory?.name, text(selectedItem.sku) && `SKU: ${text(selectedItem.sku)}`].filter(Boolean).join(' › ')}</p></div><div className="quote-v2-selected-actions"><button type="button" className="quote-v2-btn secondary" onClick={() => app.openDetail('items', text(selectedItem.id), 'supplierItems')}>View article details</button>{canAdd && <button type="button" className="quote-v2-btn primary" onClick={() => addQuotationForItem(selectedItem)}><Icon name="add" size={15} />Add quotation</button>}</div></div>
-            <div className="quote-v2-summary-grid"><Summary label="Supplier options" value={String(supplierCount)} sub={`${eligibleQuotes.length} eligible quotation${eligibleQuotes.length === 1 ? '' : 's'}`} /><Summary label="Lowest eligible / base unit" value={comparisonCurrency && ranked.length ? currencyMoney(lowestPrice, comparisonCurrency) : eligibleCurrencies.size > 1 ? 'Multiple currencies' : '—'} sub={comparisonCurrency && highestPrice > lowestPrice ? `Range to ${currencyMoney(highestPrice, comparisonCurrency)} / ${text(selectedItem.uom)}` : 'Valid normalized prices only'} /><Summary label="Purchase UOM" value={units.size === 1 ? Array.from(units)[0] : units.size ? `${units.size} options` : '—'} sub={Array.from(units).slice(0, 2).join(', ') || 'No active UOM'} /><Summary label="Base unit" value={text(selectedItem.uom) || '—'} sub={`SKU: ${text(selectedItem.sku) || 'not recorded'}`} /></div>
+            <div className="quote-v2-summary-grid">
+              <Summary label="Eligible suppliers" value={String(supplierCount)} sub={`${eligibleQuotes.length} eligible of ${filteredQuotes.length} shown quotations`} />
+              <Summary label={`Lowest / ${text(selectedItem.uom) || 'base unit'}`} value={comparisonCurrency && ranked.length ? currencyMoney(lowestPrice, comparisonCurrency) : eligibleCurrencies.size > 1 ? 'Mixed currencies' : '—'} sub={comparisonCurrency && highestPrice > lowestPrice ? `Range up to ${currencyMoney(highestPrice, comparisonCurrency)}` : comparisonCurrency ? 'Normalized eligible price' : 'No comparable price'} />
+              <Summary label="Purchase units" value={units.size === 1 ? Array.from(units)[0] : units.size ? `${units.size} options` : '—'} sub={`Base: ${text(selectedItem.uom) || '—'}${units.size > 1 ? ` · ${Array.from(units).slice(0, 3).join(', ')}` : ''}`} />
+            </div>
           </section>
 
           <section className="quote-v2-comparison"><header><div><span>Supplier price comparison</span><h3>Compare quotations</h3></div><small>{filteredQuotes.length} quotation{filteredQuotes.length === 1 ? '' : 's'} · {eligibleQuotes.length} eligible</small></header>
+            <p className="quote-v2-table-guidance">Select a supplier to review the full quotation. Scroll sideways for more columns on smaller screens.</p>
             <div className="quote-v2-table-wrap" tabIndex={0} role="region" aria-label="Scrollable supplier quotation comparison">
-              <table className="quote-v2-table"><thead><tr><th>Supplier</th><th>Purchase UOM</th><th>Quoted price</th><th>Price / {text(selectedItem.uom)||'base unit'}</th><th>Quotation</th><th>Validity</th><th>Lead time</th><th>Action</th></tr></thead>
+              <table className="quote-v2-table"><thead><tr><th scope="col">Supplier / reference</th><th scope="col">Purchase unit</th><th scope="col" className="quote-v2-number">Quoted price</th><th scope="col" className="quote-v2-number">Per {text(selectedItem.uom)||'base unit'}</th><th scope="col">Validity</th><th scope="col">Lead time</th></tr></thead>
                 <tbody>{filteredQuotes.slice().sort((a,b)=>(a.eligible===b.eligible?0:a.eligible?-1:1) || (a.currency===b.currency?a.basePrice-b.basePrice:0)).map((row) => {
                   const quote=row.quote, quoteId=text(quote.id),selected=selectedQuoteId===quoteId
                   const lowest=Boolean(row.eligible && recommended && row.currency===recommended.currency && row.basePrice===lowestPrice)
                   return <tr key={quoteId} className={`${lowest?'is-lowest':''} ${selected?'is-selected':''}`} aria-selected={selected} onClick={()=>setSelectedQuoteId(quoteId)}>
-                    <td><div className="quote-v2-supplier-cell">{lowest&&<span className="quote-v2-lowest-badge">Lowest eligible price</span>}<strong>{text(quote.supplier)||'Unnamed supplier'}</strong><small>{text(quote.supplierSku)||'No supplier reference'}</small></div></td>
+                    <td><div className="quote-v2-supplier-cell">{lowest&&<span className="quote-v2-lowest-badge">Lowest eligible price</span>}<button type="button" className="quote-v2-supplier-button" aria-pressed={selected} title={text(quote.supplier)} onClick={()=>setSelectedQuoteId(quoteId)}>{text(quote.supplier)||'Unnamed supplier'}</button><small title={text(quote.quotationReference)||'No reference'}>{text(quote.quotationReference) ? `Quote: ${text(quote.quotationReference)}` : 'Quotation reference not recorded'}</small></div></td>
                     <td><div className="quote-v2-uom"><strong>{text(quote.unit)||'—'}</strong><small>{Number.isFinite(row.factor)&&row.factor>0?`1 ${text(quote.unit)} = ${row.factor.toLocaleString('en-UG',{maximumFractionDigits:4})} ${text(selectedItem.uom)}`:'Conversion unavailable'}</small></div></td>
-                    <td><strong className="quote-v2-price">{currencyMoney(quote.price||0,row.currency)}</strong></td>
-                    <td><strong className="quote-v2-price">{Number.isFinite(row.basePrice)&&row.basePrice>0?currencyMoney(row.basePrice,row.currency):'—'}</strong><small className="quote-v2-base-hint">per {text(selectedItem.uom)||'base unit'}</small></td>
-                    <td><div className="quote-v2-ref"><strong>{text(quote.quotationReference)||'Not recorded'}</strong><small>{quote.effectiveFrom?`From ${text(quote.effectiveFrom).slice(0,10)}`:'No effective date'}</small></div></td>
+                    <td className="quote-v2-number"><strong className="quote-v2-price">{currencyMoney(quote.price||0,row.currency)}</strong></td>
+                    <td className="quote-v2-number"><strong className="quote-v2-price">{Number.isFinite(row.basePrice)&&row.basePrice>0?currencyMoney(row.basePrice,row.currency):'—'}</strong></td>
+                    
                     <td><span className={`quote-v2-validity tone-${row.expiry.tone}`} title={text(quote.quotationValidUntil)}>{row.expiry.label}</span>{!row.eligible&&<small className="quote-v2-ineligible">{row.reason}</small>}</td>
-                    <td>{num(quote.leadTime)} day{num(quote.leadTime)===1?'':'s'}</td>
-                    <td><button type="button" aria-pressed={selected} className={`quote-v2-select-btn ${selected?'is-selected':''}`} onClick={()=>setSelectedQuoteId(quoteId)}>{selected?'Selected':'Select'}</button></td>
+                    <td className="quote-v2-lead">{num(quote.leadTime)} day{num(quote.leadTime)===1?'':'s'}</td>
+                    
                   </tr>
                 })}</tbody>
               </table>{!filteredQuotes.length&&<div className="quote-v2-empty"><Icon name="request_quote" size={24}/><strong>No quotations match</strong><span>Change supplier/status filters or add a quotation.</span></div>}
             </div></section>
+            {selectedQuote && <section className="quote-v2-review-panel" aria-label="Selected quotation details">
+              <header><span>Selected quotation details</span><strong>{text(selectedQuote.supplier) || 'Supplier'}</strong></header>
+              <dl>
+                <div><dt>Quotation reference</dt><dd>{text(selectedQuote.quotationReference) || 'Not recorded'}</dd></div>
+                <div><dt>Supplier item code</dt><dd>{text(selectedQuote.supplierSku) || 'Not recorded'}</dd></div>
+                <div><dt>Effective from</dt><dd>{text(selectedQuote.effectiveFrom).slice(0, 10) || 'Not recorded'}</dd></div>
+                <div><dt>Valid until</dt><dd>{text(selectedQuote.quotationValidUntil).slice(0, 10) || 'Not recorded'}</dd></div>
+              </dl>
+              <p>Eligible quotations are ranked by normalized base-unit price within one currency. Selecting a quotation does not approve an LPO.</p>
+            </section>}
         </> : <div className="quote-v2-empty quote-v2-main-empty"><Icon name="inventory_2" size={24} /><strong>Select an article</strong><span>Choose an article from the explorer to compare supplier quotations.</span></div>}
       </main>
 
       <aside className="quote-v2-decision">
-        <section className="quote-v2-decision-card"><header><span>Decision support</span><h3>Why choose this supplier?</h3></header>{selectedQuote ? <><div className="quote-v2-choice"><span className={`quote-v2-choice-icon ${isRecommended ? 'is-best' : ''}`}><Icon name={isRecommended ? 'verified' : 'local_shipping'} size={18} /></span><div><small>{isRecommended ? 'Recommended eligible option' : selectedComparison?.eligible ? 'Selected eligible option' : 'Not eligible for recommendation'}</small><strong>{text(selectedQuote.supplier) || 'Supplier'}</strong><span>{currencyMoney(selectedQuote.price || 0, selectedCurrency)} · {text(selectedQuote.unit) || 'UOM not set'}</span></div></div><div className="quote-v2-checks"><DecisionCheck icon="payments" title="Cost position" value={!selectedComparison?.eligible ? selectedComparison?.reason || 'Not eligible' : isRecommended ? 'Lowest eligible normalized price' : priceDelta > 0 && comparisonCurrency ? `${currencyMoney(priceDelta, comparisonCurrency)} per base unit above lowest` : 'Eligible normalized quote'} tone={isRecommended ? 'good' : !selectedComparison?.eligible ? 'bad' : 'info'} /><DecisionCheck icon="verified_user" title="Supplier record" value={selectedComparison?.eligible ? 'Eligible quotation' : 'Not eligible for recommendation'} tone={selectedComparison?.eligible ? 'good' : 'bad'} /><DecisionCheck icon="event_available" title="Quotation validity" value={selectedValidity?.label || 'Not recorded'} tone={selectedValidity?.tone === 'good' ? 'good' : selectedValidity?.tone === 'bad' ? 'bad' : 'warn'} /><DecisionCheck icon="schedule" title="Lead time" value={`${num(selectedQuote.leadTime)} day${num(selectedQuote.leadTime) === 1 ? '' : 's'}`} tone="info" /><div className="quote-v2-selection-reason">{isRecommended && ranked.length>1 && ranked[1].basePrice===lowestPrice ? `Price tie resolved by lead time, then quotation validity. ${text(selectedQuote.supplier)} ranks first.` : !recommended ? "No eligible, single-currency quotation can currently be recommended." : isRecommended ? "Lowest comparable eligible base-unit price." : "This selection is shown for review; it is not the recommended quote."}</div></div></> : <div className="quote-v2-empty-small"><Icon name="info" size={19} /><strong>No supplier selected</strong><span>Select a quotation to see decision support.</span></div>}</section>
+        <section className="quote-v2-decision-card"><header><span>Decision support</span><h3>Why choose this supplier?</h3></header>{selectedQuote ? <><div className="quote-v2-choice"><span className={`quote-v2-choice-icon ${isRecommended ? 'is-best' : ''}`}><Icon name={isRecommended ? 'verified' : 'local_shipping'} size={18} /></span><div><small>{isRecommended ? 'Recommended eligible option' : selectedComparison?.eligible ? 'Selected eligible option' : 'Not eligible for recommendation'}</small><strong>{text(selectedQuote.supplier) || 'Supplier'}</strong><span>{currencyMoney(selectedQuote.price || 0, selectedCurrency)} · {text(selectedQuote.unit) || 'UOM not set'}</span></div></div><div className="quote-v2-checks"><DecisionCheck icon="payments" title="Cost position" value={!selectedComparison?.eligible ? selectedComparison?.reason || 'Not eligible' : isRecommended ? 'Lowest eligible normalized price' : priceDelta > 0 && comparisonCurrency ? `${currencyMoney(priceDelta, comparisonCurrency)} per base unit above lowest` : 'Eligible normalized quote'} tone={isRecommended ? 'good' : !selectedComparison?.eligible ? 'bad' : 'info'} /><DecisionCheck icon="verified_user" title="Supplier record" value={selectedComparison?.eligible ? 'Eligible quotation' : 'Not eligible for recommendation'} tone={selectedComparison?.eligible ? 'good' : 'bad'} /><DecisionCheck icon="event_available" title="Quotation validity" value={selectedValidity?.label || 'Not recorded'} tone={selectedValidity?.tone === 'good' ? 'good' : selectedValidity?.tone === 'bad' ? 'bad' : 'warn'} /><DecisionCheck icon="schedule" title="Lead time" value={`${num(selectedQuote.leadTime)} day${num(selectedQuote.leadTime) === 1 ? '' : 's'}`} tone="info" />{selectedValidity?.days !== null && selectedValidity?.days !== undefined && selectedValidity.days >= 0 && selectedValidity.days <= 7 && <div className="quote-v2-expiry-alert" role="status"><Icon name="warning_amber" size={17}/><span>Quotation expires {selectedValidity.days === 0 ? 'today' : `in ${selectedValidity.days} day${selectedValidity.days === 1 ? '' : 's'}`}. Verify its validity for the intended purchase date.</span></div>}<div className="quote-v2-selection-reason">{isRecommended && ranked.length>1 && ranked[1].basePrice===lowestPrice ? `Price tie resolved by lead time, then quotation validity. ${text(selectedQuote.supplier)} ranks first.` : eligibleCurrencies.size > 1 ? "Eligible quotations use different currencies. Do not compare their nominal prices without an approved exchange rate." : !recommended ? "No currently eligible quotation can be recommended." : isRecommended ? "Lowest comparable eligible base-unit price." : "This selection is shown for review; it is not the recommended quote."}</div></div></> : <div className="quote-v2-empty-small"><Icon name="info" size={19} /><strong>No supplier selected</strong><span>Select a quotation to see decision support.</span></div>}</section>
         <section className="quote-v2-actions-card"><header><span>Quick actions</span></header><button type="button" className="quote-v2-action primary" onClick={() => app.navTo('workflow-procure', 'Procurement workbench')}><Icon name="shopping_cart" size={16} /><span>Open Procurement Workbench</span><Icon name="arrow_forward" size={14} /></button>{selectedQuote && canEdit && <button type="button" className="quote-v2-action" onClick={() => app.openEdit(text(selectedQuote.id), 'supplierItems')}><Icon name="edit" size={16} /><span>Edit selected quotation</span><Icon name="chevron_right" size={14} /></button>}{selectedItem && canAdd && <button type="button" className="quote-v2-action" onClick={() => addQuotationForItem(selectedItem)}><Icon name="add" size={16} /><span>Add quotation for article</span><Icon name="chevron_right" size={14} /></button>}</section>
         <section className="quote-v2-note"><Icon name="info" size={16} /><p>Price selection is decision support only. Procurement workflow, approval rules and LPO controls remain unchanged.</p></section>
       </aside>
