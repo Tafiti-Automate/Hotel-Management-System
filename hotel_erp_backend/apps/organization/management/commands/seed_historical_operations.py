@@ -466,6 +466,12 @@ class Command(BaseCommand):
                 created_by=admin,
             )
             count.populate_from_system_balances()
+            # This command generates synthetic historical demo operations. Populate
+            # an explicitly simulated physical count for every demo article.
+            # Production counting always starts blank and requires real entry.
+            for demo_line in count.items.all():
+                demo_line.physical_quantity = demo_line.system_quantity
+                demo_line.save(update_fields=("physical_quantity", "updated_at"))
             count.submit()
             count.approve(approved_by=approver)
             count.apply_variances()
