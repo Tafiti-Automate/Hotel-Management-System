@@ -911,8 +911,15 @@ class GoodsReceiptItemSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         request = self.context.get("request")
         if has_role(request, "Receiving Clerk") and not can_view_commercial_data(request):
-            data.pop("ordered_quantity", None)
-            data.pop("unit_cost", None)
+            # Keep the initial physical count blind. Once the count is locked,
+            # the approved LPO price may be printed on the immutable GRN.
+            if not instance.goods_receipt.blind_count_locked_at:
+                data.pop("ordered_quantity", None)
+                data.pop("unit_cost", None)
+            else:
+                data["unit_cost"] = str(instance.purchase_order_item.unit_cost)
+                data["vat_rate"] = str(instance.purchase_order_item.applied_vat_rate)
+                data["ordered_quantity"] = str(instance.purchase_order_item.approved_quantity)
         return data
 
     def validate(self, attrs):

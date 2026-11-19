@@ -5,9 +5,8 @@ import type { HotelRecord } from '../lib/api'
  * Lake Victoria Serena-style Goods Received Note (PURCHASE ORDER RECEIVING).
  * A4 landscape specimen layout, with real per-property and per-GRN information.
  *
- * Pricing is intentionally not inferred for a blind Receiving Clerk: the
- * backend omits unit_cost from that role's GRN responses. In this case we
- * preserve the commercial columns but print an em dash, never UGX 0.00.
+ * The initial count remains blind; after locking, the backend exposes the
+ * approved LPO price and VAT snapshot for the printable GRN.
  */
 export type GrnComparisonLine = {
   purchase_order_item: string
@@ -102,7 +101,7 @@ function getLines(
       && str(line.unit_cost) !== ''
     const price = costKnown ? decimal(line.unit_cost) : null
     const baseRate = line.vat_percent ?? line.vat_rate
-    const vatRaw = baseRate ?? 18 // Existing hotel GRN rule; no tax model change.
+    const vatRaw = baseRate ?? 0 // Never assume VAT on a non-VAT article.
     const vatPercent = decimal(vatRaw) <= 1 ? decimal(vatRaw) * 100 : decimal(vatRaw)
     const net = price === null ? null : roundCents(accepted * price)
     const vat = net === null ? null : roundCents(net * vatPercent / 100)
