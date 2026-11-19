@@ -132,5 +132,5 @@ def test_guest_supplies_root_major_group_can_be_created_with_existing_item_group
         format="json",
     )
     assert child.status_code == 201, child.data
-    assert child.data["parent"] == response.data["id"]
+    assert str(child.data["parent"]) == str(response.data["id"])
     assert child.data["group_type"] == "Item Group"
