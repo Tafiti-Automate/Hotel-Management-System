@@ -427,7 +427,13 @@ async function readList(path: string): Promise<ApiRecord[]> {
     pages += 1
     const response = await fetchWithTimeout(url, { headers: { Accept: 'application/json', ...authHeaders() } })
     if (!response.ok) {
-      throw new ApiHttpError(explainReadFailure(path, response.status), response.status)
+      // Correlate production failures with Django/Vercel logs without exposing
+      // error tracebacks, credentials or database details to the browser.
+      const requestId = response.headers.get('X-Request-ID')
+      const detail = explainReadFailure(path, response.status)
+      throw new ApiHttpError(requestId && response.status >= 500
+        ? `${detail} Support reference: ${requestId}.`
+        : detail, response.status)
     }
 
     const body = await response.json()

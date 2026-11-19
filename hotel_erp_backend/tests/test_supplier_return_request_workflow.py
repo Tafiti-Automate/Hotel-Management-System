@@ -116,3 +116,50 @@ def test_receiving_rejection_uses_no_stock_movement(return_context):
     balance = InventoryBalance.objects.get(item=item, store=store)
     assert balance.quantity_in_stock == original
     assert balance.quantity_quarantined == Decimal("0.0000")
+
+
+@pytest.mark.django_db
+def test_storekeeper_can_load_empty_return_request_inbox(return_context):
+    keeper, _controller, _supplier, _item, _store, _grn = return_context
+    response = client_for(keeper).get("/api/v1/supplier-return-requests/")
+    assert response.status_code == 200, response.data
+    assert response.data["count"] == 0
+
+
+@pytest.mark.django_db
+def test_supplier_return_report_list_serializes_all_display_fields(return_context):
+    keeper, controller, _supplier, _item, _store, _grn = return_context
+    created = client_for(keeper).post(
+        "/api/v1/supplier-return-requests/", payload(return_context), format="json",
+    )
+    assert created.status_code == 201, created.data
+    for employee in (keeper, controller):
+        response = client_for(employee).get("/api/v1/supplier-return-requests/")
+        assert response.status_code == 200, response.data
+        assert response.data["count"] == 1
+        reported = response.data["results"][0]
+        assert reported["article_name"]
+        assert reported["store_name"]
+        assert reported["supplier_name"]
+        assert reported["grn_number"]
+        assert reported["reporter_name"]
+
+
+@pytest.mark.django_db
+def test_main_branch_without_parent_hotel_is_scoped_and_can_submit_reports(return_context):
+    keeper, controller, _supplier, item, store, grn = return_context
+    branch = store.branch
+    branch.hotel = None
+    branch.save(update_fields=["hotel", "updated_at"])
+    client = client_for(keeper)
+    empty = client.get("/api/v1/supplier-return-requests/")
+    assert empty.status_code == 200, empty.data
+    report = client.post(
+        "/api/v1/supplier-return-requests/", payload(return_context), format="json",
+    )
+    assert report.status_code == 201, report.data
+    cost_controller_inbox = client_for(controller).get("/api/v1/supplier-return-requests/")
+    assert cost_controller_inbox.status_code == 200, cost_controller_inbox.data
+    assert cost_controller_inbox.data["count"] == 1
+    balance = InventoryBalance.objects.get(item=item, store=store)
+    assert balance.quantity_quarantined == Decimal("2.0000")

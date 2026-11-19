@@ -42,8 +42,8 @@ class SupplierReturnRequestViewSet(ModelViewSet):
     def _employee(self):
         user = self.request.user
         employee = getattr(user, "employee_profile", None)
-        if not employee or not employee.is_active or not employee.branch_id or not employee.branch.hotel_id:
-            raise PermissionDenied("An active employee assigned to a hotel is required.")
+        if not employee or not employee.is_active or not employee.branch_id:
+            raise PermissionDenied("An active employee assigned to a branch is required.")
         return employee
 
     def get_queryset(self):
@@ -51,7 +51,9 @@ class SupplierReturnRequestViewSet(ModelViewSet):
             employee = self._employee()
         except PermissionDenied:
             return self.queryset.none()
-        qs = self.queryset.filter(store__branch__hotel_id=employee.branch.hotel_id)
+        qs = (self.queryset.filter(store__branch__hotel_id=employee.branch.hotel_id)
+              if employee.branch.hotel_id
+              else self.queryset.filter(store__branch_id=employee.branch_id))
         user = self.request.user
         if _has_role(user, "Cost Controller"):
             return qs
@@ -79,8 +81,11 @@ class SupplierReturnRequestViewSet(ModelViewSet):
             raise ValidationError("The selected article does not belong to this GRN.")
         if store.pk != receipt.purchase_order.store_id or line.item_id is None:
             raise ValidationError("Return source store must match the original GRN.")
-        if store.branch.hotel_id != employee.branch.hotel_id:
-            raise PermissionDenied("Cannot report goods for a different hotel.")
+        if employee.branch.hotel_id:
+            if store.branch.hotel_id != employee.branch.hotel_id:
+                raise PermissionDenied("Cannot report goods for a different hotel.")
+        elif store.branch_id != employee.branch_id:
+            raise PermissionDenied("Cannot report goods for a different branch.")
         if qty <= Decimal("0"):
             raise ValidationError("Return quantity must be positive.")
         if source == SupplierReturnRequest.SOURCE_RECEIVING:
@@ -130,7 +135,9 @@ class SupplierReturnRequestViewSet(ModelViewSet):
             ["Cost Controller"],
             title="Supplier return report awaiting review",
             message=f"{store.name}: {line.item.name}, {qty} base units. GRN {receipt.grn_number}. Reason: {obj.reason}",
-            hotel=store.branch.hotel, created_by=user,
+            hotel=store.branch.hotel if store.branch.hotel_id else None,
+            branch=store.branch if not store.branch.hotel_id else None,
+            created_by=user,
             deduplication_key=f"supplier-return-report:{obj.pk}",
         ))
 

@@ -70,6 +70,7 @@ export default function SupplierReturnReporter() {
       ? 'Report goods rejected in a GRN inspection. Rejected goods never enter Stock on Hand.'
       : 'Report damaged, defective, expired, or incorrect goods from a posted GRN. Requested quantities are quarantined immediately.'}>
     <StateMessage loading={loading} error={error || failure} />
+    {!loading && error && <button type="button" className={buttonClass} onClick={() => void reload()}>Retry loading return reports</button>}
     {!loading && !error && <div className="mc-split mc-admin-split">
       <section className="mc-dense-panel mc-form-panel">
         <header className="mc-panel-title">Report goods requiring supplier return</header>
@@ -151,6 +152,7 @@ export function SupplierReturnReviewQueue() {
   return <section className="mc-dense-panel" aria-label="Supplier return review queue">
     <header className="mc-panel-title">Reported goods · Cost Controller review and dispatch</header>
     <StateMessage loading={loading} error={error || failure} />
+    {!loading && error && <button type="button" className={buttonClass} onClick={() => void reload()}>Retry loading Cost Controller return queue</button>}
     {!loading && !error && <>
       <OperationalSummary label="Supplier return control queue" metrics={[
         { label: 'Awaiting review', value: pending, description: 'Reported by Receiving / Stores', tone: pending ? 'attention' : 'neutral' },
