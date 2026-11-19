@@ -1598,9 +1598,8 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
     def receive_delivery(self, request, pk=None):
         """Receive an issued LPO and generate a GRN.
 
-        Receiving and inventory posting are deliberately separate controls. The
-        clerk first records the physical delivery and the GRN becomes Received;
-        the existing post-to-inventory action is then used for the Posting stage.
+        The Receiving Clerk records, locks and posts accepted stock atomically.
+        There is no separate Store Keeper posting stage.
         """
         employee = self._require_receiving_clerk(request)
         supplier_invoice_no = str(request.data.get("supplier_invoice_no") or "").strip()
@@ -1757,6 +1756,11 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                 receipt.status = GoodsReceiptStatus.RECEIVED
                 receipt.blind_count_locked_at = timezone.now()
                 receipt.save(update_fields=["status", "blind_count_locked_at", "updated_at"])
+
+                # Receiving Clerk completion posts accepted goods to Stock on Hand
+                # in the same database transaction as the immutable GRN.
+                # Any posting failure rolls back the receipt and its inspection.
+                receipt.post_to_inventory(posted_by=employee)
 
                 # A supplier delivery is complete when the recorded GRNs cover
                 # the full approved LPO quantities.  Do not wait for inventory
