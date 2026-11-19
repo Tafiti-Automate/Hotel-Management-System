@@ -152,6 +152,10 @@ class Item(BaseModel):
         validators=[validate_non_negative_decimal],
         help_text="Optional maximum stock holding in base units.",
     )
+    vat_applicable = models.BooleanField(
+        default=False,
+        help_text="Whether this Article is VAT-taxable for future LPO lines; choose explicitly in the Article master.",
+    )
     batch_tracking = models.BooleanField(default=False)
     expiry_tracking = models.BooleanField(default=False)
     requires_delivery_temperature = models.BooleanField(

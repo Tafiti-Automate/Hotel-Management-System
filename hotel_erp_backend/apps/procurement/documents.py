@@ -242,11 +242,10 @@ def build_purchase_order_pdf(
         ("RIGHTPADDING", (0, 0), (-1, -1), 0),
     ]))
 
-    vat_rate = _vat_rate()
-    vat_percent = vat_rate * Decimal("100")
     net_total = order.total_amount or Decimal("0.00")
-    vat_total = (net_total * vat_rate).quantize(Decimal("0.01"))
-    gross_total = net_total + vat_total
+    # Line snapshots prevent later Article edits from rewriting approved LPOs.
+    vat_total = order.vat_total
+    gross_total = order.gross_total
 
     line_rows = [[
         Paragraph("Article", small),
@@ -262,14 +261,15 @@ def build_purchase_order_pdf(
             line.item.base_unit.abbreviation if line.item.base_unit else line.item.unit
         )
         line_net = line.line_total or Decimal("0.00")
-        line_amount = line_net + (line_net * vat_rate)
+        line_rate = line.applied_vat_rate
+        line_amount = line.gross_line_total
         line_rows.append([
             Paragraph(f"{_text(line.item.sku)} &nbsp; {_text(line.item.name)}", normal),
             Paragraph(_money(line.approved_quantity), right),
             Paragraph(_text(unit_name), normal),
             Paragraph(_money(line.unit_cost), right),
             Paragraph(_money(line_net), right),
-            Paragraph(f"{vat_percent:.0f}%", right),
+            Paragraph(f"{(line_rate * Decimal('100')):g}%", right),
             Paragraph(_money(line_amount), right),
         ])
     lines = Table(
@@ -292,7 +292,7 @@ def build_purchase_order_pdf(
 
     total_table = Table([
         [Paragraph("Net Amount", small), Paragraph(_money(net_total), right)],
-        [Paragraph(f"VAT {vat_percent:.0f}%", small), Paragraph(_money(vat_total), right)],
+        [Paragraph("VAT (selected Articles)", small), Paragraph(_money(vat_total), right)],
         [Paragraph(f"<b>Total Amount {_text(order.requisition.currency)}</b>", normal), Paragraph(f"<b>{_money(gross_total)}</b>", right)],
     ], colWidths=[45 * mm, 32 * mm])
     total_table.hAlign = "RIGHT"

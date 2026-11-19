@@ -193,6 +193,7 @@ class ItemSerializer(serializers.ModelSerializer):
             "base_unit_locked",
             "reorder_level",
             "maximum_level",
+            "vat_applicable",
             "batch_tracking",
             "expiry_tracking",
             "requires_delivery_temperature",

@@ -195,7 +195,7 @@ export default function InventoryCatalogue() {
     }
   }
   const downloadTemplate = () => {
-    const content = 'major_group,item_group,item_name,sku,base_unit,reorder_level,maximum_level,business_type,brand,barcode,batch_tracking,expiry_tracking,is_active\nBeverages,Soft Drinks,Cola,BEV-SD-001,pcs,100,1000,Resale / Revenue Item,Coca Cola,,no,no,yes\n'
+    const content = 'major_group,item_group,item_name,sku,base_unit,reorder_level,maximum_level,business_type,brand,barcode,vat_applicable,batch_tracking,expiry_tracking,is_active\nBeverages,Soft Drinks,Cola,BEV-SD-001,pcs,100,1000,Resale / Revenue Item,Coca Cola,,yes,no,no,yes\n'
     const url = URL.createObjectURL(new Blob([content], { type: 'text/csv;charset=utf-8' }))
     const link = document.createElement('a')
     link.href = url

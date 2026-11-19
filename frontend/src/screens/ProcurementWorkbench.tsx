@@ -1560,7 +1560,9 @@ function LpoSummary({ order, lines, names, quantityValue, quantityMax, onQuantit
       <ReadOnlyValue label="LPO number" value={id(order.lpo_number) || id(order.po_number)} />
       <ReadOnlyValue label="Supplier" value={supplierName} />
       <ReadOnlyValue label="Status" value={friendlyLpoStatus(id(order.status), approvalSteps)} />
-      <ReadOnlyValue label="LPO total" value={money(totalOverride ?? order.total_amount)} />
+      <ReadOnlyValue label="Net Amount" value={money(totalOverride ?? order.total_amount)} />
+      {totalOverride == null && <ReadOnlyValue label="VAT (selected Articles)" value={money(order.vat_total)} />}
+      {totalOverride == null && <ReadOnlyValue label="Total incl. VAT" value={money(order.gross_total ?? order.total_amount)} />}
     </div>
     {approvalSteps.length > 0 && (() => {
       const firstPending = approvalSteps.findIndex((step) => id(step.status) === 'pending')

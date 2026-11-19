@@ -1247,6 +1247,17 @@ class PurchaseOrder(BaseModel):
     def editable(self):
         return self.status == POStatus.DRAFT
 
+    @property
+    def vat_total(self):
+        return sum(
+            (line.vat_amount for line in self.items.select_related("item").all()),
+            Decimal("0.00"),
+        ).quantize(Decimal("0.01"))
+
+    @property
+    def gross_total(self):
+        return (self.total_amount or Decimal("0.00")) + self.vat_total
+
     def update_total_amount(self):
         self.total_amount = sum(
             (item.line_total for item in self.items.all()),
@@ -1840,6 +1851,23 @@ class PurchaseOrder(BaseModel):
         return {"can_proceed": not blockers, "blockers": blockers, "warnings": warnings}
 
 
+
+
+def configured_purchase_vat_rate():
+    """Configured standard VAT rate as a fraction, for new VAT-taxable LPO lines."""
+    try:
+        rate = Decimal(str(getattr(settings, "VAT_RATE", "0.18")))
+    except (TypeError, ValueError):
+        rate = Decimal("0.18")
+    if not rate.is_finite():
+        rate = Decimal("0.18")
+    if rate > Decimal("1"):
+        rate /= Decimal("100")
+    if rate < Decimal("0") or rate > Decimal("1"):
+        raise ValidationError("Configured VAT rate must be between 0% and 100%.")
+    return rate.quantize(Decimal("0.0001"))
+
+
 class PurchaseOrderItem(BaseModel):
     purchase_order = models.ForeignKey(
         PurchaseOrder,
@@ -1943,6 +1971,13 @@ class PurchaseOrderItem(BaseModel):
         decimal_places=2,
         validators=[validate_positive_decimal],
     )
+    vat_rate_snapshot = models.DecimalField(
+        max_digits=6,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        help_text="VAT fraction captured from the Article while LPO is draft. Historic approved orders are retained.",
+    )
     expiry_date = models.DateField(null=True, blank=True)
     destination_type = models.CharField(max_length=20, choices=RequisitionItem.DESTINATION_CHOICES, default=RequisitionItem.DESTINATION_STORE)
     destination_store = models.ForeignKey(
@@ -1977,6 +2012,27 @@ class PurchaseOrderItem(BaseModel):
         return (self.approved_quantity or Decimal("0.00")) * (
             self.unit_cost or Decimal("0.00")
         )
+
+    @property
+    def applied_vat_rate(self):
+        if self.vat_rate_snapshot is not None:
+            return self.vat_rate_snapshot
+        if self.purchase_order_id and self.purchase_order.editable:
+            # A pre-migration draft LPO has not yet been committed.
+            return configured_purchase_vat_rate() if self.item.vat_applicable else Decimal("0.0000")
+        # Historical approved/issued LPOs were printed with universal VAT.
+        # Never silently rewrite tax on an approved purchase document.
+        return configured_purchase_vat_rate()
+
+    @property
+    def vat_amount(self):
+        return (self.line_total * self.applied_vat_rate).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP,
+        )
+
+    @property
+    def gross_line_total(self):
+        return self.line_total + self.vat_amount
 
     @property
     def approved_quantity(self):
@@ -2034,6 +2090,12 @@ class PurchaseOrderItem(BaseModel):
         self.base_quantity = self.item.quantity_in_base_units(
             self.quantity, self.unit
         ).quantize(Decimal("0.0001"))
+        if self.purchase_order_id and self.purchase_order.editable:
+            # Snapshot is finalised when the draft is submitted for approval.
+            # An Article tax edit affects future/draft orders, not approved ones.
+            self.vat_rate_snapshot = (
+                configured_purchase_vat_rate() if self.item.vat_applicable else Decimal("0.0000")
+            )
         # Before the LPO is submitted, Procurement is still editing its own
         # request.  Capture that latest draft as the immutable Finance baseline.
         if self.purchase_order_id and self.purchase_order.editable:

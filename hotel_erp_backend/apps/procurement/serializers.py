@@ -484,6 +484,8 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
     next_print_classification = serializers.CharField(read_only=True)
     print_count = serializers.SerializerMethodField()
     original_printed_at = serializers.SerializerMethodField()
+    vat_total = serializers.DecimalField(max_digits=17, decimal_places=2, read_only=True)
+    gross_total = serializers.DecimalField(max_digits=17, decimal_places=2, read_only=True)
 
     class Meta:
         model = PurchaseOrder
@@ -517,6 +519,8 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "supplier_acknowledged_by",
             "note",
             "total_amount",
+            "vat_total",
+            "gross_total",
             "approval_steps",
             "next_print_classification",
             "print_count",
@@ -547,6 +551,8 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "supplier_acknowledged_at",
             "supplier_acknowledged_by",
             "total_amount",
+            "vat_total",
+            "gross_total",
             "approval_steps",
             "created_at",
             "updated_at",
@@ -642,6 +648,9 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
     )
     approved_quantity = serializers.DecimalField(max_digits=14, decimal_places=4, read_only=True)
     approved_base_quantity = serializers.DecimalField(max_digits=14, decimal_places=4, read_only=True)
+    vat_rate_snapshot = serializers.DecimalField(max_digits=6, decimal_places=4, read_only=True)
+    vat_amount = serializers.DecimalField(max_digits=17, decimal_places=2, read_only=True)
+    gross_line_total = serializers.DecimalField(max_digits=17, decimal_places=2, read_only=True)
     previously_received_quantity = serializers.SerializerMethodField()
     outstanding_quantity = serializers.SerializerMethodField()
 
@@ -653,6 +662,7 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
             "id",
             "base_quantity",
             "line_total",
+            "vat_rate_snapshot", "vat_amount", "gross_line_total",
             "created_at",
             "updated_at",
             "created_by",

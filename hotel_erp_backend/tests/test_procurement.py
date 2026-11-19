@@ -2727,3 +2727,74 @@ def test_printed_approved_lpo_without_supplier_email_reaches_receiving_queue():
     visible = next(row for row in response.data["orders"] if row["id"] == str(order.pk))
     assert "total_amount" not in visible
     assert "unit_cost" not in response.data["orderItems"][0]
+
+
+@pytest.mark.django_db
+def test_article_vat_selection_is_snapshotted_on_new_lpo_lines_and_not_applied_to_nonvat():
+    employee, department, supplier, taxable = create_procurement_context()
+    taxable.vat_applicable = True
+    taxable.save(update_fields=["vat_applicable", "updated_at"])
+    untaxed = Item.objects.create(
+        category=taxable.category, name="Non-VAT Article Test", sku="VAT-FREE-ARTICLE",
+        unit=taxable.unit, base_unit=taxable.base_unit, reorder_level=Decimal("0.0000"),
+        vat_applicable=False,
+    )
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee, department=department, reason="Mixed VAT LPO",
+        status=PRStatus.APPROVED,
+    )
+    for item in (taxable, untaxed):
+        RequisitionItem.objects.create(
+            requisition=requisition, item=item, quantity=Decimal("2.0000"),
+            approved_quantity=Decimal("2.0000"),
+        )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition, supplier=supplier, ordered_by=employee,
+    )
+    taxed = PurchaseOrderItem.objects.create(
+        purchase_order=order, item=taxable, quantity=Decimal("2.0000"),
+        unit_cost=Decimal("100000.00"),
+    )
+    no_vat = PurchaseOrderItem.objects.create(
+        purchase_order=order, item=untaxed, quantity=Decimal("2.0000"),
+        unit_cost=Decimal("50000.00"),
+    )
+    assert taxed.vat_rate_snapshot == Decimal("0.1800")
+    assert no_vat.vat_rate_snapshot == Decimal("0.0000")
+    assert taxed.vat_amount == Decimal("36000.00")
+    assert no_vat.vat_amount == Decimal("0.00")
+    order.refresh_from_db()
+    assert order.total_amount == Decimal("300000.00")
+    assert order.vat_total == Decimal("36000.00")
+    assert order.gross_total == Decimal("336000.00")
+    taxable.vat_applicable = False
+    taxable.save(update_fields=["vat_applicable", "updated_at"])
+    assert taxed.vat_amount == Decimal("36000.00")
+    order.status = POStatus.APPROVED
+    order.save(update_fields=["status", "updated_at"])
+    pdf_data = build_purchase_order_pdf(order, classification="ORIGINAL COPY")
+    assert pdf_data.startswith(b"%PDF")
+
+
+@pytest.mark.django_db
+def test_no_vat_article_creates_zero_vat_lpo_and_tax_preference_serializes():
+    employee, department, supplier, item = create_procurement_context()
+    from apps.inventory.serializers import ItemSerializer
+    assert ItemSerializer(item).data["vat_applicable"] is False
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee, department=department, reason="No VAT LPO",
+        status=PRStatus.APPROVED,
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition, item=item, quantity=Decimal("10.0000"),
+        approved_quantity=Decimal("10.0000"),
+    )
+    order = PurchaseOrder.objects.create(requisition=requisition, supplier=supplier, ordered_by=employee)
+    line = PurchaseOrderItem.objects.create(
+        purchase_order=order, item=item, quantity=Decimal("10.0000"),
+        unit_cost=Decimal("30000.00"),
+    )
+    assert line.vat_rate_snapshot == Decimal("0.0000")
+    assert order.vat_total == Decimal("0.00")
+    assert order.gross_total == Decimal("300000.00")
+    assert PurchaseOrderSerializer(order).data["vat_total"] == "0.00"

@@ -115,6 +115,9 @@ export default function FormDrawer() {
     if (f.entity === 'items') {
       seed.batchTracking = existing?.batchTracking ? 'Yes' : 'No'
       seed.expiryTracking = existing?.expiryTracking ? 'Yes' : 'No'
+      seed.taxTreatment = existing
+        ? (existing.vatApplicable ? 'VAT applicable (18%)' : 'No VAT (0%)')
+        : ''
       if (existing) {
         const itemGroup = app.data.categories.find((category) => String(category.name) === String(existing.category))
         const majorGroup = app.data.categories.find((category) => String(category.id) === String(itemGroup?.parentId))
@@ -238,6 +241,14 @@ export default function FormDrawer() {
       }
     }
     if (f.entity === 'items') {
+      if (!['VAT applicable (18%)', 'No VAT (0%)'].includes(String(values.taxTreatment || ''))) {
+        app.showWorkflowAlert(
+          'VAT selection required',
+          'Choose VAT applicable or No VAT before saving this Article. Do not infer VAT from the Article name.',
+          'warning',
+        )
+        return
+      }
       if (!String(values.majorGroup || '').trim()) {
         app.showWorkflowAlert('Major Group required', 'Choose the Major Group before selecting an Item Group.', 'warning')
         return

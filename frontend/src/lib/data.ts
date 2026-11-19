@@ -60,6 +60,7 @@ export const cfg: Record<string, EntityConfig> = {
       { key: 'sku', label: 'SKU', w: '1fr', kind: 'mono' },
       { key: 'categoryPath', label: 'Major / item group', w: '1.35fr', kind: 'text' },
       { key: 'businessType', label: 'Type', w: '1.15fr', kind: 'status' },
+      { key: 'vatLabel', label: 'Purchase VAT', w: '1fr', kind: 'text' },
       { key: 'store', label: 'Store', w: '1.1fr', kind: 'text' },
       { key: 'onHand', label: 'On hand', w: '90px', kind: 'num', align: 'right' },
       { key: 'reorder', label: 'Reorder', w: '90px', kind: 'num', align: 'right' },
@@ -72,6 +73,7 @@ export const cfg: Record<string, EntityConfig> = {
       { key: 'majorGroup', label: 'Major group', type: 'select', opts: 'majorGroups', hint: 'Select the top-level inventory family first.' },
       { key: 'category', label: 'Item group', type: 'select', opts: 'itemGroups', hint: 'Only groups inside the selected Major Group are shown.' },
       { key: 'businessType', label: 'Business classification', type: 'select', opts: 'businessTypes' },
+      { key: 'taxTreatment', label: 'Purchase VAT treatment *', type: 'select', opts: 'vatTreatments', hint: 'Choose VAT applicable (18%) or No VAT (0%). This controls VAT on future LPO lines, not the Article category.' },
       { key: 'uom', label: 'Base stock unit', type: 'select', opts: 'uoms' },
       { key: 'reorder', label: 'Reorder level', type: 'number' },
       { key: 'batchTracking', label: 'Track batches / lots', type: 'select', opts: 'yesNo', hint: 'Turn on only when this Article needs supplier or lot traceability.' },
@@ -500,6 +502,7 @@ export function getOptions(key: string, data: Record<EntityKey, Row[]>): string[
   if (key === 'departments') return (data.departments || []).map((d) => d.name)
   if (key === 'employees') return (data.employees || []).map((e) => e.name)
   if (key === 'items') return (data.items || []).map((i) => i.name)
+  if (key === 'vatTreatments') return ['VAT applicable (18%)', 'No VAT (0%)']
   if (key === 'businessTypes') return ['Consumable / Operating Expense', 'Resale / Revenue Item', 'Fixed Asset', 'Service']
   if (key === 'unitRoles') return ['Purchase unit', 'Issue unit', 'Alternate unit', 'Base unit']
   if (key === 'reqTypes') return ['department', 'hotel_purchase']

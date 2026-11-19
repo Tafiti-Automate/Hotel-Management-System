@@ -377,6 +377,7 @@ class ItemViewSet(CostControllerAuthorityMixin, CreatedByModelMixin, ModelViewSe
             "base_unit": unit.pk,
             "reorder_level": decimal_value("reorder_level"),
             "maximum_level": decimal_value("maximum_level", nullable=True),
+            **({"vat_applicable": boolean_value("vat_applicable")} if "vat_applicable" in normalized and normalized["vat_applicable"] not in (None, "") else {}),
             "batch_tracking": boolean_value("batch_tracking"),
             "expiry_tracking": boolean_value("expiry_tracking"),
             "business_type": business_type,
