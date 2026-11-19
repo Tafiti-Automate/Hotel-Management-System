@@ -704,20 +704,31 @@ function itemLines(rows: ApiRecord[], itemNames: Map<string, string>, itemUnits:
   })
 }
 
-function findDataId(data: Record<EntityKey, Row[]>, entity: EntityKey, value: unknown): string {
-  const display = text(value)
+export function findDataId(data: Record<EntityKey, Row[]>, entity: EntityKey, value: unknown): string {
+  const display = text(value).trim()
+  // A blank optional parent is meaningful: it denotes a root Major Group.
+  // Never allow an absent field (such as category.abbr) to match a blank
+  // lookup and silently resolve to the first unrelated Item Group.
+  if (!display) return ''
   const row = (data[entity] || []).find((candidate) =>
-    text(candidate.id) === display ||
-    text(candidate.name) === display ||
-    text(candidate.abbr) === display ||
-    text(candidate.code) === display
+    [candidate.id, candidate.name, candidate.abbr, candidate.code].some(
+      (key) => key !== null && key !== undefined && text(key).trim() === display,
+    )
   )
   return text(row?.id)
 }
 
-function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey, Row[]>): Row {
+export function toBackendPayload(entity: EntityKey, values: Row, data: Record<EntityKey, Row[]>): Row {
   if (entity === 'categories') {
-    const parentId = findDataId(data, 'categories', values.parent)
+    const selectedParent = text(values.parent).trim()
+    const parentId = selectedParent ? findDataId(data, 'categories', selectedParent) : ''
+    if (selectedParent && !parentId) {
+      throw new Error('Select an existing Major Group; the chosen parent is not in the catalogue.')
+    }
+    const parentRecord = (data.categories || []).find((category) => text(category.id) === parentId)
+    if (parentRecord?.parentId) {
+      throw new Error('Choose a Major Group, not an Item Group, as the parent.')
+    }
     return {
       name: text(values.name),
       code: text(values.code),

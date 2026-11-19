@@ -103,3 +103,34 @@ def test_department_supervisor_can_read_but_cannot_create_catalogue_groups():
     # approved role template. This fixture must preserve read-only access.
     assert client.get("/api/v1/categories/").status_code == 200
     assert client.post("/api/v1/categories/", {"name": "Unapproved"}, format="json").status_code == 403
+
+
+@pytest.mark.django_db
+def test_guest_supplies_root_major_group_can_be_created_with_existing_item_groups():
+    """Client regression: GUEST SUPPLIES has no parent despite existing child groups."""
+    client, _ = client_for_group("Cost Controller", "guest")
+    beverage = Category.objects.create(name="Beverages")
+    Category.objects.create(name="Soft Drinks", parent=beverage)
+    response = client.post(
+        "/api/v1/categories/",
+        {
+            "name": "GUEST SUPPLIES", "description": "GUEST AMENITIES",
+            "code": "", "parent": None, "is_active": True,
+        },
+        format="json",
+    )
+    assert response.status_code == 201, response.data
+    assert response.data["parent"] is None
+    assert response.data["group_type"] == "Major Group"
+    assert response.data["description"] == "GUEST AMENITIES"
+    assert response.data["code"]
+    assert Category.objects.get(pk=response.data["id"]).parent_id is None
+
+    child = client.post(
+        "/api/v1/categories/",
+        {"name": "Guest Room Amenities", "parent": response.data["id"]},
+        format="json",
+    )
+    assert child.status_code == 201, child.data
+    assert child.data["parent"] == response.data["id"]
+    assert child.data["group_type"] == "Item Group"

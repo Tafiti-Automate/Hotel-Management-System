@@ -100,6 +100,11 @@ export default function FormDrawer() {
     if (!existing && f.initialValues) {
       Object.assign(seed, f.initialValues)
     }
+    // Opening the "New Major Group" action must never inherit the last
+    // Item Group's parent, even if the parent field is hidden.
+    if (f.entity === 'categories' && !f.id && f.preset === 'majorGroup') {
+      seed.parent = ''
+    }
     if (f.entity === 'requisitions') {
       seed.request_type = existing?.request_type || 'department'
       seed.procurement_source = existing?.procurement_source || 'manual'
@@ -242,7 +247,7 @@ export default function FormDrawer() {
     }
     if (f.entity === 'categories' && !f.id) {
       if (f.preset === 'majorGroup') {
-        out.parent = ''
+        out.parent = null
       }
       if (f.preset === 'itemGroup') {
         if (!String(values.parent || '').trim()) {
