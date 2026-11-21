@@ -92,3 +92,15 @@
     display: none !important;
   }
 }
+
+/* A selected purchase request is a working page, not a cramped side panel. */
+.application-root.screen-app .procurement-workbench-grid.is-review-page {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+.application-root.screen-app .procurement-detail-panel.procurement-review-page {
+  position: static !important;
+  width: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  overflow: visible !important;
+}

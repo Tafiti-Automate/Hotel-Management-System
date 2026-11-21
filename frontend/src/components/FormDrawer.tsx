@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useApp } from '../state/AppContext'
 import { HelpLabel } from './HelpLabel'
 import { Icon } from './Icon'
@@ -68,6 +68,8 @@ export default function FormDrawer() {
   const f = app.form
   const [values, setValues] = useState<Row>({})
   const [step, setStep] = useState(0)
+  const [requestedSearchField, setRequestedSearchField] = useState('')
+  const searchInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const [employeePhoto, setEmployeePhoto] = useState<File | null>(null)
   const [employeePhotoPreview, setEmployeePhotoPreview] = useState('')
   const roleKey = app.user.role.trim().toLowerCase()
@@ -133,6 +135,7 @@ export default function FormDrawer() {
     setEmployeePhoto(null)
     setEmployeePhotoPreview(f.entity === 'employees' ? String(existing?.photo || '') : '')
     setStep(0)
+    setRequestedSearchField('')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [f?.entity, f?.id, f?.preset, f?.initialValues, canPurchaseOnBehalf, canRequestOnBehalf, signedInEmployee?.id])
 
@@ -141,6 +144,18 @@ export default function FormDrawer() {
       if (employeePhotoPreview.startsWith('blob:')) URL.revokeObjectURL(employeePhotoPreview)
     }
   }, [employeePhotoPreview])
+
+  useEffect(() => {
+    if (f?.entity !== 'supplierItems' || step !== 0 || !requestedSearchField) return
+    const frame = window.requestAnimationFrame(() => {
+      const input = searchInputRefs.current[requestedSearchField]
+      if (!input) return
+      input.focus()
+      try { input.showPicker?.() } catch { /* Typing remains available when the browser blocks the picker. */ }
+      setRequestedSearchField('')
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [f?.entity, requestedSearchField, step])
 
   if (!f) return null
   const conf = cfg[f.entity]
@@ -158,6 +173,12 @@ export default function FormDrawer() {
   const wizard = wizardPages.length > 1
   const pageCount = wizardPages.length
   const pageFields = wizardPages[Math.min(step, pageCount - 1)]
+  const showSearchOptions = (fieldKey: string) => {
+    const input = searchInputRefs.current[fieldKey]
+    if (!input) return
+    input.focus()
+    try { input.showPicker?.() } catch { /* The focused search input is the fallback. */ }
+  }
   const title = f.id
     ? `Edit ${conf.singular || ''}`
     : f.preset === 'majorGroup'
@@ -302,9 +323,12 @@ export default function FormDrawer() {
                   : `Create a new ${String(conf.singular || 'record').toLowerCase()}`}
             </div>
           </div>
-          <button type="button" aria-label="Back to the previous page" title="Back" onClick={app.closeForm} disabled={app.formSaving} className="hover-text form-back-button" style={{ width: 32, height: 32, border: 'none', background: 'var(--surface-2)', borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: app.formSaving ? 'wait' : 'pointer', color: 'var(--text-muted)' }}>
-            <Icon name="arrow_back" size={19} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+            {f.entity === 'supplierItems' && <button type="button" onClick={() => { setStep(0); setRequestedSearchField('article') }} className="hover-surface2" style={{ height: 36, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '0 12px', border: '1px solid var(--border)', borderRadius: 9, background: 'var(--surface)', color: 'var(--accent)', cursor: 'pointer', font: 'inherit', fontSize: 12, fontWeight: 750 }}><Icon name="search" size={17} />Search supplier/article</button>}
+            <button type="button" aria-label="Back to the previous page" title="Back" onClick={app.closeForm} disabled={app.formSaving} className="hover-text form-back-button" style={{ width: 32, height: 32, border: 'none', background: 'var(--surface-2)', borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: app.formSaving ? 'wait' : 'pointer', color: 'var(--text-muted)' }}>
+              <Icon name="arrow_back" size={19} />
+            </button>
+          </div>
         </div>
 
         {wizard && <div className="form-step-progress" style={{ display: 'grid', gridTemplateColumns: `repeat(${pageCount},1fr)`, gap: 5, padding: '12px 22px', borderBottom: '1px solid var(--border)' }}>{Array.from({ length: pageCount }).map((_, index) => <span key={index} style={{ height: 3, borderRadius: 2, background: index <= step ? 'var(--accent)' : 'var(--border)' }} />)}</div>}
@@ -377,6 +401,8 @@ export default function FormDrawer() {
             const dependencyLocked = f.entity === 'items' && fd.opts === 'itemGroups' && !values.majorGroup
             const systemGenerated = (f.entity === 'items' && fd.key === 'sku') || (f.entity === 'categories' && fd.key === 'code')
             const selectLocked = fieldLocked || dependencyLocked
+            const quotationSearchField = f.entity === 'supplierItems' && ['supplier', 'article'].includes(fd.key)
+            const searchableSelect = !selectLocked && (quotationSearchField || options.length > 6)
             return (
               <div key={fd.key}>
                 <label><HelpLabel label={f.entity === 'categories' && f.preset === 'itemGroup' && fd.key === 'parent' ? 'Major group' : fd.label} style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 7 }} /></label>
@@ -387,15 +413,16 @@ export default function FormDrawer() {
                     <span style={{ color: 'var(--text-faint)', fontSize: 12 }}>{fd.key === 'store' ? 'Active issuing store' : 'From your account'}</span>
                   </div>
                 ) : isSelect ? (
-                  <div style={{ position: 'relative' }}>
-                    {options.length > 6 && !selectLocked ? (
+                  <div style={{ position: 'relative', display: quotationSearchField ? 'grid' : 'block', gridTemplateColumns: quotationSearchField ? 'minmax(0,1fr) auto' : undefined, gap: quotationSearchField ? 8 : undefined }}>
+                    {searchableSelect ? (
                       <>
-                        <input list={`form-options-${fd.key}`} value={String(values[fd.key] ?? '')}
+                        <input ref={(element) => { searchInputRefs.current[fd.key] = element }} list={`form-options-${fd.key}`} value={String(values[fd.key] ?? '')}
                           onChange={(e) => setVal(fd.key, e.target.value, false)}
                           aria-label={`Search ${fd.label}`} placeholder={`Search ${fd.label.toLowerCase()}…`}
                           autoComplete="off"
                           style={{ width: '100%', height: 42, border: '1px solid var(--border)', background: 'var(--surface-2)', borderRadius: 10, padding: '0 12px', fontSize: 13.5, color: 'var(--text)' }} />
                         <datalist id={`form-options-${fd.key}`}>{options.map(opt => <option key={opt} value={opt} />)}</datalist>
+                        {quotationSearchField && <button type="button" onClick={() => showSearchOptions(fd.key)} aria-label={`Open ${fd.label} search`} style={{ height: 42, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '0 13px', border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface)', color: 'var(--accent)', cursor: 'pointer', font: 'inherit', fontSize: 12, fontWeight: 750 }}><Icon name="search" size={16} />Search</button>}
                       </>
                     ) : (
                       <select disabled={selectLocked} value={values[fd.key] ?? ''} onChange={(e) => setVal(fd.key, e.target.value, false)} style={{ width: '100%', height: 42, border: '1px solid var(--border)', background: selectLocked ? 'var(--surface-3)' : 'var(--surface-2)', borderRadius: 10, padding: '0 12px', fontSize: 13.5, color: 'var(--text)' }}>

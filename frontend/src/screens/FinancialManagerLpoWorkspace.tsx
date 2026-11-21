@@ -263,14 +263,17 @@ export default function FinancialManagerLpoWorkspace() {
               return <button
                 key={id(order.id)}
                 type="button"
+                className={`finance-lpo-queue-row${active ? ' is-selected' : ''}`}
+                aria-pressed={active}
                 onClick={() => setSelectedOrderId(id(order.id))}
                 style={{
                   width: '100%',
                   border: 0,
                   borderTop: '1px solid var(--border)',
-                  borderLeft: active ? '3px solid var(--accent)' : '3px solid transparent',
+                  borderLeft: active ? '3px solid #2563eb' : '3px solid transparent',
                   padding: '13px 14px',
-                  background: active ? 'var(--accent-soft)' : 'var(--surface)',
+                  background: active ? 'color-mix(in srgb, #2563eb 9%, var(--surface))' : 'var(--surface)',
+                  boxShadow: active ? 'inset 0 0 0 1px color-mix(in srgb, #2563eb 18%, transparent)' : 'none',
                   textAlign: 'left',
                   cursor: 'pointer',
                   font: 'inherit',

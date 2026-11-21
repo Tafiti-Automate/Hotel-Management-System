@@ -442,6 +442,7 @@ export default function ProcurementWorkbench() {
     if (tabs.length && !tabs.some(([key]) => key === stage)) setStage(tabs[0][0])
   }, [stage, tabs])
   const canChangeStage = can(stagePermissions[stage].change)
+  const isPurchaseRequestReview = stage === 'quote' && Boolean(form.requisition)
   const canManageLpo = app.user.isSuperuser || ['system administrator', 'procurement manager', 'procurement officer'].includes(app.user.role.toLowerCase())
   const metrics = useMemo(() => {
     const openOrders = scopedData.orders.filter((order) => ['issued', 'partially_received'].includes(id(order.status)))
@@ -601,11 +602,12 @@ export default function ProcurementWorkbench() {
 
       {message && <div style={{ ...card, padding: 13, marginBottom: 14, borderColor: 'rgba(220,38,38,.3)', color: 'var(--bad)', fontSize: 12.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}><span>{message}</span><button type="button" onClick={() => void load()} style={secondary}>Retry</button></div>}
       {loading ? <div style={{ ...card, padding: 50, textAlign: 'center', color: 'var(--text-faint)' }}>Loading procurement records…</div> : (
-        <div className="workbench-grid procurement-workbench-grid" style={{ display: 'grid', gridTemplateColumns: role === 'general manager' && !form.order ? '1fr' : stage === 'lpo' && form.order ? 'minmax(0,.9fr) minmax(460px,1.1fr)' : 'minmax(0,1.45fr) minmax(340px,.75fr)', gap: 16, alignItems: 'start' }}>
-          <section className="procurement-queue-card" style={{ ...card, overflow: 'hidden' }}>
+        <div className={`workbench-grid procurement-workbench-grid${isPurchaseRequestReview ? ' is-review-page' : ''}`} style={{ display: 'grid', gridTemplateColumns: isPurchaseRequestReview || (role === 'general manager' && !form.order) ? 'minmax(0,1fr)' : stage === 'lpo' && form.order ? 'minmax(0,.9fr) minmax(460px,1.1fr)' : 'minmax(0,1.45fr) minmax(340px,.75fr)', gap: 16, alignItems: 'start' }}>
+          {!isPurchaseRequestReview && <section className="procurement-queue-card" style={{ ...card, overflow: 'hidden' }}>
             <StageTable stage={stage} lpoQueue={lpoQueue} data={scopedData} names={names} role={role} onSelect={selectWorkspaceRecord} />
-          </section>
-          {!(role === 'general manager' && !form.order) && <aside className="procurement-detail-panel" style={{ ...card, padding: 18 }}>
+          </section>}
+          {!(role === 'general manager' && !form.order) && <aside className={`procurement-detail-panel${isPurchaseRequestReview ? ' procurement-review-page' : ''}`} style={{ ...card, padding: 18 }}>
+            {isPurchaseRequestReview && <button type="button" onClick={() => setForm({})} style={{ ...secondary, marginBottom: 16 }}><Icon name="arrow_back" size={17} />Back to purchase requests</button>}
             {!canChangeStage && stage !== 'lpo' && <ReadOnlyStage />}
             {canChangeStage && stage === 'request' && <RequestPanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel }} items={app.data.items} stores={app.data.locations} departments={app.data.departments} />}
             {canChangeStage && stage === 'quote' && <QuotePanel {...{ data: scopedData, form, setForm, busy, run, requisitionLabel, names }} suppliers={app.data.suppliers} supplierItems={(scopedData.supplierItems || app.data.supplierItems || []).map(normalizeSupplierPrice)} items={app.data.items} itemUnits={app.data.itemUnits} onContinueToLpo={(requisitionId: string) => { setStage('lpo'); setLpoQueue('prepare'); setForm({ requisition: requisitionId }) }} />}
