@@ -87,9 +87,13 @@ ROLE_SPECS = {
         },
     },
     "Cost Controller": {
-        # Cost Control creates organizational master data. Storekeepers do not
-        # gain permissions to create stores or departments.
+        # Cost Control creates and edits organizational master records, but
+        # cannot delete them or gain operational stock-posting rights.
         "add": {
+            "inventory": ["storelocation"],
+            "departments": ["department"],
+        },
+        "change": {
             "inventory": ["storelocation"],
             "departments": ["department"],
         },

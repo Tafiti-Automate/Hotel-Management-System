@@ -419,7 +419,8 @@ export default function FormDrawer() {
             const fieldLocked = baseUnitLocked && fd.key === 'uom'
             const dependencyLocked = f.entity === 'items' && fd.opts === 'itemGroups' && !values.majorGroup
             const systemGenerated = (f.entity === 'items' && fd.key === 'sku') || (f.entity === 'categories' && fd.key === 'code')
-            const selectLocked = fieldLocked || dependencyLocked
+            const storeBranchLocked = f.entity === 'locations' && Boolean(f.id) && roleKey === 'cost controller' && fd.key === 'branch'
+            const selectLocked = fieldLocked || dependencyLocked || storeBranchLocked
             const quotationSearchField = f.entity === 'supplierItems' && ['supplier', 'article'].includes(fd.key)
             const searchableSelect = !selectLocked && (quotationSearchField || options.length > 6)
             return (

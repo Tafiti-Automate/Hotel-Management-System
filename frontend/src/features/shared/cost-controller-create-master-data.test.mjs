@@ -39,3 +39,13 @@ test('Store creation preselects assigned property and restricts selectable branc
   assert.match(form, /branch.hotelId === assigned.hotelId/)
   assert.match(form, /branch.id === assigned.id/)
 })
+
+
+test('Cost Controller can edit store and department records, but not delete them', () => {
+  assert.match(list, /const canChange = costControllerMasterDataCreate \|\|/)
+  assert.match(list, /const canDelete = !costControllerMasterDataCreate &&/)
+  assert.match(list, /'Edit store'/)
+  assert.match(list, /'Edit department'/)
+  assert.match(form, /const storeBranchLocked = f.entity === 'locations'/)
+  assert.match(form, /selectLocked = fieldLocked \|\| dependencyLocked \|\| storeBranchLocked/)
+})

@@ -474,6 +474,43 @@ class StoreLocationViewSet(CreatedByModelMixin, ModelViewSet):
                 raise PermissionDenied("You can only create stores within your assigned hotel/property.")
         super().perform_create(serializer)
 
+    def perform_update(self, serializer):
+        # Restrict Cost Controller edits to established store master fields.
+        # Historical ledger/stock ownership must never move to a new branch.
+        if has_role(self.request.user, "Cost Controller") and not has_role(
+            self.request.user, "System Administrator"
+        ):
+            store = serializer.instance
+            changed = serializer.validated_data
+            editable_fields = {"name", "address", "is_default", "is_active", "branch"}
+            forbidden = set(changed) - editable_fields
+            if forbidden:
+                raise ValidationError({
+                    "detail": "Cost Control may only edit a store's name, address, default status and active status."
+                })
+            requested_branch = changed.get("branch", store.branch)
+            if not requested_branch or requested_branch.pk != store.branch_id:
+                raise ValidationError({
+                    "branch": "The issuing property cannot be changed after store creation."
+                })
+            if store.is_virtual_transit:
+                raise ValidationError({
+                    "detail": "System transit locations cannot be edited through Stores Management."
+                })
+            if changed.get("is_active") is False and store.is_active:
+                has_live_stock = InventoryBalance.objects.filter(
+                    store=store
+                ).filter(
+                    Q(quantity_in_stock__gt=0)
+                    | Q(quantity_reserved__gt=0)
+                    | Q(quantity_quarantined__gt=0)
+                ).exists()
+                if has_live_stock:
+                    raise ValidationError({
+                        "is_active": "Clear issued, reserved and quarantined stock before deactivating this store."
+                    })
+        serializer.save()
+
 
 class StoreKeeperAssignmentViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = StoreKeeperAssignment.objects.select_related("store", "employee", "employee__user")

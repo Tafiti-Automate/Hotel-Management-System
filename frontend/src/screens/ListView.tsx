@@ -49,8 +49,8 @@ export default function ListView() {
   const storeKeeperCannotCreateDepartmentRequest = role === 'store keeper' && source === 'storeRequisitions'
   const costControllerMasterDataCreate = role === 'cost controller' && (source === 'locations' || source === 'departments')
   const canAdd = !storeKeeperCannotCreateDepartmentRequest && (costControllerMasterDataCreate || !permissionName || app.user.isSuperuser || app.user.permissions.includes(`${permissionName.split('.')[0]}.add_${permissionName.split('.')[1]}`) || (!hasPermissionMetadata && app.user.isStaff))
-  const canChange = !permissionName || app.user.isSuperuser || app.user.permissions.includes(`${permissionName.split('.')[0]}.change_${permissionName.split('.')[1]}`) || (!hasPermissionMetadata && app.user.isStaff)
-  const canDelete = !permissionName || app.user.isSuperuser || app.user.permissions.includes(`${permissionName.split('.')[0]}.delete_${permissionName.split('.')[1]}`) || (!hasPermissionMetadata && app.user.isStaff)
+  const canChange = costControllerMasterDataCreate || !permissionName || app.user.isSuperuser || app.user.permissions.includes(`${permissionName.split('.')[0]}.change_${permissionName.split('.')[1]}`) || (!hasPermissionMetadata && app.user.isStaff)
+  const canDelete = !costControllerMasterDataCreate && (!permissionName || app.user.isSuperuser || app.user.permissions.includes(`${permissionName.split('.')[0]}.delete_${permissionName.split('.')[1]}`) || (!hasPermissionMetadata && app.user.isStaff))
   const [sortKey, setSortKey] = useState('')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   const [statusFilter, setStatusFilter] = useState('')
@@ -253,7 +253,7 @@ export default function ListView() {
               <Icon name="chevron_right" size={18} color="var(--text-faint)" />
               {config.editable && <>
                 {canChange &&
-                <button onClick={(event) => { event.stopPropagation(); app.openEdit(row.id) }} title="Edit" className="hover-edit" style={iconAction}><Icon name="edit" size={17} /></button>
+                <button onClick={(event) => { event.stopPropagation(); app.openEdit(row.id) }} title={route === 'locations' ? 'Edit store' : route === 'departments' ? 'Edit department' : 'Edit'} aria-label={route === 'locations' ? 'Edit store' : route === 'departments' ? 'Edit department' : 'Edit record'} className="hover-edit" style={iconAction}><Icon name="edit" size={17} /></button>
                 }
                 {canDelete &&
                 <button onClick={(event) => { event.stopPropagation(); app.requestDelete(row.id) }} title="Deactivate or delete" className="hover-del" style={iconAction}><Icon name="delete" size={17} /></button>
