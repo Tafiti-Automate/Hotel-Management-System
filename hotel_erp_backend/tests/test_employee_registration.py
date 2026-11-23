@@ -3,7 +3,6 @@ import base64
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import serializers
-from rest_framework.test import APIRequestFactory
 
 from apps.departments.models import Department
 from apps.employees.models import Employee
@@ -85,8 +84,14 @@ def test_employee_removal_is_a_soft_deactivation():
     assert serializer.is_valid(), serializer.errors
     employee = serializer.save()
 
+    from django.contrib.auth import get_user_model
+    from types import SimpleNamespace
+    admin = get_user_model().objects.create_superuser(
+        username="registration-test-admin", employee_code="EMP-REG-ADMIN",
+        password="test-pass-123",
+    )
     view = EmployeeViewSet()
-    view.request = APIRequestFactory().delete("/")
+    view.request = SimpleNamespace(user=admin)
     view.perform_destroy(employee)
     employee.refresh_from_db()
     employee.user.refresh_from_db()

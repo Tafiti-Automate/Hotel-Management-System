@@ -7,6 +7,7 @@ from django.contrib.auth.models import Group
 from rest_framework import serializers
 
 from apps.employees.models import Designation, Employee
+from apps.employees.security import is_system_administrator
 from core.phone_validation import normalize_uganda_phone
 
 
@@ -105,6 +106,43 @@ class EmployeeSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({"last_name": "Last name is required."})
             if not attrs.get("password"):
                 raise serializers.ValidationError({"password": "A temporary password is required."})
+
+        request = self.context.get("request")
+        actor = getattr(request, "user", None)
+        # Direct serializer calls in trusted migrations/tests may omit a request.
+        # Every DRF employee endpoint supplies the authenticated request.
+        if request is not None and not is_system_administrator(actor):
+            role = attrs.get("role", serializers.empty)
+            existing_role = self.instance.user.groups.first() if self.instance else None
+            if role is not serializers.empty and role != existing_role:
+                raise serializers.ValidationError({
+                    "role": "Only the System Administrator can assign or change system roles.",
+                })
+            if not self.instance:
+                if user_data.get("employee_code") or user_data.get("username"):
+                    raise serializers.ValidationError({
+                        "employee_code": "HR registrations receive an automatic employee ID and username.",
+                    })
+            else:
+                if attrs.get("password"):
+                    raise serializers.ValidationError({
+                        "password": "Only the System Administrator may reset employee passwords.",
+                    })
+                for key in ("username", "employee_code"):
+                    if key in user_data and user_data[key] != getattr(self.instance.user, key):
+                        raise serializers.ValidationError({
+                            key: "Only the System Administrator may change account identifiers.",
+                        })
+                protected = self.instance.user.groups.filter(name__in=(
+                    "System Administrator", "HR Manager", "Payroll Officer",
+                    "Financial Manager", "Financial Controller", "General Manager",
+                )).exists()
+                if "is_active" in attrs and attrs["is_active"] != self.instance.is_active and (
+                    protected or self.instance.user_id == getattr(actor, "pk", None)
+                ):
+                    raise serializers.ValidationError({
+                        "is_active": "Only the System Administrator may change a protected account's activation.",
+                    })
         return attrs
 
     def get_role_name(self, obj):

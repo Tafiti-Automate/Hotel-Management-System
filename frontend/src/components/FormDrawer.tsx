@@ -102,6 +102,11 @@ export default function FormDrawer() {
     if (!existing && f.initialValues) {
       Object.assign(seed, f.initialValues)
     }
+    if (f.entity === 'employees' && !f.id && roleKey === 'hr manager') {
+      seed.branch = app.data.branches.find((branch) =>
+        String(branch.id) === String(app.user.branchId)
+      )?.name || ''
+    }
     // Default new stores to the Cost Controller's assigned property, not an
     // arbitrary branch. Other branches may be selected only within that hotel.
     if (f.entity === 'locations' && !f.id && roleKey === 'cost controller') {
@@ -173,6 +178,9 @@ export default function FormDrawer() {
     if (locksStoreIdentity && ['department', 'requester', 'store'].includes(fd.key)) return false
     if (locksPurchaseIdentity && ['request_type', 'department', 'requester'].includes(fd.key)) return false
     if (f.entity === 'employees' && !f.id && fd.key === 'status') return false
+    // IT controls account identifiers and resets. HR maintains staff profile data.
+    if (f.entity === 'employees' && roleKey === 'hr manager' && fd.key === 'employeeCode') return false
+    if (f.entity === 'employees' && roleKey === 'hr manager' && f.id && fd.key === 'password') return false
     if (f.entity === 'categories' && !f.id && f.preset === 'majorGroup' && fd.key === 'parent') return false
     return true
   })
@@ -370,6 +378,7 @@ export default function FormDrawer() {
               </div>
             </div>
           </section>}
+          {f.entity === 'employees' && roleKey === 'hr manager' && <div className="form-helper-card" role="note" style={{ padding: 12, borderRadius: 9, background: 'var(--surface-2)', color: 'var(--text-muted)' }}>HR maintains employee records for its hotel. Employee IDs are generated automatically. System roles, account identifiers and password resets are controlled by the System Administrator.</div>}
           {f.entity === 'categories' && !f.id && f.preset === 'majorGroup' && <div className="form-helper-card" style={helperCardStyle}><span style={{ display: 'grid', placeItems: 'center', width: 24, height: 24, borderRadius: 6, background: 'rgba(37,99,235,.10)' }}><SmallFolderGraphic color="var(--accent)" /></span><div><strong>Major Group:</strong> the top level of the catalogue, such as Beverages, Food Supplies or Stationery.</div></div>}
           {f.entity === 'categories' && !f.id && f.preset === 'itemGroup' && <div className="form-helper-card" style={helperCardStyle}><span style={{ display: 'grid', placeItems: 'center', width: 24, height: 24, borderRadius: 6, background: 'rgba(37,99,235,.10)' }}><SmallFolderGraphic open color="var(--accent)" /></span><div><strong>Item Group:</strong> select the Major Group first, then name the group beneath it. Example: Beverages → Soft Drinks.</div></div>}
           {f.entity === 'categories' && (f.id || !f.preset) && <div className="form-helper-card" style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: 12, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface-2)', color: 'var(--text-muted)', fontSize: 12, lineHeight: 1.5 }}><Icon name="account_tree" size={18} color="var(--accent)" style={{ marginTop: 1 }} /><div>Catalogue hierarchy: <strong>Major Group → Item Group → Item</strong>.</div></div>}
@@ -381,6 +390,18 @@ export default function FormDrawer() {
             let options = fd.opts === 'categoryParents'
               ? categoryParentOptions(getOptions(fd.opts, app.data), app.data.categories, editingCategoryName)
               : getOptions(fd.opts || '', app.data)
+            if (fd.opts === 'branches' && f.entity === 'employees' && roleKey === 'hr manager') {
+              const assigned = app.data.branches.find((branch) =>
+                String(branch.id) === String(app.user.branchId)
+              )
+              options = assigned
+                ? app.data.branches
+                    .filter((branch) => assigned.hotelId
+                      ? branch.hotelId === assigned.hotelId
+                      : branch.id === assigned.id)
+                    .map((branch) => String(branch.name))
+                : []
+            }
             if (fd.opts === 'branches' && f.entity === 'locations' && roleKey === 'cost controller') {
               const assigned = app.data.branches.find((branch) =>
                 String(branch.id) === String(app.user.branchId)

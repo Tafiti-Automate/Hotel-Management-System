@@ -22,6 +22,8 @@ jobs:
           python hotel_erp_backend/manage.py check --settings=core.settings.test
           python hotel_erp_backend/manage.py makemigrations --check --dry-run --settings=core.settings.test
       - name: Full Django regression suite
+        # Preserve a failed migration check while still collecting test results.
+        if: ${{ always() }}
         run: python -m pytest hotel_erp_backend/tests -q
 
   frontend:
