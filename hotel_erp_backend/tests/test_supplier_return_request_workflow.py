@@ -53,6 +53,14 @@ def payload(context, *, source="stock_on_hand", quantity="2.0000"):
 
 
 @pytest.mark.django_db
+def test_supplier_return_request_list_uses_drf_authentication_dispatch():
+    response = APIClient().get("/api/v1/supplier-return-requests/")
+
+    assert response.status_code == 401
+    assert response.data["detail"] == "Authentication credentials were not provided."
+
+
+@pytest.mark.django_db
 def test_storekeeper_report_quarantines_then_cost_controller_dispatches_once(return_context):
     keeper, controller, supplier, item, store, grn = return_context
     kclient, cclient = client_for(keeper), client_for(controller)

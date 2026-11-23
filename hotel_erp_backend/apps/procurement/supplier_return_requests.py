@@ -203,9 +203,12 @@ class SupplierReturnRequestViewSet(ModelViewSet):
         self._reporter_notice(obj, "rejected")
         return Response(self.get_serializer(obj).data)
 
-    @action(detail=True, methods=["post"])
+    # Keep the public action at ``/dispatch/`` without shadowing
+    # APIView.dispatch(), which is responsible for DRF authentication,
+    # permissions and routing for every request handled by this viewset.
+    @action(detail=True, methods=["post"], url_path="dispatch", url_name="dispatch")
     @transaction.atomic
-    def dispatch(self, request, pk=None):
+    def dispatch_return(self, request, pk=None):
         controller = self._controller()
         obj = self.get_object()
         obj = SupplierReturnRequest.objects.select_for_update().get(pk=obj.pk)
