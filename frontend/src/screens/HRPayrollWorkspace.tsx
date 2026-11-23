@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import ConfirmTransaction from '../components/ConfirmTransaction'
+import HRPayrollRegister from './HRPayrollRegister'
 import { useApp } from '../state/AppContext'
 import { createBackendRecord, getToken, runBackendAction, updateBackendRecord } from '../lib/api'
 import { currency, dateLabel, HRAlerts, HREmployeeOptions, HRMetric, HRPage, HRStatus,
@@ -110,7 +111,6 @@ export function PayrollWorkspace() {
   const [accountName,setAccountName]=useState('')
   const [accountNumber,setAccountNumber]=useState('')
   const [selectedPayslip,setSelectedPayslip]=useState<HRRow|null>(null)
-  const [filter,setFilter]=useState('')
   const [coverage,setCoverage]=useState<Coverage|null>(null)
   const [coverageLoading,setCoverageLoading]=useState(false)
   const [coverageError,setCoverageError]=useState('')
@@ -125,7 +125,7 @@ export function PayrollWorkspace() {
       .finally(()=>{if(live)setCoverageLoading(false)})
     return()=>{live=false}
   },[currentId,text(period?.status)])
-  const periodEntries=entries.filter(e=>text(e.period)===currentId && [e.employee_name,e.employee_code,e.department_name].some(v=>text(v).toLowerCase().includes(filter.toLowerCase())))
+  const periodEntries=entries.filter(e=>text(e.period)===currentId)
   const currentProfile=profiles.find(p=>text(p.employee)===profileEmployee)
   const gross=periodEntries.reduce((total,e)=>total+number(e.gross_pay),0)
   const net=periodEntries.reduce((total,e)=>total+number(e.net_pay),0)
@@ -168,8 +168,8 @@ export function PayrollWorkspace() {
       <section className="hr-metrics">
         <HRMetric label="Payroll periods" value={String(periods.length)} help="By authorized properties"/>
         <HRMetric label="Salary profiles" value={String(profiles.length)} help="Active and inactive profiles"/>
-        <HRMetric label="Selected gross payroll" value={`UGX ${currency(gross)}`} help="Employees shown below"/>
-        <HRMetric label="Selected net payroll" value={`UGX ${currency(net)}`} help="Employees shown below"/>
+        <HRMetric label="Selected gross payroll" value={`UGX ${currency(gross)}`} help="Selected payroll period"/>
+        <HRMetric label="Selected net payroll" value={`UGX ${currency(net)}`} help="Selected payroll period"/>
       </section>
       <div className="hr-columns">
         <section className="hr-panel">
@@ -210,21 +210,20 @@ export function PayrollWorkspace() {
               {canSubmit&&<ConfirmTransaction title="Submit payroll to Finance?" description="Calculated payroll will be locked for HR editing pending Finance approval." confirmLabel="Submit to Finance" disabled={busy} busy={busy} className="hr-btn primary" onConfirm={()=>run(()=>runBackendAction('payroll-periods',currentId,'submit'),'Submitted to Finance')}>Submit to Finance</ConfirmTransaction>}
               {canApprove&&<ConfirmTransaction title="Approve this payroll?" description="Approve only after independently verifying statutory deductions, attendance, affectors and the full payroll register." confirmLabel="Approve payroll" disabled={busy} busy={busy} className="hr-btn primary" onConfirm={()=>run(()=>runBackendAction('payroll-periods',currentId,'approve'),'Payroll approved')}>Finance approve</ConfirmTransaction>}
               {canPost&&<ConfirmTransaction title="Post approved payroll?" description="This finalizes the period and applies salary advance repayments. The posting is irreversible." confirmLabel="Post payroll" disabled={busy} busy={busy} className="hr-btn primary" onConfirm={()=>run(()=>runBackendAction('payroll-periods',currentId,'post'),'Payroll posted')}>Post payroll</ConfirmTransaction>}
-              {text(period.status)!=='draft'&&<button type="button" className="hr-btn" disabled={busy} onClick={()=>void doExport('register.csv')}>Export register CSV</button>}
               {finance&&text(period.status)==='posted'&&<button type="button" className="hr-btn" disabled={busy} onClick={()=>void doExport('bank-schedule.csv')}>Bank schedule CSV</button>}
             </div>
           </div>:<p className="hr-empty">Select or open a payroll period.</p>}
         </section>
       </div>
-      <section className="hr-panel">
-        <header><h2>Employee payroll register</h2><label className="hr-search">Find employee<input value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Name, code or department"/></label></header>
-        <div className="hr-table-scroll"><table className="hr-table">
-          <thead><tr><th>Employee</th><th>Department</th><th>Paid days</th><th className="num">Overtime (UGX)</th><th className="num">Gross (UGX)</th><th className="num">Deductions</th><th className="num">Net (UGX)</th><th>Document</th></tr></thead>
-          <tbody>{periodEntries.map(e=><tr key={text(e.id)}><td><strong>{text(e.employee_name)}</strong><small>{text(e.employee_code)}</small></td><td>{text(e.department_name)}</td><td>{text(e.days_worked)} / {text(e.days_in_month)}</td><td className="num">{currency(e.overtime_pay)}<small>{text(e.overtime_hours)} hours</small></td><td className="num">{currency(e.gross_pay)}</td><td className="num">{currency(e.total_deductions)}</td><td className="num"><strong>{currency(e.net_pay)}</strong></td><td>{text(period?.status)==='posted'?<button type="button" className="hr-link" onClick={()=>setSelectedPayslip(e)}>Payslip</button>:<span className="hr-muted">Pending posting</span>}</td></tr>)}
-            {!periodEntries.length&&<tr><td colSpan={8} className="hr-empty">No calculated employee lines for this period.</td></tr>}
-          </tbody>
-        </table></div>
-      </section>
+      <HRPayrollRegister
+        periodId={currentId}
+        periodStatus={text(period?.status)}
+        onPayslip={(entryId) => {
+          const entry=entries.find(row=>text(row.id)===entryId)
+          if(entry && text(period?.status)==='posted') setSelectedPayslip(entry)
+          else app.showWorkflowAlert('Payslip unavailable','The posted payroll entry is not loaded. Refresh payroll to retrieve it.','warning')
+        }}
+      />
       {hr&&<section className="hr-panel">
         <header><h2>Employee salary profiles</h2><span>HR-only master data</span></header>
         <div className="hr-inline-form">

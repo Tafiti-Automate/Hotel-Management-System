@@ -19,6 +19,9 @@ from apps.employees.models import (
     SalaryAdvance,
     SalaryAdvanceRepayment,
 )
+from apps.employees.payroll_register import (
+    build_register, export_register_csv, export_register_xlsx,
+)
 from apps.employees.payroll_serializers import (
     EmployeeDocumentSerializer,
     LeaveRequestSerializer,
@@ -293,54 +296,59 @@ class PayrollPeriodViewSet(CreatedByModelMixin, ModelViewSet):
             model_error(error)
         return Response(self.get_serializer(period).data)
 
-    def _csv(self, *, bank_only=False):
-        period = self.get_object()
-        entries = period.entries.select_related("employee__user", "department").order_by(
-            "department__name", "employee__user__first_name",
-        )
-        response = HttpResponse(content_type="text/csv")
-        suffix = "bank-schedule" if bank_only else "payroll-register"
-        response["Content-Disposition"] = f'attachment; filename="{suffix}-{period.label}.csv"'
-        writer = csv.writer(response)
-        if bank_only:
-            writer.writerow(("Employee code", "Employee", "Bank", "Account name", "Account number", "Net pay"))
-            for entry in entries:
-                writer.writerow((
-                    entry.employee.user.employee_code,
-                    entry.employee.user.get_full_name(), entry.bank_name,
-                    entry.bank_account_name, entry.bank_account_number, entry.net_pay,
-                ))
-        else:
-            writer.writerow((
-                "S/No", "Department & name", "Joining date", "Department / section", "Status",
-                "Days in month", "Old basic salary", "Increment", "Merit increment", "New basic salary",
-                "Days worked", "Overtime hours", "Overtime gross", "Eligible basic pay",
-                "Arrears", "Leave transport", "Baggage allowance",
-                "Service charge / breakages", "Other earnings incl. overtime", "Housing allowance", "Gross pay",
-                "NSSF employee", "NSSF employer", "Total NSSF", "PAYE", "Local service tax",
-                "Union dues", "Staff debtors", "Salary advance", "Other deductions",
-                "Total deductions", "Net pay",
-            ))
-            for index, entry in enumerate(entries, 1):
-                writer.writerow((
-                    index, entry.employee.user.get_full_name(), entry.joining_date, entry.department.name, "Active",
-                    entry.days_in_month, entry.old_basic_salary, entry.increment_amount, entry.merit_increment,
-                    entry.new_basic_salary, entry.days_worked, entry.overtime_hours, entry.overtime_pay,
-                    entry.eligible_basic_pay, entry.arrears,
-                    entry.leave_transport, entry.baggage_allowance, entry.service_charge, entry.other_earnings,
-                    entry.housing_allowance, entry.gross_pay, entry.nssf_employee, entry.nssf_employer,
-                    entry.nssf_total, entry.paye, entry.local_service_tax, entry.union_dues,
-                    entry.staff_debtors, entry.salary_advance, entry.other_deductions,
-                    entry.total_deductions, entry.net_pay,
-                ))
-        return response
+    @action(detail=True, methods=["get"], url_path="register-layout")
+    def register_layout(self, request, pk=None):
+        require_role(request.user, HR_ROLES | FINANCE_ROLES,
+                     "Only Human Resources and Finance may view employee payroll.")
+        # The same snapshot-derived rows drive the UI and both exports.
+        return Response(build_register(self.get_object()))
 
     @action(detail=True, methods=["get"], url_path="register.csv")
     def register_csv(self, request, pk=None):
-        require_role(request.user, HR_ROLES | FINANCE_ROLES, "Only HR and Finance can export payroll registers.")
-        if self.get_object().status == PayrollPeriod.STATUS_DRAFT:
+        require_role(request.user, HR_ROLES | FINANCE_ROLES,
+                     "Only HR and Finance can export payroll registers.")
+        period = self.get_object()
+        if period.status == PayrollPeriod.STATUS_DRAFT:
             raise ValidationError("Calculate payroll before exporting the register.")
-        return self._csv()
+        return export_register_csv(build_register(period))
+
+    @action(detail=True, methods=["get"], url_path="register.xlsx")
+    def register_xlsx(self, request, pk=None):
+        require_role(request.user, HR_ROLES | FINANCE_ROLES,
+                     "Only HR and Finance can export payroll registers.")
+        period = self.get_object()
+        if period.status == PayrollPeriod.STATUS_DRAFT:
+            raise ValidationError("Calculate payroll before exporting the register.")
+        return export_register_xlsx(build_register(period))
+
+    def _csv(self, *, bank_only=False):
+        """Bank schedule is distinct from the payroll-register export.
+
+        Never include employer statutory costs in the employee payment file.
+        """
+        if not bank_only:
+            raise ValidationError("Use register.csv for the approved payroll register.")
+        period = self.get_object()
+        entries = period.entries.select_related(
+            "employee__user", "department",
+        ).order_by("department__name", "employee__user__first_name")
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = (
+            f'attachment; filename="bank-schedule-{period.label}.csv"'
+        )
+        writer = csv.writer(response)
+        writer.writerow(("Employee code", "Employee", "Bank", "Account name", "Account number", "Net pay"))
+        from apps.employees.payroll_register import _safe_csv_text
+        for entry in entries:
+            writer.writerow((
+                _safe_csv_text(entry.employee.user.employee_code),
+                _safe_csv_text(entry.employee.user.get_full_name()),
+                _safe_csv_text(entry.bank_name),
+                _safe_csv_text(entry.bank_account_name),
+                _safe_csv_text(entry.bank_account_number),
+                entry.net_pay,
+            ))
+        return response
 
     @action(detail=True, methods=["get"], url_path="bank-schedule.csv")
     def bank_schedule_csv(self, request, pk=None):

@@ -238,3 +238,26 @@ def test_payroll_rejects_periods_outside_verifiable_fy2026_27_rules(payroll_peop
     with pytest.raises(ValidationError, match="verified only for July 2026 through June 2027"):
         calculate_period(period, ctx["preparer"])
     assert not PayrollEntry.objects.filter(period=period).exists()
+
+
+@pytest.mark.django_db
+def test_client_reference_register_keeps_frozen_identity_and_tax_number(payroll_people):
+    from apps.employees.payroll_register import build_register
+
+    ctx = payroll_people
+    profile = ctx["profile"]
+    profile.tin_number = "0010099887"
+    profile.save(update_fields=["tin_number", "updated_at"])
+    record_october_days(ctx)
+    calculated = calculate_period(ctx["period"], ctx["preparer"])
+    entry = PayrollEntry.objects.get(period=calculated, employee=ctx["employee"])
+    assert entry.calculation_detail["tin_number"] == "0010099887"
+    assert entry.calculation_detail["employment_status"] == "Active"
+    original_name = entry.calculation_detail["employee_name"]
+
+    profile.tin_number = "0099988877"
+    profile.save(update_fields=["tin_number", "updated_at"])
+    report = build_register(calculated)
+    assert len(report["rows"]) == 1
+    assert report["rows"][0]["tin"] == "0010099887"
+    assert report["rows"][0]["department_and_name"] == original_name

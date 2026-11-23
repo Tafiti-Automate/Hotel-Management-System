@@ -115,3 +115,62 @@
 .hr-coverage-list>div:last-child{border-bottom:0}
 .hr-coverage-list>div>strong{font-variant-numeric:tabular-nums;white-space:nowrap}
 .hr-table td .hr-status+small{margin-top:4px}
+
+
+/* Client-reference 32-column payroll register (all views use the backend snapshot). */
+.hr-register-root{overflow:visible}
+.hr-register-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:13px 15px;border-bottom:1px solid var(--border,#dce7df)}
+.hr-register-head h2{margin:0;font-weight:850;font-size:14px}
+.hr-register-head p{margin:5px 0 0;color:var(--text-muted,#718077);font-size:11px}
+.hr-register-actions{display:flex;gap:7px;align-items:end;flex-wrap:wrap}
+.hr-register-search{display:flex;flex-direction:column;gap:5px;font-weight:750;color:var(--text-muted,#65766d);font-size:10px}
+.hr-register-search input{font:inherit;font-size:11px;background:var(--surface,#fff);color:var(--text,#1b3427);border:1px solid var(--border,#cfddd4);border-radius:7px;height:34px;width:190px;padding:7px 10px}
+.hr-register-metadata{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--surface-2,#edf3ee);padding:8px 14px;color:var(--text-muted,#566e60);font-size:11px}
+.hr-register-metadata strong{color:var(--accent,#136844)}
+.hr-register-scroll{width:100%;max-height:560px;overflow:auto;position:relative;scrollbar-gutter:stable;border-bottom:1px solid var(--border,#d6e5d9)}
+.hr-register-scroll:focus-visible{outline:2px solid var(--accent,#146941);outline-offset:-2px}
+.hr-reference-table{border-collapse:separate;border-spacing:0;min-width:max-content;width:100%;font-size:11px}
+.hr-reference-table th{position:sticky;z-index:3;top:0;padding:11px 12px;min-width:116px;max-width:180px;height:72px;white-space:normal;vertical-align:bottom;text-align:left;background:var(--surface-2,#e8f1e9);border-bottom:2px solid var(--border,#c7d9cd);border-right:1px solid var(--border,#d6e4d9);color:var(--text,#2a4636);font-weight:800;line-height:1.3}
+.hr-reference-table td{padding:10px 12px;white-space:nowrap;border-bottom:1px solid var(--border,#e5ebe5);border-right:1px solid var(--border,#e1ebe4);background:var(--surface,#fff);color:var(--text,#2a3b32);font-variant-numeric:tabular-nums}
+.hr-reference-table tr:nth-child(even) td{background:var(--surface-2,#f6faf7)}
+.hr-reference-table td.is-number{text-align:right}
+.hr-reference-table th.is-unconfirmed,.hr-reference-table td.is-unconfirmed{background:#fff3d9!important;color:#735021}
+.hr-reference-table th.hr-register-column-0,.hr-reference-table td.hr-register-column-0{position:sticky;left:0;z-index:4;min-width:60px;width:60px}
+.hr-reference-table th.hr-register-column-1,.hr-reference-table td.hr-register-column-1{position:sticky;left:60px;z-index:4;min-width:235px;width:235px;max-width:260px;overflow:hidden;text-overflow:ellipsis}
+.hr-reference-table th.hr-register-column-0,.hr-reference-table th.hr-register-column-1{z-index:6}
+.hr-reference-table tfoot td{font-weight:850;position:sticky;bottom:0;z-index:3;background:var(--accent-soft,#e6f4e9);border-top:2px solid var(--accent,#197f4b);color:var(--text,#19402a)}
+.hr-reference-table tfoot td:nth-child(-n+2){z-index:5}
+.hr-register-employee{font:inherit;font-weight:800;color:var(--accent,#14663e);text-decoration:underline;text-underline-offset:2px;border:0;background:transparent;cursor:pointer;padding:0;text-align:left;max-width:100%;text-overflow:ellipsis;overflow:hidden}
+.hr-register-employee:focus-visible{outline:2px solid var(--accent,#16774a);outline-offset:2px}
+.hr-register-hint{margin:0;padding:11px 15px;font-size:11px;line-height:1.5;color:var(--text-muted,#6a7e71)}
+.hr-register-error{margin:10px 15px;padding:11px;border:1px solid #eab39a;border-radius:7px;background:#fff3e9;color:#963e25;font-size:12px}
+.hr-register-notes{border-top:1px solid var(--border,#d8e5dc);padding:11px 15px;color:var(--text-muted,#617569)}
+.hr-register-notes summary{cursor:pointer;font-weight:800;font-size:11px;color:var(--text,#274735)}
+.hr-register-notes ol{padding-left:18px;margin:11px 0 0;display:grid;gap:7px;font-size:11px;line-height:1.5}
+.hr-register-print{display:none}
+@media(max-width:900px){.hr-register-head{align-items:stretch}.hr-register-actions{align-items:stretch}.hr-register-search{min-width:100%}.hr-register-search input{width:100%}}
+/* Split the reference across three A3 landscape pages with repeated staff IDs.
+   Does not affect the existing A4 individual-payslip print view. */
+@page hr-register-landscape{size:A3 landscape;margin:11mm}
+@media print{
+  .hr-workspace > *:not(.hr-register-root){display:none!important}
+  .hr-register-root{display:block!important;border:0!important;background:white!important;box-shadow:none!important;overflow:visible!important}
+  .hr-register-root > *:not(.hr-register-print){display:none!important}
+  .hr-register-print{display:block!important;position:relative!important;background:#fff;color:#111;margin:0;padding:0;width:100%}
+  .hr-register-print,.hr-register-print *{visibility:visible!important}
+  .hr-register-print-page{display:block!important;page:hr-register-landscape;break-after:page;width:100%;color:#151f19;background:#fff}
+  .hr-register-print-page:last-child{break-after:auto}
+  .hr-register-print-page h1{font:800 16pt Arial,sans-serif;color:#19402b;margin:0 0 7pt}
+  .hr-register-print-page p{font:10pt Arial,sans-serif;margin:0 0 10pt}
+  .hr-register-print-page table{border-collapse:collapse;width:100%;table-layout:auto}
+  .hr-register-print-page th,.hr-register-print-page td{font:8pt Arial,sans-serif;padding:4pt 5pt;border:1px solid #9cae9f;vertical-align:top;white-space:normal;overflow-wrap:anywhere}
+  .hr-register-print-page th{font-weight:800;background:#e4efe7}
+  .hr-register-print-page .is-number{text-align:right;white-space:nowrap}
+  .hr-register-print-page .hr-print-totals td{font-weight:800;background:#d8e9de}
+  .hr-register-print-page thead{display:table-header-group}
+  .hr-register-print-page tr{break-inside:avoid}
+  .hr-print-notes{font:7pt Arial,sans-serif;color:#66543b;margin-top:10pt}
+  .hr-print-notes p{font:7pt Arial,sans-serif;margin:3pt 0}
+  body:has(.hr-overlay) .hr-register-root{display:none!important}
+  body:has(.hr-overlay) .hr-workspace > .hr-overlay{display:block!important}
+}

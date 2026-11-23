@@ -297,6 +297,13 @@ def calculate_period(period, actor):
             "bank_account_number": profile.bank_account_number,
             "calculation_detail": {
                 "rule_version": PAYE_RULE_VERSION,
+                # Freeze employee identity and tax metadata for historical
+                # payroll statements, not the live editable employee profile.
+                "employee_name": employee.user.get_full_name() or employee.user.username,
+                "employee_code": employee.user.employee_code,
+                "department_name": employee.department.name,
+                "employment_status": "Active",
+                "tin_number": profile.tin_number,
                 "affectors": applied,
                 "advance_repayments": advance_plan,
                 "tax_resident": profile.tax_resident,
