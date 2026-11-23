@@ -47,7 +47,8 @@ export default function ListView() {
   const hasPermissionMetadata = app.user.permissions.length > 0
   const role = String(app.user.role || '').trim().toLowerCase()
   const storeKeeperCannotCreateDepartmentRequest = role === 'store keeper' && source === 'storeRequisitions'
-  const canAdd = !storeKeeperCannotCreateDepartmentRequest && (!permissionName || app.user.isSuperuser || app.user.permissions.includes(`${permissionName.split('.')[0]}.add_${permissionName.split('.')[1]}`) || (!hasPermissionMetadata && app.user.isStaff))
+  const costControllerMasterDataCreate = role === 'cost controller' && (source === 'locations' || source === 'departments')
+  const canAdd = !storeKeeperCannotCreateDepartmentRequest && (costControllerMasterDataCreate || !permissionName || app.user.isSuperuser || app.user.permissions.includes(`${permissionName.split('.')[0]}.add_${permissionName.split('.')[1]}`) || (!hasPermissionMetadata && app.user.isStaff))
   const canChange = !permissionName || app.user.isSuperuser || app.user.permissions.includes(`${permissionName.split('.')[0]}.change_${permissionName.split('.')[1]}`) || (!hasPermissionMetadata && app.user.isStaff)
   const canDelete = !permissionName || app.user.isSuperuser || app.user.permissions.includes(`${permissionName.split('.')[0]}.delete_${permissionName.split('.')[1]}`) || (!hasPermissionMetadata && app.user.isStaff)
   const [sortKey, setSortKey] = useState('')

@@ -1219,6 +1219,7 @@ export async function fetchBackendData(): Promise<BackendDataResult> {
     branches: raw.branches.map((row) => ({
       id: idOf(row),
       name: text(row.name),
+      hotelId: text(row.hotel),
       code: text(row.branch_code),
       status: activeStatus(row.is_active),
     })),

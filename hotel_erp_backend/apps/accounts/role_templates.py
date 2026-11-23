@@ -87,6 +87,12 @@ ROLE_SPECS = {
         },
     },
     "Cost Controller": {
+        # Cost Control creates organizational master data. Storekeepers do not
+        # gain permissions to create stores or departments.
+        "add": {
+            "inventory": ["storelocation"],
+            "departments": ["department"],
+        },
         "crud": {
             "vendors": ["supplier"],
             "inventory": ["category", "item", "itemunitprice", "supplieritemprice", "unitofmeasure"],

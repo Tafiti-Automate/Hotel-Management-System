@@ -453,6 +453,27 @@ class StoreLocationViewSet(CreatedByModelMixin, ModelViewSet):
             return scope_financial_stock_audit(queryset, self.request.user, store_lookup="")
         return queryset
 
+    def perform_create(self, serializer):
+        # Creating a store is master-data setup, not a stock transaction.
+        # Cost Control can only create it within their own hotel/property.
+        if has_role(self.request.user, "Cost Controller") and not has_role(
+            self.request.user, "System Administrator"
+        ):
+            employee = getattr(self.request.user, "employee_profile", None)
+            branch = serializer.validated_data.get("branch")
+            if not employee or not employee.is_active or not employee.branch_id:
+                raise PermissionDenied("Assign the Cost Controller to an active property before creating a store.")
+            if not branch:
+                raise ValidationError({"branch": "Select the store's property."})
+            current = employee.branch
+            authorized = (
+                branch.hotel_id == current.hotel_id if current.hotel_id
+                else branch.pk == current.pk
+            )
+            if not authorized:
+                raise PermissionDenied("You can only create stores within your assigned hotel/property.")
+        super().perform_create(serializer)
+
 
 class StoreKeeperAssignmentViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = StoreKeeperAssignment.objects.select_related("store", "employee", "employee__user")

@@ -102,6 +102,13 @@ export default function FormDrawer() {
     if (!existing && f.initialValues) {
       Object.assign(seed, f.initialValues)
     }
+    // Default new stores to the Cost Controller's assigned property, not an
+    // arbitrary branch. Other branches may be selected only within that hotel.
+    if (f.entity === 'locations' && !f.id && roleKey === 'cost controller') {
+      seed.branch = app.data.branches.find((branch) =>
+        String(branch.id) === String(app.user.branchId)
+      )?.name || ''
+    }
     // Opening the "New Major Group" action must never inherit the last
     // Item Group's parent, even if the parent field is hidden.
     if (f.entity === 'categories' && !f.id && f.preset === 'majorGroup') {
@@ -374,6 +381,18 @@ export default function FormDrawer() {
             let options = fd.opts === 'categoryParents'
               ? categoryParentOptions(getOptions(fd.opts, app.data), app.data.categories, editingCategoryName)
               : getOptions(fd.opts || '', app.data)
+            if (fd.opts === 'branches' && f.entity === 'locations' && roleKey === 'cost controller') {
+              const assigned = app.data.branches.find((branch) =>
+                String(branch.id) === String(app.user.branchId)
+              )
+              options = assigned
+                ? app.data.branches
+                  .filter((branch) => assigned.hotelId
+                    ? branch.hotelId === assigned.hotelId
+                    : branch.id === assigned.id)
+                  .map((branch) => String(branch.name))
+                : []
+            }
             if (fd.opts === 'categories' && values[fd.key] && !options.includes(String(values[fd.key]))) {
               options = [String(values[fd.key]), ...options]
             }

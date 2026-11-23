@@ -132,7 +132,7 @@ export const cfg: Record<string, EntityConfig> = {
     ],
   },
   locations: {
-    title: 'Store Locations', sub: 'Stores and storage points', icon: 'warehouse', add: 'Add location', singular: 'Location', prefix: 'LOC-', editable: true,
+    title: 'Store Locations', sub: 'Stores and storage points', icon: 'warehouse', add: 'Create store', singular: 'Store', prefix: 'LOC-', editable: true,
     cols: [
       { key: 'name', label: 'Location', w: 'minmax(0,1.5fr)', kind: 'bold' },
       { key: 'branch', label: 'Branch', w: '1.4fr', kind: 'text' },
@@ -204,7 +204,7 @@ export const cfg: Record<string, EntityConfig> = {
     ],
   },
   departments: {
-    title: 'Departments', sub: 'Hotel departments and operating cost centres', icon: 'account_tree', add: 'Add department', singular: 'Department', prefix: 'DEP-', editable: true,
+    title: 'Departments', sub: 'Hotel departments and operating cost centres', icon: 'account_tree', add: 'Create department', singular: 'Department', prefix: 'DEP-', editable: true,
     cols: [
       { key: 'name', label: 'Department', w: 'minmax(0,1.8fr)', kind: 'bold' },
       { key: 'description', label: 'Description', w: 'minmax(0,2fr)', kind: 'text' },
