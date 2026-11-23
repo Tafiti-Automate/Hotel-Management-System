@@ -107,6 +107,10 @@ export default function RoomManagementWorkspace() {
       setError('Choose a property, a room-type code, name and capacity between 1 and 255.')
       return
     }
+    if (roomTypes.some(item => str(item.code).toLowerCase() === typeCode.trim().toLowerCase() && str(item.id) !== editTypeId)) {
+      setError('A room type with this code already exists in the selected property.')
+      return
+    }
     if (editTypeId && !canEditType || !editTypeId && !canCreateType) return
     setSaving(true); setError(''); setSuccess('')
     try {
@@ -130,6 +134,14 @@ export default function RoomManagementWorkspace() {
     }
     if (!roomTypes.some(item => str(item.id) === roomTypeId)) {
       setError('The selected room type does not belong to this property.')
+      return
+    }
+    if (propertyRooms.some(item => str(item.number).toLowerCase() === roomNumber.trim().toLowerCase() && str(item.id) !== editRoomId)) {
+      setError('This room number is already registered in the selected property. Edit the existing room instead.')
+      return
+    }
+    if (roomTypes.find(item => str(item.id) === roomTypeId)?.is_active === false && !editRoomId) {
+      setError('Select an active room type before creating a room.')
       return
     }
     if (editRoomId && !canEditRoom || !editRoomId && !canCreateRoom) return
