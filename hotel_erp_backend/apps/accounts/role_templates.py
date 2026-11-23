@@ -22,6 +22,34 @@ ROLE_SPECS = {
             "materials_control": ["outletassignment", "integrationconfig", "glaccountmapping"],
         },
     },
+    "HR Manager": {
+        # HR owns employee master data, leave, documents and payroll preparation.
+        # Finance independently approves salary advances and submitted payroll.
+        "crud": {
+            "employees": [
+                "employee", "designation", "payrollprofile", "payrollaffector",
+                "salaryadvance", "payrollperiod", "leaverequest", "employeedocument",
+            ],
+        },
+        "view": {
+            "departments": ["department", "branch"],
+            "employees": ["payrollentry", "salaryadvancerepayment"],
+        },
+    },
+    "Payroll Officer": {
+        "crud": {
+            "employees": [
+                "payrollprofile", "payrollaffector", "salaryadvance",
+                "payrollperiod", "leaverequest", "employeedocument",
+            ],
+        },
+        "view": {
+            "departments": ["department", "branch"],
+            "employees": [
+                "employee", "designation", "payrollentry", "salaryadvancerepayment",
+            ],
+        },
+    },
     "Department Supervisor": {
         # Supervisors originate Department requests for their own department.
         # Object-level API controls keep them on their own draft/rejected records.
@@ -134,6 +162,7 @@ ROLE_SPECS = {
             "materials_control": ["budgetoverride"],
             "finance": ["suppliercreditnote", "supplierpaymentreconciliation"],
             "inventory": ["stockadjustment"],
+            "employees": ["salaryadvance", "payrollperiod"],
         },
         "view": {
             "departments": ["branch", "department"],
@@ -147,6 +176,10 @@ ROLE_SPECS = {
             "vendors": ["supplier"],
             "finance": ["supplierinvoice", "supplierinvoiceitem", "supplierpayment", "suppliercreditnote", "expense"],
             "materials_control": ["glexport", "glaccountmapping", "wasterecord", "recipe", "posimportbatch"],
+            "employees": [
+                "employee", "payrollprofile", "payrollaffector", "salaryadvance",
+                "payrollperiod", "payrollentry", "salaryadvancerepayment",
+            ],
         },
     },
     "Accounts Payable Clerk": {
@@ -178,6 +211,9 @@ ROLE_SPECS = {
             "materials_control": [
                 "costcenterbudget", "budgetoverride", "fiscalperiod", "glexport", "glaccountmapping",
                 "wasterecord", "recipe", "posimportbatch",
+            ],
+            "employees": [
+                "payrollperiod", "payrollentry", "payrollaffector", "salaryadvance",
             ],
         },
     },
@@ -276,6 +312,9 @@ ROLE_ALIASES = {
     "Finance Manager": "Financial Manager",
     "Finance Controller": "Financial Manager",
     "Financial Controller": "Financial Manager",
+    "Human Resources Manager": "HR Manager",
+    "Human Resource Manager": "HR Manager",
+    "HR Officer": "Payroll Officer",
     "Accounts Payable (A/P) Clerk": "Accounts Payable Clerk",
     "AP Clerk": "Accounts Payable Clerk",
     "MANAGER": "General Manager",

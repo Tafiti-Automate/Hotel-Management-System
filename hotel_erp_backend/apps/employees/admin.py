@@ -1,6 +1,17 @@
 from django.contrib import admin
 
-from apps.employees.models import Designation, Employee
+from apps.employees.models import (
+    Designation,
+    Employee,
+    EmployeeDocument,
+    LeaveRequest,
+    PayrollAffector,
+    PayrollEntry,
+    PayrollPeriod,
+    PayrollProfile,
+    SalaryAdvance,
+    SalaryAdvanceRepayment,
+)
 from core.mixins.admin import CreatedByAdminMixin
 
 
@@ -28,3 +39,16 @@ class EmployeeAdmin(CreatedByAdminMixin, admin.ModelAdmin):
         "designation",
     )
     date_hierarchy = "created_at"
+
+
+for payroll_model in (
+    PayrollProfile,
+    PayrollAffector,
+    SalaryAdvance,
+    PayrollPeriod,
+    PayrollEntry,
+    SalaryAdvanceRepayment,
+    LeaveRequest,
+    EmployeeDocument,
+):
+    admin.site.register(payroll_model)
