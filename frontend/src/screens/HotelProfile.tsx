@@ -426,6 +426,11 @@ export default function HotelProfile() {
           <p>Identity, branding, contact information and operating defaults</p>
         </div>
         <div className="company-settings-page-actions">
+          {(app.user.isSuperuser || app.user.role.toLowerCase() === 'system administrator') && !creating && (
+            <button type="button" className="company-settings-new" onClick={() => app.navTo('front-desk-rooms', 'Rooms & room types')}>
+              <Icon name="hotel" size={16} /> Manage rooms
+            </button>
+          )}
           {hotels.length > 1 && !creating && (
             <select value={selectedId} onChange={(event) => setSelectedId(event.target.value)} aria-label="Select hotel profile">
               {hotels.map((hotel) => <option key={hotel.id} value={String(hotel.id)}>{hotel.name}</option>)}

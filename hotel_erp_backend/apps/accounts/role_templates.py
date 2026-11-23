@@ -19,6 +19,7 @@ ROLE_SPECS = {
             "employees": ["employee", "designation"],
             "inventory": ["category", "item", "itemunitprice", "storelocation", "unitofmeasure"],
             "organization": ["hotel"],
+            "hospitality": ["room", "roomtype"],
             "materials_control": ["outletassignment", "integrationconfig", "glaccountmapping"],
         },
     },

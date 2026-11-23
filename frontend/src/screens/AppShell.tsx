@@ -41,6 +41,7 @@ const AccessManagement = lazy(() => import('./AccessManagement'))
 const SupplierManagement = lazy(() => import('./SupplierManagement'))
 const SupplierQuotationOptionOne = lazy(() => import('./SupplierQuotationOptionOne'))
 const ReceptionWorkspace = lazy(() => import('./HospitalityWorkspaces').then(module => ({default: module.ReceptionWorkspace})))
+const RoomManagementWorkspace = lazy(() => import('./RoomManagementWorkspace'))
 const BarPosWorkspace = lazy(() => import('./HospitalityWorkspaces').then(module => ({default: module.BarPosWorkspace})))
 const UnitManagement = lazy(() => import('./UnitManagement'))
 const MaterialsControl = lazy(() => import('./MaterialsControl'))
@@ -113,6 +114,7 @@ export default function AppShell() {
   else if (route === 'hr-attendance') content = <HRAttendanceWorkspace />
   else if (route === 'hr-shifts') content = <HRShiftsWorkspace />
   else if (route === 'front-desk-reservations') content = <ReceptionWorkspace />
+  else if (route === 'front-desk-rooms') content = <RoomManagementWorkspace />
   else if (route === 'bar-pos') content = <BarPosWorkspace />
   else if (route === 'purchasing-workbench') content = <EnterprisePurchasingWorkbench />
   else if (route === 'purchasing-quotes') content = <EnterpriseQuoteMatrix />

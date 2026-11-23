@@ -10,7 +10,10 @@ interface NavGroup { heading: string; items: NavItem[] }
 const roleNavigation: Record<string, NavGroup[]> = {
   receptionist: [{ heading: 'Front office', items: [{ route: 'front-desk-reservations', label: 'Reservations desk', icon: 'hotel' }] }],
   'reservations agent': [{ heading: 'Reservations', items: [{ route: 'front-desk-reservations', label: 'Room availability & bookings', icon: 'event_available' }] }],
-  'front office manager': [{ heading: 'Front office', items: [{ route: 'front-desk-reservations', label: 'Reservation management', icon: 'hotel' }] }],
+  'front office manager': [{ heading: 'Front office', items: [
+    { route: 'front-desk-rooms', label: 'Room management', icon: 'hotel' },
+    { route: 'front-desk-reservations', label: 'Reservation management', icon: 'hotel' },
+  ] }],
   bartender: [{ heading: 'Bar', items: [{ route: 'bar-pos', label: 'Open bar checks', icon: 'point_of_sale' }] }],
   waiter: [{ heading: 'Restaurant', items: [{ route: 'bar-pos', label: 'Restaurant checks', icon: 'restaurant' }] }],
   cashier: [{ heading: 'Cashier', items: [{ route: 'bar-pos', label: 'POS check register', icon: 'receipt_long' }] }],
@@ -159,6 +162,7 @@ const adminNavigation: NavGroup[] = [
   { heading: 'Master data', items: [
     { route:'dashboard', label:'IT dashboard', icon:'space_dashboard' },
     { route:'admin-cost-centers', label:'Cost center / Stores', icon:'warehouse' },
+    { route:'front-desk-rooms', label:'Rooms & room types', icon:'hotel' },
     { route:'admin-articles', label:'Article master', icon:'inventory_2' },
     { route:'admin-authorisation-rules', label:'Authorisation rules', icon:'rule' },
     { route:'uoms', label:'Unit conversions', icon:'straighten' },

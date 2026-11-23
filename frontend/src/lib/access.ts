@@ -56,11 +56,13 @@ const routePermissions: Record<string, string[]> = {
   'access-management': ['accounts.view_user', 'auth.view_group'],
   'hotel-profile': ['organization.view_hotel'],
   'front-desk-reservations': ['hospitality.view_reservation'],
+  'front-desk-rooms': ['hospitality.view_room', 'hospitality.view_roomtype'],
   'bar-pos': ['hospitality.view_poscheck'],
 }
 
 const enterpriseRoleRoutes: Record<string, string[]> = {
   'front-desk-reservations': ['receptionist', 'reservations agent', 'front office manager'],
+  'front-desk-rooms': ['front office manager'],
   'bar-pos': ['bartender', 'waiter', 'bar supervisor', 'cashier'],
   'hr-payroll': ['hr manager', 'payroll officer', 'financial manager', 'financial controller'],
   'hr-affectors': ['hr manager', 'payroll officer'],
@@ -92,7 +94,7 @@ const enterpriseRoleRoutes: Record<string, string[]> = {
 }
 const adminAllowedRoutes = new Set([
   'dashboard','hr-dashboard', 'integration-control', 'access-management', 'audit-log',
-  'hotel-profile', 'admin-cost-centers', 'admin-authorisation-rules','admin-articles',
+  'hotel-profile', 'admin-cost-centers', 'admin-authorisation-rules','admin-articles', 'front-desk-rooms',
   'locations', 'categories', 'items', 'uoms', 'itemUnits', 'employees', 'departments',
   'suppliers','supplierItems', 'reports','reportview',
 ])
@@ -102,7 +104,7 @@ const hrApps = new Set(['employees', 'departments', 'accounts'])
 const strictRoleRoutes: Record<string, Set<string>> = {
   receptionist: new Set(['front-desk-reservations']),
   'reservations agent': new Set(['front-desk-reservations']),
-  'front office manager': new Set(['front-desk-reservations']),
+  'front office manager': new Set(['front-desk-reservations', 'front-desk-rooms']),
   bartender: new Set(['bar-pos']),
   waiter: new Set(['bar-pos']),
   cashier: new Set(['bar-pos']),

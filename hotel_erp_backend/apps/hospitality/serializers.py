@@ -9,6 +9,17 @@ class RoomTypeSerializer(serializers.ModelSerializer):
         model = RoomType
         fields = ("id", "branch", "code", "name", "capacity", "is_active")
 
+    def validate_capacity(self, value):
+        if not 1 <= value <= 255:
+            raise serializers.ValidationError("Guest capacity must be between 1 and 255.")
+        return value
+
+    def validate_code(self, value):
+        return value.strip().upper()
+
+    def validate_name(self, value):
+        return value.strip()
+
 
 class RoomSerializer(serializers.ModelSerializer):
     class Meta:

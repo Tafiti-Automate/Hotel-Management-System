@@ -66,16 +66,128 @@ class PropertyScopedMixin:
         return super().get_queryset().filter(branch_id=self.property_id())
 
 
-class RoomTypeViewSet(PropertyScopedMixin, viewsets.ReadOnlyModelViewSet):
+class RoomMasterDataMixin:
+    """Hotel room master configuration, never guest or housekeeping posting.
+
+    Property managers can access only their assigned branch; IT administrators
+    can configure properties, including when they have no Employee record.
+    """
+
+    permission_classes = (HotelDjangoModelPermissions,)
+    http_method_names = ("get", "post", "patch", "head", "options")
+
+    def _is_administrator(self):
+        user = self.request.user
+        return user.is_superuser or user.groups.filter(name="System Administrator").exists()
+
+    def _require_editor(self):
+        if not self._is_administrator() and not self.request.user.groups.filter(
+            name="Front Office Manager"
+        ).exists():
+            raise PermissionDenied("Room configuration is restricted to System Administrator and Front Office Manager.")
+
+    def _require_property(self, branch):
+        if not branch or not branch.is_active:
+            raise ValidationError({"branch": "Choose an active hotel property."})
+        if not self._is_administrator():
+            require_property(self.request.user, branch.pk)
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if self._is_administrator():
+            return qs
+        return qs.filter(branch_id=assigned_employee(self.request.user).branch_id)
+
+    def _validate_and_save(self, instance, serializer):
+        for key, value in serializer.validated_data.items():
+            setattr(instance, key, value)
+        try:
+            instance.full_clean()
+        except DjangoValidationError as error:
+            raise ValidationError(getattr(error, "message_dict", None) or error.messages)
+        instance.save()
+        serializer.instance = instance
+
+
+class RoomTypeViewSet(RoomMasterDataMixin, viewsets.ModelViewSet):
     queryset = RoomType.objects.select_related("branch")
     serializer_class = RoomTypeSerializer
-    http_method_names = ("get", "head", "options")
+
+    @transaction.atomic
+    def perform_create(self, serializer):
+        self._require_editor()
+        branch = serializer.validated_data.get("branch")
+        self._require_property(branch)
+        from apps.departments.models import Branch
+        Branch.objects.select_for_update().get(pk=branch.pk)
+        self._validate_and_save(RoomType(created_by=self.request.user), serializer)
+
+    @transaction.atomic
+    def perform_update(self, serializer):
+        self._require_editor()
+        current = self.get_object()
+        self._require_property(current.branch)
+        from apps.departments.models import Branch
+        Branch.objects.select_for_update().get(pk=current.branch_id)
+        proposed = serializer.validated_data
+        if "branch" in proposed and proposed["branch"].pk != current.branch_id:
+            raise ValidationError({"branch": "An existing room type cannot move to another hotel property."})
+        if "code" in proposed and proposed["code"] != current.code and current.rooms.exists():
+            raise ValidationError({"code": "Room type codes in use cannot be changed."})
+        if proposed.get("is_active") is False and current.is_active and current.rooms.filter(is_active=True).exists():
+            raise ValidationError({"is_active": "Deactivate or reassign active rooms before disabling this type."})
+        self._validate_and_save(current, serializer)
 
 
-class RoomViewSet(PropertyScopedMixin, viewsets.ReadOnlyModelViewSet):
+class RoomViewSet(RoomMasterDataMixin, viewsets.ModelViewSet):
     queryset = Room.objects.select_related("room_type", "branch")
     serializer_class = RoomSerializer
-    http_method_names = ("get", "head", "options")
+
+    def _no_operational_fields(self):
+        forbidden = {"status", "housekeeping_status"} & set(self.request.data)
+        if forbidden:
+            raise ValidationError({
+                "detail": "Occupancy and housekeeping conditions must be changed through authorized front-desk and housekeeping workflows."
+            })
+
+    @transaction.atomic
+    def perform_create(self, serializer):
+        self._require_editor()
+        self._no_operational_fields()
+        branch = serializer.validated_data.get("branch")
+        self._require_property(branch)
+        from apps.departments.models import Branch
+        Branch.objects.select_for_update().get(pk=branch.pk)
+        room_type = serializer.validated_data.get("room_type")
+        if not room_type or not room_type.is_active or room_type.branch_id != branch.pk:
+            raise ValidationError({"room_type": "Choose an active room type from this hotel property."})
+        self._validate_and_save(Room(created_by=self.request.user), serializer)
+
+    @transaction.atomic
+    def perform_update(self, serializer):
+        self._require_editor()
+        self._no_operational_fields()
+        current = self.get_object()
+        self._require_property(current.branch)
+        from apps.departments.models import Branch
+        Branch.objects.select_for_update().get(pk=current.branch_id)
+        proposed = serializer.validated_data
+        if "branch" in proposed and proposed["branch"].pk != current.branch_id:
+            raise ValidationError({"branch": "Existing rooms cannot be moved between properties."})
+        room_type = proposed.get("room_type", current.room_type)
+        if not room_type.is_active or room_type.branch_id != current.branch_id:
+            raise ValidationError({"room_type": "Choose an active room type belonging to this property."})
+        reservations = current.reservations
+        if reservations.exists() and any(
+            field in proposed and proposed[field] != getattr(current, field)
+            for field in ("number", "room_type")
+        ):
+            raise ValidationError({"detail": "A room with reservation history cannot be renumbered or retyped."})
+        if proposed.get("is_active") is False and current.is_active and reservations.filter(
+            status__in=(Reservation.STATUS_RESERVED, Reservation.STATUS_CHECKED_IN)
+        ).exists():
+            raise ValidationError({"is_active": "Cancel or resolve active reservations before deactivating this room."})
+        self._validate_and_save(current, serializer)
 
 
 class GuestFolioViewSet(PropertyScopedMixin, viewsets.ReadOnlyModelViewSet):
