@@ -212,8 +212,9 @@ export function hasReportAccess(user: AccessUser): boolean {
   return allowed.includes('*') || allowed.length > 0
 }
 
-function roleKey(user: Pick<AccessUser, 'role'>): string {
-  return user.role.trim().toLowerCase()
+/** Canonical role identifier used consistently by navigation and authorization. */
+export function roleKey(user: Pick<AccessUser, 'role'>): string {
+  return String(user.role || '').trim().toLowerCase().replace(/[\s_-]+/g, ' ')
 }
 
 export function isStoresManager(user: Pick<AccessUser, 'role'>): boolean {

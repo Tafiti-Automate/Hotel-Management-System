@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useApp } from '../state/AppContext'
 import { Icon } from './Icon'
 import { Avatar } from './Avatar'
-import { canAccessRoute, canSwitchBranches, canSwitchModules } from '../lib/access'
+import { canAccessRoute, canSwitchBranches, canSwitchModules, roleKey } from '../lib/access'
 
 interface NavItem { route: string; label: string; icon?: string }
 interface NavGroup { heading: string; items: NavItem[] }
@@ -218,9 +218,13 @@ export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
-  const role = String(app.user.role || '').trim().toLowerCase()
+  const role = roleKey(app.user)
   const administrator = app.user.isSuperuser || role === 'system administrator'
-  const rawGroups = app.activeModule === 'hr' ? hrNavigation : (roleNavigation[role] || adminNavigation)
+  // Front Office Manager always receives the dedicated operational sidebar.
+  // The HR module switch must never replace the PMS navigation for this role.
+  const rawGroups = role === 'front office manager'
+    ? roleNavigation[role]
+    : app.activeModule === 'hr' ? hrNavigation : (roleNavigation[role] || adminNavigation)
   const groups = rawGroups
     .map((group) => ({ ...group, items: group.items.filter((item) => canAccessRoute(app.user, item.route)) }))
     .filter((group) => group.items.length)

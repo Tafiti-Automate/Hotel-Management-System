@@ -29,3 +29,17 @@ test('Unsafe payments and check-out are not posted from review screens',()=>{
  assert.match(ui,/Night audit closing is not enabled/)
  assert.doesNotMatch(ui,/runBackendAction\('hospitality-reservations',\s*[^\n]+,\s*'check-out'/)
 })
+
+test('Front Office Manager role names are normalized consistently for sidebar and routes', () => {
+ const access = read('lib/access.ts')
+ const sidebar = read('components/Sidebar.tsx')
+ assert.match(access, /export function roleKey/)
+ assert.match(sidebar, /const role = roleKey\(app\.user\)/)
+ assert.match(sidebar, /role === 'front office manager'/)
+ const perm = ['hospitality.view_room','hospitality.view_roomtype','hospitality.view_reservation']
+ for (const role of ['Front Office Manager','Front_Office_Manager','FRONT-OFFICE MANAGER','Front   Office   Manager']) {
+   for (const route of ['front-desk-rooms','front-office-assignments','front-office-housekeeping']) {
+     assert.equal(canAccessRoute({role, isSuperuser:false, permissions:perm}, route), true, role + ': ' + route)
+   }
+ }
+})
