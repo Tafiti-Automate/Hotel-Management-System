@@ -174,7 +174,7 @@ const adminNavigation: NavGroup[] = [
   { heading: 'Master data', items: [
     { route:'dashboard', label:'IT dashboard', icon:'space_dashboard' },
     { route:'admin-cost-centers', label:'Cost center / Stores', icon:'warehouse' },
-    { route:'front-desk-rooms', label:'Rooms & room types', icon:'hotel' },
+    { route: 'front-desk-rooms', label: 'Rooms & room types', icon: 'hotel' },
     { route:'admin-articles', label:'Article master', icon:'inventory_2' },
     { route:'admin-authorisation-rules', label:'Authorisation rules', icon:'rule' },
     { route:'uoms', label:'Unit conversions', icon:'straighten' },
