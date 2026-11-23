@@ -39,7 +39,7 @@ def test_receiving_duplicate_delivery_reference_never_reposts_stock():
     )
     order_line = PurchaseOrderItem.objects.create(
         purchase_order=order, requisition_item=line_req, item=item,
-        unit=item.base_unit, quantity=Decimal("5.0000"), unit_cost=Decimal("1200.0000"),
+        unit=item.base_unit, quantity=Decimal("5.0000"), unit_cost=Decimal("1200.00"),
     )
     authorize_order_for_test(order)
     order.issue(sent_by=employee, sent_to_email=supplier.email)
