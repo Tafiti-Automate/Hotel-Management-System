@@ -42,6 +42,7 @@ const SupplierManagement = lazy(() => import('./SupplierManagement'))
 const SupplierQuotationOptionOne = lazy(() => import('./SupplierQuotationOptionOne'))
 const ReceptionWorkspace = lazy(() => import('./HospitalityWorkspaces').then(module => ({default: module.ReceptionWorkspace})))
 const RoomManagementWorkspace = lazy(() => import('./RoomManagementWorkspace'))
+const FrontOfficeWorkspace = lazy(() => import('./FrontOfficeWorkspace'))
 const BarPosWorkspace = lazy(() => import('./HospitalityWorkspaces').then(module => ({default: module.BarPosWorkspace})))
 const UnitManagement = lazy(() => import('./UnitManagement'))
 const MaterialsControl = lazy(() => import('./MaterialsControl'))
@@ -115,6 +116,7 @@ export default function AppShell() {
   else if (route === 'hr-shifts') content = <HRShiftsWorkspace />
   else if (route === 'front-desk-reservations') content = <ReceptionWorkspace />
   else if (route === 'front-desk-rooms') content = <RoomManagementWorkspace />
+  else if (['front-office-dashboard', 'front-office-arrivals', 'front-office-inhouse', 'front-office-departures', 'front-office-assignments', 'front-office-housekeeping', 'front-office-guests', 'front-office-folios', 'front-office-cashier', 'front-office-night-audit', 'front-office-reports', 'front-office-config'].includes(route)) content = <FrontOfficeWorkspace section={route} />
   else if (route === 'bar-pos') content = <BarPosWorkspace />
   else if (route === 'purchasing-workbench') content = <EnterprisePurchasingWorkbench />
   else if (route === 'purchasing-quotes') content = <EnterpriseQuoteMatrix />
