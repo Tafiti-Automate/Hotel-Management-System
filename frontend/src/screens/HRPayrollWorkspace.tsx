@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import ConfirmTransaction from '../components/ConfirmTransaction'
 import { useApp } from '../state/AppContext'
 import { createBackendRecord, getToken, runBackendAction, updateBackendRecord } from '../lib/api'
@@ -20,7 +20,7 @@ function PayrollPayslip({ entry, period, onClose }: { entry: HRRow; period: HRRo
     ['Basic pay',currency(entry.eligible_basic_pay)],['Arrears',currency(entry.arrears)],
     ['Leave transport',currency(entry.leave_transport)],['Baggage allowance',currency(entry.baggage_allowance)],
     ['Service charge',currency(entry.service_charge)],['Housing allowance',currency(entry.housing_allowance)],
-    ['Other earnings',currency(entry.other_earnings)],
+    ['Other earnings (includes overtime)',currency(entry.other_earnings)],
   ]
   const deductions: [string,string][] = [
     ['NSSF (employee)',currency(entry.nssf_employee)],['PAYE',currency(entry.paye)],
@@ -36,6 +36,7 @@ function PayrollPayslip({ entry, period, onClose }: { entry: HRRow; period: HRRo
         <h2>{text(entry.employee_name)}</h2>
         <p>Employee code: {text(entry.employee_code)} · Department: {text(entry.department_name)}</p>
         <p>Payroll period: {text(period.year)}-{text(period.month).padStart(2,'0')} · Property: {text(period.branch_name)}</p>
+        <p>Approved overtime: {text(entry.overtime_hours)} hours · UGX {currency(entry.overtime_pay)} (included under other earnings)</p>
         <div className="hr-payslip-grid">
           <div><h3>Earnings (UGX)</h3>{rows.map(([k,v])=><div key={k}><span>{k}</span><strong>{v}</strong></div>)}</div>
           <div><h3>Deductions (UGX)</h3>{deductions.map(([k,v])=><div key={k}><span>{k}</span><strong>{v}</strong></div>)}</div>
@@ -66,6 +67,27 @@ export async function downloadPayrollCsv(id: string, kind: 'register.csv'|'bank-
   setTimeout(() => URL.revokeObjectURL(url), 3000)
 }
 
+type CoverageRow = {
+  employee: string; employee_name: string; department_name: string;
+  required_days: number; approved_days: number; paid_days: number;
+  missing_days: number; overtime_hours: string; overtime_pay: string; ready: boolean
+}
+type Coverage = {ready:boolean;employee_count:number;missing_day_count:number;employees:CoverageRow[]}
+
+async function readCoverage(periodId:string):Promise<Coverage>{
+  const token=getToken()
+  if(!token)throw new Error('Your payroll session has expired. Sign in again.')
+  const base=(process.env.NEXT_PUBLIC_API_BASE_URL||'/api/v1').replace(/\/+$/,'')
+  const response=await fetch(`${base}/payroll-periods/${encodeURIComponent(periodId)}/attendance-coverage/`,{
+    headers:{Accept:'application/json',Authorization:`Token ${token}`},
+  })
+  if(!response.ok){
+    const data=await response.json().catch(()=>({})) as Record<string,unknown>
+    throw new Error(text(data.detail)||`Attendance readiness check failed (${response.status}).`)
+  }
+  return response.json() as Promise<Coverage>
+}
+
 export function PayrollWorkspace() {
   const app=useApp()
   const role=app.user.role.trim().toLowerCase()
@@ -89,13 +111,25 @@ export function PayrollWorkspace() {
   const [accountNumber,setAccountNumber]=useState('')
   const [selectedPayslip,setSelectedPayslip]=useState<HRRow|null>(null)
   const [filter,setFilter]=useState('')
+  const [coverage,setCoverage]=useState<Coverage|null>(null)
+  const [coverageLoading,setCoverageLoading]=useState(false)
+  const [coverageError,setCoverageError]=useState('')
   const period=periods.find(p=>text(p.id)===selectedId)||periods[0]
   const currentId=text(period?.id)
+  useEffect(()=>{
+    if(!currentId){setCoverage(null);setCoverageLoading(false);setCoverageError('');return}
+    let live=true
+    setCoverage(null);setCoverageLoading(true);setCoverageError('')
+    void readCoverage(currentId).then(result=>{if(live)setCoverage(result)})
+      .catch(cause=>{if(live)setCoverageError(cause instanceof Error?cause.message:'Unable to verify attendance.')})
+      .finally(()=>{if(live)setCoverageLoading(false)})
+    return()=>{live=false}
+  },[currentId,text(period?.status)])
   const periodEntries=entries.filter(e=>text(e.period)===currentId && [e.employee_name,e.employee_code,e.department_name].some(v=>text(v).toLowerCase().includes(filter.toLowerCase())))
   const currentProfile=profiles.find(p=>text(p.employee)===profileEmployee)
   const gross=periodEntries.reduce((total,e)=>total+number(e.gross_pay),0)
   const net=periodEntries.reduce((total,e)=>total+number(e.net_pay),0)
-  const canCalculate=hr && ['draft','calculated'].includes(text(period?.status))
+  const canCalculate=hr && coverage?.ready===true && !coverageLoading && !coverageError && ['draft','calculated'].includes(text(period?.status))
   const canSubmit=hr && text(period?.status)==='calculated'
   const canApprove=finance && text(period?.status)==='submitted'
   const canPost=finance && text(period?.status)==='approved'
@@ -162,7 +196,15 @@ export function PayrollWorkspace() {
               <div><dt>Net pay</dt><dd>UGX {currency(period.net_total)}</dd></div>
               <div><dt>Employer NSSF</dt><dd>UGX {currency(period.employer_nssf_total)}</dd></div>
               <div><dt>Rule version</dt><dd>{text(period.statutory_rule_version)}</dd></div></dl>
-            <p className="hr-muted">Calculated amounts must be reconciled with approved timesheets, tax guidance and employee profiles before posting.</p>
+            <p className="hr-muted">Calculation now requires independently approved daily evidence for every eligible day, including rest days and leave. Overtime payment must reflect an approved hotel policy.</p>
+            <section className="hr-coverage" aria-label="Payroll attendance readiness">
+              <strong>Attendance readiness</strong>
+              {coverageLoading?<p>Checking approved attendance…</p>:coverageError?<p role="alert">{coverageError}</p>
+                :coverage?<><p>{coverage.ready?'Attendance coverage complete.':'Attendance incomplete — payroll calculation blocked.'} {coverage.employee_count} employees · {coverage.missing_day_count} days missing or awaiting approval.</p>
+                  {!coverage.ready&&<div className="hr-coverage-list">{coverage.employees.filter(e=>!e.ready).slice(0,12).map(e=><div key={e.employee}><span>{e.employee_name}</span><strong>{e.approved_days}/{e.required_days} approved days</strong></div>)}</div>}
+                </>:<p>Attendance has not been checked yet.</p>}
+              {hr&&<button type="button" className="hr-btn" onClick={()=>app.navTo('hr-attendance','Daily attendance')}>Open daily attendance</button>}
+            </section>
             <div className="hr-actions">
               {canCalculate&&<ConfirmTransaction title="Recalculate this payroll?" description="This updates unposted employee snapshots. Verify salary profiles, approved affectors, advances and days worked first." confirmLabel="Calculate payroll" disabled={busy} busy={busy} className="hr-btn primary" onConfirm={()=>run(()=>runBackendAction('payroll-periods',currentId,'calculate'),'Payroll calculated')}>Calculate</ConfirmTransaction>}
               {canSubmit&&<ConfirmTransaction title="Submit payroll to Finance?" description="Calculated payroll will be locked for HR editing pending Finance approval." confirmLabel="Submit to Finance" disabled={busy} busy={busy} className="hr-btn primary" onConfirm={()=>run(()=>runBackendAction('payroll-periods',currentId,'submit'),'Submitted to Finance')}>Submit to Finance</ConfirmTransaction>}
@@ -177,9 +219,9 @@ export function PayrollWorkspace() {
       <section className="hr-panel">
         <header><h2>Employee payroll register</h2><label className="hr-search">Find employee<input value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Name, code or department"/></label></header>
         <div className="hr-table-scroll"><table className="hr-table">
-          <thead><tr><th>Employee</th><th>Department</th><th>Days worked</th><th className="num">Gross (UGX)</th><th className="num">Deductions</th><th className="num">Net (UGX)</th><th>Document</th></tr></thead>
-          <tbody>{periodEntries.map(e=><tr key={text(e.id)}><td><strong>{text(e.employee_name)}</strong><small>{text(e.employee_code)}</small></td><td>{text(e.department_name)}</td><td>{text(e.days_worked)} / {text(e.days_in_month)}</td><td className="num">{currency(e.gross_pay)}</td><td className="num">{currency(e.total_deductions)}</td><td className="num"><strong>{currency(e.net_pay)}</strong></td><td>{text(period?.status)==='posted'?<button type="button" className="hr-link" onClick={()=>setSelectedPayslip(e)}>Payslip</button>:<span className="hr-muted">Pending posting</span>}</td></tr>)}
-            {!periodEntries.length&&<tr><td colSpan={7} className="hr-empty">No calculated employee lines for this period.</td></tr>}
+          <thead><tr><th>Employee</th><th>Department</th><th>Paid days</th><th className="num">Overtime (UGX)</th><th className="num">Gross (UGX)</th><th className="num">Deductions</th><th className="num">Net (UGX)</th><th>Document</th></tr></thead>
+          <tbody>{periodEntries.map(e=><tr key={text(e.id)}><td><strong>{text(e.employee_name)}</strong><small>{text(e.employee_code)}</small></td><td>{text(e.department_name)}</td><td>{text(e.days_worked)} / {text(e.days_in_month)}</td><td className="num">{currency(e.overtime_pay)}<small>{text(e.overtime_hours)} hours</small></td><td className="num">{currency(e.gross_pay)}</td><td className="num">{currency(e.total_deductions)}</td><td className="num"><strong>{currency(e.net_pay)}</strong></td><td>{text(period?.status)==='posted'?<button type="button" className="hr-link" onClick={()=>setSelectedPayslip(e)}>Payslip</button>:<span className="hr-muted">Pending posting</span>}</td></tr>)}
+            {!periodEntries.length&&<tr><td colSpan={8} className="hr-empty">No calculated employee lines for this period.</td></tr>}
           </tbody>
         </table></div>
       </section>

@@ -3,7 +3,9 @@ from django.db.models import Sum
 from rest_framework import serializers
 
 from apps.employees.models import (
+    AttendanceRecord,
     EmployeeDocument,
+    ShiftTemplate,
     LeaveRequest,
     PayrollAffector,
     PayrollEntry,
@@ -26,6 +28,37 @@ class CleanModelSerializer(serializers.ModelSerializer):
             detail = getattr(error, "message_dict", None) or getattr(error, "messages", None) or str(error)
             raise serializers.ValidationError(detail) from error
         return attrs
+
+
+class ShiftTemplateSerializer(CleanModelSerializer):
+    branch_name = serializers.CharField(source="branch.name", read_only=True)
+
+    class Meta:
+        model = ShiftTemplate
+        fields = "__all__"
+        read_only_fields = ("id", "created_by", "created_at", "updated_at")
+
+
+class AttendanceRecordSerializer(CleanModelSerializer):
+    employee_name = serializers.CharField(source="employee.user.get_full_name", read_only=True)
+    employee_code = serializers.CharField(source="employee.user.employee_code", read_only=True)
+    department_name = serializers.CharField(source="employee.department.name", read_only=True)
+    branch_name = serializers.CharField(source="employee.branch.name", read_only=True)
+    shift_name = serializers.CharField(source="shift.name", read_only=True, default="")
+    reviewed_by_name = serializers.CharField(source="approved_by.get_full_name", read_only=True, default="")
+
+    class Meta:
+        model = AttendanceRecord
+        fields = "__all__"
+        read_only_fields = (
+            "id", "approved_by", "approved_at", "created_by",
+            "created_at", "updated_at",
+        )
+
+    def validate(self, attrs):
+        if self.instance and self.instance.approved_at:
+            raise serializers.ValidationError("Approved attendance is immutable; use a controlled payroll correction.")
+        return super().validate(attrs)
 
 
 class PayrollProfileSerializer(CleanModelSerializer):

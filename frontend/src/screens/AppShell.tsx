@@ -20,6 +20,8 @@ const SalaryAdvanceWorkspace = lazy(() => import('./HRWorkspaces').then(module =
 const LeaveWorkspace = lazy(() => import('./HRWorkspaces').then(module => ({ default: module.LeaveWorkspace })))
 const LeaveCalendarWorkspace = lazy(() => import('./HRWorkspaces').then(module => ({ default: module.LeaveCalendarWorkspace })))
 const HRDocumentsWorkspace = lazy(() => import('./HRWorkspaces').then(module => ({ default: module.HRDocumentsWorkspace })))
+const HRAttendanceWorkspace = lazy(() => import('./HRWorkspaces').then(module => ({ default: module.HRAttendanceWorkspace })))
+const HRShiftsWorkspace = lazy(() => import('./HRWorkspaces').then(module => ({ default: module.HRShiftsWorkspace })))
 const ProcurementWorkbench = lazy(() => import('./ProcurementWorkbench'))
 const FinancialManagerLpoWorkspace = lazy(() => import('./FinancialManagerLpoWorkspace'))
 const ReceivingClerkWorkspaceV2 = lazy(() => import('./ReceivingClerkWorkspaceV2'))
@@ -108,6 +110,8 @@ export default function AppShell() {
   else if (route === 'hr-leave') content = <LeaveWorkspace />
   else if (route === 'hr-calendar') content = <LeaveCalendarWorkspace />
   else if (route === 'hr-documents') content = <HRDocumentsWorkspace />
+  else if (route === 'hr-attendance') content = <HRAttendanceWorkspace />
+  else if (route === 'hr-shifts') content = <HRShiftsWorkspace />
   else if (route === 'front-desk-reservations') content = <ReceptionWorkspace />
   else if (route === 'bar-pos') content = <BarPosWorkspace />
   else if (route === 'purchasing-workbench') content = <EnterprisePurchasingWorkbench />

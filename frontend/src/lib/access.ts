@@ -65,6 +65,8 @@ const enterpriseRoleRoutes: Record<string, string[]> = {
   'hr-payroll': ['hr manager', 'payroll officer', 'financial manager', 'financial controller'],
   'hr-affectors': ['hr manager', 'payroll officer'],
   'hr-advances': ['hr manager', 'payroll officer', 'financial manager', 'financial controller'],
+  'hr-attendance': ['hr manager', 'payroll officer'],
+  'hr-shifts': ['hr manager', 'payroll officer'],
   'hr-leave': ['hr manager', 'payroll officer'],
   'hr-calendar': ['hr manager', 'payroll officer'],
   'hr-documents': ['hr manager', 'payroll officer'],

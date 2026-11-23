@@ -56,3 +56,35 @@ test('leave and files are connected to actual Django APIs', () => {
   assert.match(leave,/getToken\(\)/)
   assert.match(views,/FileResponse\(/)
 })
+
+test('shift and daily attendance routes are HR-only and connected to Django', () => {
+  const attendance = read('screens/HRAttendanceWorkspace.tsx')
+  const services = read('../../hotel_erp_backend/apps/employees/payroll_services.py')
+  const routeMap = read('lib/navigation.ts')
+  const role = name => ({role:name,isSuperuser:false,permissions:['employees.view_employee','employees.view_attendancerecord']})
+  for (const route of ['hr-shifts','hr-attendance']) {
+    assert.ok(sidebar.includes(`route: '${route}'`))
+    assert.ok(shell.includes(`route === '${route}'`))
+    assert.ok(routeMap.includes(`'${route}'`))
+    assert.equal(canAccessRoute(role('HR Manager'),route),true)
+    assert.equal(canAccessRoute(role('Payroll Officer'),route),true)
+    assert.equal(canAccessRoute(role('Financial Manager'),route),false)
+    assert.equal(canAccessRoute(role('Store Keeper'),route),false)
+  }
+  assert.match(attendance,/createBackendRecord\('attendance-records'/)
+  assert.match(attendance,/runBackendAction\('attendance-records'/)
+  assert.match(attendance,/createBackendRecord\('hr-shifts'/)
+  assert.match(services,/Approved attendance is incomplete/)
+  assert.match(services,/overtime_pay/)
+  assert.match(payroll,/Attendance readiness/)
+  assert.match(payroll,/coverage\?\.ready===true/)
+  assert.match(payroll,/Overtime \(UGX\)/)
+})
+
+test('payroll PAYE uses LST-deducted income and documented statutory version', () => {
+  const services = read('../../hotel_erp_backend/apps/employees/payroll_services.py')
+  assert.match(services,/gross - local_service_tax/)
+  assert.match(services,/PAYE_RULE_VERSION = "UG-FY2026-27"/)
+  assert.match(services,/NSSF_EMPLOYEE_RATE = Decimal\("0\.05"\)/)
+  assert.match(services,/NSSF_EMPLOYER_RATE = Decimal\("0\.10"\)/)
+})

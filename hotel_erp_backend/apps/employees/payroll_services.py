@@ -1,7 +1,7 @@
 """Controlled Uganda payroll calculations and period transitions."""
 
 import calendar
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.core.exceptions import ValidationError
@@ -10,6 +10,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from apps.employees.models import (
+    AttendanceRecord,
     PayrollAffector,
     PayrollEntry,
     PayrollPeriod,
@@ -75,13 +76,87 @@ def _affector_amount(affector, basic):
     return money(affector.amount)
 
 
-def _days_worked(employee, month_start, month_end, days_in_month):
-    joined = employee.date_joined
-    if not joined or joined <= month_start:
-        return Decimal(days_in_month)
-    if joined > month_end:
-        return Decimal("0")
-    return Decimal((month_end - joined).days + 1)
+def _approved_attendance(employee, month_start, month_end):
+    """Fail closed until every eligible calendar day has independently approved evidence.
+
+    Scheduled rest/holiday days and approved paid leave remain payable for a
+    monthly salaried employee. Unpaid leave and absence reduce prorated pay.
+    Overtime is never inferred from hours: the HR Manager approves its gross
+    amount from the employer's verified contractual policy.
+    """
+    first = max(month_start, employee.date_joined or month_start)
+    if first > month_end:
+        return Decimal("0.00"), Decimal("0.00"), Decimal("0.00"), []
+    records = list(AttendanceRecord.objects.select_related("shift", "approved_by").filter(
+        employee=employee, work_date__range=(first, month_end),
+    ).order_by("work_date"))
+    by_date = {row.work_date: row for row in records}
+    total_days = (month_end - first).days + 1
+    missing = []
+    current = first
+    for _ in range(total_days):
+        if current not in by_date or not by_date[current].approved_at or not by_date[current].approved_by_id:
+            missing.append(current.isoformat())
+        current += timedelta(days=1)
+    if missing:
+        name = employee.user.get_full_name() or employee.user.username
+        raise ValidationError(
+            f"Approved attendance is incomplete for {name}: "
+            f"{len(missing)} day(s) missing or pending, starting {missing[0]}. "
+            "Record and independently approve all work, rest, leave and absence days."
+        )
+    paid = Decimal(sum(1 for row in records if row.status in AttendanceRecord.PAYABLE_STATUSES))
+    hours = sum((row.overtime_hours for row in records), Decimal("0.00"))
+    overtime = money(sum((row.overtime_pay for row in records), Decimal("0.00")))
+    evidence = [
+        {"id": str(row.pk), "date": row.work_date.isoformat(),
+         "status": row.status, "shift_id": str(row.shift_id) if row.shift_id else None,
+         "overtime_hours": str(row.overtime_hours), "overtime_pay": str(row.overtime_pay)}
+        for row in records
+    ]
+    return paid, hours, overtime, evidence
+
+
+def attendance_coverage(period):
+    """Payroll readiness evidence without exposing or paginating every daily row."""
+    first_day, last_day, _days = _month_bounds(period)
+    profiles = PayrollProfile.objects.select_related(
+        "employee__user", "employee__branch", "employee__department",
+    ).filter(
+        employee__branch=period.branch,
+        employee__is_active=True, employee__user__is_active=True, is_active=True,
+    )
+    rows = []
+    for profile in profiles:
+        employee = profile.employee
+        first = max(first_day, employee.date_joined or first_day)
+        expected = max(0, (last_day - first).days + 1)
+        attendance = list(AttendanceRecord.objects.filter(
+            employee=employee, work_date__range=(first, last_day),
+        ).order_by("work_date")) if expected else []
+        approved = [line for line in attendance if line.approved_by_id and line.approved_at]
+        missing = max(0, expected - len(approved))
+        rows.append({
+            "employee": str(employee.pk),
+            "employee_name": employee.user.get_full_name() or employee.user.username,
+            "employee_code": employee.user.employee_code,
+            "department_name": employee.department.name,
+            "required_days": expected,
+            "approved_days": len(approved),
+            "pending_days": len(attendance) - len(approved),
+            "missing_days": missing,
+            "paid_days": sum(1 for line in approved if line.status in AttendanceRecord.PAYABLE_STATUSES),
+            "overtime_hours": str(sum((line.overtime_hours for line in approved), Decimal("0.00"))),
+            "overtime_pay": str(money(sum((line.overtime_pay for line in approved), Decimal("0.00")))),
+            "ready": expected == len(approved),
+        })
+    return {
+        "period": str(period.pk),
+        "ready": bool(rows) and all(line["ready"] for line in rows),
+        "employee_count": len(rows),
+        "missing_day_count": sum(line["missing_days"] for line in rows),
+        "employees": rows,
+    }
 
 
 @transaction.atomic
@@ -89,6 +164,11 @@ def calculate_period(period, actor):
     period = PayrollPeriod.objects.select_for_update().get(pk=period.pk)
     if period.status not in (PayrollPeriod.STATUS_DRAFT, PayrollPeriod.STATUS_CALCULATED):
         raise ValidationError("Only a draft or calculated payroll can be recalculated.")
+    if not ( (2026, 7) <= (period.year, period.month) <= (2027, 6) ):
+        raise ValidationError(
+            "Installed PAYE rules are verified only for July 2026 through June 2027. "
+            "Other periods require an independently validated statutory rule version."
+        )
     month_start, month_end, days_in_month = _month_bounds(period)
     profiles = PayrollProfile.objects.select_related(
         "employee__user", "employee__department", "employee__branch",
@@ -138,7 +218,9 @@ def calculate_period(period, actor):
         increment = money(category_totals["basic_increment"])
         merit = money(category_totals["merit_increment"])
         new_basic = money(basic + increment + merit)
-        days_worked = _days_worked(employee, month_start, month_end, days_in_month)
+        days_worked, overtime_hours, overtime_pay, attendance_evidence = _approved_attendance(
+            employee, month_start, month_end,
+        )
         eligible = money(new_basic * days_worked / Decimal(days_in_month))
         earnings = {
             "arrears": money(category_totals["arrears"]),
@@ -146,15 +228,20 @@ def calculate_period(period, actor):
             "baggage_allowance": money(category_totals["baggage_allowance"]),
             "service_charge": money(category_totals["service_charge"]),
             "housing_allowance": money(category_totals["housing_allowance"]),
-            "other_earnings": money(category_totals["other_earning"]),
+            "other_earnings": money(category_totals["other_earning"] + overtime_pay),
         }
         gross = money(eligible + sum(earnings.values(), Decimal("0.00")))
         nssf_employee = money(gross * NSSF_EMPLOYEE_RATE) if profile.nssf_applicable else Decimal("0.00")
         nssf_employer = money(gross * NSSF_EMPLOYER_RATE) if profile.nssf_applicable else Decimal("0.00")
-        paye = uganda_monthly_paye(gross, resident=profile.tax_resident)
         local_service_tax = (
             money(profile.local_service_tax_annual / Decimal("4"))
             if period.month in (7, 8, 9, 10) else Decimal("0.00")
+        )
+        # URA: assessed Local Service Tax is deductible from PAYE chargeable income.
+        # Employee NSSF contributions are not deducted when computing PAYE.
+        paye = uganda_monthly_paye(
+            max(Decimal("0.00"), gross - local_service_tax),
+            resident=profile.tax_resident,
         )
         union_dues = money(
             profile.union_dues_monthly + category_totals["union_dues"]
@@ -185,6 +272,8 @@ def calculate_period(period, actor):
             "joining_date": employee.date_joined,
             "days_in_month": days_in_month,
             "days_worked": days_worked,
+            "overtime_hours": overtime_hours,
+            "overtime_pay": overtime_pay,
             "old_basic_salary": basic,
             "increment_amount": increment,
             "merit_increment": merit,
@@ -212,6 +301,8 @@ def calculate_period(period, actor):
                 "advance_repayments": advance_plan,
                 "tax_resident": profile.tax_resident,
                 "nssf_applicable": profile.nssf_applicable,
+                "approved_attendance": attendance_evidence,
+                "overtime_pay": str(overtime_pay),
             },
             "created_by": actor,
         }

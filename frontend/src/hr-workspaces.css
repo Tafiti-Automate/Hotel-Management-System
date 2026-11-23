@@ -104,3 +104,14 @@
   .hr-payslip-actions{display:none!important}
   @page{size:A4;margin:12mm}
 }
+
+
+/* Attendance evidence and payroll readiness controls. */
+.hr-coverage{margin:12px 0;padding:12px;border:1px solid var(--border,#cfddd5);border-radius:8px;background:var(--surface-2,#f0f7f1)}
+.hr-coverage>strong{display:block;color:var(--text,#163b27);font-size:12px;margin-bottom:5px}
+.hr-coverage>p{color:var(--text-muted,#667c6d);font-size:11px;line-height:1.5;margin:6px 0 10px}
+.hr-coverage-list{max-height:150px;overflow:auto;margin:8px 0;border:1px solid var(--border,#d8e6dc);border-radius:7px;background:var(--surface,#fff)}
+.hr-coverage-list>div{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 10px;border-bottom:1px solid var(--border,#e0e8e2);font-size:11px}
+.hr-coverage-list>div:last-child{border-bottom:0}
+.hr-coverage-list>div>strong{font-variant-numeric:tabular-nums;white-space:nowrap}
+.hr-table td .hr-status+small{margin-top:4px}

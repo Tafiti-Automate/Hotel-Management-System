@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from django.conf import settings
@@ -305,6 +306,142 @@ class PayrollPeriod(BaseModel):
         return f"{self.branch} payroll {self.label}"
 
 
+class ShiftTemplate(BaseModel):
+    """Scheduled hotel shift, including shifts that cross midnight."""
+
+    branch = models.ForeignKey(
+        "departments.Branch", on_delete=models.PROTECT, related_name="hr_shifts",
+    )
+    name = models.CharField(max_length=100)
+    starts_at = models.TimeField()
+    ends_at = models.TimeField()
+    unpaid_break_minutes = models.PositiveSmallIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta(BaseModel.Meta):
+        ordering = ("branch__name", "starts_at", "name")
+        constraints = [
+            models.UniqueConstraint(fields=("branch", "name"), name="unique_hr_shift_per_branch"),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.starts_at and self.ends_at:
+            start = datetime.combine(timezone.localdate(), self.starts_at)
+            end = datetime.combine(timezone.localdate(), self.ends_at)
+            if end <= start:
+                end += timedelta(days=1)
+            minutes = int((end - start).total_seconds() // 60)
+            if self.unpaid_break_minutes >= minutes:
+                raise ValidationError({"unpaid_break_minutes": "Break time must be shorter than the scheduled shift."})
+
+    def __str__(self):
+        return f"{self.branch}: {self.name}"
+
+
+class AttendanceRecord(BaseModel):
+    """Approved daily payroll evidence, including paid rest and unpaid absence.
+
+    Overtime payment is an explicitly approved monetary amount; the system
+    does not guess hotel-specific overtime multipliers or time-off policies.
+    """
+
+    STATUS_PRESENT = "present"
+    STATUS_PAID_LEAVE = "paid_leave"
+    STATUS_UNPAID_LEAVE = "unpaid_leave"
+    STATUS_ABSENT = "absent"
+    STATUS_REST = "rest"
+    STATUS_PUBLIC_HOLIDAY = "public_holiday"
+    STATUS_CHOICES = (
+        (STATUS_PRESENT, "Present"), (STATUS_PAID_LEAVE, "Approved paid leave"),
+        (STATUS_UNPAID_LEAVE, "Approved unpaid leave"), (STATUS_ABSENT, "Unpaid absence"),
+        (STATUS_REST, "Paid rest day"), (STATUS_PUBLIC_HOLIDAY, "Paid public holiday"),
+    )
+    PAYABLE_STATUSES = {
+        STATUS_PRESENT, STATUS_PAID_LEAVE, STATUS_REST, STATUS_PUBLIC_HOLIDAY,
+    }
+
+    employee = models.ForeignKey(
+        Employee, on_delete=models.PROTECT, related_name="attendance_records",
+    )
+    work_date = models.DateField()
+    shift = models.ForeignKey(
+        ShiftTemplate, on_delete=models.PROTECT, related_name="attendance_records",
+        null=True, blank=True,
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES)
+    worked_hours = models.DecimalField(
+        max_digits=6, decimal_places=2, default=Decimal("0.00"),
+        validators=[validate_non_negative_decimal],
+    )
+    overtime_hours = models.DecimalField(
+        max_digits=6, decimal_places=2, default=Decimal("0.00"),
+        validators=[validate_non_negative_decimal],
+    )
+    overtime_pay = models.DecimalField(
+        max_digits=18, decimal_places=2, default=Decimal("0.00"),
+        validators=[validate_non_negative_decimal],
+        help_text="Approved gross overtime in UGX; calculated from a verified employer policy outside payroll.",
+    )
+    note = models.TextField(blank=True)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name="approved_hr_attendance", null=True, blank=True,
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta(BaseModel.Meta):
+        ordering = ("-work_date", "employee__user__first_name")
+        constraints = [
+            models.UniqueConstraint(fields=("employee", "work_date"), name="unique_employee_daily_attendance"),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.employee_id and self.shift_id:
+            if not self.employee.branch_id or self.shift.branch_id != self.employee.branch_id:
+                raise ValidationError({"shift": "The shift must belong to the employee's property."})
+        if self.employee_id and self.work_date and self.employee.date_joined:
+            if self.work_date < self.employee.date_joined:
+                raise ValidationError({"work_date": "Attendance cannot predate employment."})
+        if self.work_date and self.work_date > timezone.localdate():
+            raise ValidationError({"work_date": "Future attendance cannot be confirmed."})
+        if self.status == self.STATUS_PRESENT and not self.worked_hours:
+            raise ValidationError({"worked_hours": "Present attendance requires a positive worked-hours entry."})
+        if self.status != self.STATUS_PRESENT and (
+            self.worked_hours or self.overtime_hours or self.overtime_pay
+        ):
+            raise ValidationError("Only present attendance can include worked hours or overtime.")
+        if bool(self.overtime_hours) != bool(self.overtime_pay):
+            raise ValidationError("Overtime hours and approved overtime pay must both be positive or both zero.")
+        if self.overtime_hours and not self.note.strip():
+            raise ValidationError({"note": "Provide the approved shift, contract, or overtime policy evidence for this payment."})
+        if self.work_date and self.employee_id and self.status in (
+            self.STATUS_PAID_LEAVE, self.STATUS_UNPAID_LEAVE,
+        ):
+            leave = LeaveRequest.objects.filter(
+                employee_id=self.employee_id, status="approved",
+                start_date__lte=self.work_date, end_date__gte=self.work_date,
+            )
+            if self.status == self.STATUS_PAID_LEAVE:
+                leave = leave.exclude(leave_type="unpaid")
+            else:
+                leave = leave.filter(leave_type="unpaid")
+            if not leave.exists():
+                raise ValidationError({"status": "An approved matching leave request must cover this date."})
+            if self.status == self.STATUS_UNPAID_LEAVE:
+                # Whole-day attendance cannot silently round fractional unpaid
+                # leave into a full day's salary deduction.
+                if any(request.days != request.days.to_integral_value() for request in leave):
+                    raise ValidationError({
+                        "status": "Partial-day unpaid leave needs a separately approved payroll adjustment; "
+                        "do not classify the entire day as unpaid.",
+                    })
+
+    def __str__(self):
+        return f"{self.employee} - {self.work_date} ({self.status})"
+
+
 class PayrollEntry(BaseModel):
     """Immutable after posting; forms the payroll register and payslip snapshot."""
 
@@ -316,6 +453,8 @@ class PayrollEntry(BaseModel):
     joining_date = models.DateField(null=True, blank=True)
     days_in_month = models.PositiveSmallIntegerField()
     days_worked = models.DecimalField(max_digits=6, decimal_places=2, validators=[validate_non_negative_decimal])
+    overtime_hours = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal("0.00"))
+    overtime_pay = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     old_basic_salary = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     increment_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     merit_increment = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))

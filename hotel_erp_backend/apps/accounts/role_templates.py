@@ -29,6 +29,7 @@ ROLE_SPECS = {
             "employees": [
                 "employee", "designation", "payrollprofile", "payrollaffector",
                 "salaryadvance", "payrollperiod", "leaverequest", "employeedocument",
+                "shifttemplate", "attendancerecord",
             ],
         },
         "view": {
@@ -41,6 +42,7 @@ ROLE_SPECS = {
             "employees": [
                 "payrollprofile", "payrollaffector", "salaryadvance",
                 "payrollperiod", "leaverequest", "employeedocument",
+                "shifttemplate", "attendancerecord",
             ],
         },
         "view": {
@@ -179,6 +181,7 @@ ROLE_SPECS = {
             "employees": [
                 "employee", "payrollprofile", "payrollaffector", "salaryadvance",
                 "payrollperiod", "payrollentry", "salaryadvancerepayment",
+                "shifttemplate", "attendancerecord",
             ],
         },
     },

@@ -1,6 +1,7 @@
 from rest_framework.routers import DefaultRouter
 
 from apps.employees.views import DesignationViewSet, EmployeeViewSet
+from apps.employees.attendance_views import AttendanceRecordViewSet, ShiftTemplateViewSet
 from apps.employees.payroll_views import (
     EmployeeDocumentViewSet,
     LeaveRequestViewSet,
@@ -24,5 +25,7 @@ router.register("payroll-entries", PayrollEntryViewSet, basename="payroll-entry"
 router.register("salary-advance-repayments", SalaryAdvanceRepaymentViewSet, basename="salary-advance-repayment")
 router.register("leave-requests", LeaveRequestViewSet, basename="leave-request")
 router.register("employee-documents", EmployeeDocumentViewSet, basename="employee-document")
+router.register("hr-shifts", ShiftTemplateViewSet, basename="hr-shift")
+router.register("attendance-records", AttendanceRecordViewSet, basename="attendance-record")
 
 urlpatterns = router.urls

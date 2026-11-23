@@ -183,6 +183,10 @@ const hrNavigation: NavGroup[] = [
     { route: 'hr-affectors', label: 'Payroll affectors', icon: 'tune' },
     { route: 'hr-advances', label: 'Salary advances', icon: 'account_balance_wallet' },
   ] },
+  { heading: 'Attendance & shifts', items: [
+    { route: 'hr-attendance', label: 'Daily attendance', icon: 'fact_check' },
+    { route: 'hr-shifts', label: 'Shift templates', icon: 'schedule' },
+  ] },
   { heading: 'Leave & records', items: [
     { route: 'hr-leave', label: 'Leave management', icon: 'event_available' },
     { route: 'hr-calendar', label: 'Leave calendar', icon: 'calendar_month' },

@@ -4,7 +4,7 @@
  * state until their backend-backed deep-link contracts are defined.
  */
 export const workspaceRoutes = [
-  'dashboard', 'hr-dashboard', 'hr-payroll', 'hr-affectors', 'hr-advances', 'hr-leave', 'hr-calendar', 'hr-documents', 'front-desk-reservations', 'bar-pos', 'workflow-stores', 'workflow-procure',
+  'dashboard', 'hr-dashboard', 'hr-payroll', 'hr-affectors', 'hr-advances', 'hr-attendance', 'hr-shifts', 'hr-leave', 'hr-calendar', 'hr-documents', 'front-desk-reservations', 'bar-pos', 'workflow-stores', 'workflow-procure',
   'workflow-pay', 'workflow-consume', 'workflow-configure',
   'waste-control', 'recipes-production', 'pos-control',
   'finance-governance', 'integration-control',
@@ -41,6 +41,8 @@ const semanticPaths: Partial<Record<WorkspaceRoute, string>> = {
   'hr-payroll': '/hr/payroll',
   'hr-affectors': '/hr/payroll/affectors',
   'hr-advances': '/hr/payroll/advances',
+  'hr-attendance': '/hr/attendance',
+  'hr-shifts': '/hr/shifts',
   'hr-leave': '/hr/leave',
   'hr-calendar': '/hr/leave/calendar',
   'hr-documents': '/hr/documents',

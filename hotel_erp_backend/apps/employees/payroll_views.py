@@ -31,6 +31,7 @@ from apps.employees.payroll_serializers import (
 )
 from apps.employees.payroll_services import (
     approve_period,
+    attendance_coverage,
     calculate_period,
     post_period,
     submit_period,
@@ -250,6 +251,12 @@ class PayrollPeriodViewSet(CreatedByModelMixin, ModelViewSet):
             raise ValidationError("Only an empty draft payroll period can be deleted.")
         instance.delete()
 
+    @action(detail=True, methods=["get"], url_path="attendance-coverage")
+    def attendance_coverage(self, request, pk=None):
+        require_role(request.user, HR_ROLES | FINANCE_ROLES,
+                     "Only Human Resources or Finance may inspect payroll attendance evidence.")
+        return Response(attendance_coverage(self.get_object()))
+
     @action(detail=True, methods=["post"])
     def calculate(self, request, pk=None):
         require_role(request.user, HR_ROLES, "Only Human Resources may calculate payroll.")
@@ -307,8 +314,9 @@ class PayrollPeriodViewSet(CreatedByModelMixin, ModelViewSet):
             writer.writerow((
                 "S/No", "Department & name", "Joining date", "Department / section", "Status",
                 "Days in month", "Old basic salary", "Increment", "Merit increment", "New basic salary",
-                "Days worked", "Eligible basic pay", "Arrears", "Leave transport", "Baggage allowance",
-                "Service charge / breakages", "Other earnings", "Housing allowance", "Gross pay",
+                "Days worked", "Overtime hours", "Overtime gross", "Eligible basic pay",
+                "Arrears", "Leave transport", "Baggage allowance",
+                "Service charge / breakages", "Other earnings incl. overtime", "Housing allowance", "Gross pay",
                 "NSSF employee", "NSSF employer", "Total NSSF", "PAYE", "Local service tax",
                 "Union dues", "Staff debtors", "Salary advance", "Other deductions",
                 "Total deductions", "Net pay",
@@ -317,7 +325,8 @@ class PayrollPeriodViewSet(CreatedByModelMixin, ModelViewSet):
                 writer.writerow((
                     index, entry.employee.user.get_full_name(), entry.joining_date, entry.department.name, "Active",
                     entry.days_in_month, entry.old_basic_salary, entry.increment_amount, entry.merit_increment,
-                    entry.new_basic_salary, entry.days_worked, entry.eligible_basic_pay, entry.arrears,
+                    entry.new_basic_salary, entry.days_worked, entry.overtime_hours, entry.overtime_pay,
+                    entry.eligible_basic_pay, entry.arrears,
                     entry.leave_transport, entry.baggage_allowance, entry.service_charge, entry.other_earnings,
                     entry.housing_allowance, entry.gross_pay, entry.nssf_employee, entry.nssf_employer,
                     entry.nssf_total, entry.paye, entry.local_service_tax, entry.union_dues,
