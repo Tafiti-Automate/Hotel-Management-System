@@ -1,7 +1,7 @@
 import csv
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
-from django.http import HttpResponse
+from django.http import FileResponse, HttpResponse
 from django.utils import timezone
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -158,6 +158,8 @@ class PayrollAffectorViewSet(CreatedByModelMixin, ModelViewSet):
             affector = PayrollAffector.objects.select_for_update().get(pk=self.get_object().pk)
             if affector.is_approved:
                 raise ValidationError("This affector is already approved.")
+            if affector.created_by_id == request.user.pk:
+                raise ValidationError("The payroll affector preparer cannot approve their own entry.")
             affector.full_clean()
             affector.approved_by = request.user
             affector.approved_at = timezone.now()
@@ -188,6 +190,8 @@ class SalaryAdvanceViewSet(CreatedByModelMixin, ModelViewSet):
 
     def perform_update(self, serializer):
         self._require_hr()
+        employee = serializer.validated_data.get("employee", serializer.instance.employee)
+        ensure_branch_scope(self.request.user, employee.branch)
         serializer.save()
 
     @action(detail=True, methods=["post"])
@@ -237,11 +241,12 @@ class PayrollPeriodViewSet(CreatedByModelMixin, ModelViewSet):
 
     def perform_update(self, serializer):
         require_role(self.request.user, HR_ROLES, "Only Human Resources may edit draft payroll periods.")
+        ensure_branch_scope(self.request.user, serializer.validated_data.get("branch", serializer.instance.branch))
         serializer.save()
 
     def perform_destroy(self, instance):
         require_role(self.request.user, {"HR Manager"}, "Only the HR Manager may remove draft payroll periods.")
-        if instance.status != PayrollPeriod.STATUS_DRAFT:
+        if instance.status != PayrollPeriod.STATUS_DRAFT or instance.entries.exists():
             raise ValidationError("Only an empty draft payroll period can be deleted.")
         instance.delete()
 
@@ -323,10 +328,16 @@ class PayrollPeriodViewSet(CreatedByModelMixin, ModelViewSet):
 
     @action(detail=True, methods=["get"], url_path="register.csv")
     def register_csv(self, request, pk=None):
+        require_role(request.user, HR_ROLES | FINANCE_ROLES, "Only HR and Finance can export payroll registers.")
+        if self.get_object().status == PayrollPeriod.STATUS_DRAFT:
+            raise ValidationError("Calculate payroll before exporting the register.")
         return self._csv()
 
     @action(detail=True, methods=["get"], url_path="bank-schedule.csv")
     def bank_schedule_csv(self, request, pk=None):
+        require_role(request.user, FINANCE_ROLES, "Only Finance can export salary payment schedules.")
+        if self.get_object().status != PayrollPeriod.STATUS_POSTED:
+            raise ValidationError("Only posted payroll can be exported to the bank.")
         return self._csv(bank_only=True)
 
 
@@ -377,6 +388,7 @@ class LeaveRequestViewSet(CreatedByModelMixin, ModelViewSet):
 
     def perform_update(self, serializer):
         require_role(self.request.user, HR_ROLES, "Only Human Resources may edit pending leave requests.")
+        ensure_branch_scope(self.request.user, serializer.validated_data.get("employee", serializer.instance.employee).branch)
         serializer.save()
 
     def _review(self, request, status):
@@ -394,6 +406,12 @@ class LeaveRequestViewSet(CreatedByModelMixin, ModelViewSet):
             leave.reviewed_at = timezone.now()
             leave.save(update_fields=("status", "review_note", "reviewed_by", "reviewed_at", "updated_at"))
         return Response(self.get_serializer(leave).data)
+
+    def perform_destroy(self, instance):
+        require_role(self.request.user, {"HR Manager"}, "Only the HR Manager can remove unreviewed leave.")
+        if instance.status != "pending":
+            raise ValidationError("Reviewed leave records cannot be deleted.")
+        instance.delete()
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
@@ -428,8 +446,21 @@ class EmployeeDocumentViewSet(CreatedByModelMixin, ModelViewSet):
 
     def perform_update(self, serializer):
         self._require_hr()
+        ensure_branch_scope(self.request.user, serializer.validated_data.get("employee", serializer.instance.employee).branch)
         serializer.save()
 
     def perform_destroy(self, instance):
         self._require_hr()
         instance.delete()
+
+    @action(detail=True, methods=["get"])
+    def download(self, request, pk=None):
+        """Serve personnel documents only through an authorized scoped request."""
+        require_role(request.user, HR_ROLES, "Only Human Resources may access personnel documents.")
+        document = self.get_object()
+        if not document.file:
+            raise ValidationError("This employee document has no stored file.")
+        return FileResponse(
+            document.file.open("rb"), as_attachment=True,
+            filename=document.original_name or document.file.name.rsplit("/", 1)[-1],
+        )

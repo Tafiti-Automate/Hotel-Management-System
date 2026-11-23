@@ -256,7 +256,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     toast: null,
     workflowAlert: null,
     apiStatus: 'idle',
-    activeModule: initialRoute === 'hr-dashboard' ? 'hr' : 'operations',
+    activeModule: initialRoute.startsWith('hr-') ? 'hr' : 'operations',
     apiMessage: null,
     authMessage: null,
     procurementDraftId: null,
@@ -282,7 +282,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!nextRoute || !canAccessRoute(user, nextRoute)) return
       setState((current) => ({
         ...current, screen: 'app', route: nextRoute,
-        activeModule: nextRoute === 'hr-dashboard' ? 'hr' : current.activeModule,
+        activeModule: nextRoute.startsWith('hr-') ? 'hr' : current.activeModule,
         navActive: nextRoute, crumb: labelForRoute(nextRoute),
         searchTerm: '', itemCategoryFilter: null, detail: null,
         form: null, confirm: null, reportId: null,
@@ -680,7 +680,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const destination = requested && canAccessRoute(signedInUser, requested) ? requested : landing.route
       patch({
         screen: canSwitchModules(signedInUser) && !requested ? 'launchpad' : 'app',
-        activeModule: destination === 'hr-dashboard' ? 'hr' : 'operations',
+        activeModule: destination.startsWith('hr-') ? 'hr' : 'operations',
         route: destination,
         navActive: destination,
         crumb: destination === landing.route ? landing.crumb : labelForRoute(destination),
@@ -695,11 +695,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const landing = operationsLandingFor(user)
       patch(canSwitchModules(user)
         ? { screen: 'launchpad', branchOpen: false, settingsOpen: false }
-        : { screen: 'app', activeModule: 'operations', route: landing.route, navActive: landing.route, crumb: landing.crumb, branchOpen: false, settingsOpen: false })
+        : { screen: 'app', activeModule: landing.route.startsWith('hr-') ? 'hr' : 'operations', route: landing.route, navActive: landing.route, crumb: landing.crumb, branchOpen: false, settingsOpen: false })
     },
     enterApp: () => {
       const landing = operationsLandingFor(user)
-      patch({ screen: 'app', activeModule: 'operations', route: landing.route, navActive: landing.route, crumb: landing.crumb })
+      patch({ screen: 'app', activeModule: landing.route.startsWith('hr-') ? 'hr' : 'operations', route: landing.route, navActive: landing.route, crumb: landing.crumb })
     },
     enterHR: () => {
       if (!canAccessModule(user, 'hr')) {
@@ -715,7 +715,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return
       }
       const landing = operationsLandingFor(user)
-      patch({ screen: 'app', activeModule: 'operations', route: landing.route, navActive: landing.route, crumb: landing.crumb })
+      patch({ screen: 'app', activeModule: landing.route.startsWith('hr-') ? 'hr' : 'operations', route: landing.route, navActive: landing.route, crumb: landing.crumb })
     },
     navTo: (route, label) => {
       if (!canAccessRoute(user, route)) {

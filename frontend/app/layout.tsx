@@ -43,6 +43,8 @@ import '../src/department-requisitions-fix.css'
 import '../src/market-lists.css'
 /* Printed GRNs use the exact supplied A4 landscape document structure. */
 import '../src/grn-reference-exact.css'
+/* Kalibu-style HR and payroll management: scoped to hr-workspace. */
+import '../src/hr-workspaces.css'
 
 export const metadata: Metadata = {
   title: 'Hotel ERP',

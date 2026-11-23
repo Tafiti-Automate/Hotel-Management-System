@@ -62,6 +62,12 @@ const routePermissions: Record<string, string[]> = {
 const enterpriseRoleRoutes: Record<string, string[]> = {
   'front-desk-reservations': ['receptionist', 'reservations agent', 'front office manager'],
   'bar-pos': ['bartender', 'waiter', 'bar supervisor', 'cashier'],
+  'hr-payroll': ['hr manager', 'payroll officer', 'financial manager', 'financial controller'],
+  'hr-affectors': ['hr manager', 'payroll officer'],
+  'hr-advances': ['hr manager', 'payroll officer', 'financial manager', 'financial controller'],
+  'hr-leave': ['hr manager', 'payroll officer'],
+  'hr-calendar': ['hr manager', 'payroll officer'],
+  'hr-documents': ['hr manager', 'payroll officer'],
   'purchasing-workbench': ['procurement officer', 'procurement manager'],
   'purchasing-quotes': ['procurement officer', 'procurement manager', 'cost controller'],
   'purchasing-pr-new': ['department head'],
@@ -107,7 +113,7 @@ const strictRoleRoutes: Record<string, Set<string>> = {
   'cost controller': new Set(['stock-on-hand', 'receiving-return-new', 'locations', 'departments', 'purchasing-quotes', 'pos-reconciliation', 'recipes-detail', 'stocktake-variance', 'store-inventory','dashboard', 'detail', 'workflow-stores', 'waste-control', 'recipes-production', 'pos-control', 'items', 'categories', 'uoms', 'itemUnits', 'suppliers', 'supplierItems', 'reports', 'reportview', 'menu-engineering']),
   'procurement manager': new Set([ 'purchasing-workbench', 'purchasing-quotes', 'purchasing-order-detail','dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
   'procurement officer': new Set([ 'purchasing-workbench', 'purchasing-quotes', 'purchasing-order-detail','dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
-  'financial manager': new Set([ 'finance-invoice-matching', 'finance-budgets', 'finance-period-close', 'purchasing-order-detail', 'stocktake-variance','dashboard', 'detail', 'workflow-procure', 'approval-inbox', 'workflow-pay', 'finance-governance', 'reports', 'reportview', 'menu-engineering']),
+  'financial manager': new Set([ 'hr-payroll', 'hr-advances', 'finance-invoice-matching', 'finance-budgets', 'finance-period-close', 'purchasing-order-detail', 'stocktake-variance','dashboard', 'detail', 'workflow-procure', 'approval-inbox', 'workflow-pay', 'finance-governance', 'reports', 'reportview', 'menu-engineering']),
   'accounts payable clerk': new Set([ 'finance-invoice-matching','dashboard', 'detail', 'workflow-pay', 'reports', 'reportview']),
   'general manager': new Set([ 'workflow-pay', 'purchasing-order-detail','dashboard', 'detail', 'workflow-procure', 'approval-inbox', 'reports', 'reportview', 'menu-engineering']),
   'receiving clerk': new Set([ 'supplier-return-report', 'receiving-po-detail','dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
@@ -238,6 +244,8 @@ export function canAccessModule(user: AccessUser, module: 'operations' | 'hr'): 
 export function operationsLandingFor(user: AccessUser): { route: string; crumb: string } {
   const role = roleKey(user)
   const roleLanding: Record<string, { route: string; crumb: string }> = {
+    'hr manager': { route: 'hr-dashboard', crumb: 'Human Resources' },
+    'payroll officer': { route: 'hr-dashboard', crumb: 'Human Resources' },
     'department supervisor': { route: 'dashboard', crumb: 'Department dashboard' },
     'outlet supervisor': { route: 'dashboard', crumb: 'Outlet dashboard' },
     supervisor: { route: 'dashboard', crumb: 'Department dashboard' },

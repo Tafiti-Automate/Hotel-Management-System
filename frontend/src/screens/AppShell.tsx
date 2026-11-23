@@ -14,6 +14,12 @@ const ReportView = lazy(() => import('./ReportView'))
 const HotelProfile = lazy(() => import('./HotelProfile'))
 const WorkflowHub = lazy(() => import('./WorkflowHub'))
 const HRDashboard = lazy(() => import('./HRDashboard'))
+const PayrollWorkspace = lazy(() => import('./HRWorkspaces').then(module => ({ default: module.PayrollWorkspace })))
+const PayrollAffectorWorkspace = lazy(() => import('./HRWorkspaces').then(module => ({ default: module.PayrollAffectorWorkspace })))
+const SalaryAdvanceWorkspace = lazy(() => import('./HRWorkspaces').then(module => ({ default: module.SalaryAdvanceWorkspace })))
+const LeaveWorkspace = lazy(() => import('./HRWorkspaces').then(module => ({ default: module.LeaveWorkspace })))
+const LeaveCalendarWorkspace = lazy(() => import('./HRWorkspaces').then(module => ({ default: module.LeaveCalendarWorkspace })))
+const HRDocumentsWorkspace = lazy(() => import('./HRWorkspaces').then(module => ({ default: module.HRDocumentsWorkspace })))
 const ProcurementWorkbench = lazy(() => import('./ProcurementWorkbench'))
 const FinancialManagerLpoWorkspace = lazy(() => import('./FinancialManagerLpoWorkspace'))
 const ReceivingClerkWorkspaceV2 = lazy(() => import('./ReceivingClerkWorkspaceV2'))
@@ -96,6 +102,12 @@ export default function AppShell() {
   </section>
   else if (route === 'dashboard') content = <Dashboard />
   else if (route === 'hr-dashboard') content = <HRDashboard />
+  else if (route === 'hr-payroll') content = <PayrollWorkspace />
+  else if (route === 'hr-affectors') content = <PayrollAffectorWorkspace />
+  else if (route === 'hr-advances') content = <SalaryAdvanceWorkspace />
+  else if (route === 'hr-leave') content = <LeaveWorkspace />
+  else if (route === 'hr-calendar') content = <LeaveCalendarWorkspace />
+  else if (route === 'hr-documents') content = <HRDocumentsWorkspace />
   else if (route === 'front-desk-reservations') content = <ReceptionWorkspace />
   else if (route === 'bar-pos') content = <BarPosWorkspace />
   else if (route === 'purchasing-workbench') content = <EnterprisePurchasingWorkbench />

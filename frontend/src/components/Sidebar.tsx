@@ -116,6 +116,7 @@ const roleNavigation: Record<string, NavGroup[]> = {
       { route: 'approval-inbox', label: 'Approval inbox', icon: 'approval' },
       { route: 'workflow-procure', label: 'LPO workbench', icon: 'receipt_long' },
       { route: 'workflow-pay', label: 'Invoices & payments', icon: 'payments' },
+      { route: 'hr-payroll', label: 'Payroll approval', icon: 'account_balance_wallet' },
       { route: 'finance-budgets', label: 'Monthly budgets', icon: 'table_chart' },
       { route: 'finance-period-close', label: 'Month-end close', icon: 'lock' },
       { route: 'finance-invoice-matching', label: '3-way invoice matching', icon: 'fact_check' },
@@ -174,8 +175,20 @@ const adminNavigation: NavGroup[] = [
 const hrNavigation: NavGroup[] = [
   { heading: 'Human resources', items: [
     { route: 'hr-dashboard', label: 'People overview', icon: 'groups' },
-    { route: 'employees', label: 'Employees', icon: 'badge' },
+    { route: 'employees', label: 'Employee management', icon: 'badge' },
     { route: 'departments', label: 'Departments', icon: 'account_tree' },
+  ] },
+  { heading: 'Payroll', items: [
+    { route: 'hr-payroll', label: 'Payroll management', icon: 'payments' },
+    { route: 'hr-affectors', label: 'Payroll affectors', icon: 'tune' },
+    { route: 'hr-advances', label: 'Salary advances', icon: 'account_balance_wallet' },
+  ] },
+  { heading: 'Leave & records', items: [
+    { route: 'hr-leave', label: 'Leave management', icon: 'event_available' },
+    { route: 'hr-calendar', label: 'Leave calendar', icon: 'calendar_month' },
+    { route: 'hr-documents', label: 'Documents', icon: 'folder_open' },
+  ] },
+  { heading: 'Administration', items: [
     { route: 'access-management', label: 'User access', icon: 'manage_accounts' },
   ] },
 ]
