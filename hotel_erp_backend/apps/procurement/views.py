@@ -1598,8 +1598,10 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
     def receive_delivery(self, request, pk=None):
         """Receive an issued LPO and generate a GRN.
 
-        The Receiving Clerk records, locks and posts accepted stock atomically.
-        There is no separate Store Keeper posting stage.
+        The Receiving Clerk completes the blind count and inspection, then
+        accepted goods immediately increase Stock on Hand in the same atomic
+        transaction. Rejected quantities are excluded; a failed posting rolls
+        back the entire delivery. No second Stores posting is required.
         """
         employee = self._require_receiving_clerk(request)
         supplier_invoice_no = str(request.data.get("supplier_invoice_no") or "").strip()
@@ -1757,9 +1759,10 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                 receipt.blind_count_locked_at = timezone.now()
                 receipt.save(update_fields=["status", "blind_count_locked_at", "updated_at"])
 
-                # Receiving Clerk completion posts accepted goods to Stock on Hand
-                # in the same database transaction as the immutable GRN.
-                # Any posting failure rolls back the receipt and its inspection.
+                # Accepted goods post to the correct store exactly once,
+                # atomically with the locked blind GRN and inspection record.
+                # Rejected quantities are excluded from stock, ledger and WAC.
+                # No Store Keeper handoff is needed for successful deliveries.
                 receipt.post_to_inventory(posted_by=employee)
 
                 # A supplier delivery is complete when the recorded GRNs cover
@@ -2441,8 +2444,9 @@ class GoodsReceiptNoteViewSet(CreatedByModelMixin, ModelViewSet):
                 locked = GoodsReceiptNote.objects.select_for_update().get(pk=receipt.pk)
                 if not locked.blind_count_locked_at or locked.status not in (
                     GoodsReceiptStatus.RECEIVED, GoodsReceiptStatus.INSPECTED,
+                    GoodsReceiptStatus.POSTED,
                 ):
-                    raise ValidationError("Only a locked, unposted blind count can receive a variance note.")
+                    raise ValidationError("Only a saved, locked blind count can receive a variance note.")
                 comparison = blind_receiving_reconciliation(locked)
                 if not comparison["has_variance"]:
                     raise ValidationError("No delivery quantity variance requires an explanation.")

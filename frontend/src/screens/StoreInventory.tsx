@@ -13,7 +13,7 @@ const number = (value: unknown) => {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : 0
 }
-const quantity = (value: unknown) => number(value).toLocaleString('en-UG', { maximumFractionDigits: 2 })
+const quantity = (value: unknown) => number(value).toLocaleString('en-UG', { maximumFractionDigits: 4 })
 const label = (value: unknown) => id(value).replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()) || 'Draft'
 
 function time(value: unknown) {
@@ -96,7 +96,7 @@ export default function StoreInventory() {
   const categoryRows = useMemo(() => app.data.categories.slice().sort((left, right) => id(left.name).localeCompare(id(right.name))), [app.data.categories])
   const itemById = useMemo(() => new Map(app.data.items.map((item) => [id(item.id), item])), [app.data.items])
   const countableBalanceTotal = selected ? balances.filter((row) => id(row.store) === id(selected.store)).length : 0
-  const varianceLines = selectedItems.filter((line) => line.physical_quantity != null && number(line.physical_quantity) !== number(line.system_quantity))
+  const varianceLines = selectedItems.filter((line) => line.physical_quantity != null && line.system_quantity != null && number(line.physical_quantity) !== number(line.system_quantity))
 
   useEffect(() => {
     if (!selected) return
@@ -228,7 +228,7 @@ function Gather({ counts, stores, selected, items, currentStore, countableBalanc
   counts: Row[]; stores: Row[]; selected: Row | null; items: Row[]; currentStore?: Row; countableBalanceTotal: number; physical: Record<string, string>; busy: boolean; newStore: string; newNote: string; setNewStore: (value: string) => void; setNewNote: (value: string) => void; setSelectedId: (value: string) => void; setPhysical: (value: Record<string, string>) => void; createCount: () => Promise<void>; savePhysical: () => Promise<void>; action: (action: string, success: string) => void
 }) {
   return <div className="store-inventory-gather-grid"><section className="store-inventory-card store-inventory-new"><div className="store-inventory-section-head"><div><small>New Inventory</small><h2>Gather Inventory</h2><p>Create a new store inventory session. Its date and time are system-recorded.</p></div></div><label>Cost Center / Store<select value={newStore} onChange={(event) => setNewStore(event.target.value)}><option value="">Choose assigned store</option>{stores.map((store) => <option key={id(store.id)} value={id(store.id)}>{id(store.name)}</option>)}</select></label><label>Info / count note<textarea value={newNote} onChange={(event) => setNewNote(event.target.value)} placeholder="e.g. October month-end count" /></label><button type="button" className="store-inventory-primary" disabled={busy || !newStore} onClick={() => void createCount()}><Icon name="add" size={16} />Open Inventory</button><div className="store-inventory-session-list"><small>Recent sessions</small>{counts.slice(0, 8).map((count) => <button type="button" key={id(count.id)} className={id(selected?.id) === id(count.id) ? 'active' : ''} onClick={() => setSelectedId(id(count.id))}><span><strong>{id(count.count_no)}</strong><em>{date(count.count_date)}</em></span><Status value={count.status} /></button>)}</div></section>
-    <section className="store-inventory-card store-inventory-count-sheet">{!selected ? <Empty icon="format_list_numbered" title="Select an inventory session" text="Choose an existing session or open a new one to gather physical quantities." /> : <><div className="store-inventory-section-head"><div><small>Counted Receipts</small><h2>{id(selected.count_no)}</h2><p>{id(currentStore?.name) || 'Assigned store'} · {date(selected.count_date)} · {id(selected.note) || 'No count note'}</p></div><Status value={selected.status} /></div><div className="store-inventory-count-actions"><span>{items.length ? `${items.length} Article${items.length === 1 ? '' : 's'} on the count sheet` : `${countableBalanceTotal} balance record${countableBalanceTotal === 1 ? '' : 's'} ready to populate`}</span>{!items.length && ['draft', 'in_progress'].includes(id(selected.status)) && <button type="button" className="store-inventory-secondary" disabled={busy} onClick={() => action('populate', 'Count sheet populated from live stock')}><Icon name="playlist_add" size={16} />Populate Count Sheet</button>}</div>{items.length > 0 && <><div className="store-inventory-table-wrap"><table className="store-inventory-table store-inventory-count-table"><thead><tr><th>Article</th><th>Count status</th><th>Physical Qty</th><th>Count note</th></tr></thead><tbody>{items.map((line) => { return <tr key={id(line.id)}><td><strong>{id(line.item_name) || id(line.item)}</strong><small>{id(line.item_sku)}</small></td><td>{line.physical_quantity == null ? "Not counted" : "Recorded"}</td><td><input aria-label={`Physical quantity for ${id(line.item_name) || id(line.item)}`} type="number" min="0" step="0.01" disabled={!['draft', 'in_progress'].includes(id(selected.status))} value={physical[id(line.id)] ?? ''} onChange={(event) => setPhysical({ ...physical, [id(line.id)]: event.target.value })} /></td><td>{id(line.note) || "—"}</td></tr> })}</tbody></table></div><footer className="store-inventory-flow-actions">{['draft', 'in_progress'].includes(id(selected.status)) && <><button type="button" className="store-inventory-secondary" disabled={busy} onClick={() => void savePhysical()}><Icon name="save" size={16} />Save Counted Receipts</button><button type="button" className="store-inventory-primary" disabled={busy} onClick={() => action('submit', 'Inventory submitted for approval')}><Icon name="send" size={16} />Submit Inventory</button></>}{id(selected.status) === 'submitted' && <button type="button" className="store-inventory-primary" disabled={busy} onClick={() => action('approve', 'Inventory approved')}><Icon name="approval" size={16} />Approve Inventory</button>}{id(selected.status) === 'approved' && <button type="button" className="store-inventory-primary" disabled={busy} onClick={() => action('apply', 'Approved inventory variances posted')}><Icon name="published_with_changes" size={16} />Apply Variances</button>}</footer></>}</>}</section></div>
+    <section className="store-inventory-card store-inventory-count-sheet">{!selected ? <Empty icon="format_list_numbered" title="Select an inventory session" text="Choose an existing session or open a new one to gather physical quantities." /> : <><div className="store-inventory-section-head"><div><small>Counted Receipts</small><h2>{id(selected.count_no)}</h2><p>{id(currentStore?.name) || 'Assigned store'} · {date(selected.count_date)} · {id(selected.note) || 'No count note'}</p></div><Status value={selected.status} /></div><div className="store-inventory-count-actions"><span>{items.length ? `${items.length} Article${items.length === 1 ? '' : 's'} on the count sheet` : `${countableBalanceTotal} balance record${countableBalanceTotal === 1 ? '' : 's'} ready to populate`}</span>{!items.length && ['draft', 'in_progress'].includes(id(selected.status)) && <button type="button" className="store-inventory-secondary" disabled={busy} onClick={() => action('populate', 'Count sheet populated from live stock')}><Icon name="playlist_add" size={16} />Populate Count Sheet</button>}</div>{items.length > 0 && <><div className="store-inventory-table-wrap"><table className="store-inventory-table store-inventory-count-table"><thead><tr><th>Article</th><th>Count status</th><th>Physical Qty</th><th>Count note</th></tr></thead><tbody>{items.map((line) => { return <tr key={id(line.id)}><td><strong>{id(line.item_name) || id(line.item)}</strong><small>{id(line.item_sku)}</small></td><td>{line.physical_quantity == null ? "Not counted" : "Recorded"}</td><td><input aria-label={`Physical quantity for ${id(line.item_name) || id(line.item)}`} type="number" min="0" step="0.0001" disabled={!['draft', 'in_progress'].includes(id(selected.status))} value={physical[id(line.id)] ?? ''} onChange={(event) => setPhysical({ ...physical, [id(line.id)]: event.target.value })} /></td><td>{id(line.note) || "—"}</td></tr> })}</tbody></table></div><footer className="store-inventory-flow-actions">{['draft', 'in_progress'].includes(id(selected.status)) && <><button type="button" className="store-inventory-secondary" disabled={busy} onClick={() => void savePhysical()}><Icon name="save" size={16} />Save Counted Receipts</button><button type="button" className="store-inventory-primary" disabled={busy} onClick={() => action('submit', 'Inventory submitted for approval')}><Icon name="send" size={16} />Submit Inventory</button></>}{id(selected.status) === 'submitted' && <span role="status" className="store-inventory-approval-note">Submitted — awaiting independent Financial Manager approval.</span>}{id(selected.status) === 'approved' && <button type="button" className="store-inventory-primary" disabled={busy} onClick={() => action('apply', 'Approved inventory variances posted')}><Icon name="published_with_changes" size={16} />Apply Variances</button>}</footer></>}</>}</section></div>
 }
 
 function ItemGroups({ rows }: { rows: Row[] }) {
@@ -249,8 +249,68 @@ function TakingLists({ counts, stores, items, print, select }: { counts: Row[]; 
   return <section className="store-inventory-card"><div className="store-inventory-section-head"><div><small>Stock Taking Lists</small><h2>Printable stock count sheets</h2><p>Print a blank count sheet for a populated inventory session, then record the physical results in Gather Inventory.</p></div></div><div className="store-inventory-list-grid">{counts.map((count) => { const itemCount = items.filter((line) => id(line.stock_count) === id(count.id)).length; return <article key={id(count.id)}><span><Icon name="format_list_numbered" size={18} /></span><div><strong>{id(count.count_no)}</strong><p>{id(stores.get(id(count.store))?.name)} · {date(count.count_date)}</p><small>{itemCount ? `${itemCount} Article${itemCount === 1 ? '' : 's'} populated` : 'Awaiting count-sheet population'}</small></div><footer><button type="button" onClick={() => select(count)}>Open</button><button type="button" disabled={!itemCount} onClick={() => print(count)}><Icon name="print" size={15} />Print</button></footer></article> })}</div>{!counts.length && <Empty icon="format_list_numbered" title="No stock-taking lists" text="Create an inventory session first, then populate it from live stock." />}</section>
 }
 
-function Receipts({ selected, lines, itemById, varianceLines, counts, select }: { selected: Row | null; lines: Row[]; itemById: Map<string, Row>; varianceLines: Row[]; counts: Row[]; select: (count: Row) => void }) {
-  return <div className="store-inventory-receipts-grid"><section className="store-inventory-card"><div className="store-inventory-section-head"><div><small>Inventory Session</small><h2>Counted Receipts</h2><p>Captured physical quantities and the calculated difference from the system quantity.</p></div></div><div className="store-inventory-session-list receipts">{counts.map((count) => <button type="button" key={id(count.id)} className={id(selected?.id) === id(count.id) ? 'active' : ''} onClick={() => select(count)}><span><strong>{id(count.count_no)}</strong><em>{date(count.count_date)}</em></span><Status value={count.status} /></button>)}</div></section><section className="store-inventory-card store-inventory-receipt-detail">{!selected ? <Empty icon="fact_check" title="Select an inventory session" text="Choose a stock count to review its counted receipts." /> : <><div className="store-inventory-section-head"><div><small>{varianceLines.length ? 'Variance detected' : 'Counted quantity'}</small><h2>{id(selected.count_no)}</h2><p>{lines.length} counted receipt{lines.length === 1 ? '' : 's'} · {varianceLines.length} variance{varianceLines.length === 1 ? '' : 's'}</p></div><Status value={selected.status} /></div><div className="store-inventory-table-wrap"><table className="store-inventory-table"><thead><tr><th>Article</th><th>System Qty</th><th>Physical Qty</th><th>Variance</th><th>Note</th></tr></thead><tbody>{lines.map((line) => { const variance = number(line.physical_quantity) - number(line.system_quantity); return <tr key={id(line.id)}><td><strong>{id(line.item_name) || id(itemById.get(id(line.item))?.name) || 'Article'}</strong></td><td>{quantity(line.system_quantity)}</td><td>{quantity(line.physical_quantity)}</td><td className={variance === 0 ? '' : variance < 0 ? 'variance-negative' : 'variance-positive'}>{variance > 0 ? '+' : ''}{quantity(variance)}</td><td>{id(line.note) || '—'}</td></tr> })}</tbody></table></div>{!lines.length && <Empty icon="receipt_long" title="No counted receipts" text="Populate the selected session and record the physical quantity for each Article." />}</>}</section></div>
+function Receipts({ selected, lines, itemById, varianceLines, counts, select }: {
+  selected: Row | null
+  lines: Row[]
+  itemById: Map<string, Row>
+  varianceLines: Row[]
+  counts: Row[]
+  select: (count: Row) => void
+}) {
+  // Store Keepers receive no theoretical quantity from Django: never turn a
+  // missing field into a fake zero or display a fabricated stock variance.
+  const canShowTheoretical = lines.length > 0 && lines.every((line) => line.system_quantity != null)
+  return <div className="store-inventory-receipts-grid">
+    <section className="store-inventory-card">
+      <div className="store-inventory-section-head">
+        <div>
+          <small>Inventory Session</small>
+          <h2>Counted Receipts</h2>
+          <p>Recorded physical quantities; independent Finance review determines variances.</p>
+        </div>
+      </div>
+      <div className="store-inventory-session-list receipts">
+        {counts.map((count) => <button type="button" key={id(count.id)} className={id(selected?.id) === id(count.id) ? 'active' : ''} onClick={() => select(count)}>
+          <span><strong>{id(count.count_no)}</strong><em>{date(count.count_date)}</em></span>
+          <Status value={count.status} />
+        </button>)}
+      </div>
+    </section>
+    <section className="store-inventory-card store-inventory-receipt-detail">
+      {!selected ? <Empty icon="fact_check" title="Select an inventory session" text="Choose a stock count to review its recorded physical quantities." /> : <>
+        <div className="store-inventory-section-head">
+          <div>
+            <small>{canShowTheoretical && varianceLines.length ? 'Variance detected' : 'Counted quantity'}</small>
+            <h2>{id(selected.count_no)}</h2>
+            <p>{lines.length} counted article{lines.length === 1 ? '' : 's'}{canShowTheoretical ? ` · ${varianceLines.length} variance${varianceLines.length === 1 ? '' : 's'}` : ' · variance review restricted to Finance'}</p>
+          </div>
+          <Status value={selected.status} />
+        </div>
+        <div className="store-inventory-table-wrap">
+          <table className="store-inventory-table">
+            <thead><tr>
+              <th>Article</th>
+              {canShowTheoretical && <th>System Qty</th>}
+              <th>Physical Qty</th>
+              {canShowTheoretical && <th>Variance</th>}
+              <th>Note</th>
+            </tr></thead>
+            <tbody>{lines.map((line) => {
+              const variance = canShowTheoretical ? number(line.physical_quantity) - number(line.system_quantity) : 0
+              return <tr key={id(line.id)}>
+                <td><strong>{id(line.item_name) || id(itemById.get(id(line.item))?.name) || 'Article'}</strong></td>
+                {canShowTheoretical && <td>{quantity(line.system_quantity)}</td>}
+                <td>{line.physical_quantity == null ? 'Not counted' : quantity(line.physical_quantity)}</td>
+                {canShowTheoretical && <td className={variance === 0 ? '' : variance < 0 ? 'variance-negative' : 'variance-positive'}>{variance > 0 ? '+' : ''}{quantity(variance)}</td>}
+                <td>{id(line.note) || '—'}</td>
+              </tr>
+            })}</tbody>
+          </table>
+        </div>
+        {!lines.length && <Empty icon="receipt_long" title="No counted receipts" text="Populate the selected session and record the physical quantity for each Article." />}
+      </>}
+    </section>
+  </div>
 }
 
 function Status({ value }: { value: unknown }) {

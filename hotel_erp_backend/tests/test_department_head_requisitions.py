@@ -468,10 +468,12 @@ def test_connected_eight_role_shortage_partial_receipts_and_signed_completion(wo
         assert receiver.post(
             f"/api/v1/grns/{grn_id}/post-to-inventory/", {}, format="json",
         ).status_code == 403
+        # Receiving already booked accepted quantities atomically with GRN.
+        assert arrived.data["status"] == "posted", arrived.data
         posted = keeper.post(
             f"/api/v1/grns/{grn_id}/post-to-inventory/", {}, format="json",
         )
-        assert posted.status_code == 200, posted.data
+        assert posted.status_code == 400, posted.data
         assert StockLedger.objects.filter(
             reference_id=grn_id,
             reference_type=LedgerReferenceType.GRN_RECEIPT,

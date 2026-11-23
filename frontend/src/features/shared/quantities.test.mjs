@@ -19,6 +19,9 @@ test('quantity reduction requires a documented reason', () => {
 test('stock counts require finite non-negative quantities', () => {
   assert.equal(validateCount('0'), null)
   assert.equal(validateCount('4.25'), null)
+  assert.equal(validateCount('4.0001'), null)
+  assert.match(validateCount('4.00001'), /four decimal/)
+  assert.match(validateCount('1e-5'), /four decimal/)
   assert.match(validateCount(''), /Enter/)
   assert.match(validateCount('-0.1'), /negative/)
   assert.match(validateCount('NaN'), /valid/)

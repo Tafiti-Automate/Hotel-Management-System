@@ -96,7 +96,7 @@ def test_department_request_is_reduction_only_and_reaches_stores(ctx, monkeypatc
 
 
 @pytest.mark.django_db
-def test_store_keeper_verifies_grn_before_soh_increases(ctx):
+def test_received_grn_immediately_updates_soh_without_duplicate_keeper_post(ctx):
     sync_client_roles()
     today = timezone.localdate()
     FiscalPeriod.objects.create(
@@ -119,7 +119,14 @@ def test_store_keeper_verifies_grn_before_soh_increases(ctx):
     received = receiver.post(f"/api/v1/purchase-orders/{order.pk}/receive-delivery/", {"supplier_invoice_no": "INV-1", "lines": [{"purchase_order_item": str(po_line.pk), "quantity_received": "4.00"}]}, format="json")
     assert received.status_code == 201, received.data
     grn = received.data["id"]
-    before = InventoryBalance.objects.get(item=ctx["item"], store=ctx["main"]).quantity_in_stock
+    before = Decimal("20.0000")
+    assert received.data["status"] == "posted"
+    after = InventoryBalance.objects.get(item=ctx["item"], store=ctx["main"])
+    assert after.quantity_in_stock == before + Decimal("4.0000")
+    assert StockLedger.objects.filter(
+        reference_id=grn, reference_type=LedgerReferenceType.GRN_RECEIPT,
+        quantity_in=Decimal("4.0000"),
+    ).count() == 1
     assert receiver.post(f"/api/v1/grns/{grn}/post-to-inventory/", {}, format="json").status_code == 403
 
     keeper = APIClient(); keeper.force_authenticate(ctx["ku"])
@@ -129,9 +136,9 @@ def test_store_keeper_verifies_grn_before_soh_increases(ctx):
     check = keeper.get(f"/api/v1/grns/{grn}/verification/")
     assert check.status_code == 200 and check.data["lines"][0]["matches_lpo_limit"] is True
     posted = keeper.post(f"/api/v1/grns/{grn}/post-to-inventory/", {}, format="json")
-    assert posted.status_code == 200 and posted.data["status"] == "posted"
-    assert InventoryBalance.objects.get(item=ctx["item"], store=ctx["main"]).quantity_in_stock == before + Decimal("4.00")
-    after = InventoryBalance.objects.get(item=ctx["item"], store=ctx["main"])
+    assert posted.status_code == 400, "Already-posted supplier delivery must not post twice"
+    after.refresh_from_db()
+    assert after.quantity_in_stock == before + Decimal("4.00")
     expected_wac = (
         (before * Decimal("3000")) + (Decimal("4.00") * Decimal("1000"))
     ) / (before + Decimal("4.00"))

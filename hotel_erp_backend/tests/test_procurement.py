@@ -51,7 +51,7 @@ from apps.procurement.serializers import (
     PurchaseRequisitionSerializer,
 )
 from apps.vendors.models import Supplier
-from core.constants.choices import GoodsReceiptStatus, POStatus, PRStatus
+from core.constants.choices import GoodsReceiptStatus, LedgerReferenceType, POStatus, PRStatus
 
 
 def create_procurement_context():
@@ -1469,7 +1469,7 @@ def test_receiving_clerk_workspace_shows_only_ready_branch_lpos_without_prices()
 
 
 @pytest.mark.django_db
-def test_receiving_clerk_records_grn_but_cannot_post_store_inventory():
+def test_receiving_clerk_posts_accepted_goods_immediately_without_double_posting():
     employee, department, supplier, item = create_procurement_context()
     branch = Branch.objects.create(name="Direct GRN Branch")
     store = StoreLocation.objects.create(branch=branch, name="Main Store")
@@ -1578,14 +1578,16 @@ def test_receiving_clerk_records_grn_but_cannot_post_store_inventory():
     receipt_line = receipt.items.get()
     receipt.refresh_from_db()
     order.refresh_from_db()
-    assert receipt.status == "received"
+    assert receipt.status == "posted"
     assert receipt.received_date == system_received_date
     assert receipt.supplier_invoice_no == "INV-1001"
     assert receipt_line.quantity_received == Decimal("1.00")
     assert receipt_line.expiry_date == expiry_date
     assert receipt.inspection.status == "accepted"
     assert receipt.inspection.items.get().quantity_accepted == Decimal("1.00")
-    assert not InventoryBalance.objects.filter(item=item, store=store).exists()
+    balance = InventoryBalance.objects.get(item=item, store=store)
+    assert balance.quantity_in_stock == Decimal("1.0000")
+    assert StockLedger.objects.filter(reference_id=receipt.pk, quantity_in=Decimal("1.0000")).count() == 1
 
     posted = client.post(
         f"/api/v1/grns/{receipt.pk}/post-to-inventory/",
@@ -1593,11 +1595,14 @@ def test_receiving_clerk_records_grn_but_cannot_post_store_inventory():
         format="json",
     )
 
-    # Receiving books physical delivery; a separate Storekeeper must post SOH.
+    # The completed physical delivery already posted accepted goods atomically.
+    # A second manual posting attempt must never increase stock twice.
     assert posted.status_code == 403, posted.data
     receipt.refresh_from_db()
-    assert receipt.status == "received"
-    assert not InventoryBalance.objects.filter(item=item, store=store).exists()
+    assert receipt.status == "posted"
+    balance.refresh_from_db()
+    assert balance.quantity_in_stock == Decimal("1.0000")
+    assert StockLedger.objects.filter(reference_id=receipt.pk).count() == 1
 
 
 @pytest.mark.django_db
@@ -1872,7 +1877,9 @@ def test_receiving_clerk_workspace_keeps_grn_after_lpo_is_fully_received():
     assert workspace.data["receiptItems"][0]["item_name"] == item.name
     assert workspace.data["receiptItems"][0]["item_sku"] == item.sku
     assert workspace.data["receiptItems"][0]["unit_name"] == item.base_unit.name
-    assert "ordered_quantity" not in workspace.data["receiptItems"][0]
+    # The initial blind count is locked; only then may ordered quantities
+    # appear in the read-only reconciliation/history view.
+    assert workspace.data["receiptItems"][0]["ordered_quantity"] == "2.0000"
     assert workspace.data["receiptItems"][0]["accepted_quantity"] == "2.0000"
     assert workspace.data["receiptItems"][0]["rejected_quantity"] == "0.0000"
 
@@ -2301,7 +2308,7 @@ def test_supplier_pack_quote_keeps_lpo_quantity_in_article_base_uom():
 
 
 @pytest.mark.django_db
-def test_receiving_rejections_are_stored_in_inspection_without_inventory_posting():
+def test_receiving_rejections_post_only_accepted_quantity_to_inventory():
     employee, department, supplier, item = create_procurement_context()
     branch = Branch.objects.create(name="Blind Receiving Inspection")
     store = StoreLocation.objects.create(branch=branch, name="Blind Receiving Store")
@@ -2352,8 +2359,16 @@ def test_receiving_rejections_are_stored_in_inspection_without_inventory_posting
     assert inspection_line.quantity_received == Decimal("2.00")
     assert inspection_line.quantity_rejected == Decimal("1.00")
     assert inspection_line.quantity_accepted == Decimal("1.00")
-    assert receipt.status == GoodsReceiptStatus.RECEIVED
-    assert not receipt.items.filter(inventory_changes_applied=True).exists()
+    assert receipt.status == GoodsReceiptStatus.POSTED
+    assert receipt.items.filter(inventory_changes_applied=True).count() == 1
+    balance = InventoryBalance.objects.get(item=item, store=store)
+    assert balance.quantity_in_stock == Decimal("1.0000")
+    assert StockLedger.objects.filter(
+        reference_id=receipt.pk, quantity_in=Decimal("1.0000"),
+    ).count() == 1
+    assert not StockLedger.objects.filter(
+        reference_id=receipt.pk, quantity_in=Decimal("2.0000"),
+    ).exists()
 
 
 @pytest.mark.django_db
@@ -2439,7 +2454,9 @@ def test_blind_receiving_reveals_lpo_quantities_only_after_locked_grn_and_preser
     assert receipt.blind_count_locked_at is not None
     assert receipt.note == ""
     assert original.quantity_received == Decimal("4.0000")
-    assert not InventoryBalance.objects.filter(store=store, item=item).exists()
+    # Four counted minus one rejected = three actually accepted into SOH.
+    assert InventoryBalance.objects.get(store=store, item=item).quantity_in_stock == Decimal("3.0000")
+    assert StockLedger.objects.filter(reference_id=receipt.pk, quantity_in=Decimal("3.0000")).count() == 1
 
     revealed = client.get(f"/api/v1/grns/{receipt.pk}/blind-reconciliation/")
     assert revealed.status_code == 200, revealed.data
@@ -2861,7 +2878,8 @@ def test_multiple_partial_grns_can_share_invoice_with_distinct_delivery_notes():
     assert len(receipts) == 3
     assert len({receipt.grn_number for receipt in receipts}) == 3
     assert all(receipt.blind_count_locked_at for receipt in receipts)
-    assert not InventoryBalance.objects.filter(item=item, store=store).exists()
+    assert InventoryBalance.objects.get(item=item, store=store).quantity_in_stock == Decimal("3.0000")
+    assert StockLedger.objects.filter(reference_type=LedgerReferenceType.GRN_RECEIPT, store=store, item=item).count() == 3
     # A fully received LPO is intentionally hidden from Receiving Clerk scope.
     assert physical_receipt(invoice="INV-NEW", delivery="DN-NEW").status_code == 404
 

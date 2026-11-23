@@ -24,5 +24,10 @@ export function validateCount(value: string | number): string | null {
   const quantity = Number(raw)
   if (!Number.isFinite(quantity)) return 'Enter a valid number.'
   if (quantity < 0) return 'Counted quantity cannot be negative.'
+  // Backend stock quantities have exactly four base-unit decimal places.
+  // Reject scientific notation and sub-base-unit precision before saving.
+  if (!/^(?:\d+(?:\.\d{1,4})?|\.\d{1,4})$/.test(raw)) {
+    return 'Counted quantity must use at most four decimal places.'
+  }
   return null
 }

@@ -2698,7 +2698,18 @@ class StockCount(BaseModel):
                     store=stock_count.store,
                     defaults={"quantity_in_stock": Decimal("0.00")},
                 )
-                variance = line.physical_quantity - balance.quantity_in_stock
+                # The count's theoretical balance is a frozen snapshot, not a
+                # licence to overwrite stock movements posted after counting.
+                # Fail closed before writing *any* variance. transaction.atomic
+                # rolls back prior lines if another item moved in the meantime.
+                if balance.quantity_in_stock != line.system_quantity:
+                    raise ValidationError(
+                        f"Stock on Hand for {line.item} changed since the physical "
+                        f"count snapshot ({line.system_quantity} to "
+                        f"{balance.quantity_in_stock}). Start a new stocktake "
+                        "against the updated stock ledger before posting variances."
+                    )
+                variance = line.physical_quantity - line.system_quantity
                 if variance == Decimal("0.00"):
                     continue
                 if line.physical_quantity < balance.quantity_reserved:
