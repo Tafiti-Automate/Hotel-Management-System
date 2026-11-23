@@ -14,7 +14,7 @@ from apps.hospitality.serializers import (
     CashierSessionSerializer, GuestFolioSerializer, POSCheckSerializer, POSOrderLineSerializer, PropertyGuestSerializer, ReservationSerializer, RoomSerializer, RoomTypeSerializer,
 )
 from apps.hospitality.services import (
-    add_pos_line, assigned_employee, close_cashier_session, open_cashier_session, open_guest_folio, register_property_guest, require_outlet, require_property, room_availability, save_reservation, transition_reservation, void_pos_order_line,
+    add_pos_line, assigned_employee, change_room_condition, close_cashier_session, move_reservation_room, open_cashier_session, open_guest_folio, register_property_guest, require_outlet, require_property, room_availability, save_reservation, transition_reservation, void_pos_order_line,
 )
 from apps.materials_control.models import OutletAssignment, Recipe
 from rest_framework.permissions import IsAuthenticated
@@ -142,6 +142,13 @@ class RoomTypeViewSet(RoomMasterDataMixin, viewsets.ModelViewSet):
 class RoomViewSet(RoomMasterDataMixin, viewsets.ModelViewSet):
     queryset = Room.objects.select_related("room_type", "branch")
     serializer_class = RoomSerializer
+
+    @action(detail=True, methods=("post",), url_path="change-condition")
+    def change_condition(self, request, pk=None):
+        room = change_room_condition(
+            request.user, self.get_object(), request.data.get("condition"), request.data.get("reason"),
+        )
+        return Response(self.get_serializer(room).data)
 
     def _no_operational_fields(self):
         forbidden = {"status", "housekeeping_status"} & set(self.request.data)
@@ -294,6 +301,13 @@ class ReservationViewSet(PropertyScopedMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=("post",), url_path="check-in")
     def check_in(self, request, pk=None):
         reservation = transition_reservation(request.user, self.get_object(), "check-in")
+        return Response(self.get_serializer(reservation).data)
+
+    @action(detail=True, methods=("post",), url_path="move-room")
+    def move_room(self, request, pk=None):
+        reservation = move_reservation_room(
+            request.user, self.get_object(), request.data.get("target_room"), request.data.get("reason"),
+        )
         return Response(self.get_serializer(reservation).data)
 
     @action(detail=True, methods=("post",), url_path="cancel")

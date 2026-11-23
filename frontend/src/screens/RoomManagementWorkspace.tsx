@@ -172,9 +172,14 @@ export default function RoomManagementWorkspace() {
         <button type="button" className="hs-button" disabled={loading || saving} onClick={() => void load()}>
           <Icon name="refresh" size={16} /> Refresh
         </button>
-        {role === 'front office manager' && <button type="button" className="hs-button" onClick={() => app.navTo('front-desk-reservations', 'Reservations Desk')}>
-          <Icon name="hotel" size={16} /> Reservations Desk
-        </button>}
+        {role === 'front office manager' && <>
+          <button type="button" className="hs-button" onClick={() => app.navTo('front-desk-reservations', 'Reservations Desk')}>
+            <Icon name="hotel" size={16} /> Reservations Desk
+          </button>
+          <button type="button" className="hs-button" onClick={() => app.navTo('front-office-housekeeping', 'Housekeeping Status')}>
+            <Icon name="cleaning_services" size={16} /> Room condition controls
+          </button>
+        </>}
       </div>
     </header>
 

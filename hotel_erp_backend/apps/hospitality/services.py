@@ -289,3 +289,137 @@ def close_cashier_session(user, session, closing_count, note):
         locked.note = note
         locked.save(update_fields=("status", "closed_at", "closed_by", "closing_count", "note", "updated_at"))
         return locked
+
+
+def change_room_condition(user, room, condition, reason):
+    """Audited housekeeping / out-of-order transition with property serialization.
+
+    This operation never rewrites occupancy, checks out a guest, or posts revenue.
+    """
+    from apps.audit_logs.models import AuditLog
+
+    employee = require_property(user, room.branch_id)
+    groups = set(user.groups.values_list("name", flat=True))
+    allowed = {"Front Office Manager", "Housekeeping Supervisor", "Housekeeper"}
+    if not groups.intersection(allowed) or not user.has_perm("hospitality.change_room"):
+        raise PermissionDenied("Authorized front office or housekeeping staff with room-change permission required.")
+
+    condition = str(condition or "").strip().lower()
+    reason = str(reason or "").strip()
+    if not 8 <= len(reason) <= 250:
+        raise ValidationError({"reason": "Give a reason between 8 and 250 characters."})
+    if condition not in {"dirty", "clean", "inspected", "out_of_order", "return_to_service"}:
+        raise ValidationError({"condition": "Unsupported room condition."})
+    if condition in {"out_of_order", "return_to_service"} and "Front Office Manager" not in groups:
+        raise PermissionDenied("Only the Front Office Manager can change out-of-order status.")
+    if condition == "inspected" and not groups.intersection({"Front Office Manager", "Housekeeping Supervisor"}):
+        raise PermissionDenied("Inspection requires Front Office Manager or Housekeeping Supervisor approval.")
+
+    with transaction.atomic():
+        Branch.objects.select_for_update().get(pk=room.branch_id)
+        locked = Room.objects.select_for_update().get(pk=room.pk, branch_id=room.branch_id)
+        before_status = locked.status
+        before_housekeeping = locked.housekeeping_status
+        if condition == "out_of_order":
+            if locked.status != Room.STATUS_VACANT:
+                raise ValidationError({"condition": "Only vacant rooms can be taken out of order."})
+            if locked.reservations.filter(
+                status__in=(Reservation.STATUS_RESERVED, Reservation.STATUS_CHECKED_IN)
+            ).exists():
+                raise ValidationError({"condition": "Move or cancel all active reservations before taking this room out of order."})
+            locked.status = Room.STATUS_OUT_OF_ORDER
+            locked.housekeeping_status = "dirty"
+        elif condition == "return_to_service":
+            if locked.status != Room.STATUS_OUT_OF_ORDER:
+                raise ValidationError({"condition": "This room is not out of order."})
+            locked.status = Room.STATUS_VACANT
+            locked.housekeeping_status = "dirty"
+        else:
+            if locked.status == Room.STATUS_OUT_OF_ORDER or not locked.is_active:
+                raise ValidationError({"condition": "Return the room to active service before housekeeping updates."})
+            transitions = {"dirty": {"clean"}, "clean": {"dirty", "inspected"}, "inspected": {"dirty"}}
+            if condition not in transitions.get(before_housekeeping, set()):
+                raise ValidationError({"condition": "Invalid housekeeping progression. Mark dirty rooms clean, then inspect them."})
+            locked.housekeeping_status = condition
+        locked.save(update_fields=("status", "housekeeping_status", "updated_at"))
+        AuditLog.objects.create(
+            actor=user, action="pms.room.condition_changed", entity_type="hospitality.Room",
+            entity_id=str(locked.pk), metadata={
+                "branch_id": str(locked.branch_id), "room_number": locked.number,
+                "employee_id": str(employee.pk), "reason": reason,
+                "old_status": before_status, "new_status": locked.status,
+                "old_housekeeping": before_housekeeping, "new_housekeeping": locked.housekeeping_status,
+            },
+        )
+        return locked
+
+
+def move_reservation_room(user, reservation, target_room_id, reason):
+    """Reallocate a reserved or checked-in guest without touching the folio ledger."""
+    from uuid import UUID
+    from apps.audit_logs.models import AuditLog
+
+    employee = require_property(user, reservation.branch_id)
+    if not user.groups.filter(name="Front Office Manager").exists() or not user.has_perm("hospitality.change_reservation"):
+        raise PermissionDenied("Front Office Manager with reservation-change permission required.")
+    reason = str(reason or "").strip()
+    if not 8 <= len(reason) <= 250:
+        raise ValidationError({"reason": "Give a room-move reason between 8 and 250 characters."})
+    try:
+        target_key = UUID(str(target_room_id))
+    except (ValueError, TypeError, AttributeError):
+        raise ValidationError({"target_room": "A valid destination room is required."})
+
+    with transaction.atomic():
+        Branch.objects.select_for_update().get(pk=reservation.branch_id)
+        booked = Reservation.objects.select_for_update().get(pk=reservation.pk, branch_id=reservation.branch_id)
+        if booked.status not in (Reservation.STATUS_RESERVED, Reservation.STATUS_CHECKED_IN):
+            raise ValidationError({"reservation": "Only reserved or checked-in reservations can move rooms."})
+        if str(booked.room_id) == str(target_key):
+            raise ValidationError({"target_room": "Choose a different room."})
+        try:
+            target = Room.objects.select_for_update().select_related("room_type").get(
+                pk=target_key, branch_id=booked.branch_id,
+            )
+        except Room.DoesNotExist:
+            raise ValidationError({"target_room": "Destination room does not belong to this property."})
+        if not target.is_active or target.status != Room.STATUS_VACANT or not target.room_type.is_active:
+            raise ValidationError({"target_room": "Destination must be an active, vacant room of an active type."})
+        if booked.adults + booked.children > target.room_type.capacity:
+            raise ValidationError({"target_room": "Destination capacity is insufficient for this reservation."})
+        if booked.status == Reservation.STATUS_CHECKED_IN and target.housekeeping_status not in ("clean", "inspected"):
+            raise ValidationError({"target_room": "Checked-in guests may move only into a clean or inspected room."})
+        if Reservation.objects.filter(
+            room=target, status__in=(Reservation.STATUS_RESERVED, Reservation.STATUS_CHECKED_IN),
+            arrival_date__lt=booked.departure_date, departure_date__gt=booked.arrival_date,
+        ).exclude(pk=booked.pk).exists():
+            raise ValidationError({"target_room": "Destination has a conflicting reservation."})
+        if Reservation.objects.filter(room=target, status=Reservation.STATUS_CHECKED_IN).exclude(pk=booked.pk).exists():
+            raise ValidationError({"target_room": "Destination is already occupied."})
+
+        original_id = booked.room_id
+        source = Room.objects.select_for_update().filter(pk=original_id, branch_id=booked.branch_id).first() if original_id else None
+        if booked.status == Reservation.STATUS_CHECKED_IN:
+            if not source or source.status != Room.STATUS_OCCUPIED:
+                raise ValidationError({"room": "Source room occupancy is inconsistent; resolve it before moving the guest."})
+            source.status = Room.STATUS_VACANT
+            source.housekeeping_status = "dirty"
+            source.save(update_fields=("status", "housekeeping_status", "updated_at"))
+            target.status = Room.STATUS_OCCUPIED
+            target.save(update_fields=("status", "updated_at"))
+        booked.room = target
+        try:
+            booked.full_clean()
+        except DjangoValidationError as exc:
+            raise ValidationError(getattr(exc, "message_dict", None) or exc.messages)
+        booked.save(update_fields=("room", "updated_at"))
+        AuditLog.objects.create(
+            actor=user, action="pms.reservation.room_moved", entity_type="hospitality.Reservation",
+            entity_id=str(booked.pk), metadata={
+                "branch_id": str(booked.branch_id), "employee_id": str(employee.pk),
+                "reservation_reference": booked.reference, "reason": reason,
+                "from_room_id": str(original_id or ""), "to_room_id": str(target.pk),
+                "checked_in": booked.status == Reservation.STATUS_CHECKED_IN,
+            },
+        )
+        return booked

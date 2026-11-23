@@ -22,8 +22,10 @@ test('Front Office Manager navigation excludes Receptionist and other operations
 })
 test('Unsafe payments and check-out are not posted from review screens',()=>{
  const ui=read('screens/FrontOfficeWorkspace.tsx')
- assert.doesNotMatch(ui,/runBackendAction\(/)
+ assert.match(ui,/runBackendAction\('hospitality-rooms'/)
+ assert.match(ui,/runBackendAction\('hospitality-reservations'/)
  assert.doesNotMatch(ui,/createBackendRecord\(/)
  assert.match(ui,/check-out is blocked/)
  assert.match(ui,/Night audit closing is not enabled/)
+ assert.doesNotMatch(ui,/runBackendAction\('hospitality-reservations',\s*[^\n]+,\s*'check-out'/)
 })

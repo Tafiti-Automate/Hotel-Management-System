@@ -14,7 +14,7 @@ const profile = read('screens/HotelProfile.tsx')
 
 test('Room Management is visible to administrators and Front Office Managers', () => {
   assert.match(sidebar, /route: 'front-desk-rooms', label: 'Rooms & room types'/)
-  assert.match(sidebar, /route: 'front-desk-rooms', label: 'Room management'/)
+  assert.match(sidebar, /route: 'front-desk-rooms', label: 'Room Management'/)
   assert.match(shell, /route === 'front-desk-rooms'/)
   assert.match(nav, /'front-desk-rooms': '\/front-desk\/rooms'/)
   assert.match(access, /'front-desk-rooms': \['front office manager'\]/)

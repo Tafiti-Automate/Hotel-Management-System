@@ -287,7 +287,7 @@ export function operationsLandingFor(user: AccessUser): { route: string; crumb: 
     'receiving clerk': { route: 'dashboard', crumb: 'Receiving dashboard' },
     receptionist: { route: 'front-desk-reservations', crumb: 'Reception desk' },
     'reservations agent': { route: 'front-desk-reservations', crumb: 'Reservations desk' },
-    'front office manager': { route: 'front-desk-reservations', crumb: 'Front office' },
+    'front office manager': { route: 'front-office-dashboard', crumb: 'Front Office Dashboard' },
     bartender: { route: 'bar-pos', crumb: 'Bar POS' },
     waiter: { route: 'bar-pos', crumb: 'Restaurant orders' },
     cashier: { route: 'bar-pos', crumb: 'Cashier POS register' },
