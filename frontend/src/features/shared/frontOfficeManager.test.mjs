@@ -12,13 +12,20 @@ test('All Front Office Manager links resolve to dedicated routes and workspaces'
    assert.ok(shell.includes(route) || ['front-office-dashboard','front-office-arrivals'].includes(route),route)
  }
 })
-test('Front Office Manager navigation excludes Receptionist and other operations roles',()=>{
+test('Front Office Manager has all 14 routes while shared reservations remain available to reception',()=>{
  const user=role=>({role,isSuperuser:false,permissions:['hospitality.view_room','hospitality.view_reservation','hospitality.view_roomtype']})
  for(const route of routes){
    assert.equal(canAccessRoute(user('Front Office Manager'),route),true,route)
-   assert.equal(canAccessRoute(user('Receptionist'),route),false,route)
    assert.equal(canAccessRoute(user('Store Keeper'),route),false,route)
+   if(route !== 'front-desk-reservations') {
+     assert.equal(canAccessRoute(user('Receptionist'),route),false,route)
+     assert.equal(canAccessRoute(user('Reservations Agent'),route),false,route)
+   }
  }
+ // Reception and Reservations Agent are deliberately allowed into the shared
+ // reservations desk, but never the management-only rooms, moves or housekeeping.
+ assert.equal(canAccessRoute(user('Receptionist'),'front-desk-reservations'),true)
+ assert.equal(canAccessRoute(user('Reservations Agent'),'front-desk-reservations'),true)
 })
 test('Unsafe payments and check-out are not posted from review screens',()=>{
  const ui=read('screens/FrontOfficeWorkspace.tsx')
