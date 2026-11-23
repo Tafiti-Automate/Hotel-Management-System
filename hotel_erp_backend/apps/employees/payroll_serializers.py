@@ -115,6 +115,19 @@ class SalaryAdvanceSerializer(CleanModelSerializer):
     def validate(self, attrs):
         if self.instance and self.instance.status != SalaryAdvance.STATUS_DRAFT:
             raise serializers.ValidationError("Only draft salary advances can be edited.")
+        if self.instance is None:
+            # A new draft's outstanding balance is initialized to the principal.
+            # Model.clean() compares balance with principal, so populate it
+            # *before* full_clean(), not only in create() after validation.
+            candidate = SalaryAdvance(balance=attrs["principal_amount"])
+            for field, value in attrs.items():
+                setattr(candidate, field, value)
+            try:
+                candidate.full_clean()
+            except DjangoValidationError as error:
+                detail = getattr(error, "message_dict", None) or getattr(error, "messages", None) or str(error)
+                raise serializers.ValidationError(detail) from error
+            return attrs
         return super().validate(attrs)
 
 
