@@ -114,6 +114,8 @@ export interface HotelRecord {
 }
 
 export interface NotificationRecord {
+  priority?: 'normal' | 'warning' | 'critical'
+  category?: string
   id: string
   employee: string
   title: string

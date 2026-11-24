@@ -24,6 +24,10 @@ export default function Header() {
   const [unreadOnly,setUnreadOnly]=useState(false)
   const [banners,setBanners]=useState<NotificationRecord[]>([])
   const [quiet,setQuiet]=useState(false)
+  const [category,setCategory]=useState('All')
+  const [selectedNotice,setSelectedNotice]=useState<NotificationRecord|null>(null)
+  const [desktop,setDesktop]=useState(false)
+  const desktopRef=useRef(false)
   const known=useRef<Set<string>|null>(null)
   const quietRef=useRef(false)
   const notificationRequest = useRef(0)
@@ -31,12 +35,19 @@ export default function Header() {
     let value=false
     try{value=localStorage.getItem('hotel:notification-quiet:'+app.user.id)==='1'}catch{/* storage unavailable */}
     quietRef.current=value;setQuiet(value)
+    setSelectedNotice(null);setCategory('All')
+    desktopRef.current=false;setDesktop(false)
   },[app.user.id])
   const toggleQuiet=()=>{
     const value=!quietRef.current
     quietRef.current=value;setQuiet(value)
-    if(value)setBanners([])
+    if(value)setBanners(rows=>rows.filter(row=>row.priority==='critical'))
     try{localStorage.setItem('hotel:notification-quiet:'+app.user.id,value?'1':'0')}catch{/* storage unavailable */}
+  }
+  const enableDesktop=async()=>{
+    if(!('Notification' in window)||!window.isSecureContext){setNotificationsError('Desktop notifications are unavailable in this browser.');return}
+    if(desktopRef.current){desktopRef.current=false;setDesktop(false);return}
+    try{const permission=await Notification.requestPermission();desktopRef.current=permission==='granted';setDesktop(desktopRef.current);if(!desktopRef.current)setNotificationsError('Desktop notification permission was not granted.')}catch{setNotificationsError('Desktop notifications are unavailable.')}
   }
   const dismissBanner=(id:string)=>setBanners(rows=>rows.filter(row=>row.id!==id))
   const notificationTriggerRef = useRef<HTMLButtonElement>(null)
@@ -44,6 +55,7 @@ export default function Header() {
   const [period, setPeriod] = useState<FiscalPeriodContext | null>(null)
   const [periodError, setPeriodError] = useState(false)
 
+  const visibleNotifications=notifications.filter(n=>(!unreadOnly||!n.is_read)&&(category==='All'||(n.category||'General')===category))
   const unread = notifications.filter((notification) => !notification.is_read).length
   const propertyName = app.currentBranch || app.user.branchName || app.user.departmentName || 'Current property'
   const propertyOption = app.data.branches.find((branch) => String(branch.name) === app.currentBranch)
@@ -66,8 +78,11 @@ export default function Header() {
       const next = await fetchNotifications()
       if (request !== notificationRequest.current) return
       const previous=known.current
-      if(previous && !quietRef.current && document.visibilityState==='visible'){
-        const incoming=next.filter(row=>!row.is_read&&!previous.has(row.id))
+      if(previous && document.visibilityState==='visible'){
+        const incoming=next.filter(row=>!row.is_read&&!previous.has(row.id)&&(!quietRef.current||row.priority==='critical'))
+        if(desktopRef.current && 'Notification' in window && Notification.permission==='granted' && incoming.length){
+          try{const alert=new Notification('Hotel ERP',{body:'New operational notifications. Open your notification centre to review.',tag:'hotel-erp-inbox'});alert.onclick=()=>{window.focus();setNotificationsOpen(true);alert.close()}}catch{/* browser may require a service worker */}
+        }
         if(incoming.length)setBanners(rows=>[...rows,...incoming].filter((row,i,all)=>all.findIndex(r=>r.id===row.id)===i).slice(-3))
       }
       known.current=new Set(next.map(row=>row.id))
@@ -135,13 +150,15 @@ export default function Header() {
 
   const readNotification = async (notification: NotificationRecord) => {
     dismissBanner(notification.id)
+    setSelectedNotice(notification)
+    setNotificationsOpen(true)
     if (!notification.is_read) {
       setNotifications((rows) => rows.map((row) => row.id === notification.id ? { ...row, is_read: true } : row))
       try {
         await markNotificationRead(notification.id)
       } catch (error) {
         setNotifications((rows) => rows.map((row) => row.id === notification.id ? { ...row, is_read: false } : row))
-        setNotificationsError(errorMessage(error))
+        setNotificationsError('Could not mark notification as read. Please retry.')
         return
       }
     }
@@ -160,6 +177,7 @@ export default function Header() {
         ? 'workflow-stores' : /expiry|expired stock|expires today/.test(message) && ['store keeper','cost controller'].includes(role) ? 'stock-on-hand' : null
     if (target && canAccessRoute(app.user,target)) {
       setNotificationsOpen(false)
+      setSelectedNotice(null)
       app.navTo(target, target === 'workflow-pay' ? 'Supplier payments' : target === 'workflow-procure' ? 'Procurement' : target === 'stock-on-hand' ? 'Stock on hand' : 'Stores')
     }
   }
@@ -226,15 +244,18 @@ export default function Header() {
               <div className="hotel-notification-controls">
                 <button type="button" aria-pressed={!unreadOnly} onClick={()=>setUnreadOnly(false)}>All</button>
                 <button type="button" aria-pressed={unreadOnly} onClick={()=>setUnreadOnly(true)}>Unread ({unread})</button>
+                <select aria-label="Notification category" value={category} onChange={e=>setCategory(e.target.value)}>{['All',...new Set(notifications.map(n=>n.category||'General'))].map(c=><option key={c}>{c}</option>)}</select>
+                <button type="button" aria-pressed={desktop} onClick={()=>void enableDesktop()}>{desktop?'Desktop: On':'Desktop: Off'}</button>
                 <button type="button" aria-pressed={quiet} onClick={toggleQuiet}>{quiet?'Do not disturb: On':'Do not disturb: Off'}</button>
               </div>
+              {selectedNotice&&<div className="hotel-notification-controls"><strong>{selectedNotice.title}</strong><p>{selectedNotice.message}</p><button type="button" onClick={()=>setSelectedNotice(null)}>Close details</button></div>}
               <div className="neo-notification-list">
                 {notificationsLoading && <NotificationState icon="progress_activity" title="Loading notifications" />}
                 {!notificationsLoading && notificationsError && <NotificationState icon="error" title="Notifications may be out of date" detail={notificationsError} action={() => void loadNotifications()} />}
-                {!notificationsLoading && !notificationsError && notifications.filter(n=>!unreadOnly||!n.is_read).length === 0 && <NotificationState icon="notifications_none" title={unreadOnly?"No unread notifications":"No notifications"} />}
-                {!notificationsLoading && notifications.filter(n=>!unreadOnly||!n.is_read).map((notification) => <button key={notification.id} className={`neo-notification-item ${notification.is_read ? 'is-read' : ''}`} onClick={() => void readNotification(notification)}>
+                {!notificationsLoading && !notificationsError && visibleNotifications.length === 0 && <NotificationState icon="notifications_none" title={unreadOnly?"No unread notifications":"No notifications"} />}
+                {!notificationsLoading && visibleNotifications.map((notification) => <button key={notification.id} className={`neo-notification-item ${notification.is_read ? 'is-read' : ''}`} onClick={() => void readNotification(notification)}>
                   <span className="neo-notification-icon"><Icon name={notification.is_read ? 'notifications' : 'notification_important'} size={17} /></span>
-                  <span><strong>{notification.title}</strong><small>{notification.message}</small><time>{notificationTime(notification.created_at)}</time></span>
+                  <span><strong>{notification.title}{notification.priority==='critical'?' · Critical':notification.priority==='warning'?' · Warning':''}</strong><small>{notification.message}</small><time>{notificationTime(notification.created_at)}</time></span>
                   {!notification.is_read && <i />}
                 </button>)}
               </div>
@@ -285,10 +306,11 @@ function IncomingBanner({notification,onDismiss,onOpen}:{notification:Notificati
   const dismiss=useRef(onDismiss)
   dismiss.current=onDismiss
   const [paused,setPaused]=useState(false)
-  const warning=/expir|variance|overdue|awaiting|approval|shortage/i.test(notification.title)
+  const critical=notification.priority==='critical'
+  const warning=critical||notification.priority==='warning'||(!notification.priority&&/expir|variance|overdue|awaiting|approval|shortage/i.test(notification.title))
   const duration=warning?8000:6000
-  useEffect(()=>{if(paused)return;const timer=window.setTimeout(()=>dismiss.current(),duration);return()=>window.clearTimeout(timer)},[duration,paused])
-  return <aside className="hotel-incoming-banner" data-warning={warning} onMouseEnter={()=>setPaused(true)} onMouseLeave={()=>setPaused(false)} onFocus={()=>setPaused(true)} onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget))setPaused(false)}}>
+  useEffect(()=>{if(paused||critical)return;const timer=window.setTimeout(()=>dismiss.current(),duration);return()=>window.clearTimeout(timer)},[duration,paused,critical])
+  return <aside className="hotel-incoming-banner" data-warning={warning} data-critical={critical} onMouseEnter={()=>setPaused(true)} onMouseLeave={()=>setPaused(false)} onFocus={()=>setPaused(true)} onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget))setPaused(false)}}>
     <Icon name={warning?'notification_important':'notifications'} size={21}/>
     <div role="status" aria-live="polite"><strong>{notification.title}</strong><p>{notification.message}</p><button type="button" onClick={onOpen}>View notification</button></div>
     <button type="button" aria-label="Dismiss banner without marking read" onClick={onDismiss}><Icon name="close" size={18}/></button>
