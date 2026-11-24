@@ -866,9 +866,10 @@ class FiscalPeriodViewSet(CreatedByModelMixin, ModelViewSet):
 
 
 class GLAccountMappingViewSet(CreatedByModelMixin, ModelViewSet):
-    queryset = GLAccountMapping.objects.select_related("branch__hotel")
+    queryset = GLAccountMapping.objects.select_related("branch__hotel", "department")
     serializer_class = GLAccountMappingSerializer
-    filterset_fields = ("branch", "source_type", "is_active")
+    filterset_fields = ("branch", "department", "source_type", "is_active")
+    search_fields = ("branch__name", "department__name", "source_type", "debit_account", "credit_account")
 
     def get_queryset(self):
         return hotel_scope(super().get_queryset(), self.request.user, "branch")
@@ -879,10 +880,12 @@ class GLAccountMappingViewSet(CreatedByModelMixin, ModelViewSet):
 
     def perform_create(self, serializer):
         self._require_admin()
+        ensure_branch_scope(self.request.user, serializer.validated_data["branch"].pk)
         super().perform_create(serializer)
 
     def perform_update(self, serializer):
         self._require_admin()
+        ensure_branch_scope(self.request.user, serializer.validated_data.get("branch", serializer.instance.branch).pk)
         serializer.save()
 
     def perform_destroy(self, instance):

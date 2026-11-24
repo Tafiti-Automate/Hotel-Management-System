@@ -251,10 +251,12 @@ def test_internal_dispatch_moves_stock_into_virtual_transit_until_pickup(ctx):
     assert not DepartmentConsumption.objects.filter(
         stock_issue_item__issue=issue
     ).exists()
-    assert StockLedger.objects.filter(
+    dispatch_rows = StockLedger.objects.filter(
         reference_id=issue.pk,
         reference_type=LedgerReferenceType.TRANSIT_DISPATCH,
-    ).count() == 2
+    )
+    assert dispatch_rows.count() == 2
+    assert all(row.total_cost_snapshot == Decimal("3750.0000") for row in dispatch_rows)
     assert FiscalPeriod.objects.get(branch=ctx["branch"]).pre_close_checklist()[
         "open_issue_transits"
     ] == 1
@@ -274,9 +276,12 @@ def test_internal_dispatch_moves_stock_into_virtual_transit_until_pickup(ctx):
     consumed = DepartmentConsumption.objects.get(stock_issue_item__issue=issue)
     assert consumed.quantity == Decimal("3.00")
     assert consumed.unit_cost == Decimal("1250.0000")
-    assert StockLedger.objects.filter(
+    pickup = StockLedger.objects.get(
         reference_id=issue.pk, reference_type=LedgerReferenceType.TRANSIT_PICKUP,
-    ).count() == 1
+    )
+    assert pickup.total_cost_snapshot == Decimal("3750.0000")
+    assert pickup.unit_cost_snapshot == Decimal("1250.0000")
+    assert pickup.wac_after == Decimal("0.0000")
     assert FiscalPeriod.objects.get(branch=ctx["branch"]).pre_close_checklist()[
         "open_issue_transits"
     ] == 0
@@ -287,6 +292,8 @@ def test_internal_dispatch_moves_stock_into_virtual_transit_until_pickup(ctx):
 
 @pytest.mark.django_db
 def test_multi_request_dispatch_rolls_back_when_any_request_is_short(ctx):
+    # Make the first dispatch valid so the second shortage tests rollback.
+    InventoryBalance.objects.filter(item=ctx["item"], store=ctx["main"]).update(weighted_average_cost=Decimal("1250.0000"))
     today = timezone.localdate()
     FiscalPeriod.objects.create(
         branch=ctx["branch"], name="Rollback test month",

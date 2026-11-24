@@ -213,7 +213,7 @@ def test_warehouse_reports_keep_unlike_units_separate_and_use_posted_wac():
     store = StoreLocation.objects.create(branch=branch, name="Warehouse")
     category = Category.objects.create(name="Warehouse supplies")
     for name, unit, quantity, cost in (("Oil", "litre", "3.1250", "1000.0000"), ("Soap", "each", "4", "500.0000")):
-        item = Item.objects.create(category=category, name=name, sku="WH-"+name, unit=unit)
+        item = Item.objects.create(category=category, name=name, sku="WH-"+name, unit=unit, reorder_level=Decimal("0.0000"))
         InventoryBalance.objects.create(item=item, store=store, quantity_in_stock=Decimal(quantity), weighted_average_cost=Decimal(cost))
     client = APIClient()
     client.force_authenticate(user)

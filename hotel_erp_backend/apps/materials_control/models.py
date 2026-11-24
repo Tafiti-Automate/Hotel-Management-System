@@ -1028,10 +1028,11 @@ class FiscalPeriod(BaseModel):
 
     def inventory_gl_journal_preview(self):
         """Read-only proposed journal entries. No financial postings occur."""
-        from apps.inventory.models import StockLedger
+        from apps.inventory.models import StockLedger, StockIssue, StoreReturn, DepartmentConsumption, MonthEndInventory
         from core.constants.choices import LedgerReferenceType
         sources = {
             LedgerReferenceType.STOCK_ISSUE: GLAccountMapping.SOURCE_CONSUMPTION,
+            LedgerReferenceType.TRANSIT_PICKUP: GLAccountMapping.SOURCE_CONSUMPTION,
             # Department returns reverse previously recognized consumption
             # at the return's immutable historical stock valuation.
             LedgerReferenceType.STORE_RETURN: GLAccountMapping.SOURCE_CONSUMPTION,
@@ -1041,14 +1042,24 @@ class FiscalPeriod(BaseModel):
             LedgerReferenceType.STOCK_ADJUSTMENT: GLAccountMapping.SOURCE_VARIANCE,
         }
         configured = {m.source_type: m for m in GLAccountMapping.objects.filter(
-            branch=self.branch, is_active=True
+            branch=self.branch, is_active=True, department__isnull=True
         )}
+        department_mappings = {(m.department_id, m.source_type): m for m in GLAccountMapping.objects.filter(
+            branch=self.branch, is_active=True, department__isnull=False
+        )}
+        classified = {
+            (row.department_id, row.cycle.cutoff.year, row.cycle.cutoff.month): row.department_cost_snapshot.get("classification")
+            for row in MonthEndInventory.objects.filter(
+                cycle__branch=self.branch, cycle__status="booked", department__isnull=False,
+                cycle__cutoff__gte=self.start_date, cycle__cutoff__lte=self.end_date,
+            ).select_related("cycle")
+        }
         movements = StockLedger.objects.with_accounting_date().filter(
             store__branch=self.branch,
             accounting_date__range=(self.start_date, self.end_date),
         ).order_by("accounting_date", "created_at", "pk").values(
             "pk", "created_at", "accounting_date", "reference_type", "reference_id",
-            "quantity_in", "quantity_out", "unit_cost_snapshot", "total_cost_snapshot"
+            "quantity_in", "quantity_out", "unit_cost_snapshot", "total_cost_snapshot", "item_id", "store_id"
         )
         draft, blockers, excluded = [], [], {}
         debits = credits = Decimal("0.00")
@@ -1065,16 +1076,82 @@ class FiscalPeriod(BaseModel):
                 blockers.append(f"Invalid stock movement direction for {source} movement {movement['pk']}.")
                 continue
             amount = movement["total_cost_snapshot"]
-            if amount is None or movement["unit_cost_snapshot"] is None:
+            unit_cost = movement["unit_cost_snapshot"]
+            department = None
+            if source in (LedgerReferenceType.STOCK_ISSUE, LedgerReferenceType.TRANSIT_PICKUP):
+                issue = StockIssue.objects.filter(pk=movement["reference_id"], store__branch=self.branch).select_related("requisition__department").first()
+                if issue:
+                    department = issue.requisition.department
+                if source == LedgerReferenceType.TRANSIT_PICKUP:
+                    # Dispatch is an asset movement. Recognize signed pickup once,
+                    # and require original signed issue evidence for legacy rows.
+                    if (not issue or issue.fulfillment_status != StockIssue.STATUS_COMPLETED
+                            or not issue.signed_at or issue.transit_store_id != movement["store_id"]
+                            or not outbound):
+                        blockers.append(f"Missing signed pickup evidence for movement {movement['pk']}.")
+                        continue
+                    if StockLedger.objects.filter(reference_id=issue.pk, item_id=movement["item_id"],
+                                                   reference_type=LedgerReferenceType.STOCK_ISSUE).exists():
+                        blockers.append(f"Duplicate issue and transit pickup evidence for {issue.issue_no}.")
+                        continue
+                    entries = list(DepartmentConsumption.objects.filter(
+                        stock_issue_item__issue=issue, item_id=movement["item_id"],
+                        department=department, stock_issue_item__base_quantity=movement["quantity_out"],
+                    ).select_related("stock_issue_item"))
+                    pickup_count = StockLedger.objects.filter(
+                        reference_id=issue.pk, item_id=movement["item_id"],
+                        reference_type=LedgerReferenceType.TRANSIT_PICKUP,
+                        quantity_out=movement["quantity_out"],
+                    ).count()
+                    if (len(entries) != 1 or pickup_count != 1
+                            or entries[0].quantity != movement["quantity_out"]
+                            or entries[0].consumed_on != movement["accounting_date"]):
+                        blockers.append(f"Ambiguous signed pickup quantities for {issue.issue_no}; reconcile issue lines.")
+                        continue
+                    recorded = entries[0].stock_issue_item.dispatched_unit_cost
+                    if recorded <= 0:
+                        blockers.append(f"Missing historical cost for signed pickup {issue.issue_no}.")
+                        continue
+                    expected = (recorded * movement["quantity_out"]).quantize(Decimal("0.0001"))
+                    if (amount is not None and amount != expected) or (unit_cost is not None and unit_cost != recorded):
+                        blockers.append(f"Signed pickup cost disagrees with dispatch evidence for {issue.issue_no}.")
+                        continue
+                    amount, unit_cost = expected, recorded
+            elif source == LedgerReferenceType.STORE_RETURN:
+                returned = StoreReturn.objects.filter(pk=movement["reference_id"], store__branch=self.branch,
+                                                      inventory_changes_applied=True).select_related("department").first()
+                if returned:
+                    department = returned.department
+                    # Returns have immutable historic costs but no per-lot
+                    # original GL allocation. Do not guess a prior account.
+                    if DepartmentConsumption.objects.filter(
+                        department=department, item_id=movement["item_id"],
+                        stock_issue_item__issue__store=returned.store,
+                        consumed_on__lt=movement["accounting_date"].replace(day=1),
+                    ).exists():
+                        blockers.append(f"Cross-period return {returned.return_no} needs original GL account allocation before export.")
+                        continue
+            if amount is None or unit_cost is None:
                 blockers.append(f"Missing historical cost for {source} movement {movement['pk']}.")
                 continue
             amount = amount.quantize(Decimal("0.01"))
             if amount <= 0:
                 blockers.append(f"Nonpositive GL amount for {source} movement {movement['pk']}.")
                 continue
-            mapping = configured.get(sources[source])
+            mapping_source = sources[source]
+            if department:
+                date = movement["accounting_date"]
+                classification = classified.get((department.pk, date.year, date.month))
+                if classification in ("expense", "cost_of_sales"):
+                    mapping_source = (GLAccountMapping.SOURCE_DEPARTMENT_COGS if classification == "cost_of_sales"
+                                      else GLAccountMapping.SOURCE_DEPARTMENT_EXPENSE)
+                    mapping = department_mappings.get((department.pk, mapping_source))
+                else:
+                    mapping = configured.get(mapping_source)
+            else:
+                mapping = configured.get(mapping_source)
             if mapping is None:
-                blockers.append(f"Missing active GL mapping for {sources[source]}.")
+                blockers.append(f"Missing active GL mapping for {mapping_source}" + (f" ({department.name})." if department else "."))
                 continue
             if not mapping.debit_account or not mapping.credit_account or mapping.debit_account == mapping.credit_account:
                 blockers.append(f"Invalid debit and credit accounts for {sources[source]}.")
@@ -1087,6 +1164,7 @@ class FiscalPeriod(BaseModel):
                 "source": source,
                 "reference": str(movement["reference_id"]),
                 "movement_id": str(movement["pk"]),
+                "department": department.name if department else "",
             }
             draft.append({**common, "account": dr, "debit": str(amount), "credit": "0.00"})
             draft.append({**common, "account": cr, "debit": "0.00", "credit": str(amount)})
@@ -1141,6 +1219,9 @@ class GLAccountMapping(BaseModel):
     SOURCE_POS_COGS = "pos_cogs"
     SOURCE_WASTE = "stock_waste"
     SOURCE_VARIANCE = "stock_variance"
+    SOURCE_DEPARTMENT_EXPENSE = "department_expense"
+    SOURCE_DEPARTMENT_COGS = "department_cogs"
+    DEPARTMENT_SOURCES = (SOURCE_DEPARTMENT_EXPENSE, SOURCE_DEPARTMENT_COGS)
     SOURCE_CHOICES = (
         (SOURCE_INVOICE, "Supplier invoices"),
         (SOURCE_EXPENSE, "Expenses"),
@@ -1149,12 +1230,16 @@ class GLAccountMapping(BaseModel):
         (SOURCE_POS_COGS, "POS cost of goods sold"),
         (SOURCE_WASTE, "Waste and spoilage expense"),
         (SOURCE_VARIANCE, "Physical counts and stock adjustments"),
+        (SOURCE_DEPARTMENT_EXPENSE, "Department-specific operating expense"),
+        (SOURCE_DEPARTMENT_COGS, "Department-specific cost of sales"),
     )
 
     branch = models.ForeignKey(
         "departments.Branch", on_delete=models.PROTECT, related_name="gl_account_mappings"
     )
     source_type = models.CharField(max_length=40, choices=SOURCE_CHOICES)
+    department = models.ForeignKey("departments.Department", on_delete=models.PROTECT,
+                                   null=True, blank=True, related_name="gl_account_mappings")
     debit_account = models.CharField(max_length=50)
     credit_account = models.CharField(max_length=50)
     tax_account = models.CharField(
@@ -1165,8 +1250,18 @@ class GLAccountMapping(BaseModel):
     class Meta(BaseModel.Meta):
         constraints = [
             models.UniqueConstraint(
-                fields=("branch", "source_type"), name="unique_branch_gl_source_mapping"
-            )
+                fields=("branch", "source_type"), condition=models.Q(department__isnull=True),
+                name="unique_branch_gl_source_mapping"
+            ),
+            models.UniqueConstraint(
+                fields=("branch", "department", "source_type"), condition=models.Q(department__isnull=False),
+                name="unique_department_gl_source_mapping"
+            ),
+            models.CheckConstraint(
+                condition=(models.Q(department__isnull=False, source_type__in=("department_expense", "department_cogs"))
+                           | (models.Q(department__isnull=True) & ~models.Q(source_type__in=("department_expense", "department_cogs")))),
+                name="gl_mapping_department_source_consistency",
+            ),
         ]
         ordering = ("branch__name", "source_type")
 
@@ -1174,6 +1269,10 @@ class GLAccountMapping(BaseModel):
         super().clean()
         if self.debit_account and self.debit_account == self.credit_account:
             raise ValidationError("Debit and credit accounts must be different.")
+        if bool(self.department_id) != (self.source_type in self.DEPARTMENT_SOURCES):
+            raise ValidationError("Department-specific expense or cost of sales requires a department; other sources are property-wide.")
+        if self.department_id and not self.department.is_active:
+            raise ValidationError("Select an active department.")
 
     def __str__(self):
         return f"{self.branch} - {self.get_source_type_display()}"
@@ -1213,7 +1312,7 @@ class GLExport(BaseModel):
         credit_total = Decimal("0.00")
         mappings = {
             mapping.source_type: mapping
-            for mapping in GLAccountMapping.objects.filter(branch=period.branch, is_active=True)
+            for mapping in GLAccountMapping.objects.filter(branch=period.branch, is_active=True, department__isnull=True)
         }
 
         def mapping_for(source):
@@ -1332,7 +1431,7 @@ class GLExport(BaseModel):
             raise ValidationError({"inventory_gl": inventory["blockers"]})
         for line in inventory["draft_rows"]:
             add_entry(
-                line["date"], line["source"], line["reference"], "",
+                line["date"], line["source"], line["reference"], line.get("department", ""),
                 f"Inventory movement {line['movement_id']}",
                 line["account"], line["debit"], line["credit"],
             )
@@ -1353,6 +1452,8 @@ class GLExport(BaseModel):
         existing = cls.objects.filter(period=period, checksum=checksum).first()
         if existing:
             return existing
+        if cls.objects.filter(period=period).exists():
+            raise ValidationError("A different GL export already exists for this closed period. Finance must reconcile changes rather than generate a second posting file.")
         return cls.objects.create(
             period=period, generated_by=actor, row_count=len(postings),
             checksum=checksum, payload=payload, created_by=actor,

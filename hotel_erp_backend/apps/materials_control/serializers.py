@@ -235,6 +235,7 @@ class FiscalPeriodSerializer(CleanModelSerializer):
 
 class GLAccountMappingSerializer(CleanModelSerializer):
     branch_name = serializers.CharField(source="branch.name", read_only=True)
+    department_name = serializers.CharField(source="department.name", read_only=True, allow_null=True)
 
     class Meta:
         model = GLAccountMapping

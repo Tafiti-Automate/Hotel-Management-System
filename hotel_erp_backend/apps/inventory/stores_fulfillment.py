@@ -184,7 +184,10 @@ def fulfill_requisition(request_id, keeper, actor, quantities=None):
         unit_cost = balance.weighted_average_cost
         if unit_cost == 0 and stock_value > 0:
             unit_cost = (stock_value / quantity).quantize(FOUR, rounding=ROUND_HALF_UP)
+        if unit_cost <= 0:
+            raise ValidationError(f"Missing verified acquisition cost for {line.item}; reconcile valuation before dispatch.")
         previous_transit = transit_balance.quantity_in_stock
+        transit_wac_before = transit_balance.weighted_average_cost
         new_transit = previous_transit + quantity
         transit_balance.weighted_average_cost = (
             ((previous_transit * transit_balance.weighted_average_cost) + quantity * unit_cost)
@@ -216,6 +219,10 @@ def fulfill_requisition(request_id, keeper, actor, quantities=None):
                 quantity_out=Decimal("0") if inbound else quantity,
                 reference_type=LedgerReferenceType.TRANSIT_DISPATCH,
                 reference_id=issue.pk,
+                unit_cost_snapshot=unit_cost,
+                total_cost_snapshot=(quantity * unit_cost).quantize(FOUR, rounding=ROUND_HALF_UP),
+                wac_before=transit_wac_before if inbound else balance.weighted_average_cost,
+                wac_after=transit_balance.weighted_average_cost if inbound else balance.weighted_average_cost,
                 note=(
                     f"Dispatch {req.requisition_no} into virtual transit"
                     if inbound else f"Dispatch {req.requisition_no} out of {req.store}"
@@ -274,13 +281,25 @@ def complete_transit_pickup(issue_id, receiver, actor):
         )
         if balance.quantity_in_stock < line.base_quantity:
             raise ValidationError(f"In-transit balance is short for {line.item}.")
-        balance.quantity_in_stock -= line.base_quantity
-        balance.save(update_fields=["quantity_in_stock", "updated_at"])
+        if line.dispatched_unit_cost <= 0:
+            raise ValidationError(f"Missing dispatch valuation for {line.item}.")
+        before_wac = balance.weighted_average_cost
+        remaining = balance.quantity_in_stock - line.base_quantity
+        value = (line.base_quantity * line.dispatched_unit_cost).quantize(FOUR, rounding=ROUND_HALF_UP)
+        remaining_value = balance.quantity_in_stock * before_wac - value
+        # Keep the value of other outstanding issues; do not use today's source cost.
+        if remaining and remaining_value < 0:
+            raise ValidationError(f"In-transit valuation does not reconcile for {line.item}.")
+        balance.quantity_in_stock = remaining
+        balance.weighted_average_cost = (remaining_value / remaining).quantize(FOUR, rounding=ROUND_HALF_UP) if remaining else Decimal("0.0000")
+        balance.save(update_fields=["quantity_in_stock", "weighted_average_cost", "updated_at"])
         StockLedger.objects.create(
             item=line.item, store=issue.transit_store,
             quantity_out=line.base_quantity,
             reference_type=LedgerReferenceType.TRANSIT_PICKUP,
             reference_id=issue.pk,
+            unit_cost_snapshot=line.dispatched_unit_cost, total_cost_snapshot=value,
+            wac_before=before_wac, wac_after=balance.weighted_average_cost,
             note=f"Signed physical pickup {issue.issue_no}",
             created_by=actor,
         )

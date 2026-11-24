@@ -304,3 +304,41 @@ def test_unvalued_department_return_blocks_finance_export(materials_context):
     period.close(user, "Return valuation needs correction before journal export.")
     with pytest.raises(ValidationError, match="Missing historical cost"):
         GLExport.generate(period, user)
+
+
+@pytest.mark.django_db
+def test_signed_pickup_uses_classified_department_account_and_not_dispatch(materials_context):
+    from apps.inventory.models import StoreRequisition, StoreRequisitionItem, StockIssue, StockIssueItem, DepartmentConsumption, StoreLocation, MonthEndCycle, MonthEndInventory
+    from calendar import monthrange
+    user, employee, department, branch, store, unit, item = materials_context
+    today = timezone.localdate()
+    cutoff = today.replace(day=monthrange(today.year, today.month)[1])
+    period = FiscalPeriod.objects.create(branch=branch, name="Department GL", start_date=today.replace(day=1), end_date=cutoff)
+    cycle = MonthEndCycle.objects.create(branch=branch, cutoff=cutoff, memo_reference="TEST", memo="Test", status="booked", created_by=user)
+    MonthEndInventory.objects.create(cycle=cycle, department=department, location_name=department.name,
+                                     department_cost_snapshot={"classification":"cost_of_sales"})
+    transit = StoreLocation.objects.create(branch=branch, name="Transit GL", is_virtual_transit=True, is_active=False)
+    req = StoreRequisition.objects.create(department=department, store=store, requested_by=employee)
+    req_line = StoreRequisitionItem.objects.create(requisition=req, item=item, quantity_requested=Decimal("2"))
+    issue = StockIssue.objects.create(requisition=req, store=store, issued_by=employee, transit_store=transit,
+                                      fulfillment_status=StockIssue.STATUS_COMPLETED, signed_at=timezone.now(), inventory_changes_applied=True)
+    line = StockIssueItem.objects.create(issue=issue, requisition_item=req_line, item=item, unit=item.base_unit,
+                                        quantity=Decimal("2"), dispatched_unit_cost=Decimal("125.0000"))
+    DepartmentConsumption.objects.create(department=department, stock_issue_item=line, item=item,
+                                         quantity=line.base_quantity, unit_cost=Decimal("125"), consumed_on=today)
+    for location, source in ((store, LedgerReferenceType.TRANSIT_DISPATCH), (transit, LedgerReferenceType.TRANSIT_PICKUP)):
+        StockLedger.objects.create(store=location, item=item, reference_type=source, reference_id=issue.pk,
+                                   quantity_out=line.base_quantity)
+    GLAccountMapping.objects.create(branch=branch, source_type=GLAccountMapping.SOURCE_CONSUMPTION, debit_account="GENERAL", credit_account="STOCK")
+    blocked = period.inventory_gl_journal_preview()
+    assert not blocked["ready_for_finance_review"]
+    assert any("department_cogs" in blocker for blocker in blocked["blockers"])
+    GLAccountMapping.objects.create(branch=branch, department=department, source_type=GLAccountMapping.SOURCE_DEPARTMENT_COGS,
+                                     debit_account="FOOD-COST", credit_account="STOCK")
+    preview = period.inventory_gl_journal_preview()
+    assert preview["ready_for_finance_review"], preview["blockers"]
+    assert preview["excluded_source_counts"]["transit_dispatch"] == 1
+    assert preview["debit_total"] == preview["credit_total"] == "250.00"
+    assert [row["account"] for row in preview["draft_rows"]] == ["FOOD-COST", "STOCK"]
+    assert all(row["department"] == department.name for row in preview["draft_rows"])
+    assert not GLExport.objects.exists()
