@@ -92,7 +92,12 @@ def test_cost_controller_can_read_property_stock_on_hand_without_stock_mutation_
     # This grant must never allow Cost Control to edit balances or perform
     # operational reservation reconciliation, even with a valid balance ID.
     record = InventoryBalance.objects.get(store=primary, item=item)
-    assert client.patch(f"/api/v1/inventory-balances/{record.pk}/", {"quantity_in_stock": "1000"}, format="json").status_code == 405
+    # DRF may reject permission before resolving the read-only method.
+    # Either rejection is safe only if no quantity or valuation changes.
+    assert client.patch(f"/api/v1/inventory-balances/{record.pk}/", {"quantity_in_stock": "1000"}, format="json").status_code in (403, 405)
+    record.refresh_from_db()
+    assert record.quantity_in_stock == Decimal("10.0000")
+    assert record.weighted_average_cost == Decimal("0.0000")
     assert client.post(f"/api/v1/inventory-balances/{record.pk}/reconcile-reservation/", {}, format="json").status_code == 403
     for perm in ("add", "change", "delete"):
         assert not user.has_perm(f"inventory.{perm}_inventorybalance")

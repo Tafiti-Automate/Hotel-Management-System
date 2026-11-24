@@ -256,7 +256,21 @@ def test_goods_receipt_item_posts_received_stock_to_inventory():
         unit_cost=Decimal("7000.00"),
     )
 
-    receipt_item.post_to_inventory()
+    # Posting an uninspected line must not mutate inventory.
+    with pytest.raises(ValidationError, match="Inspect and accept or reject"):
+        receipt_item.post_to_inventory()
+    assert not StockLedger.objects.filter(reference_id=receipt.pk).exists()
+    assert not receipt.items.filter(inventory_changes_applied=True).exists()
+    inspection = GoodsInspection.objects.create(goods_receipt=receipt, inspected_by=employee)
+    GoodsInspectionItem.objects.create(
+        inspection=inspection,
+        goods_receipt_item=receipt_item,
+        quantity_received=receipt_item.base_quantity,
+        quantity_accepted=receipt_item.base_quantity,
+        quantity_rejected=Decimal("0.0000"),
+    )
+    receipt.refresh_from_db()
+    receipt.post_to_inventory(posted_by=employee)
 
     order.refresh_from_db()
     receipt_item.refresh_from_db()
@@ -265,9 +279,10 @@ def test_goods_receipt_item_posts_received_stock_to_inventory():
     assert receipt_item.base_quantity == Decimal("24.0000")
     assert receipt_item.store == store
     assert receipt_item.inventory_changes_applied is True
-    # A direct line-post does not complete the GRN workflow. The LPO receipt
-    # status changes only when the Goods Receipt Note is recorded/posted.
-    assert order.status == POStatus.ISSUED
+    # An accepted partial delivery leaves the balance of the LPO outstanding.
+    receipt.refresh_from_db()
+    assert receipt.status == GoodsReceiptStatus.POSTED
+    assert order.status == POStatus.PARTIALLY_RECEIVED
     assert InventoryBalance.objects.get(item=item, store=store).quantity_in_stock == Decimal("24.00")
     batch = InventoryBatch.objects.get(item=item, store=store)
     assert batch.remaining_quantity == Decimal("24.00")
@@ -276,6 +291,8 @@ def test_goods_receipt_item_posts_received_stock_to_inventory():
 
     with pytest.raises(ValidationError):
         receipt_item.post_to_inventory()
+    assert InventoryBalance.objects.get(item=item, store=store).quantity_in_stock == Decimal("24.0000")
+    assert StockLedger.objects.filter(reference_id=receipt.id).count() == 1
 
 
 @pytest.mark.django_db
@@ -913,7 +930,22 @@ def test_requisition_tracks_ordering_and_receipt_fulfillment():
         quantity_received=Decimal("4.00"),
         unit_cost=Decimal("7500.00"),
     )
-    receipt_item.post_to_inventory()
+    # Posting an uninspected line must not mutate inventory.
+    with pytest.raises(ValidationError, match="Inspect and accept or reject"):
+        receipt_item.post_to_inventory()
+    assert not StockLedger.objects.filter(reference_id=receipt.pk).exists()
+    assert not receipt.items.filter(inventory_changes_applied=True).exists()
+    inspection = GoodsInspection.objects.create(goods_receipt=receipt, inspected_by=employee)
+    GoodsInspectionItem.objects.create(
+        inspection=inspection,
+        goods_receipt_item=receipt_item,
+        quantity_received=receipt_item.base_quantity,
+        quantity_accepted=receipt_item.base_quantity,
+        quantity_rejected=Decimal("0.0000"),
+    )
+    receipt.refresh_from_db()
+    receipt.post_to_inventory(posted_by=employee)
+    assert receipt.status == GoodsReceiptStatus.POSTED
 
     requisition.refresh_from_db()
     assert requisition.status == PRStatus.FULFILLED

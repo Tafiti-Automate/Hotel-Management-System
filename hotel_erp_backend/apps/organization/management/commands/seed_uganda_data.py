@@ -748,20 +748,25 @@ class Command(BaseCommand):
         # 14. CREATE INVENTORY BALANCES & STOCK LEDGERS
         # ==========================================
         self.stdout.write("Creating Inventory Balances...")
+        # These are explicit synthetic acquisition costs for the demo's
+        # opening stock only, not estimates of historical production prices.
+        # Water matches the presentation transfer/adjustment scenario; the
+        # other values are sample costs distinct from retail selling prices.
         balances = [
-            (item_water, store_main, Decimal("250.00"), Decimal("100.00")),
-            (item_cola, store_main, Decimal("180.00"), Decimal("150.00")),
-            (item_beer, store_main, Decimal("120.00"), Decimal("50.00")),
-            (item_sugar, store_kitchen, Decimal("50.00"), Decimal("20.00")),
-            (item_soap, store_main, Decimal("15.00"), Decimal("5.00")),
+            (item_water, store_main, Decimal("250.00"), Decimal("100.00"), Decimal("900.0000")),
+            (item_cola, store_main, Decimal("180.00"), Decimal("150.00"), Decimal("1200.0000")),
+            (item_beer, store_main, Decimal("120.00"), Decimal("50.00"), Decimal("3200.0000")),
+            (item_sugar, store_kitchen, Decimal("50.00"), Decimal("20.00"), Decimal("3500.0000")),
+            (item_soap, store_main, Decimal("15.00"), Decimal("5.00"), Decimal("18000.0000")),
         ]
 
-        for item, store, qty, reorder in balances:
+        for item, store, qty, reorder, acquisition_cost in balances:
             # Create Balance record
             InventoryBalance.objects.create(
                 item=item,
                 store=store,
                 quantity_in_stock=qty,
+                weighted_average_cost=acquisition_cost,
                 reorder_level=reorder,
                 created_by=admin_user
             )
@@ -774,7 +779,11 @@ class Command(BaseCommand):
                 quantity_out=Decimal("0.00"),
                 reference_type=LedgerReferenceType.STOCK_ADJUSTMENT,
                 reference_id=uuid.uuid4(),
-                note="Initial database seed stock.",
+                unit_cost_snapshot=acquisition_cost,
+                total_cost_snapshot=(qty * acquisition_cost).quantize(Decimal("0.0001")),
+                wac_before=Decimal("0.0000"),
+                wac_after=acquisition_cost,
+                note="Synthetic demonstration opening stock and acquisition cost.",
                 created_by=admin_user
             )
 

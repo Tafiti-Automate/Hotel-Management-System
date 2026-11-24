@@ -1,4 +1,5 @@
 from io import StringIO
+from decimal import Decimal
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -145,6 +146,13 @@ def test_seed_uganda_data_populates_empty_database_and_refuses_overwrite(monkeyp
     assert Supplier.objects.count() == 4
     assert Item.objects.count() == 6
     assert InventoryBalance.objects.count() == 5
+    from apps.inventory.models import StockLedger
+    for balance in InventoryBalance.objects.all():
+        assert balance.weighted_average_cost > 0
+        ledger = StockLedger.objects.get(item=balance.item, store=balance.store)
+        assert ledger.unit_cost_snapshot == balance.weighted_average_cost
+        assert ledger.total_cost_snapshot == balance.quantity_in_stock * balance.weighted_average_cost
+        assert ledger.wac_after == balance.weighted_average_cost
     assert Customer.objects.count() == 4
     assert not get_user_model().objects.get(username="jokello").has_usable_password()
     assert "created successfully" in output.getvalue()
