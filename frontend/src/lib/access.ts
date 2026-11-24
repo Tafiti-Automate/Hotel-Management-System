@@ -110,7 +110,10 @@ const enterpriseRoleRoutes: Record<string, string[]> = {
   'admin-cost-centers': ['system administrator'],
   'admin-authorisation-rules': ['system administrator'],
   'admin-articles': ['system administrator'],
-  'stocktake-sheet': ['department supervisor', 'outlet supervisor', 'supervisor', 'store keeper'],
+  'stocktake-sheet': ['cost controller'],
+  'store-inventory': ['cost controller'],
+  'store-analysis': ['cost controller'],
+  'store-usage': ['cost controller'],
   'stocktake-variance': ['cost controller', 'financial manager'],
   'month-end-stocktake': ['cost controller', 'financial manager'],
   'recipes-detail': ['department head', 'cost controller'],
@@ -138,8 +141,8 @@ const strictRoleRoutes: Record<string, Set<string>> = {
   'outlet supervisor': new Set([ 'waste-new', 'dashboard', 'detail', 'workflow-stores', 'new-store-request', 'incoming-pickup', 'waste-control']),
   supervisor: new Set([ 'waste-new', 'dashboard', 'detail', 'workflow-stores', 'new-store-request', 'incoming-pickup', 'waste-control']),
   'department head': new Set([ 'market-lists', 'purchasing-pr-new', 'recipes-detail', 'purchasing-order-detail','dashboard', 'detail', 'workflow-stores', 'waste-control', 'recipes-production', 'reports', 'reportview']),
-  'store keeper': new Set([ 'supplier-return-report', 'department-returns-new', 'stocktake-sheet','dashboard', 'detail', 'workflow-stores', 'grn-posting', 'transfer-dispatch', 'stock-on-hand', 'store-transfers', 'locations', 'store-inventory', 'store-analysis', 'store-usage', 'store-purchase-requests', 'reports', 'reportview']),
-  'cost controller': new Set(['stock-on-hand', 'receiving-return-new', 'locations', 'departments', 'purchasing-quotes', 'pos-reconciliation', 'recipes-detail', 'stocktake-variance', 'month-end-stocktake', 'store-inventory','dashboard', 'detail', 'workflow-stores', 'waste-control', 'recipes-production', 'pos-control', 'items', 'categories', 'uoms', 'itemUnits', 'suppliers', 'supplierItems', 'reports', 'reportview', 'menu-engineering']),
+  'store keeper': new Set([ 'supplier-return-report', 'department-returns-new','dashboard', 'detail', 'workflow-stores', 'grn-posting', 'transfer-dispatch', 'stock-on-hand', 'store-transfers', 'locations', 'store-purchase-requests']),
+  'cost controller': new Set(['stock-on-hand', 'receiving-return-new', 'locations', 'departments', 'purchasing-quotes', 'pos-reconciliation', 'recipes-detail', 'stocktake-variance', 'month-end-stocktake', 'store-inventory', 'stocktake-sheet', 'store-analysis', 'store-usage','dashboard', 'detail', 'workflow-stores', 'waste-control', 'recipes-production', 'pos-control', 'items', 'categories', 'uoms', 'itemUnits', 'suppliers', 'supplierItems', 'reports', 'reportview', 'menu-engineering']),
   'procurement manager': new Set([ 'purchasing-workbench', 'purchasing-quotes', 'purchasing-order-detail','dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
   'procurement officer': new Set([ 'purchasing-workbench', 'purchasing-quotes', 'purchasing-order-detail','dashboard', 'detail', 'workflow-procure', 'reports', 'reportview']),
   'financial manager': new Set([ 'hr-payroll', 'hr-advances', 'finance-invoice-matching', 'finance-budgets', 'finance-period-close', 'purchasing-order-detail', 'stocktake-variance','month-end-stocktake','dashboard', 'detail', 'workflow-procure', 'approval-inbox', 'workflow-pay', 'finance-governance', 'reports', 'reportview', 'menu-engineering']),
@@ -150,12 +153,9 @@ const strictRoleRoutes: Record<string, Set<string>> = {
 
 export const roleReportIds: Record<string, string[]> = {
   'department head': ['departmentRequests', 'storeIssues'],
-  'store keeper': [
-    'departmentRequests', 'storeIssues', 'valuation', 'lowstock', 'movement', 'aging',
-    'consumption', 'stockMovementControl', 'goodsReceipts',
-  ],
+  'store keeper': [],
   'cost controller': [
-    'lowstock', 'procurement', 'supplierPriceChanges', 'supplier',
+    'departmentRequests', 'storeIssues', 'valuation', 'aging', 'lowstock', 'procurement', 'supplierPriceChanges', 'supplier',
     'purchasePrices', 'purchaseStatisticsItem', 'reorderProposal', 'purchaseStatisticsSupplier',
     'purchaseReceivingDeviation', 'abcAnalysis', 'priceVariance', 'receiptsJournal',
     'salesOverview', 'salesStatistics', 'salesActivity', 'articlePotentialUsage', 'menuEngineering',

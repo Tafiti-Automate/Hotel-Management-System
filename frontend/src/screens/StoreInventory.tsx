@@ -54,6 +54,9 @@ export default function StoreInventory() {
   const [newStore, setNewStore] = useState('')
   const [newNote, setNewNote] = useState('')
   const [physical, setPhysical] = useState<Record<string, string>>({})
+  const [foundArticle,setFoundArticle] = useState('')
+  const [foundQty,setFoundQty] = useState('')
+  const [foundSearch,setFoundSearch] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -69,7 +72,7 @@ export default function StoreInventory() {
       if (itemResult.status === 'rejected') throw itemResult.reason
       setCounts(countResult.value)
       setCountItems(itemResult.value)
-      setStores(storeResult.status === 'fulfilled' ? storeResult.value : [])
+      setStores(storeResult.status === 'fulfilled' ? storeResult.value.filter(row=>row.is_active!==false&&!row.is_virtual_transit) : [])
       setBalances(balanceResult.status === 'fulfilled' ? balanceResult.value : [])
     } catch (reason) {
       const detail = errorMessage(reason)
@@ -165,6 +168,12 @@ export default function StoreInventory() {
     )
   }
 
+  const addFoundArticle = async () => {
+    if (!selected || !foundArticle || validateCount(foundQty)) return
+    if (await execute(()=>createBackendRecord('stock-count-items',{stock_count:id(selected.id),item:foundArticle,physical_quantity:foundQty}), 'Additional article counted')) {
+      setFoundArticle('');setFoundQty('');setFoundSearch('')
+    }
+  }
   const printList = (count: Row) => {
     const lines = countItems.filter((line) => id(line.stock_count) === id(count.id))
     const escape = (value: unknown) => id(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -174,7 +183,7 @@ export default function StoreInventory() {
       return
     }
     const store = storeById.get(id(count.store))
-    popup.document.write(`<html><head><title>${escape(count.count_no)} Stock Taking List</title><style>@page{size:A4;margin:16mm}body{font:12px Arial;color:#0f172a}header{display:flex;justify-content:space-between;border-bottom:2px solid #1d4ed8;padding-bottom:12px}h1{margin:0;font-size:20px}p{margin:4px 0;color:#475569}table{width:100%;border-collapse:collapse;margin-top:20px}th,td{border:1px solid #cbd5e1;padding:8px;text-align:left}th{background:#eff6ff;font-size:10px;text-transform:uppercase}.write{height:31px}.signatures{display:flex;justify-content:space-between;gap:24px;margin-top:54px}.signatures span{width:31%;border-top:1px solid #334155;padding-top:7px}</style></head><body><header><div><h1>Stock Taking List</h1><p>${escape(count.count_no)} · ${escape(store?.name || 'Store')} · ${escape(date(count.count_date))}</p></div><p>Prepared ${escape(date(count.created_at))} ${escape(time(count.created_at))}</p></header><table><thead><tr><th>#</th><th>Article</th><th>Physical Qty</th><th>Count note</th></tr></thead><tbody>${lines.map((line, index) => `<tr><td>${index + 1}</td><td>${escape(itemById.get(id(line.item))?.name || line.item_name || 'Article')}</td><td class="write"></td><td class="write"></td></tr>`).join('') || '<tr><td colspan="5">Populate this session before printing its count sheet.</td></tr>'}</tbody></table><div class="signatures"><span>Counted by</span><span>Checked by</span><span>Store Keeper</span></div><script>window.onload=()=>window.print()</script></body></html>`)
+    popup.document.write(`<html><head><title>${escape(count.count_no)} Stock Taking List</title><style>@page{size:A4;margin:16mm}body{font:12px Arial;color:#0f172a}header{display:flex;justify-content:space-between;border-bottom:2px solid #1d4ed8;padding-bottom:12px}h1{margin:0;font-size:20px}p{margin:4px 0;color:#475569}table{width:100%;border-collapse:collapse;margin-top:20px}th,td{border:1px solid #cbd5e1;padding:8px;text-align:left}th{background:#eff6ff;font-size:10px;text-transform:uppercase}.write{height:31px}.signatures{display:flex;justify-content:space-between;gap:24px;margin-top:54px}.signatures span{width:31%;border-top:1px solid #334155;padding-top:7px}</style></head><body><header><div><h1>Stock Taking List</h1><p>${escape(count.count_no)} · ${escape(store?.name || 'Store')} · ${escape(date(count.count_date))}</p></div><p>Prepared ${escape(date(count.created_at))} ${escape(time(count.created_at))}</p></header><table><thead><tr><th>#</th><th>Article</th><th>Physical Qty</th><th>Count note</th></tr></thead><tbody>${lines.map((line, index) => `<tr><td>${index + 1}</td><td>${escape(itemById.get(id(line.item))?.name || line.item_name || 'Article')}</td><td class="write"></td><td class="write"></td></tr>`).join('') || '<tr><td colspan="5">Populate this session before printing its count sheet.</td></tr>'}</tbody></table><div class="signatures"><span>Counted by</span><span>Checked by</span><span>Cost Controller</span></div><script>window.onload=()=>window.print()</script></body></html>`)
     popup.document.close()
   }
 
@@ -184,6 +193,7 @@ export default function StoreInventory() {
       <button type="button" className="store-inventory-refresh" disabled={loading || busy} onClick={() => void load()}><Icon name="refresh" size={16} />{loading ? 'Refreshing…' : 'Refresh'}</button>
     </header>
 
+    {tab === 'gather' && selected && ['draft','in_progress'].includes(id(selected.status)) && <section className="store-inventory-card"><h2>Add physically found article</h2><p>Record an article absent from the count sheet without changing live stock.</p><div style={{display:'flex',gap:8,flexWrap:'wrap'}}><input aria-label="Search articles" placeholder="Name or SKU" value={foundSearch} onChange={e=>setFoundSearch(e.target.value)}/><select aria-label="Additional article" value={foundArticle} onChange={e=>setFoundArticle(e.target.value)}><option value="">Select article</option>{app.data.items.filter(item=>item.is_active!==false&&!selectedItems.some(line=>id(line.item)===id(item.id))&&[item.name,item.sku].join(' ').toLowerCase().includes(foundSearch.toLowerCase())).map(item=><option key={id(item.id)} value={id(item.id)}>{id(item.name)} · {id(item.sku)}</option>)}</select><input aria-label="Found physical quantity" type="number" min="0" step="0.0001" value={foundQty} onChange={e=>setFoundQty(e.target.value)}/><button type="button" className="store-inventory-primary" disabled={busy||!foundArticle||Boolean(validateCount(foundQty))} onClick={()=>void addFoundArticle()}>Add article to count</button></div></section>}
     {error && <div className="store-inventory-error" role="alert"><Icon name="error" size={17} />{error}</div>}
 
     <nav className="store-inventory-tabs" aria-label="Manage Inventory">

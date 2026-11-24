@@ -113,7 +113,7 @@ ROLE_SPECS = {
             "inventory": [
                 "storerequisition", "storerequisitionitem", "storelocation", "inventorybalance",
                 # Stocktake variance review reads the frozen count and ledger snapshot.
-                # Only Store Keepers can enter/change the physical counts.
+                # Cost Control enters counts through the guarded stocktake API.
                 "stockcount", "stockcountitem", "stockledger",
                 "stockadjustment", "stockadjustmentitem",
             ],
@@ -122,14 +122,13 @@ ROLE_SPECS = {
     },
     "Store Keeper": {
         # Store Keeper controls internal stock after HOD + Cost Control approval,
-        # prepares the transfer/issue voucher, conducts assigned-store counts,
+        # prepares the transfer/issue voucher (physical counts belong to Cost Control),
         # and verifies supplier GRNs before SOH posting.  Queryset guards in the
         # inventory API keep these records limited to the keeper's stores.
         "crud": {
             "inventory": [
                 "stockissue", "stockissueitem",
                 "stocktransfer", "stocktransferitem",
-                "stockcount", "stockcountitem",
                 "stockadjustment", "stockadjustmentitem",
                 "storereturn", "storereturnitem",
             ],

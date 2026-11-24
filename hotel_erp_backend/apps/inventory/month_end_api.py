@@ -2,6 +2,7 @@
 import calendar
 from datetime import timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils import timezone
 
@@ -16,7 +17,7 @@ from rest_framework.response import Response
 from apps.departments.models import Branch, Department
 from apps.inventory.models import (
     MonthEndCycle, MonthEndInventory, StoreLocation, InventoryBalance,
-    InventoryBatch, StockCount, StockCountItem, StockLedger, DepartmentConsumption, StoreReturn,
+    InventoryBatch, StockCount, StockCountItem, StockLedger, DepartmentConsumption, StoreReturn, Item,
 )
 from apps.materials_control.models import FiscalPeriod
 from apps.notifications.services import notify_roles
@@ -152,21 +153,25 @@ def _cycle_data(cycle):
                 actual = Decimal(record["physical_quantity"])
                 theoretical = Decimal(record["system_quantity"])
                 cost = Decimal(record["unit_cost"])
-                variance_value = ((actual - theoretical) * cost).quantize(Decimal("0.0001"))
-                closing_value = (actual * cost).quantize(Decimal("0.0001"))
-                difference_total += variance_value
-                closing_total += closing_value
-                line.update(system_quantity=str(theoretical), unit_cost=str(cost),
+                known = cost > 0 or (actual == 0 and theoretical == 0)
+                variance_value = ((actual - theoretical) * cost).quantize(Decimal("0.0001")) if known else None
+                closing_value = (actual * cost).quantize(Decimal("0.0001")) if known else None
+                if known:
+                    difference_total += variance_value
+                    closing_total += closing_value
+                else:
+                    all_counted = False
+                line.update(system_quantity=str(theoretical), unit_cost=str(cost) if known else None,
                             variance=str(actual - theoretical),
-                            variance_value=str(variance_value), closing_value=str(closing_value))
+                            variance_value=str(variance_value) if known else None, closing_value=str(closing_value) if known else None)
             lines.append(line)
         state = "booked" if cycle.status == "booked" else ("zero_planned" if consumption else
                 "submitted" if row.submitted_at else "counting" if row.prepared_at else "count_pending")
         total_difference += difference_total
         total_closing += closing_total
         inventories.append({
-            "difference_value": str(difference_total) if consumption or row.submitted_at else None,
-            "closing_value": str(closing_total) if consumption or row.submitted_at else None,
+            "difference_value": str(difference_total) if (consumption or row.submitted_at) and all(line.get("variance_value") is not None for line in lines) else None,
+            "closing_value": str(closing_total) if (consumption or row.submitted_at) and all(line.get("closing_value") is not None for line in lines) else None,
             "id": row.pk, "location_name": row.location_name,
             "store": str(row.store_id) if row.store_id else None,
             "department": str(row.department_id) if row.department_id else None,
@@ -298,7 +303,7 @@ def _snapshot(row):
                 "received_quantity": str(batch.quantity),
                 "updated_at": batch.updated_at.isoformat(), "physical_quantity": None,
             } for batch in batches],
-            "id": str(b.pk), "article": b.item.name, "sku": b.item.sku,
+            "id": str(b.pk), "item_id": str(b.item_id), "article": b.item.name, "sku": b.item.sku,
             "item_group": b.item.category.name,
             "unit": (b.item.base_unit.abbreviation or b.item.base_unit.name) if b.item.base_unit else b.item.unit,
             "system_quantity": str(b.quantity_in_stock), "unit_cost": str(b.weighted_average_cost),
@@ -309,13 +314,20 @@ def _snapshot(row):
 
 def _verify(row, *, review=False):
     balances = {str(b.pk): b for b in _balances(row)}
-    if set(balances) != {line["id"] for line in row.count_snapshot}:
+    recorded = {line["id"] for line in row.count_snapshot if not line.get("missing_balance")}
+    if set(balances) != recorded:
         raise ValidationError(f"{row.location_name}: article roster changed. Refresh and recount.")
     for line in row.count_snapshot:
+        if line.get("missing_balance"):
+            item = Item.objects.filter(pk=line["item_id"]).first()
+            if not item or InventoryBalance.objects.filter(store_id=row.store_id,item_id=line["item_id"]).exists():
+                raise ValidationError(f"{line['article']}: stock records changed. Refresh and recount.")
+            balances[line["id"]] = SimpleNamespace(item=item,item_id=item.pk,quantity_in_stock=Decimal("0"),
+                weighted_average_cost=Decimal("0"),updated_at=None,quantity_reserved=Decimal("0"),quantity_quarantined=Decimal("0"))
         b = balances[line["id"]]
         if (b.quantity_in_stock != Decimal(line["system_quantity"])
                 or b.weighted_average_cost != Decimal(line["unit_cost"])
-                or b.updated_at.isoformat() != line["updated_at"]):
+                or (b.updated_at.isoformat() if b.updated_at else None) != line["updated_at"]):
             raise ValidationError(f"{row.location_name}: {line['article']} changed. Refresh and recount.")
         if line["physical_quantity"] is None:
             raise ValidationError("Count every article, including explicit zeros.")
@@ -326,8 +338,8 @@ def _verify(row, *, review=False):
         if required != line.get("batch_required", False) or set(live_batches) != {batch["id"] for batch in saved_batches}:
             raise ValidationError(f"{line['article']}: batch roster changed. Refresh and recount.")
         batch_difference = False
-        if required:
-            if sum((batch.remaining_quantity for batch in live_batches.values()), Decimal("0")) != b.quantity_in_stock:
+        if required and (review or saved_batches):
+            if review and sum((batch.remaining_quantity for batch in live_batches.values()), Decimal("0")) != b.quantity_in_stock:
                 raise ValidationError(f"{line['article']}: existing batch and stock balances do not reconcile.")
             batch_total = Decimal("0")
             for saved in saved_batches:
@@ -339,7 +351,7 @@ def _verify(row, *, review=False):
                 if saved["physical_quantity"] is None:
                     raise ValidationError(f"{line['article']}: count each known batch explicitly.")
                 quantity = Decimal(saved["physical_quantity"])
-                if quantity > batch.quantity:
+                if review and quantity > batch.quantity:
                     raise ValidationError(f"{line['article']}: batch count exceeds documented receipt quantity; reconcile provenance first.")
                 batch_total += quantity
                 batch_difference |= quantity != batch.remaining_quantity
@@ -455,7 +467,7 @@ def month_end_action(request, pk, operation):
                 row.save(update_fields=["stock_count"])
             cycle.status, cycle.booked_by, cycle.booked_at = "booked", request.user, timezone.now()
             cycle.save(update_fields=["status", "booked_by", "booked_at"])
-        elif operation in ("prepare", "refresh", "save-count", "submit", "investigate"):
+        elif operation in ("prepare", "refresh", "save-count", "submit", "investigate", "add-article"):
             if cycle.status != "planned":
                 raise ValidationError("Reopen the approved inventory before editing.")
             row_id = serializers.IntegerField(min_value=1).run_validation(request.data.get("inventory"))
@@ -481,6 +493,25 @@ def month_end_action(request, pk, operation):
                         line["note"] = updates[line["id"]]
             elif not row.prepared_at or row.submitted_at:
                 raise ValidationError("Prepare an editable inventory first.")
+            elif operation == "add-article":
+                item_id = serializers.UUIDField().run_validation(request.data.get("item"))
+                actual = serializers.DecimalField(max_digits=14,decimal_places=4,min_value=Decimal("0")).run_validation(request.data.get("physical_quantity"))
+                item = Item.objects.filter(pk=item_id,is_active=True).select_related("category","base_unit").first()
+                if not item:
+                    raise ValidationError("Select an active article.")
+                if InventoryBalance.objects.filter(store_id=row.store_id,item_id=item_id).exists():
+                    raise ValidationError("Article has a balance record. Refresh or use its existing line.")
+                if any(line.get("item_id")==str(item_id) or line["sku"]==item.sku for line in row.count_snapshot):
+                    raise ValidationError("Article is already on the sheet.")
+                batches = _batches(row,item_id)
+                row.count_snapshot.append({"id":str(item.pk),"item_id":str(item.pk),"missing_balance":True,
+                    "article":item.name,"sku":item.sku,"item_group":item.category.name,
+                    "unit":(item.base_unit.abbreviation or item.base_unit.name) if item.base_unit else item.unit,
+                    "system_quantity":"0.0000","unit_cost":"0.0000","updated_at":None,
+                    "physical_quantity":str(actual),"note":"","batch_required":bool(batches or item.batch_tracking or item.expiry_tracking),
+                    "batches":[{"id":str(b.pk),"batch_number":b.batch_number,"expiry_date":b.expiry_date.isoformat() if b.expiry_date else None,
+                        "system_quantity":str(b.remaining_quantity),"received_quantity":str(b.quantity),"updated_at":b.updated_at.isoformat(),"physical_quantity":None} for b in batches]})
+                row.count_snapshot.sort(key=lambda line:(line["item_group"].casefold(),line["article"].casefold(),line["id"]))
             elif operation == "save-count":
                 payload = CountInput(data=request.data.get("lines"), many=True, allow_empty=False)
                 payload.is_valid(raise_exception=True)

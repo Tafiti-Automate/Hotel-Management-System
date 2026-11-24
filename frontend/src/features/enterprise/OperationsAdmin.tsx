@@ -209,10 +209,12 @@ export function EnterpriseStocktakeSheet() {
   const [chosenId,setChosenId]=useState('')
   const [selectedStore,setSelectedStore]=useState('')
   const [countNote,setCountNote]=useState('')
+  const [foundArticle,setFoundArticle]=useState('')
+  const [foundQuantity,setFoundQuantity]=useState('')
   const [search,setSearch]=useState('')
   const id=chosenId||pathId
   const count=(data['stock-counts']||[]).find(row=>str(row.id)===id)
-  const storeOptions=(data.stores||[])
+  const storeOptions=(data.stores||[]).filter(row=>row.is_active!==false&&!row.is_virtual_transit)
   const rawItems=(data['stock-count-items']||[]).filter(row=>str(row.stock_count)===id)
   const articlesById=new Map((data.items||[]).map(article=>[str(article.id),article]))
   const articleName=(line:ApiRow)=>str(line.item_name||articlesById.get(str(line.item))?.name)||'Article name unavailable'
@@ -250,7 +252,7 @@ export function EnterpriseStocktakeSheet() {
     },'Physical counts synced to Django')
     if(ok){setDraft({});setUnsynced(false);try{localStorage.removeItem(storageKey)}catch{/* unavailable */}}
   }
-  const submit=async()=>execute(()=>runBackendAction('stock-counts',id,'submit'),'Count sheet submitted to Cost Control')
+  const submit=async()=>execute(()=>runBackendAction('stock-counts',id,'submit'),'Count sheet submitted for independent Finance review')
   const app=useApp()
   const printBlindCount=()=>{
     if(!count||!items.length)return
@@ -272,7 +274,7 @@ export function EnterpriseStocktakeSheet() {
     <StateMessage loading={loading} error={error||mutationError}/>
     {count&&<WorkflowPrerequisite domain="stock_count" record={count} action="submit"/>}
     {count&&editable&&unsynced&&<div className="mc-workflow-prerequisite" role="status"><Icon name="info" size={17}/><div><strong>Unsynced physical counts</strong><p>Changes on this device are not yet saved to the server.</p><small>Next: Sync saved counts before submitting.</small></div></div>}
-    {!loading&&!error&&<section className="mc-dense-panel" aria-label="Start stocktake session"><header className="mc-panel-title">Start physical stocktake <small>All assigned stores</small></header><div className="mc-count-setup"><label className="mc-field"><span>Store / location</span><select value={selectedStore} onChange={e=>setSelectedStore(e.target.value)}><option value="">Select store to count</option>{storeOptions.map(row=><option value={str(row.id)} key={str(row.id)}>{str(row.name)}</option>)}</select></label><label className="mc-field"><span>Count note (optional)</span><input value={countNote} onChange={e=>setCountNote(e.target.value)} placeholder="e.g. Monthly count — Main Store"/></label><button className={primary} disabled={busy||!selectedStore} onClick={()=>void createSheet()}><Icon name="add" size={16}/> Create stocktake</button></div><p className="mc-help">Select an assigned store. The system captures its recorded quantities privately; counters enter what they actually find.</p></section>}
+    {!loading&&!error&&<section className="mc-dense-panel" aria-label="Start stocktake session"><header className="mc-panel-title">Start physical stocktake <small>Current property stores</small></header><div className="mc-count-setup"><label className="mc-field"><span>Store / location</span><select value={selectedStore} onChange={e=>setSelectedStore(e.target.value)}><option value="">Select store to count</option>{storeOptions.map(row=><option value={str(row.id)} key={str(row.id)}>{str(row.name)}</option>)}</select></label><label className="mc-field"><span>Count note (optional)</span><input value={countNote} onChange={e=>setCountNote(e.target.value)} placeholder="e.g. Monthly count — Main Store"/></label><button className={primary} disabled={busy||!selectedStore} onClick={()=>void createSheet()}><Icon name="add" size={16}/> Create stocktake</button></div><p className="mc-help">Select an assigned store. The system captures its recorded quantities privately; counters enter what they actually find.</p></section>}
     {!loading&&!error&&<label className="mc-field mc-picker"><span>Count session</span><select value={id} onChange={e=>setChosenId(e.target.value)}>
       <option value="">Choose assigned count sheet</option>{(data['stock-counts']||[]).map(row=><option value={str(row.id)} key={str(row.id)}>{str(row.count_no)} · {str(row.store_name||row.store)} · {str(row.status)}</option>)}
     </select></label>}
@@ -282,6 +284,7 @@ export function EnterpriseStocktakeSheet() {
         <div className={unsynced?'mc-state mc-state-warn':'mc-state'}>{unsynced?'Local changes not synced':'Count sheet synced'}</div>
       </section>
       <section className="mc-dense-panel mc-count-grid"><header className="mc-panel-title">Physical shelf count <small>{completed} / {rawItems.length} recorded</small></header><label className="mc-field"><span>Search article by name, code or bin</span><input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search this store’s articles…"/></label>
+        {editable && <div className="mc-count-setup"><label className="mc-field"><span>Add physically found article (search above)</span><select value={foundArticle} onChange={e=>setFoundArticle(e.target.value)}><option value="">Select article not yet counted</option>{(data.items||[]).filter(article=>article.is_active!==false&&!rawItems.some(line=>str(line.item)===str(article.id))&&[str(article.name),str(article.sku)].join(' ').toLowerCase().includes(search.trim().toLowerCase())).map(article=><option key={str(article.id)} value={str(article.id)}>{str(article.name)} · {str(article.sku)}</option>)}</select></label><label className="mc-field"><span>Actual quantity</span><input type="number" min="0" step="0.0001" value={foundQuantity} onChange={e=>setFoundQuantity(e.target.value)}/></label><button className={primary} disabled={busy||unsynced||!foundArticle||!/^\d+(\.\d{1,4})?$/.test(foundQuantity)} onClick={()=>void execute(async()=>{await createBackendRecord('stock-count-items',{stock_count:id,item:foundArticle,physical_quantity:foundQuantity});setFoundArticle('');setFoundQuantity('')},'Additional article counted')}>Add article to count</button></div>}
         <div className="mc-table-scroll"><table className="mc-simple-table"><thead><tr><th>Shelf / Bin</th><th>Article</th><th>Base unit</th><th>Physical count</th></tr></thead>
         <tbody>{items.map((line,index)=><tr key={str(line.id)}><td>{str(line.bin_location)||'—'}</td>
           <td><b>{articleName(line)}</b>{articleSku(line)&&<small className="mc-muted">{articleSku(line)}</small>}</td><td>{articleUnit(line)}</td>

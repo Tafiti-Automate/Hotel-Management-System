@@ -18,8 +18,7 @@ def test_submitted_stocktake_line_is_locked(status):
     view = StockCountItemViewSet()
     view.request = SimpleNamespace(user=SimpleNamespace(is_superuser=False))
     count = SimpleNamespace(store_id=42, status=status, inventory_changes_applied=False)
-    with patch("apps.inventory.views.has_role", side_effect=lambda _user, *names: "Store Keeper" in names), \
-         patch("apps.inventory.views.assigned_store_ids", return_value=[42]), \
+    with patch("apps.inventory.views.require_stocktake_store"), \
          pytest.raises(ValidationError, match="locked"):
         view._require_editable_count(count)
 
@@ -29,7 +28,6 @@ def test_submitted_stocktake_header_is_locked(status):
     view = StockCountViewSet()
     view.request = SimpleNamespace(user=SimpleNamespace(is_superuser=False))
     count = SimpleNamespace(store_id=42, status=status, inventory_changes_applied=False)
-    with patch.object(view, "_is_store_keeper", return_value=True), \
-         patch("apps.inventory.views.assigned_store_ids", return_value=[42]), \
+    with patch("apps.inventory.views.require_stocktake_store"), \
          pytest.raises(ValidationError, match="locked"):
         view._require_count_entry(count)

@@ -167,6 +167,15 @@ MATERIALS_SHARED_REPORT_IDS = ("purchasePrices", "purchaseStatisticsItem", "reor
 for _report_id in MATERIALS_SHARED_REPORT_IDS:
     REPORT_ROLE_ACCESS.setdefault(_report_id, set()).update({"Cost Controller", "Financial Manager"})
 
+# Client moved analysis/report center ownership away from Store Keeper.
+for _report_key, _roles in REPORT_ROLE_ACCESS.items():
+    # Return reconciliation is embedded operational evidence, not the
+    # analytics workspace; Storekeepers must retain their return workflow.
+    if _report_key != "returnRegisters":
+        _roles.discard("Store Keeper")
+for _report_id in ("departmentRequests","storeIssues","valuation","aging"):
+    REPORT_ROLE_ACCESS[_report_id].add("Cost Controller")
+
 CONTROL_REPORT_KEYS = {
     "daily": "dailyActivities",
     "pending": "pendingActions",

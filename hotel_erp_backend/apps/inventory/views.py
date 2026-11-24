@@ -1672,6 +1672,30 @@ class StoreReturnItemViewSet(CreatedByModelMixin, ModelViewSet):
         instance.delete()
 
 
+def require_stocktake_store(user, store_id):
+    if user.is_superuser or not user.is_active or not has_role(user, "Cost Controller") or has_role(user, "System Administrator", "Store Keeper", "Financial Manager", "General Manager"):
+        raise PermissionDenied("Only Cost Control may manage physical inventory.")
+    employee = getattr(user, "employee_profile", None)
+    if not employee or not employee.is_active or not employee.branch_id:
+        raise PermissionDenied("An active Cost Controller and property assignment are required.")
+    if not StoreLocation.objects.filter(pk=store_id, branch_id=employee.branch_id, is_active=True, is_virtual_transit=False).exists():
+        raise PermissionDenied("Select an active physical store in your property.")
+    return employee
+
+
+class StocktakeAccessPermission(IsAuthenticated):
+    def has_permission(self, request, view):
+        if not super().has_permission(request, view):
+            return False
+        if request.user.is_superuser or has_role(request.user, "Store Keeper", "System Administrator"):
+            return False
+        if request.method in ("GET", "HEAD", "OPTIONS"):
+            return has_role(request.user, "Cost Controller", "Financial Manager", "General Manager")
+        if getattr(view, "action", "") == "approve":
+            return has_role(request.user, "Financial Manager") and not has_role(request.user, "Cost Controller")
+        return has_role(request.user, "Cost Controller")
+
+
 class StockCountViewSet(CreatedByModelMixin, ModelViewSet):
     queryset = StockCount.objects.select_related("store", "conducted_by", "approved_by")
     serializer_class = StockCountSerializer
@@ -1679,33 +1703,16 @@ class StockCountViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("count_no", "store__name", "note")
     ordering_fields = ("count_no", "count_date", "status", "created_at")
 
-    def get_permissions(self):
-        # Approving a count is a financial action, not general inventory editing.
-        if self.action == "approve":
-            return [IsAuthenticated()]
-        return super().get_permissions()
-
-    def _is_store_keeper(self):
-        return has_role(self.request.user, "Store Keeper") and not has_role(
-            self.request.user, "System Administrator", "General Manager"
-        )
+    permission_classes = (StocktakeAccessPermission,)
 
     def get_queryset(self):
-        queryset = super().get_queryset()
-        if self._is_store_keeper():
-            return queryset.filter(store_id__in=assigned_store_ids(self.request.user))
-        if self.action == "approve":
-            employee = getattr(self.request.user, "employee_profile", None)
-            if not employee or not employee.branch_id:
-                return queryset.none()
-            return queryset.filter(store__branch_id=employee.branch_id)
-        return scope_financial_stock_audit(queryset, self.request.user)
+        employee = getattr(self.request.user, "employee_profile", None)
+        if not employee or not employee.is_active or not employee.branch_id:
+            return self.queryset.none()
+        return super().get_queryset().filter(store__branch_id=employee.branch_id)
 
     def _require_count_entry(self, count):
-        if self.request.user.is_superuser or not self._is_store_keeper():
-            raise PermissionDenied("Only an assigned Store Keeper may edit a stocktake.")
-        if count.store_id not in set(assigned_store_ids(self.request.user)):
-            raise PermissionDenied("Stocktake is outside your assigned stores.")
+        require_stocktake_store(self.request.user, count.store_id)
         if count.inventory_changes_applied or count.status not in (
             StockCountStatus.DRAFT, StockCountStatus.IN_PROGRESS
         ):
@@ -1726,20 +1733,9 @@ class StockCountViewSet(CreatedByModelMixin, ModelViewSet):
         instance.delete()
 
     def perform_create(self, serializer):
-        # Physical counting is never available to IT administrators or
-        # unassigned staff even when they have generic model permissions.
-        if not self._is_store_keeper():
-            raise PermissionDenied("Only an assigned Store Keeper may create a stocktake.")
         store = serializer.validated_data["store"]
-        if self._is_store_keeper() and store.pk not in set(assigned_store_ids(self.request.user)):
-            raise PermissionDenied("Choose a store assigned to your Store Keeper account.")
-        employee = getattr(self.request.user, "employee_profile", None)
-        if self._is_store_keeper() and not employee:
-            raise PermissionDenied("An active Store Keeper employee profile is required.")
-        serializer.save(
-            created_by=self.request.user if self.request.user.is_authenticated else None,
-            conducted_by=employee or serializer.validated_data["conducted_by"],
-        )
+        employee = require_stocktake_store(self.request.user, store.pk)
+        serializer.save(created_by=self.request.user, conducted_by=employee)
 
     @action(detail=True, methods=["post"])
     def populate(self, request, pk=None):
@@ -1765,8 +1761,8 @@ class StockCountViewSet(CreatedByModelMixin, ModelViewSet):
                 or not has_role(request.user, "Financial Manager")):
             raise PermissionDenied("Only the Financial Manager may approve a submitted stocktake.")
         employee = getattr(request.user, "employee_profile", None)
-        if not employee or not employee.branch_id:
-            raise PermissionDenied("An assigned Financial Manager employee and property are required.")
+        if not employee or not employee.is_active or not employee.branch_id:
+            raise PermissionDenied("An active Financial Manager employee and property are required.")
         stock_count = self.get_object()
         if stock_count.conducted_by_id == employee.pk:
             raise PermissionDenied("You cannot approve a stocktake that you conducted.")
@@ -1778,11 +1774,8 @@ class StockCountViewSet(CreatedByModelMixin, ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
-        if request.user.is_superuser or not self._is_store_keeper():
-            raise PermissionDenied("Only an assigned Store Keeper can cancel a stocktake.")
         stock_count = self.get_object()
-        if stock_count.store_id not in set(assigned_store_ids(request.user)):
-            raise PermissionDenied("Stocktake is outside your assigned stores.")
+        self._require_count_entry(stock_count)
         try:
             stock_count.cancel()
         except DjangoValidationError as error:
@@ -1790,10 +1783,23 @@ class StockCountViewSet(CreatedByModelMixin, ModelViewSet):
         return Response(self.get_serializer(stock_count).data)
 
     @action(detail=True, methods=["post"])
+    @transaction.atomic
     def apply(self, request, pk=None):
-        if request.user.is_superuser or not self._is_store_keeper():
-            raise PermissionDenied("Only an assigned Store Keeper can post approved stocktake variances.")
         stock_count = self.get_object()
+        require_stocktake_store(request.user, stock_count.store_id)
+        from apps.inventory.stores_fulfillment import require_open_period
+        require_open_period(stock_count.store.branch_id, timezone.localdate())
+        stock_count = StockCount.objects.select_for_update().get(pk=stock_count.pk)
+        if not stock_count.approved_by_id or stock_count.approved_by_id == stock_count.conducted_by_id:
+            raise PermissionDenied("Independent Finance approval is required.")
+        for line in stock_count.items.select_related("item"):
+            if line.physical_quantity is None or line.variance == 0:
+                continue
+            balance = InventoryBalance.objects.select_for_update().filter(store_id=stock_count.store_id, item_id=line.item_id).first()
+            if not balance or balance.weighted_average_cost <= 0:
+                raise ValidationError(f"{line.item}: reconcile verified acquisition cost before posting.")
+            if line.item.batch_tracking or line.item.expiry_tracking or InventoryBatch.objects.filter(store_id=stock_count.store_id, item_id=line.item_id).exists():
+                raise ValidationError(f"{line.item}: reconcile batch quantities in the month-end inventory workflow before posting.")
         try:
             stock_count.apply_variances()
         except DjangoValidationError as error:
@@ -1808,14 +1814,10 @@ class StockCountItemViewSet(CreatedByModelMixin, ModelViewSet):
     search_fields = ("stock_count__count_no", "item__name", "item__sku")
     ordering_fields = ("system_quantity", "physical_quantity", "created_at")
 
+    permission_classes = (StocktakeAccessPermission,)
+
     def _require_editable_count(self, stock_count):
-        if self.request.user.is_superuser or not (
-            has_role(self.request.user, "Store Keeper")
-            and not has_role(self.request.user, "System Administrator", "General Manager")
-        ):
-            raise PermissionDenied("Only an assigned Store Keeper may enter physical stock counts.")
-        if stock_count.store_id not in set(assigned_store_ids(self.request.user)):
-            raise PermissionDenied("Stock count is outside your assigned stores.")
+        require_stocktake_store(self.request.user, stock_count.store_id)
         if stock_count.inventory_changes_applied or stock_count.status not in (
             StockCountStatus.DRAFT, StockCountStatus.IN_PROGRESS
         ):
@@ -1823,9 +1825,16 @@ class StockCountItemViewSet(CreatedByModelMixin, ModelViewSet):
 
     def perform_create(self, serializer):
         self._require_editable_count(serializer.validated_data["stock_count"])
-        if "physical_quantity" not in serializer.validated_data:
+        if serializer.validated_data.get("physical_quantity") is None:
             raise ValidationError("Explicit physical count required (zero is valid).")
-        super().perform_create(serializer)
+        count = serializer.validated_data["stock_count"]
+        item = serializer.validated_data["item"]
+        if not item.is_active:
+            raise ValidationError("Select an active article.")
+        if StockCountItem.objects.filter(stock_count=count,item=item).exists():
+            raise ValidationError("This article is already on the count sheet.")
+        balance = InventoryBalance.objects.filter(store_id=count.store_id,item=item).first()
+        serializer.save(created_by=self.request.user, system_quantity=balance.quantity_in_stock if balance else Decimal("0.0000"))
 
     def perform_update(self, serializer):
         self._require_editable_count(serializer.instance.stock_count)
@@ -1834,6 +1843,8 @@ class StockCountItemViewSet(CreatedByModelMixin, ModelViewSet):
         if ("stock_count" in serializer.validated_data
                 and serializer.validated_data["stock_count"].pk != serializer.instance.stock_count_id):
             raise ValidationError("An existing count line cannot be moved to another count.")
+        if "item" in serializer.validated_data and serializer.validated_data["item"].pk != serializer.instance.item_id:
+            raise ValidationError("An existing count line cannot change its article.")
         serializer.save()
 
     def perform_destroy(self, instance):
@@ -1841,12 +1852,10 @@ class StockCountItemViewSet(CreatedByModelMixin, ModelViewSet):
         instance.delete()
 
     def get_queryset(self):
-        queryset = super().get_queryset()
-        if has_role(self.request.user, "Store Keeper") and not has_role(
-            self.request.user, "System Administrator", "General Manager"
-        ):
-            return queryset.filter(stock_count__store_id__in=assigned_store_ids(self.request.user))
-        return scope_financial_stock_audit(queryset, self.request.user, "stock_count__store")
+        employee = getattr(self.request.user, "employee_profile", None)
+        if not employee or not employee.is_active or not employee.branch_id:
+            return self.queryset.none()
+        return super().get_queryset().filter(stock_count__store__branch_id=employee.branch_id)
 
 
 class SupplierPriceQuoteProposalViewSet(CreatedByModelMixin, ModelViewSet):

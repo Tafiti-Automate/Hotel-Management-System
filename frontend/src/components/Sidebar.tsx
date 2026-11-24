@@ -70,14 +70,7 @@ const roleNavigation: Record<string, NavGroup[]> = {
       { route: 'store-transfers', label: 'Transfers', icon: 'sync_alt' },
       { route: 'stock-on-hand', label: 'Stock on Hand Control', icon: 'inventory_2' },
       { route: 'locations', label: 'Stores & locations', icon: 'warehouse' },
-      { route: 'store-inventory', label: 'Manage inventory', icon: 'fact_check' },
-      { route: 'stocktake-sheet', label: 'Physical stocktake', icon: 'playlist_add_check' },
       { route: 'store-purchase-requests', label: 'Purchase requests', icon: 'shopping_cart' },
-    ] },
-    { heading: 'Insights', items: [
-      { route: 'store-usage', label: 'Usage', icon: 'monitoring' },
-      { route: 'store-analysis', label: 'Stock analysis', icon: 'bar_chart' },
-      { route: 'reports', label: 'All reports', icon: 'description' },
     ] },
   ],
   'cost controller': [
@@ -91,7 +84,8 @@ const roleNavigation: Record<string, NavGroup[]> = {
       { route: 'waste-control', label: 'Waste audit', icon: 'delete_sweep' },
       { route: 'recipes-production', label: 'Recipe costing', icon: 'menu_book' },
       { route: 'pos-reconciliation', label: 'POS reconciliation', icon: 'point_of_sale' },
-      { route: 'stocktake-sheet', label: 'Stocktake sessions', icon: 'playlist_add_check' },
+      { route: 'store-inventory', label: 'Manage inventory', icon: 'fact_check' },
+      { route: 'stocktake-sheet', label: 'Physical stocktake', icon: 'playlist_add_check' },
       { route: 'stocktake-variance', label: 'Stocktake variances', icon: 'analytics' },
       { route: 'month-end-stocktake', label: 'Month-end stocktake', icon: 'inventory_2' },
       { route: 'menu-engineering', label: 'Menu sales analysis', icon: 'scatter_plot' },
@@ -106,7 +100,7 @@ const roleNavigation: Record<string, NavGroup[]> = {
       { route: 'items', label: 'Articles', icon: 'inventory_2' },
       { route: 'uoms', label: 'Units & conversions', icon: 'straighten' },
     ] },
-    { heading: 'Insights', items: [{ route: 'reports', label: 'Reports', icon: 'bar_chart' }] },
+    { heading: 'Insights', items: [{ route: 'store-usage', label: 'Usage', icon: 'monitoring' }, { route: 'store-analysis', label: 'Stock analysis', icon: 'bar_chart' }, { route: 'reports', label: 'All reports', icon: 'bar_chart' }] },
   ],
   'procurement manager': [
     { heading: 'Procurement', items: [

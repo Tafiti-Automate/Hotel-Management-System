@@ -9,16 +9,6 @@ ROLE_REPORT_PATHS = {
         "department-requests",
         "store-issues",
     ],
-    "Store Keeper": [
-        "department-requests",
-        "store-issues",
-        "goods-receipts",
-        "stock-summary",
-        "low-stock",
-        "expiry",
-        "consumption",
-        "stock-movement-control",
-    ],
     "Cost Controller": [
         "low-stock",
         "procurement-summary",
@@ -154,3 +144,10 @@ def test_new_materials_reports_do_not_grant_department_head_access():
     client.force_authenticate(user=make_role_user("Department Head"))
     for report in ("issueDeviation", "issueDeviationReason", "requestTransfer", "monthlyStoreBalance", "dailyOutOfStock", "stockForecast", "articleDocumentHistory", "bookingJournal", "stockCover", "stockTakeLinewise", "usageStatistics", "consumptionInventory",):
         assert client.get(f"/api/v1/reports/analysis/{report}/").status_code == 403
+
+
+@pytest.mark.django_db
+def test_storekeeper_cannot_access_report_center_endpoints():
+    client=APIClient();client.force_authenticate(make_role_user("Store Keeper"))
+    for path in ("stock-summary","consumption","goods-receipts","analysis/purchasePrices","analysis/stockCover"):
+        assert client.get(f"/api/v1/reports/{path}/").status_code==403

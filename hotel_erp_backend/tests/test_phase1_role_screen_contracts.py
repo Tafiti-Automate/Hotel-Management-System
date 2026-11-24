@@ -30,7 +30,7 @@ ROLE_SCREEN_COLLECTIONS = {
         "purchase-order-items", "grns", "grn-items", "supplier-returns",
     ],
     "Store Keeper": [
-        "stock-counts", "stock-count-items", "items", "inventory-balances",
+        "items", "inventory-balances",
         "grns", "grn-items", "stock-ledger", "stores",
     ],
     "Receiving Clerk": ["purchase-orders", "purchase-order-items", "grns"],

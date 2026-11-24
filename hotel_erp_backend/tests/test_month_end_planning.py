@@ -272,3 +272,18 @@ def test_department_cost_classification_freezes_evidence_without_duplicate_expen
     assert DepartmentConsumption.objects.count() == 1
     assert not StockLedger.objects.exists()
     assert next(row for row in result["inventories"] if row["department"])["department_cost"]["net_cost"] == "2000.0000"
+
+
+def test_unrecorded_physical_article_is_counted_before_valuation_reconciliation(operational_context):
+    controller, finance, _, period, balance, base, main, empty = operational_context
+    found = Item.objects.create(category=balance.item.category,name="Found article",unit="kg",reorder_level=Decimal("0"))
+    prepared=action(controller,base,"prepare",{"inventory":main["id"]})
+    line=next(r for r in prepared["inventories"] if r["id"]==main["id"])["lines"][0]
+    action(controller,base,"save-count",{"inventory":main["id"],"lines":[{"id":line["id"],"physical_quantity":"10.0000"}]})
+    action(controller,base,"add-article",{"inventory":main["id"],"item":str(found.pk),"physical_quantity":"7.1250"})
+    result=action(controller,base,"submit",{"inventory":main["id"]})
+    added=next(l for r in result["inventories"] if r["id"]==main["id"] for l in r["lines"] if l["article"]=="Found article")
+    assert added["system_quantity"]=="0.0000" and Decimal(added["variance"])==Decimal("7.1250")
+    assert added["variance_value"] is None
+    assert not InventoryBalance.objects.filter(store=balance.store,item=found).exists()
+    assert not StockLedger.objects.exists()
