@@ -46,7 +46,7 @@ export default function FinancialOverview(){
  </section>
 }
 function ReportChart({spec,result,available}:{spec:typeof specs[number];result:Result|undefined;available:boolean}){
- const panel={padding:16,border:'1px solid var(--border)',borderRadius:13,background:'var(--surface)',minWidth:0}
+ const panel={padding:16,border:'1px solid var(--border)',borderRadius:8,background:'var(--surface)',minWidth:0}
  const muted={fontSize:11,color:'var(--text-muted)'}
  const grouped=new Map<string,{sums:number[];missing:number[]}>()
  for(const row of result?.rows||[]){

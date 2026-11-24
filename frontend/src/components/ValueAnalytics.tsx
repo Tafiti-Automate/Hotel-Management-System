@@ -13,7 +13,7 @@ export default function ValueAnalytics({title,description,records,ready=true,mon
   const top=ranked.slice(0,7)
   const total=valid.reduce((s,r)=>s+r.amount,0)
   const fmt=(n:number)=>monetary?money(n):n.toLocaleString('en-UG')
-  const panel={padding:16,border:'1px solid var(--border)',borderRadius:13,background:'var(--surface)',minWidth:0}
+  const panel={padding:16,border:'1px solid var(--border)',borderRadius:8,background:'var(--surface)',minWidth:0}
   const muted={fontSize:11,color:'var(--text-muted)'}
   return <section style={{...panel,margin:'12px 0',color:'var(--text)'}} aria-label={title}>
     <h2 style={{margin:'0 0 5px',fontSize:17}}>{title}</h2><p style={muted}>{description}</p>

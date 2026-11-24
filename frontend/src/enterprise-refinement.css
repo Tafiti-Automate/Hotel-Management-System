@@ -1,0 +1,39 @@
+/* Shared workspace refinement. Login, document layouts and status semantics are intentionally excluded. */
+.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] {
+ --hp-radius-card:8px;--hp-radius-control:6px;
+ --ds-table-row-height:40px;
+}
+.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] .neo-sidebar{background:#103127!important;box-shadow:none!important}
+.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] .neo-nav-item.is-active{background:#d9eadf!important;color:#103127!important;box-shadow:none!important}
+.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] .neo-nav-item.is-active .neo-nav-icon{color:#103127!important}
+.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] .neo-nav-item{border-radius:6px!important}
+.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] .neo-workspace :is(.neo-metric-card,.neo-dashboard-card,.finance-table-card,.finance-action-panel,.procurement-queue-card,.procurement-detail-panel,.ds-panel,.ds-card,.soh-panel,.mc-dense-panel,.mc-form-panel){border-radius:8px!important;box-shadow:none!important}
+.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] .neo-workspace .neo-metric-card:hover{transform:none!important;box-shadow:none!important;border-color:var(--accent)!important}
+.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] .neo-dashboard-intro h1{font-size:24px!important;font-weight:700!important;line-height:1.25!important;letter-spacing:-.02em!important;color:var(--text)!important}
+.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] .neo-dashboard-intro p{font-size:13px!important;line-height:1.5!important;color:var(--text-muted)!important}
+.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] .neo-dashboard-eyebrow{font-size:11px!important;font-weight:600!important;letter-spacing:.035em!important;color:var(--text-muted)!important}
+.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] .neo-metric-card{min-height:96px!important;padding:14px!important}
+.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] .neo-metric-copy strong{font-size:24px!important;font-weight:700!important;font-variant-numeric:tabular-nums;color:var(--text)!important;white-space:normal!important;overflow-wrap:anywhere}
+.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] .neo-metric-copy :is(small,em){font-size:12px!important;line-height:1.4!important;color:var(--text-muted)!important;white-space:normal!important}
+.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] :is(.neo-metric-icon,.neo-activity-status,.neo-welcome-icon,.neo-quick-card>div>button>span:first-child){border-radius:6px!important;box-shadow:none!important}
+.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] :is(.neo-card-head h2,.neo-quick-card h2){font-size:16px!important;font-weight:650!important;color:var(--text)!important}
+.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] :is(.neo-card-head p,.neo-card-head>div>span,.neo-quick-card>header>span,.neo-activity-copy small,.neo-activity-meta time,.neo-scope-list small,.neo-quick-card small,.neo-welcome-card>span small,.neo-welcome-card>span em){font-size:11px!important;line-height:1.45!important;color:var(--text-muted)!important}
+.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] :is(.neo-activity-copy strong,.neo-scope-list strong,.neo-quick-card strong,.neo-welcome-card>span strong){font-size:13px!important;color:var(--text)!important}
+.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] .neo-activity-meta em{font-size:11px!important;max-width:100%!important;white-space:normal!important;text-align:right}
+.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] .neo-activity-row{min-height:52px!important;grid-template-columns:32px minmax(0,1fr) minmax(95px,145px) 15px}
+.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] :is(.neo-work-queue,.neo-activity-list){min-height:0!important}
+.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] .neo-dashboard-empty{min-height:150px!important;padding:20px!important}
+.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] .neo-dashboard-empty strong{font-size:13px!important;color:var(--text)!important}
+.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] .neo-dashboard-empty small{font-size:12px!important;color:var(--text-muted)!important}
+.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] :is(.neo-card-head,.neo-activity-row,.neo-quick-card>div>button){background:var(--surface)!important;border-color:var(--border)!important}
+.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] :is(.neo-activity-row,.neo-quick-card>div>button):hover{background:var(--surface-3)!important}
+.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] :is(.neo-dashboard-refresh,.neo-card-head>button){min-height:34px!important;font-size:12px!important;border-radius:6px!important;background:var(--surface-2)!important;color:var(--text)!important;border:1px solid var(--border)!important;box-shadow:none!important}
+.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] .neo-workspace :is(.mc-primary,.erp-primary,.bp-primary,.ds-btn-primary,.hs-button-primary){background:var(--accent-strong)!important;color:white!important;border-radius:6px!important;box-shadow:none!important}
+.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] .neo-workspace :is(.mc-action,.mc-secondary,.bp-quiet,.ds-btn-secondary){border-radius:6px!important;box-shadow:none!important}
+.application-root.screen-app.mode-dark[data-ui-version="hotel-inventory-control-v1"] :is(.neo-property-chip,.neo-search,.neo-search kbd,.neo-fiscal-chip,.neo-header-icon,.neo-profile-trigger){background:var(--surface-2)!important;color:var(--text)!important;border-color:var(--border)!important}
+.application-root.screen-app.mode-dark[data-ui-version="hotel-inventory-control-v1"] .neo-profile-trigger strong{color:var(--text)!important}
+.application-root.screen-app.mode-dark[data-ui-version="hotel-inventory-control-v1"] .neo-profile-trigger small{color:var(--text-muted)!important}
+.application-root.screen-app.mode-dark[data-ui-version="hotel-inventory-control-v1"] .neo-workspace table tbody tr:hover{background:var(--surface-3)!important}
+.application-root.screen-app.mode-dark[data-ui-version="hotel-inventory-control-v1"] .neo-workspace :is(.neo-dashboard-card,.neo-metric-card,.finance-table-card,.finance-action-panel,.procurement-queue-card,.procurement-detail-panel,.ds-panel,.ds-card,.soh-panel,.mc-dense-panel,.mc-form-panel){background:var(--surface)!important;color:var(--text)!important;border-color:var(--border)!important}
+@media(max-width:680px){.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] .neo-dashboard-intro{flex-wrap:wrap}.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] .neo-metric-card{min-height:88px!important;padding:10px!important}.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] .neo-metric-copy strong{font-size:20px!important}.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] .neo-activity-row{grid-template-columns:28px minmax(0,1fr) minmax(80px,110px) 12px;gap:6px}}
+@media(prefers-reduced-motion:reduce){.application-root.screen-app .neo-metric-card{transition:none!important}}

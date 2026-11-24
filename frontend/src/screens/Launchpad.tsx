@@ -41,9 +41,9 @@ export default function Launchpad() {
     <main className="neo-launchpad-main">
       <section className="neo-launchpad-hero">
         <div>
-          <span className="neo-launchpad-eyebrow">Workspace directory</span>
-          <h1>Welcome back, {firstName}.</h1>
-          <p>Select the business area you want to work in. Your role, property and permissions will be applied automatically.</p>
+          <span className="neo-launchpad-eyebrow">Hotel ERP</span>
+          <h1>Welcome, {firstName}</h1>
+          <p>Select a business area.</p>
         </div>
         <div className="neo-session-card">
           <span className="neo-session-icon"><Icon name="verified_user" size={20} /></span>
@@ -62,7 +62,7 @@ export default function Launchpad() {
         </div>
       </section>
 
-      <section className="neo-launchpad-footnote"><Icon name="info" size={16} /><span>Only business areas permitted for your account are shown here.</span></section>
+      <section className="neo-launchpad-footnote"><Icon name="info" size={16} /><span>Available modules depend on your assigned role.</span></section>
     </main>
     <footer className="hotel-system-footer">Powered by Tafiti Automate</footer>
   </div>

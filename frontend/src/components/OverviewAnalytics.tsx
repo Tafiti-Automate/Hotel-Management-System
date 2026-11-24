@@ -40,16 +40,16 @@ export default function OverviewAnalytics({groups,ready,title='Operational analy
   const max=Math.max(1,...trend.map(p=>p.value))
   const x=(i:number)=>38+i*292/Math.max(1,trend.length-1)
   const y=(n:number)=>128-n/max*104
-  const panel={background:'var(--surface)',border:'1px solid var(--border)',borderRadius:13,padding:16,minWidth:0}
+  const panel={background:'var(--surface)',border:'1px solid var(--border)',borderRadius:8,padding:16,minWidth:0}
   const muted={color:'var(--text-muted)',fontSize:11}
   const choose=(kind:'label'|'status'|'month',value:string)=>setFilter({scope,kind,value})
   if(!ready)return <section style={panel}><strong>{title}</strong><p style={muted}>Analytics unavailable while records are loading or inaccessible.</p></section>
   if(!entries.length)return <section style={panel}><strong>{title}</strong><p style={muted}>No accessible records to chart.</p></section>
   let offset=0
   return <section aria-label={title} style={{display:'grid',gap:12,margin:'12px 0',color:'var(--text)'}}>
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}><div><h2 style={{margin:0,fontSize:17}}>{title}</h2><small style={muted}>Accessible records only · counts, not financial totals</small></div><label style={muted}>Trend period <select value={period} onChange={e=>{setPeriod(Number(e.target.value));setFilter(null)}}><option value={6}>Last 6 months</option><option value={12}>Last 12 months</option></select></label></div>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}><div><h2 style={{margin:0,fontSize:17}}>{title}</h2><small style={muted}>Record counts · current access scope</small></div><label style={muted}>Trend period <select value={period} onChange={e=>{setPeriod(Number(e.target.value));setFilter(null)}}><option value={6}>Last 6 months</option><option value={12}>Last 12 months</option></select></label></div>
     <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,280px),1fr))',gap:12}}>
-      <article style={panel}><strong>Recorded activity trend</strong><p style={muted}>{dateLabel} · {format(entries.length-dated)} records without usable dates</p>
+      <article style={panel}><strong>Monthly activity</strong><p style={muted}>{dateLabel} · {format(entries.length-dated)} records without usable dates</p>
         {dated? <svg viewBox="0 0 360 155" width="100%" role="img" aria-label="Monthly record counts">
           {[0,1,2,3,4].map(i=><g key={i}><line x1="38" x2="330" y1={y(max*i/4)} y2={y(max*i/4)} stroke="var(--border)"/><text x="32" y={y(max*i/4)+3} textAnchor="end" fontSize="9" fill="var(--text-muted)">{Math.round(max*i/4)}</text></g>)}
           <path d={'M '+trend.map((p,i)=>x(i)+' '+y(p.value)).join(' L ')+' L 330 128 L 38 128 Z'} fill="#169b62" opacity=".12"/>
@@ -58,10 +58,10 @@ export default function OverviewAnalytics({groups,ready,title='Operational analy
         </svg>:<p style={muted}>No dated records available for a historical trend.</p>}
         <div style={{display:'flex',flexWrap:'wrap',gap:4}}>{trend.filter(p=>p.value>0).map(p=><button type="button" className="mc-secondary" key={p.key} onClick={()=>choose('month',p.key)} style={{fontSize:10}}>{p.label} {p.key.slice(0,4)} · {p.value}</button>)}</div>
       </article>
-      <article style={panel}><strong>Record volumes</strong><p style={muted}>All accessible records by type</p>
+      <article style={panel}><strong>Record volumes</strong><p style={muted}>Records by type</p>
         {kinds.map((p,i)=><button type="button" key={p.label} onClick={()=>choose('label',p.label)} style={{display:'grid',gap:5,width:'100%',textAlign:'left',padding:'8px 0',border:0,background:'transparent',color:'var(--text)',cursor:'pointer',font:'inherit'}}><span style={{display:'flex',justifyContent:'space-between',fontSize:12}}>{p.label}<b>{format(p.value)}</b></span><span style={{height:10,background:'var(--surface-2)',borderRadius:5,overflow:'hidden'}}><span style={{display:'block',height:'100%',width:p.value/Math.max(1,kinds[0]?.value||0)*100+'%',background:palette[i%palette.length],borderRadius:5}}/></span></button>)}
       </article>
-      <article style={panel}><strong>Status distribution</strong><p style={muted}>Current status of accessible records</p>
+      <article style={panel}><strong>Status distribution</strong><p style={muted}>Records by status</p>
         <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}><svg viewBox="0 0 128 128" width="125" role="img" aria-label="Record status distribution">
           {statuses.map((p,i)=>{const length=p.value/entries.length*314.159;const start=offset;offset+=length;return <circle key={p.label} cx="64" cy="64" r="50" fill="none" stroke={palette[i]} strokeWidth="17" strokeDasharray={length+' '+(314.159-length)} strokeDashoffset={-start} transform="rotate(-90 64 64)"><title>{p.label}: {p.value}</title></circle>})}
           <text x="64" y="63" textAnchor="middle" fontWeight="700" fontSize="18" fill="var(--text)">{format(entries.length)}</text><text x="64" y="77" textAnchor="middle" fontSize="9" fill="var(--text-muted)">Records</text>

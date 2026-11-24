@@ -47,6 +47,7 @@ import '../src/grn-reference-exact.css'
 import '../src/hr-workspaces.css'
 
 import '../src/hotel-auth-green.css'
+import '../src/enterprise-refinement.css'
 
 export const metadata: Metadata = {
   title: 'Hotel ERP',
