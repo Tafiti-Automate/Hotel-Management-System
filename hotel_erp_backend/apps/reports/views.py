@@ -372,6 +372,70 @@ class ReturnReconciliationRegisterReportView(ReportAPIView):
         })
 
 
+def register_article_details(queryset, rows, family, request):
+    """Expand only already-authorized document records; keep legacy register API."""
+    by_id = {row["drilldown_id"]: row for row in rows}
+    columns = [{"key": key, "label": label, "kind": kind} for key, label, kind in (
+        ("reference", "Reference", "text"), ("date", "Date", "text"),
+        ("department", "Department", "text"), ("store", "Store", "text"),
+        ("supplier", "Supplier", "text"), ("article", "Article", "text"),
+        ("sku", "SKU", "text"), ("unit", "UOM", "text"), ("status", "Status", "text"),
+    )]
+    measures = {
+        "departmentRequests": [("requested", "Requested base qty", "number"), ("approved", "Approved base qty", "number"), ("issued", "Issued base qty", "number")],
+        "storeIssues": [("issued", "Issue base qty", "number")],
+        "purchaseRequisitions": [("requested", "Requested qty", "number"), ("approved", "Approved qty", "number")],
+        "purchaseOrders": [("ordered", "Approved order qty", "number")],
+        "goodsReceipts": [("delivered", "Delivered base qty", "number"), ("accepted", "Accepted base qty", "number"), ("rejected", "Rejected base qty", "number")],
+    }[family]
+    roles = user_role_names(request.user)
+    valued = is_report_administrator(request.user) or bool(set(roles).intersection({
+        "Store Keeper", "Cost Controller", "F&B Cost Controller", "Financial Manager", "Financial Controller",
+        "General Manager", "Procurement Manager", "Accounts Payable Clerk",
+    }))
+    if valued and family in ("purchaseOrders", "purchaseRequisitions", "storeIssues"):
+        measures = measures + [("line_value", "Recorded line value", "money")]
+    columns += [{"key": key, "label": label, "kind": kind} for key, label, kind in measures]
+    details = []
+    for document in queryset.prefetch_related("items__item__base_unit", "items__unit") if family != "goodsReceipts" else queryset.prefetch_related("items__item__base_unit", "items__purchase_order_item__unit", "items__inspection_items"):
+        header = by_id.get(str(document.pk))
+        if header is None:
+            continue
+        for line in document.items.all():
+            item = line.item
+            base = item.base_unit.abbreviation if item.base_unit_id else item.unit
+            unit = base
+            if family in ("purchaseRequisitions", "purchaseOrders"):
+                unit = line.unit.abbreviation if line.unit_id else base
+            row = {key: header.get(key, "") for key in ("reference", "date", "department", "store", "supplier", "status", "drilldown_type", "drilldown_id")}
+            row.update(article=item.name, sku=item.sku, unit=unit)
+            if family == "departmentRequests":
+                row.update(requested=str(line.base_quantity_requested), approved=str(line.quantity_approved), issued=str(line.quantity_issued))
+            elif family == "storeIssues":
+                row["issued"] = str(line.base_quantity) if document.inventory_changes_applied else "0.0000"
+                if valued:
+                    cost = line.dispatched_unit_cost
+                    row["line_value"] = str(line.base_quantity * cost) if document.inventory_changes_applied and cost > 0 else None
+            elif family == "purchaseRequisitions":
+                row.update(requested=str(line.quantity), approved=str(line.approved_quantity))
+                if valued:
+                    row["line_value"] = str(line.estimated_total)
+            elif family == "purchaseOrders":
+                row.update(ordered=str(line.approved_quantity))
+                if valued:
+                    row["line_value"] = str(line.gross_line_total)
+            else:
+                row["department"] = document.purchase_order.requisition.department.name if document.purchase_order.requisition.department_id else ""
+                row["store"] = line.store.name if line.store_id else ""
+                decision = next(iter(line.inspection_items.all()), None)
+                complete = decision is not None and decision.quantity_received == line.base_quantity and decision.quantity_accepted + decision.quantity_rejected == line.base_quantity
+                row.update(delivered=str(line.base_quantity),
+                           accepted=str(decision.quantity_accepted) if complete else None,
+                           rejected=str(decision.quantity_rejected) if complete else None)
+            details.append(row)
+    return {"detail_columns": columns, "detail_results": details}
+
+
 class DepartmentRequestRegisterReportView(ReportAPIView):
     report_key = "departmentRequests"
 
@@ -424,7 +488,7 @@ class DepartmentRequestRegisterReportView(ReportAPIView):
             "drilldown_type": "store-requisitions",
             "drilldown_id": str(req.id),
         } for req in queryset.order_by("-created_at")]
-        return Response({"results": rows})
+        return Response({"results": rows, **register_article_details(queryset, rows, "departmentRequests", request)})
 
 
 class StoreIssueRegisterReportView(ReportAPIView):
@@ -473,7 +537,7 @@ class StoreIssueRegisterReportView(ReportAPIView):
             "drilldown_type": "stock_issue",
             "drilldown_id": str(issue.id),
         } for issue in queryset.order_by("-issue_date", "-created_at")]
-        return Response({"results": rows})
+        return Response({"results": rows, **register_article_details(queryset, rows, "storeIssues", request)})
 
 
 class PurchaseRequisitionRegisterReportView(ReportAPIView):
@@ -503,7 +567,7 @@ class PurchaseRequisitionRegisterReportView(ReportAPIView):
             "drilldown_type": "requisitions",
             "drilldown_id": str(req.id),
         } for req in queryset.order_by("-created_at")]
-        return Response({"results": rows})
+        return Response({"results": rows, **register_article_details(queryset, rows, "purchaseRequisitions", request)})
 
 
 class PurchaseOrderRegisterReportView(ReportAPIView):
@@ -546,7 +610,7 @@ class PurchaseOrderRegisterReportView(ReportAPIView):
                 "drilldown_type": "orders",
                 "drilldown_id": str(order.id),
             })
-        return Response({"total_value": decimal_string(total_value), "results": rows})
+        return Response({"total_value": decimal_string(total_value), "results": rows, **register_article_details(queryset, rows, "purchaseOrders", request)})
 
 
 class GoodsReceiptRegisterReportView(ReportAPIView):
@@ -597,7 +661,7 @@ class GoodsReceiptRegisterReportView(ReportAPIView):
             "drilldown_type": "grns",
             "drilldown_id": str(grn.id),
         } for grn in queryset.order_by("-received_date", "-created_at")]
-        return Response({"results": rows})
+        return Response({"results": rows, **register_article_details(queryset, rows, "goodsReceipts", request)})
 
 
 class StockSummaryReportView(ReportAPIView):

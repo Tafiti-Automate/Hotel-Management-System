@@ -51,10 +51,12 @@ def test_department_supervisor_cannot_read_stocktake_audit_by_default():
 @pytest.mark.django_db
 def test_cost_controller_can_read_property_stock_on_hand_without_stock_mutation_permissions():
     from decimal import Decimal
+    from uuid import uuid4
 
     from apps.departments.models import Branch, Department
     from apps.employees.models import Employee
-    from apps.inventory.models import Category, InventoryBalance, Item, StoreLocation
+    from apps.inventory.models import Category, InventoryBalance, Item, StockLedger, StoreLocation
+    from core.constants.choices import LedgerReferenceType
     from apps.organization.models import Hotel
 
     call_command("setup_hotel_roles", verbosity=0)
@@ -79,10 +81,20 @@ def test_cost_controller_can_read_property_stock_on_hand_without_stock_mutation_
     client = APIClient()
     client.force_authenticate(user=user)
 
+    # A dispatched quantity is ledger evidence, not a reservation or sale.
+    for movement, amount in ((LedgerReferenceType.TRANSIT_DISPATCH, "2.1250"),
+                             (LedgerReferenceType.STOCK_TRANSFER, "1.0000"),
+                             (LedgerReferenceType.SALE, "4.0000")):
+        StockLedger.objects.create(item=item, store=primary, quantity_out=Decimal(amount),
+                                   reference_type=movement, reference_id=uuid4())
     balances = client.get("/api/v1/inventory-balances/")
     assert balances.status_code == 200, balances.data
     balance_stores = {entry["store"] for entry in balances.data["results"]}
     assert {str(pk) for pk in balance_stores} == {str(primary.pk), str(sibling.pk)}
+    row = next(entry for entry in balances.data["results"] if str(entry["store"]) == str(primary.pk))
+    assert Decimal(str(row["issued_transferred_quantity"])) == Decimal("3.1250")
+    assert row["item_name"] == item.name and row["store_name"] == primary.name
+    assert Decimal(str(row["available_value"])) == 0
 
     stores = client.get("/api/v1/stores/")
     assert stores.status_code == 200, stores.data

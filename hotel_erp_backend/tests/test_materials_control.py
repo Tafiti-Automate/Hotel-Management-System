@@ -677,3 +677,30 @@ def test_pos_import_cannot_be_inserted_for_a_closed_business_date(materials_cont
             source="TestPOS", source_reference="CLOSED-DATE-1", created_by=user,
         )
     assert not POSImportBatch.objects.filter(source_reference="CLOSED-DATE-1").exists()
+
+
+@pytest.mark.django_db
+def test_recipe_production_department_is_distinct_from_stock_source(materials_context):
+    from apps.materials_control.serializers import RecipeSerializer
+    from rest_framework.exceptions import PermissionDenied
+    user, employee, department, branch, outlet, unit, item = materials_context
+    user.groups.add(Group.objects.get_or_create(name="Department Head")[0])
+    other_department = Department.objects.create(name="Engineering Department")
+    other_recipe = Recipe.objects.create(name="Engineering recipe", outlet=outlet,
+        production_department=other_department, yield_quantity=Decimal("1"), target_food_cost_percent=Decimal("30"))
+    view = RecipeViewSet()
+    view.request = SimpleNamespace(user=user)
+    with pytest.raises(PermissionDenied, match="own production department"):
+        view._require_production_department(other_department)
+    view._require_production_department(department)
+    serializer = RecipeSerializer(data={
+        "name": "Fish", "production_department": str(department.pk), "outlet": str(outlet.pk),
+        "yield_quantity": "1.0000", "target_food_cost_percent": "30.00",
+    })
+    assert serializer.is_valid(), serializer.errors
+    recipe = serializer.save(created_by=user)
+    assert recipe.production_department_id == department.pk
+    assert recipe.outlet_id == outlet.pk
+    assert RecipeSerializer(recipe).data["production_department_name"] == department.name
+    assert recipe in view.get_queryset()
+    assert other_recipe not in view.get_queryset()

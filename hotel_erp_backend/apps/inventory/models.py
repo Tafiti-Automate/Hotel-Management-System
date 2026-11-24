@@ -2849,6 +2849,7 @@ class MonthEndInventory(models.Model):
     prepared_at = models.DateTimeField(null=True, blank=True)
     submitted_at = models.DateTimeField(null=True, blank=True)
     count_snapshot = models.JSONField(default=list, blank=True)
+    department_cost_snapshot = models.JSONField(default=dict, blank=True)
     stock_count = models.OneToOneField(StockCount, on_delete=models.PROTECT, null=True, blank=True)
 
     class Meta:

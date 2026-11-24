@@ -155,8 +155,11 @@ function RecipeControl() {
   const recipes = records.recipes || []
   const ingredients = records['recipe-ingredients'] || []
   const [selected, setSelected] = useState('')
-  const [recipe, setRecipe] = useState({ name: '', outlet: '', yield_quantity: '1', yield_unit: 'Portions', target_food_cost_percent: '30', selling_price: '0', is_sub_recipe: false, note: '' })
+  const [recipe, setRecipe] = useState({ name: '', production_department: '', outlet: '', yield_quantity: '1', yield_unit: 'Portions', target_food_cost_percent: '30', selling_price: '0', is_sub_recipe: false, note: '' })
   const [ingredient, setIngredient] = useState({ item: '', unit: '', quantity: '', trim_percent: '0', note: '' })
+  const [recipeSearch, setRecipeSearch] = useState('')
+  const [recipeQuery, setRecipeQuery] = useState('')
+  const visibleRecipes = recipes.filter(row => [row.name, row.code, row.production_department_name, row.outlet_name].some(value => id(value).toLowerCase().includes(recipeQuery.trim().toLowerCase())))
   const current = recipes.find((row) => id(row.id) === selected)
   const currentIngredients = ingredients.filter((row) => id(row.recipe) === selected)
   const items = app.data.items as Row[]
@@ -180,7 +183,8 @@ function RecipeControl() {
         <div className="mc-card-head"><div><h2>New recipe standard</h2><p>Create the yield and food-cost target, then add its ingredients.</p></div><Icon name="restaurant_menu" size={20} /></div>
         <div className="mc-fields two">
           <label>Recipe name *<input required value={recipe.name} onChange={(event) => setRecipe({ ...recipe, name: event.target.value })} /></label>
-          <label>Production outlet *<select required value={recipe.outlet} onChange={(event) => setRecipe({ ...recipe, outlet: event.target.value })}><option value="">Select outlet</option>{(app.data.locations as Row[]).map((row) => <option key={id(row.id)} value={id(row.id)}>{id(row.name)}</option>)}</select></label>
+          <label>Production department *<select required value={recipe.production_department} onChange={(event) => setRecipe({ ...recipe, production_department: event.target.value })}><option value="">Select department</option>{(app.data.departments as Row[]).filter(row => row.is_active !== false).map((row) => <option key={id(row.id)} value={id(row.id)}>{id(row.name)}</option>)}</select></label>
+          <label>Ingredient stock source *<select required value={recipe.outlet} onChange={(event) => setRecipe({ ...recipe, outlet: event.target.value })}><option value="">Select source store</option>{(app.data.locations as Row[]).filter(row => row.is_active !== false && !row.is_virtual_transit).map((row) => <option key={id(row.id)} value={id(row.id)}>{id(row.name)}</option>)}</select><small>Physical source for ingredient costing and POS stock depletion; does not change department ownership.</small></label>
           <label>Yield quantity *<input required min="0.0001" step="0.0001" type="number" value={recipe.yield_quantity} onChange={(event) => setRecipe({ ...recipe, yield_quantity: event.target.value })} /></label>
           <label>Yield unit *<input required value={recipe.yield_unit} onChange={(event) => setRecipe({ ...recipe, yield_unit: event.target.value })} /></label>
           <label>Target food cost % *<input required min="0.01" max="100" step="0.01" type="number" value={recipe.target_food_cost_percent} onChange={(event) => setRecipe({ ...recipe, target_food_cost_percent: event.target.value })} /></label>
@@ -190,8 +194,9 @@ function RecipeControl() {
         <button className="mc-primary" disabled={busy}><Icon name="add" size={16} /> Create recipe draft</button>
       </form>
       <section className="mc-card">
-        <div className="mc-card-head"><div><h2>Recipe register</h2><p>Select a draft to maintain ingredients and publish.</p></div><span className="mc-count">{recipes.length}</span></div>
-        {!recipes.length ? <Empty loading={loading}>No recipes have been configured.</Empty> : <div className="mc-list compact">{recipes.map((row) => <button type="button" className={`mc-select-row ${selected === id(row.id) ? 'active' : ''}`} key={id(row.id)} onClick={() => setSelected(id(row.id))}><span><strong>{id(row.name)}</strong><small>{id(row.code)} · {row.ingredient_count} ingredient(s)</small></span><span><Status value={row.status} /><b>{money(row.cost_per_yield)}</b></span></button>)}</div>}
+        <div className="mc-card-head"><div><h2>Recipe register</h2><p>Select a draft to maintain ingredients and publish.</p></div><span className="mc-count">{visibleRecipes.length}</span></div>
+        <form className="mc-fields two" onSubmit={event => { event.preventDefault(); setRecipeQuery(recipeSearch) }}><input aria-label="Search recipes" placeholder="Recipe, department or code" value={recipeSearch} onChange={event => setRecipeSearch(event.target.value)} /><button className="mc-secondary" type="submit"><Icon name="search" size={16} /> Search</button></form>
+        {!visibleRecipes.length ? <Empty loading={loading}>No matching recipes.</Empty> : <div className="mc-list compact">{visibleRecipes.map((row) => <button type="button" className={`mc-select-row ${selected === id(row.id) ? 'active' : ''}`} key={id(row.id)} onClick={() => setSelected(id(row.id))}><span><strong>{id(row.name)}</strong><small>{id(row.code)} · {id(row.production_department_name) || "Department not assigned"} · {row.ingredient_count} ingredient(s)</small></span><span><Status value={row.status} /><b>{money(row.cost_per_yield)}</b></span></button>)}</div>}
       </section>
     </div>
     {current && <section className="mc-card mc-recipe-detail">

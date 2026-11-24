@@ -235,6 +235,10 @@ class Recipe(BaseModel):
     outlet = models.ForeignKey(
         "inventory.StoreLocation", on_delete=models.PROTECT, related_name="recipes"
     )
+    production_department = models.ForeignKey(
+        "departments.Department", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="production_recipes",
+    )
     yield_quantity = models.DecimalField(
         max_digits=14, decimal_places=4, validators=[validate_positive_decimal]
     )

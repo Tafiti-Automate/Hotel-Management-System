@@ -121,7 +121,12 @@ def scoped_recipe_records(queryset, user, outlet_field):
         return queryset
     employee = employee_for(user)
     if has_role(user, "department"):
-        return queryset.filter(**{f"{outlet_field}_id__in": department_outlet_ids(employee)})
+        queryset = queryset.filter(**{f"{outlet_field}_id__in": department_outlet_ids(employee)})
+        if queryset.model is Recipe:
+            queryset = queryset.filter(Q(production_department__isnull=True) | Q(production_department_id=employee.department_id))
+        elif queryset.model is RecipeIngredient:
+            queryset = queryset.filter(Q(recipe__production_department__isnull=True) | Q(recipe__production_department_id=employee.department_id))
+        return queryset
     if has_role(user, "outlet") and employee:
         ids = OutletAssignment.objects.filter(
             employee=employee, is_active=True
@@ -457,12 +462,12 @@ class WasteRecordViewSet(CreatedByModelMixin, ModelViewSet):
 
 
 class RecipeViewSet(CreatedByModelMixin, ModelViewSet):
-    queryset = Recipe.objects.select_related("outlet__branch__hotel", "published_by").prefetch_related(
+    queryset = Recipe.objects.select_related("outlet__branch__hotel", "production_department", "published_by").prefetch_related(
         "ingredients"
     )
     serializer_class = RecipeSerializer
-    filterset_fields = ("outlet", "status", "is_sub_recipe")
-    search_fields = ("code", "name", "note", "outlet__name")
+    filterset_fields = ("outlet", "production_department", "status", "is_sub_recipe")
+    search_fields = ("code", "name", "note", "outlet__name", "production_department__name")
     ordering_fields = ("name", "status", "published_at", "created_at")
 
     def get_queryset(self):
@@ -472,8 +477,19 @@ class RecipeViewSet(CreatedByModelMixin, ModelViewSet):
         if not has_role(self.request.user, "department", "cost"):
             raise PermissionDenied("Only Department leadership or F&B Cost Control can maintain recipes.")
 
+    def _require_production_department(self, department):
+        if department is None:
+            return  # pre-existing API clients and legacy records retain their outlet
+        if not department.is_active:
+            raise ValidationError("Select an active production department.")
+        employee = employee_for(self.request.user)
+        if has_role(self.request.user, "department") and not has_role(self.request.user, "cost"):
+            if not employee or employee.department_id != department.pk:
+                raise PermissionDenied("Select your own production department.")
+
     def perform_create(self, serializer):
         self._require_recipe_editor()
+        self._require_production_department(serializer.validated_data.get("production_department"))
         require_recipe_outlet(self.request.user, serializer.validated_data["outlet"])
         super().perform_create(serializer)
 
@@ -481,6 +497,7 @@ class RecipeViewSet(CreatedByModelMixin, ModelViewSet):
         self._require_recipe_editor()
         if serializer.instance.status != Recipe.STATUS_DRAFT:
             raise ValidationError("Published or archived recipes cannot be edited; create a new revision.")
+        self._require_production_department(serializer.validated_data.get("production_department", serializer.instance.production_department))
         require_recipe_outlet(self.request.user, serializer.validated_data.get(
             "outlet", serializer.instance.outlet
         ))

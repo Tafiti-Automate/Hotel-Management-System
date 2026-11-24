@@ -4,7 +4,7 @@ import RecordDetailDrawer from '../components/RecordDetailDrawer'
 import { canViewReport } from '../lib/access'
 import { errorMessage, fetchOperationalReport, isOperationalReport } from '../lib/api'
 import { reports, type EntityKey } from '../lib/data'
-import { buildOperationalReport, buildReport } from '../lib/reports'
+import { buildOperationalReport, buildReport, presentReport, summaryGroupOptions } from '../lib/reports'
 import { useApp } from '../state/AppContext'
 
 const exportBtn: CSSProperties = {
@@ -55,6 +55,10 @@ export default function ReportView({ selectedReportId }: { selectedReportId?: st
   const [reportStatus, setReportStatus] = useState('')
   const [valueMin, setValueMin] = useState('')
   const [page, setPage] = useState(1)
+  const [searchDraft, setSearchDraft] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [mode, setMode] = useState<'detail' | 'summary'>('detail')
+  const [groupIndex, setGroupIndex] = useState(-1)
   const [filtersOpen, setFiltersOpen] = useState(true)
   const [refreshKey, setRefreshKey] = useState(0)
   const [livePayload, setLivePayload] = useState<Record<string, unknown>>({})
@@ -109,7 +113,14 @@ export default function ReportView({ selectedReportId }: { selectedReportId?: st
     return () => { active = false }
   }, [actionType, authorized, branchId, category, dateFrom, dateTo, department, documentType, employee, item, operationalReportId, refreshKey, reportId, reportStatus, store, supplier, valueMin])
 
-  const report = operationalReportId ? buildOperationalReport(operationalReportId, livePayload) : buildReport(reportId, filteredData)
+  const registerReport = operationalReportId ? buildOperationalReport(operationalReportId, livePayload) : buildReport(reportId, filteredData)
+  const sourceReport = operationalReportId && Array.isArray(livePayload.detail_columns)
+    ? buildOperationalReport(operationalReportId, {title: registerReport.title, subtitle: 'Article-level records from the permitted document register', columns: livePayload.detail_columns, results: livePayload.detail_results})
+    : registerReport
+  const groupOptions = summaryGroupOptions(sourceReport)
+  const groupValue = groupOptions.some(option => option.index === groupIndex) ? groupIndex : groupOptions[0]?.index ?? -1
+  const report = presentReport(sourceReport, reportId, searchQuery, mode, groupValue)
+  useEffect(() => { setSearchDraft(''); setSearchQuery(''); setMode('detail'); setGroupIndex(-1) }, [reportId])
   const pageSize = 25
   const pageCount = Math.max(1, Math.ceil(report.rows.length / pageSize))
   const visibleRows = report.rows.slice((page - 1) * pageSize, page * pageSize)
@@ -136,12 +147,12 @@ export default function ReportView({ selectedReportId }: { selectedReportId?: st
   const supportsValueMinimum = controlReport && reportId !== 'managementSummary'
   const controlRows = Array.isArray(livePayload.results) ? livePayload.results as Record<string, any>[] : []
   const controlValues = (key: string) => Array.from(new Set(controlRows.map((row) => String(row[key] || '')).filter(Boolean))).sort()
-  const activeFilterCount = [dateFrom, dateTo, store, category, item, department, employee, supplier, documentType, actionType, reportStatus, valueMin].filter(Boolean).length
+  const activeFilterCount = [dateFrom, dateTo, store, category, item, department, employee, supplier, documentType, actionType, reportStatus, valueMin, searchQuery].filter(Boolean).length
   const needsItem = reportId === 'movement' && !item
   const emptyMessage = needsItem ? 'Choose an Article to generate its stock card.' : liveError ? liveError : report.emptyDetail || 'No records match the selected criteria.'
   const scope = reportScope(app.user.role, app.currentBranch)
   const generatedAt = new Date()
-  const baseFilename = `${safeFilename(report.title)}-${dateStamp()}`
+  const baseFilename = `${safeFilename(report.title)}-${mode}-${dateStamp()}`
 
   useEffect(() => {
     if (page > pageCount) setPage(pageCount)
@@ -149,7 +160,7 @@ export default function ReportView({ selectedReportId }: { selectedReportId?: st
 
   const clearFilters = () => {
     setStore(''); setCategory(''); setDateFrom(''); setDateTo(''); setItem(''); setDepartment('');
-    setEmployee(''); setSupplier(''); setDocumentType(''); setActionType(''); setReportStatus(''); setValueMin(''); setPage(1)
+    setEmployee(''); setSupplier(''); setDocumentType(''); setActionType(''); setReportStatus(''); setValueMin(''); setSearchDraft(''); setSearchQuery(''); setPage(1)
   }
 
   const applyDatePreset = (preset: 'today' | 'week' | 'month') => {
@@ -168,14 +179,14 @@ export default function ReportView({ selectedReportId }: { selectedReportId?: st
 
   const exportCsv = () => {
     const quote = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`
-    const csv = [report.columns.map((column) => quote(column.label)).join(','), ...report.rows.map((row) => row.cells.map((cell) => quote(cell.text)).join(','))].join('\n')
+    const csv = [report.columns.map((column) => quote(column.label)).join(','), ...report.rows.map((row) => row.cells.map((cell) => quote(cell.text)).join(',')), ...(report.hasTotals ? [report.totals.map(cell => quote(cell.text)).join(',')] : [])].join('\n')
     download(new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' }), `${baseFilename}.csv`)
   }
 
   const exportExcel = () => {
     const escape = (value: unknown) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    const metadataRows = [['Report', report.title], ['Prepared for', `${app.user.name} · ${app.user.role}`], ['Scope', scope], ['Generated', generatedAt.toLocaleString('en-UG')], []]
-    const tableRows = [...metadataRows, report.columns.map((column) => column.label), ...report.rows.map((row) => row.cells.map((cell) => cell.text))]
+    const metadataRows = [['Report', report.title], ['View', mode], ['Search', searchQuery || 'All matching records'], ['Prepared for', `${app.user.name} · ${app.user.role}`], ['Scope', scope], ['Generated', generatedAt.toLocaleString('en-UG')], []]
+    const tableRows = [...metadataRows, report.columns.map((column) => column.label), ...report.rows.map((row) => row.cells.map((cell) => cell.text)), ...(report.hasTotals ? [report.totals.map(cell => cell.text)] : [])]
     const xml = `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Report"><Table>${tableRows.map((row) => `<Row>${row.map((cell) => `<Cell><Data ss:Type="String">${escape(cell)}</Data></Cell>`).join('')}</Row>`).join('')}</Table></Worksheet></Workbook>`
     download(new Blob([xml], { type: 'application/vnd.ms-excel' }), `${baseFilename}.xls`)
   }
@@ -185,8 +196,8 @@ export default function ReportView({ selectedReportId }: { selectedReportId?: st
     if (!popup) { app.showWorkflowAlert('PDF export blocked', 'Allow pop-ups for this site, then try again.', 'warning'); return }
     const escapeHtml = (value: unknown) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
     const head = report.columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join('')
-    const body = report.rows.map((row) => `<tr>${row.cells.map((cell) => `<td>${escapeHtml(cell.text)}</td>`).join('')}</tr>`).join('')
-    const criteria = [dateFrom ? `From ${dateFrom}` : '', dateTo ? `To ${dateTo}` : '', selectedStoreName ? `Store: ${selectedStoreName}` : '', selectedCategoryName ? `Category: ${selectedCategoryName}` : ''].filter(Boolean).join(' · ') || 'Current report scope'
+    const body = [...report.rows.map(row => row.cells), ...(report.hasTotals ? [report.totals] : [])].map(cells => `<tr>${cells.map(cell => `<td>${escapeHtml(cell.text)}</td>`).join('')}</tr>`).join('')
+    const criteria = [dateFrom ? `From ${dateFrom}` : '', dateTo ? `To ${dateTo}` : '', selectedStoreName ? `Store: ${selectedStoreName}` : '', selectedCategoryName ? `Category: ${selectedCategoryName}` : '', searchQuery ? `Search: ${searchQuery}` : '', `View: ${mode}`].filter(Boolean).join(' · ') || 'Current report scope'
     const controlledNote = reportId === 'purchaseOrders' ? '<div class="notice"><strong>Controlled LPO copies:</strong> The register records the controlled-copy position of each LPO. Printing or downloading an individual LPO continues to issue <strong>ORIGINAL COPY</strong> first and <strong>COPY OF ORIGINAL</strong> thereafter.</div>' : ''
     popup.document.write(`<html><head><title>${escapeHtml(report.title)}</title><style>@page{size:A4 landscape;margin:10mm}*{box-sizing:border-box}body{margin:0;color:#111827;font-family:Arial,sans-serif;font-size:8.5pt}header{display:flex;justify-content:space-between;gap:24px;padding-bottom:10px;border-bottom:2px solid #111827}h1{margin:0;font-size:17pt;letter-spacing:-.2px}p{margin:4px 0 0;color:#4b5563}.meta{text-align:right;color:#4b5563;font-size:7.8pt;line-height:1.5}.criteria{margin:10px 0;color:#374151;font-size:8pt}.notice{margin:0 0 10px;padding:7px 9px;border:1px solid #d1d5db;background:#f9fafb;font-size:7.8pt;line-height:1.4}table{border-collapse:collapse;width:100%;table-layout:auto}tr{break-inside:avoid}th,td{border:1px solid #cbd5e1;padding:5px 6px;text-align:left;vertical-align:top;word-break:break-word}th{background:#f3f4f6;text-transform:uppercase;font-size:7pt;letter-spacing:.2px}footer{margin-top:10px;padding-top:6px;border-top:1px solid #e5e7eb;color:#6b7280;font-size:7pt;display:flex;justify-content:space-between}.internal{font-weight:700;color:#374151}</style></head><body><header><div><h1>${escapeHtml(report.title)}</h1><p>${escapeHtml(report.subtitle)}</p></div><div class="meta"><strong>${escapeHtml(app.currentBranch || 'Hotel Management System')}</strong><br>Prepared for ${escapeHtml(app.user.name)} · ${escapeHtml(app.user.role)}<br>${escapeHtml(generatedAt.toLocaleString('en-UG'))}</div></header><div class="criteria"><strong>Scope:</strong> ${escapeHtml(scope)} · <strong>Criteria:</strong> ${escapeHtml(criteria)} · <strong>Records:</strong> ${report.rows.length}</div>${controlledNote}<table><thead><tr>${head}</tr></thead><tbody>${body || `<tr><td colspan="${report.columns.length}">No records match the selected criteria.</td></tr>`}</tbody></table><footer><span class="internal">Internal report</span><span>${escapeHtml(report.title)} · Generated by Hotel Management System</span></footer><script>window.onload=()=>window.print()</script></body></html>`)
     popup.document.close()
@@ -205,7 +216,7 @@ export default function ReportView({ selectedReportId }: { selectedReportId?: st
     if (entity) app.openDetail(entity, sourceId, 'reports')
   }
 
-  if (!app.reportId) return null
+  if (!selectedReportId && !app.reportId) return null
 
   if (!authorized) {
     return (
@@ -234,9 +245,9 @@ export default function ReportView({ selectedReportId }: { selectedReportId?: st
           <div className="report-view-meta"><span>{report.rows.length} record{report.rows.length === 1 ? '' : 's'}</span>{live && <span className="report-live-status"><i />Live report</span>}</div>
         </div>
         <div className="report-export-actions">
-          <button onClick={exportPdf} style={exportBtn}><Icon name="picture_as_pdf" size={16} />PDF</button>
-          <button onClick={exportExcel} style={exportBtn}><Icon name="table_view" size={16} />Excel</button>
-          <button onClick={exportCsv} style={exportBtn}><Icon name="download" size={16} />CSV</button>
+          <button disabled={liveLoading || Boolean(liveError)} onClick={exportPdf} style={exportBtn}><Icon name="picture_as_pdf" size={16} />PDF</button>
+          <button disabled={liveLoading || Boolean(liveError)} onClick={exportExcel} style={exportBtn}><Icon name="table_view" size={16} />Excel</button>
+          <button disabled={liveLoading || Boolean(liveError)} onClick={exportCsv} style={exportBtn}><Icon name="download" size={16} />CSV</button>
         </div>
       </header>
 
@@ -245,6 +256,16 @@ export default function ReportView({ selectedReportId }: { selectedReportId?: st
       {report.emptyDetail && <ReportNotice icon="info" title="Reporting status" text={report.emptyDetail} />}
 
       <section className="report-filter-shell">
+        <div className="report-filter-toolbar" style={{ flexWrap: 'wrap', gap: 8 }}>
+          <form style={{display:'flex',gap:6,alignItems:'center',flex:'1 1 250px'}} onSubmit={event => {event.preventDefault(); setSearchQuery(searchDraft); setPage(1); setSelectedReportRow(null)}}>
+            <input aria-label="Search report records" placeholder="Search report records…" value={searchDraft} onChange={event => setSearchDraft(event.target.value)} style={filterControl} />
+            <button type="submit" style={exportBtn}><Icon name="search" size={15} />Search</button>
+            {searchDraft && <button type="button" style={exportBtn} onClick={() => {setSearchDraft(''); setSearchQuery(''); setPage(1)}}>Clear</button>}
+          </form>
+          <button type="button" style={exportBtn} aria-pressed={mode === 'detail'} onClick={() => {setMode('detail');setPage(1);setSelectedReportRow(null)}}>Detailed</button>
+          <button type="button" style={exportBtn} aria-pressed={mode === 'summary'} onClick={() => {setMode('summary');setPage(1);setSelectedReportRow(null)}}>Summary</button>
+          {mode === 'summary' && groupOptions.length > 0 && <label>Group by <select aria-label="Summary grouping" value={groupValue} onChange={event => {setGroupIndex(Number(event.target.value));setPage(1)}} style={filterControl}>{groupOptions.map(option => <option key={option.index} value={option.index}>{option.label}</option>)}</select></label>}
+        </div>
         <div className="report-filter-toolbar">
           <button type="button" className="report-filter-toggle" onClick={() => setFiltersOpen((value) => !value)} aria-expanded={filtersOpen}>
             <Icon name="filter_alt" size={16} /> Filters {activeFilterCount > 0 && <span>{activeFilterCount}</span>}
@@ -288,7 +309,7 @@ export default function ReportView({ selectedReportId }: { selectedReportId?: st
             {liveLoading && <ReportState icon="sync" title="Loading report" detail="Retrieving the latest records for your working scope…" />}
             {!liveLoading && !visibleRows.length && <ReportState icon={liveError ? 'error' : needsItem ? 'inventory_2' : 'inbox'} title={liveError ? 'Report could not be loaded' : needsItem ? 'Choose an Article' : 'No matching records'} detail={emptyMessage} danger={Boolean(liveError)} />}
             {!liveLoading && visibleRows.map((row, ri) => (
-              <button type="button" onClick={() => setSelectedReportRow(row.data || Object.fromEntries(report.columns.map((column, index) => [column.label, row.cells[index]?.text || '—'])))} key={ri} className="report-record-row hover-surface2" style={{ width: '100%', display: 'grid', gridTemplateColumns: report.grid, border: 0, borderBottom: '1px solid var(--border)', padding: '0 8px', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
+              <button type="button" onClick={() => { if (mode === 'detail') setSelectedReportRow(row.data || Object.fromEntries(report.columns.map((column, index) => [column.label, row.cells[index]?.text || '—']))) }} key={ri} className="report-record-row hover-surface2" style={{ width: '100%', display: 'grid', gridTemplateColumns: report.grid, border: 0, borderBottom: '1px solid var(--border)', padding: '0 8px', background: 'var(--surface)', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
                 {row.cells.map((cell, ci) => <div key={ci} style={cell.style}>{cell.text}</div>)}
               </button>
             ))}

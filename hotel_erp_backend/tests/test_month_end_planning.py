@@ -235,3 +235,40 @@ def test_later_booking_keeps_cutoff_accounting_date(operational_context, monkeyp
     assert ledger.created_at.date() == date(2026, 12, 1)
     assert StockCount.objects.get().count_date == date(2026, 11, 30)
     assert period.inventory_valuation_reconciliation()["movement_count"] == 1
+
+
+def test_department_cost_classification_freezes_evidence_without_duplicate_expense(operational_context):
+    from apps.inventory.models import StoreRequisition, StoreRequisitionItem, StockIssue, StockIssueItem
+    from django.utils import timezone
+    controller, finance, finance_user, period, balance, base, main, empty = operational_context
+    employee = finance_user.employee_profile
+    department = employee.department
+    req = StoreRequisition.objects.create(department=department, store=balance.store, requested_by=employee)
+    req_line = StoreRequisitionItem.objects.create(requisition=req, item=balance.item, quantity_requested=Decimal("2.0000"))
+    issue = StockIssue.objects.create(requisition=req, store=balance.store, issued_by=employee,
+                                      fulfillment_status=StockIssue.STATUS_COMPLETED, signed_at=timezone.now(),
+                                      inventory_changes_applied=True)
+    line = StockIssueItem.objects.create(issue=issue, requisition_item=req_line, item=balance.item,
+                                         quantity=Decimal("2.0000"), dispatched_unit_cost=Decimal("1000.0000"))
+    expense = DepartmentConsumption.objects.create(department=department, stock_issue_item=line,
+        item=balance.item, quantity=Decimal("2.0000"), unit_cost=Decimal("1000.00"), consumed_on=date(2026,11,30))
+    prepared = action(controller, base, "prepare", {"inventory": main["id"]})
+    item = next(row for row in prepared["inventories"] if row["id"] == main["id"])["lines"][0]
+    action(controller, base, "save-count", {"inventory": main["id"], "lines": [{"id": item["id"], "physical_quantity": "10.0000"}]})
+    action(controller, base, "submit", {"inventory": main["id"]})
+    action(controller, base, "prepare", {"inventory": empty["id"]})
+    result = action(controller, base, "submit", {"inventory": empty["id"], "confirm_empty": True})
+    dept = next(row for row in result["inventories"] if row["department"])
+    assert Decimal(dept["department_cost"]["net_cost"]) == Decimal("2000")
+    assert dept["department_cost"]["lines"][0]["reference"] == issue.issue_no
+    action(finance, base, "approve", {"note": "Reviewed"}, expected=400)
+    approved = action(finance, base, "approve", {"note": "Reviewed", "department_classifications": {str(dept["id"]): "expense"}})
+    assert next(row for row in approved["inventories"] if row["department"])["department_cost"]["classification"] == "expense"
+    DepartmentConsumption.objects.filter(pk=expense.pk).update(unit_cost=Decimal("1100.00"))
+    action(controller, base, "book", expected=400)
+    DepartmentConsumption.objects.filter(pk=expense.pk).update(unit_cost=Decimal("1000.00"))
+    result = action(controller, base, "book")
+    assert result["status"] == "booked"
+    assert DepartmentConsumption.objects.count() == 1
+    assert not StockLedger.objects.exists()
+    assert next(row for row in result["inventories"] if row["department"])["department_cost"]["net_cost"] == "2000.0000"

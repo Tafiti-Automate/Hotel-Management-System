@@ -391,6 +391,25 @@ class StoreKeeperAssignmentSerializer(serializers.ModelSerializer):
 
 
 class InventoryBalanceSerializer(serializers.ModelSerializer):
+    item_name = serializers.CharField(source="item.name", read_only=True)
+    item_sku = serializers.CharField(source="item.sku", read_only=True)
+    category_name = serializers.CharField(source="item.category.name", read_only=True)
+    store_name = serializers.CharField(source="store.name", read_only=True)
+    branch_name = serializers.CharField(source="store.branch.name", read_only=True, allow_null=True)
+    base_unit_name = serializers.SerializerMethodField()
+    unit_amount = serializers.DecimalField(source="weighted_average_cost", max_digits=15, decimal_places=4, read_only=True)
+    total_value = serializers.SerializerMethodField()
+    available_value = serializers.SerializerMethodField()
+
+    def get_base_unit_name(self, balance):
+        return (balance.item.base_unit.abbreviation or balance.item.base_unit.name) if balance.item.base_unit_id else balance.item.unit
+
+    def get_total_value(self, balance):
+        return str((balance.quantity_in_stock * balance.weighted_average_cost).quantize(Decimal("0.0001")))
+
+    def get_available_value(self, balance):
+        return str((balance.available_quantity * balance.weighted_average_cost).quantize(Decimal("0.0001")))
+
     weighted_average_cost = serializers.DecimalField(
         max_digits=15, decimal_places=4, read_only=True
     )

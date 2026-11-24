@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils import timezone
 
 from django.db import transaction
+from django.db.models import Q
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -15,10 +16,11 @@ from rest_framework.response import Response
 from apps.departments.models import Branch, Department
 from apps.inventory.models import (
     MonthEndCycle, MonthEndInventory, StoreLocation, InventoryBalance,
-    InventoryBatch, StockCount, StockCountItem, StockLedger, DepartmentConsumption,
+    InventoryBatch, StockCount, StockCountItem, StockLedger, DepartmentConsumption, StoreReturn,
 )
 from apps.materials_control.models import FiscalPeriod
 from apps.notifications.services import notify_roles
+from core.constants.choices import LedgerReferenceType
 
 
 class MonthEndPlanInput(serializers.Serializer):
@@ -52,6 +54,79 @@ def _employee(user, *, write):
     if not employee or not employee.is_active or not employee.branch_id or not employee.branch.is_active:
         raise PermissionDenied("An active employee and property assignment are required.")
     return employee
+
+
+def _department_cost(row):
+    """Net zero-closing department consumption, sourced only from recorded transactions."""
+    cycle = row.cycle
+    start = cycle.cutoff.replace(day=1)
+    entries = []
+    issues = DepartmentConsumption.objects.filter(
+        department_id=row.department_id, consumed_on__range=(start, cycle.cutoff),
+    ).filter(
+        Q(stock_issue_item__issue__store__branch_id=cycle.branch_id)
+        | Q(goods_receipt_item__goods_receipt__purchase_order__requisition__branch_id=cycle.branch_id)
+    ).select_related("item__base_unit", "stock_issue_item__issue", "goods_receipt_item__goods_receipt").order_by("pk")
+    for entry in issues:
+        direct = entry.goods_receipt_item_id is not None
+        source = entry.goods_receipt_item.goods_receipt if direct else entry.stock_issue_item.issue
+        reference = source.grn_number if direct else source.issue_no
+        # The consumption record is the already-recognized cost evidence, not a new expense.
+        entries.append({
+            "id": str(entry.pk), "article": entry.item.name, "sku": entry.item.sku,
+            "source": "direct_receipt" if direct else "department_issue", "reference": reference,
+            "date": entry.consumed_on.isoformat(), "quantity": str(entry.quantity),
+            "unit": entry.item.base_unit.abbreviation if entry.item.base_unit_id else entry.item.unit,
+            "value": str(entry.total_cost.quantize(Decimal("0.0001"))) if entry.unit_cost > 0 else None,
+        })
+    returns = {ret.pk: ret.return_no for ret in StoreReturn.objects.filter(
+        department_id=row.department_id, store__branch_id=cycle.branch_id, inventory_changes_applied=True,
+    )}
+    for movement in StockLedger.objects.with_accounting_date().filter(
+        reference_type=LedgerReferenceType.STORE_RETURN, reference_id__in=returns,
+        store__branch_id=cycle.branch_id, accounting_date__range=(start, cycle.cutoff),
+    ).select_related("item__base_unit").order_by("pk"):
+        entries.append({
+            "id": str(movement.pk), "article": movement.item.name, "sku": movement.item.sku,
+            "source": "department_return", "reference": returns[movement.reference_id],
+            "date": movement.accounting_date.isoformat(), "quantity": str(-movement.quantity_in),
+            "unit": movement.item.base_unit.abbreviation if movement.item.base_unit_id else movement.item.unit,
+            "value": str(-movement.total_cost_snapshot) if movement.total_cost_snapshot is not None and movement.unit_cost_snapshot is not None else None,
+        })
+    missing = sum(entry["value"] is None for entry in entries)
+    net = sum((Decimal(entry["value"]) for entry in entries if entry["value"] is not None), Decimal("0.0000"))
+    return {"lines": entries, "missing_valuations": missing,
+            "net_cost": str(net.quantize(Decimal("0.0001"))) if not missing else None,
+            "closing_value": "0.0000"}
+
+
+def _approve_department_costs(cycle, classifications):
+    if not isinstance(classifications, dict):
+        raise ValidationError("Supply department classifications as an object.")
+    rows = list(cycle.inventories.filter(department__isnull=False))
+    if set(classifications) - {str(row.pk) for row in rows}:
+        raise ValidationError("Classification must refer to a department in this inventory.")
+    for row in rows:
+        evidence = _department_cost(row)
+        classification = classifications.get(str(row.pk), "")
+        if evidence["missing_valuations"]:
+            raise ValidationError(f"{row.location_name}: resolve missing historical consumption costs.")
+        if classification not in ("", "expense", "cost_of_sales"):
+            raise ValidationError(f"{row.location_name}: select Expense or Cost of sales.")
+        if evidence["lines"] and not classification:
+            raise ValidationError(f"{row.location_name}: Finance must classify the recorded departmental cost.")
+        row.department_cost_snapshot = {**evidence, "classification": classification}
+        row.save(update_fields=["department_cost_snapshot"])
+
+
+def _verify_department_costs(cycle):
+    for row in cycle.inventories.filter(department__isnull=False):
+        current = _department_cost(row)
+        saved = row.department_cost_snapshot
+        if not saved and not current["lines"]:
+            continue  # compatibility for a previously approved empty department
+        if {key: saved.get(key) for key in current} != current:
+            raise ValidationError(f"{row.location_name}: departmental cost evidence changed. Reopen and obtain fresh Finance approval.")
 
 
 def _cycle_data(cycle):
@@ -96,6 +171,7 @@ def _cycle_data(cycle):
             "store": str(row.store_id) if row.store_id else None,
             "department": str(row.department_id) if row.department_id else None,
             "treatment": "consumption_zero" if consumption else "physical_count",
+            "department_cost": (row.department_cost_snapshot or (_department_cost(row) if cycle.status == "planned" else None)) if consumption else None,
             "closing_quantity": "0.0000" if consumption else None,
             "status": state, "booked": cycle.status == "booked", "lines": lines,
             "stock_count": str(row.stock_count_id) if row.stock_count_id else None,
@@ -319,6 +395,7 @@ def month_end_action(request, pk, operation):
         if operation == "reopen":
             if cycle.status != "approved":
                 raise ValidationError("Only an approved unbooked inventory can be reopened.")
+            cycle.inventories.filter(department__isnull=False).update(department_cost_snapshot={})
             cycle.status, cycle.approved_by, cycle.approved_at, cycle.approval_note = "planned", None, None, ""
             cycle.save(update_fields=["status", "approved_by", "approved_at", "approval_note"])
         elif operation == "approve":
@@ -326,12 +403,14 @@ def month_end_action(request, pk, operation):
                 raise PermissionDenied("You cannot approve your own or already approved inventory.")
             note = serializers.CharField(max_length=2000).run_validation(request.data.get("note"))
             _review(cycle, period)
+            _approve_department_costs(cycle, request.data.get("department_classifications", {}))
             cycle.status, cycle.approved_by, cycle.approved_at, cycle.approval_note = "approved", request.user, timezone.now(), note
             cycle.save(update_fields=["status", "approved_by", "approved_at", "approval_note"])
         elif operation == "book":
             if cycle.status != "approved" or cycle.approved_by_id == request.user.pk:
                 raise ValidationError("Independent Finance approval is required before booking.")
             _review(cycle, period)
+            _verify_department_costs(cycle)
             approver = getattr(cycle.approved_by, "employee_profile", None)
             if (not approver or not approver.is_active or approver.branch_id != cycle.branch_id
                     or not cycle.approved_by.is_active or not cycle.approved_by.groups.filter(name="Financial Manager").exists()):
@@ -517,6 +596,7 @@ def month_end_reconciliation(request, pk):
         "previous_cutoff": previous.cutoff.isoformat() if previous else None,
         "locations": rows,
         "direct_department_expenses": [{"department": key, "amount": str(value)} for key, value in sorted(direct.items())],
+        "department_costs": [{"department": row.location_name, **row.department_cost_snapshot} for row in cycle.inventories.filter(department__isnull=False) if row.department_cost_snapshot],
         "blockers": list(dict.fromkeys(blockers)),
         "reconciled": not blockers,
         "note": "Read-only inventory value reconciliation, not a certified food/beverage cost-of-sales or general ledger statement. Transfers, returns, expenses and POS depletion are distinct movement categories.",

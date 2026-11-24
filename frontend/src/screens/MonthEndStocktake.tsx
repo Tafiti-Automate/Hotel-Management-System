@@ -10,9 +10,10 @@ type Line = {
   unit_cost?: string; variance?: string; variance_value?: string; closing_value?: string
   batch_required?: boolean; batches?: Batch[]
 }
+type DepartmentCost = { classification?: string; net_cost: string | null; missing_valuations: number; closing_value: string; lines: {id:string; article:string; sku:string; source:string; reference:string; date:string; quantity:string; unit:string; value:string|null}[] }
 type Location = {
   id: number; location_name: string; treatment: string; status: string; booked: boolean
-  lines: Line[]; stock_count: string | null; difference_value: string | null; closing_value: string | null
+  lines: Line[]; stock_count: string | null; difference_value: string | null; closing_value: string | null; department_cost?: DepartmentCost | null
 }
 type Cycle = {
   id: number; cutoff: string; memo_reference: string; memo: string; status: string
@@ -48,6 +49,9 @@ export default function MonthEndStocktake() {
   const [memoReference, setMemoReference] = useState('')
   const [memo, setMemo] = useState('')
   const [approval, setApproval] = useState('')
+  const [classifications, setClassifications] = useState<Record<string,string>>({})
+  const [articleSearch, setArticleSearch] = useState('')
+  const [articleQuery, setArticleQuery] = useState('')
   const [counts, setCounts] = useState<Record<string, string>>({})
   const [notes, setNotes] = useState<Record<string, string>>({})
   const [batchCounts, setBatchCounts] = useState<Record<string, string>>({})
@@ -58,6 +62,8 @@ export default function MonthEndStocktake() {
   const row = cycle?.inventories.find(r => r.id === location) || cycle?.inventories[0]
   const ready = cycle?.inventories.every(r => r.treatment === 'consumption_zero' || r.status === 'submitted')
   const editable = controller && cycle?.status === 'planned'
+  const matches = (values: unknown[]) => values.map(value => String(value ?? '')).join(' ').toLowerCase().includes(articleQuery.trim().toLowerCase())
+  const departmentReady = cycle?.inventories.every(r => !r.department_cost || (!r.department_cost.missing_valuations && (!r.department_cost.lines.length || Boolean(classifications[String(r.id)]))))
   const completeDraft = (l: Line) => Boolean(counts[l.id]?.trim()) && (l.batches || []).every(b => Boolean(batchCounts[b.id]?.trim()))
   const changedDraft = (l: Line) => counts[l.id] !== l.physical_quantity || (l.batches || []).some(b => batchCounts[b.id] !== b.physical_quantity)
   const property = app.user.branchName || 'Property'
@@ -139,24 +145,35 @@ export default function MonthEndStocktake() {
       </form>
     </details>}
     <section className="mc-card">
-      <label>Month-end inventory <select value={cycle?.id ?? ''} onChange={e => {setSelected(Number(e.target.value)); setLocation(null)}}>
+      <label>Month-end inventory <select value={cycle?.id ?? ''} onChange={e => {setSelected(Number(e.target.value)); setLocation(null); setClassifications({}); setArticleSearch(''); setArticleQuery('')}}>
         {!cycles.length && <option value="">No inventory cycles</option>}{cycles.map(c => <option key={c.id} value={c.id}>{c.cutoff} · {dateLabel(c.status)}</option>)}
       </select></label>
       <button className="mc-secondary" disabled={busy} onClick={() => void load().catch(e => setError(errorMessage(e)))}>Reload register</button>
       {cycle && <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:12}}>
         <button className="mc-secondary" onClick={() => print('memo')}>Print official memo</button>
         <button className="mc-secondary" disabled={!ready && cycle.status !== 'booked' && cycle.status !== 'approved'} onClick={() => print('variance')}>Inventory Differences by Value</button>
-        {finance && cycle.status === 'planned' && <><input aria-label="Finance approval note" placeholder="Finance approval note" value={approval} onChange={e => setApproval(e.target.value)} /><button className="mc-primary" disabled={busy || !ready || !approval.trim()} onClick={() => action('approve', {note:approval}, 'Inventories approved')}>Approve inventories</button></>}
+        {finance && cycle.status === 'planned' && <><input aria-label="Finance approval note" placeholder="Finance approval note" value={approval} onChange={e => setApproval(e.target.value)} /><button className="mc-primary" disabled={busy || !ready || !approval.trim() || !departmentReady} onClick={() => action('approve', {note:approval, department_classifications:classifications}, 'Inventories approved')}>Approve inventories</button></>}
         {controller && cycle.status === 'approved' && <><button className="mc-primary" disabled={busy} onClick={() => {if (window.confirm('Book all approved inventories? Posted records become read-only.')) action('book', {}, 'Inventories booked')}}>Book inventories</button><button className="mc-secondary" disabled={busy} onClick={() => {if (window.confirm('Reopen and invalidate Finance approval?')) action('reopen')}}>Reopen for review</button></>}
         {cycle.total_closing_value !== null && <p>Net difference value: <strong>{cycle.total_difference_value}</strong> · Closing inventory value: <strong>{cycle.total_closing_value}</strong></p>}
         {cycle.status === 'booked' && <button className="mc-secondary" onClick={() => void printReconciliation()}>Monthly inventory reconciliation</button>}
+        <button className="mc-secondary" onClick={()=>{try{printDocument('DEPARTMENT CONSUMPTION — SUMMARY',property,'<p>Cutoff: '+escape(cycle.cutoff)+'</p><table><thead><tr><th>Department</th><th>Finance classification</th><th>Recorded net cost</th><th>Closing inventory</th></tr></thead><tbody>'+cycle.inventories.filter(r=>r.treatment==='consumption_zero').map(r=>'<tr>'+[r.location_name,r.department_cost?.classification || 'Pending',r.department_cost?.net_cost ?? 'Not available','0.0000'].map(v=>'<td>'+escape(v)+'</td>').join('')+'</tr>').join('')+'</tbody></table><p>Recorded consumption only; no new expense posted.</p>')}catch(e){setError(errorMessage(e))}}}>Department cost summary</button>
         {cycle.approval_note && <p>Finance approval: {cycle.approval_note}</p>}
       </div>}
     </section>
     {cycle && <section className="mc-card" style={{display:'grid',gridTemplateColumns:'minmax(180px, 280px) minmax(0,1fr)',gap:16}}>
       <aside><h2>Inventories</h2>{cycle.inventories.map(r => <button key={r.id} className="mc-secondary" aria-pressed={r.id === row?.id} style={{display:'block',width:'100%',textAlign:'left',marginBottom:6}} onClick={() => setLocation(r.id)}>{r.location_name} · {dateLabel(r.status)}</button>)}</aside>
       {row && <main style={{minWidth:0}}><h2>{row.location_name}</h2>
-        {row.treatment === 'consumption_zero' ? <p>Consumption department · {row.booked ? 'Booked' : 'Planned'} closing quantity 0.0000. No duplicate consumption or expense posting.</p> : <>
+        <form style={{display:'flex',gap:8,marginBottom:12}} onSubmit={e=>{e.preventDefault();setArticleQuery(articleSearch)}}><input aria-label="Search inventory articles" placeholder="Article, group or reference" value={articleSearch} onChange={e=>setArticleSearch(e.target.value)}/><button type="submit" className="mc-secondary">Search</button><button type="button" className="mc-secondary" onClick={()=>{setArticleSearch('');setArticleQuery('')}}>Clear</button></form>
+        {row.treatment === 'consumption_zero' ? <>
+          <p>Consumption department · Closing inventory 0.0000. Recorded net cost is classified by Finance, not charged again.</p>
+          {row.department_cost && <><p>Net recorded consumption: <strong>{row.department_cost.net_cost ?? 'Missing cost evidence'}</strong></p>
+            {finance && cycle.status === 'planned' && <label>Accounting treatment<select value={classifications[String(row.id)] || ''} onChange={e=>setClassifications(old=>({...old,[String(row.id)]:e.target.value}))}><option value="">Select treatment</option><option value="expense">Department expense</option><option value="cost_of_sales">Cost of sales</option></select></label>}
+            {row.department_cost.classification && <p>Finance classification: {dateLabel(row.department_cost.classification)}</p>}
+            {row.department_cost.missing_valuations > 0 && <p role="alert">Resolve {row.department_cost.missing_valuations} missing valuation(s) before approval.</p>}
+            <div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse'}}><thead><tr>{['Date','Reference','Article','Source','Quantity','Unit','Recorded value'].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{row.department_cost.lines.filter(l=>matches([l.article,l.sku,l.reference,l.source])).map(l=><tr key={l.id}>{[l.date,l.reference,l.article,dateLabel(l.source),l.quantity,l.unit,l.value ?? 'Missing cost'].map((value,i)=><td key={i} style={{padding:8}}>{value}</td>)}</tr>)}</tbody></table></div>
+            <button className="mc-secondary" onClick={()=>{try{const cost=row.department_cost!;printDocument('DEPARTMENT CONSUMPTION — DETAILED',property,'<p>'+escape(row.location_name)+' · '+escape(cycle.cutoff)+'</p><p>Finance treatment: '+escape(cost.classification || 'Pending')+'</p><table><thead><tr><th>Date</th><th>Reference</th><th>Article</th><th>Source</th><th>Quantity</th><th>Unit</th><th>Recorded value</th></tr></thead><tbody>'+cost.lines.filter(l=>matches([l.article,l.sku,l.reference,l.source])).map(l=>'<tr>'+[l.date,l.reference,l.article,dateLabel(l.source),l.quantity,l.unit,l.value ?? 'Missing cost'].map(v=>'<td>'+escape(v)+'</td>').join('')+'</tr>').join('')+'</tbody></table><p>Full department net recorded cost: '+escape(cost.net_cost ?? 'Missing valuation')+'</p>')}catch(e){setError(errorMessage(e))}}}>Print detailed department report</button>
+          </>}
+        </> : <>
           <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12}}>
             {editable && row.status === 'count_pending' && <button className="mc-primary" disabled={busy} onClick={() => action('prepare',{inventory:row.id})}>Prepare count sheet</button>}
             {row.status !== 'count_pending' && <button className="mc-secondary" onClick={() => print('count')}>Print blind sheet</button>}
@@ -165,7 +182,7 @@ export default function MonthEndStocktake() {
             {editable && row.status === 'submitted' && <button className="mc-primary" disabled={busy || !row.lines.some(l => notes[l.id]?.trim())} onClick={() => action('investigate',{inventory:row.id,lines:row.lines.filter(l => notes[l.id]?.trim()).map(l => ({id:l.id,note:notes[l.id]}))},'Investigation notes saved')}>Save variance notes</button>}
           </div>
           <div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontVariantNumeric:'tabular-nums'}}><thead><tr>{['Item group','Article','Unit','Physical quantity',...(row.status === 'submitted' || row.booked ? ['System','Difference','Unit cost','Difference value','Closing value','Investigation'] : [])].map(h => <th key={h} style={{textAlign:'left',padding:8,borderBottom:'1px solid var(--border)'}}>{h}</th>)}</tr></thead><tbody>
-            {row.lines.map(l => <tr key={l.id}>{[l.item_group,l.article,l.unit].map((v,i) => <td key={i} style={{padding:8}}>{v}{i === 1 && (l.batches || []).map(b => <div key={b.id} style={{marginTop:6,fontSize:12}}>Batch {b.batch_number || 'Unlabelled'} · Expiry {b.expiry_date || '—'} {editable && row.status === 'counting' ? <input aria-label={'Batch quantity '+b.id} type="number" min="0" step="0.0001" value={batchCounts[b.id] ?? ''} onChange={e => setBatchCounts(old => ({...old,[b.id]:e.target.value}))} style={{width:95}}/> : <span>Physical: {b.physical_quantity ?? '—'}{b.system_quantity !== undefined && ' · System: '+b.system_quantity}</span>}</div>)}</td>)}<td style={{padding:8}}>{editable && row.status === 'counting' ? <input aria-label={'Physical quantity '+l.article} inputMode="decimal" type="number" min="0" step="0.0001" value={counts[l.id] ?? ''} onChange={e => setCounts(old => ({...old,[l.id]:e.target.value}))} style={{width:110}}/> : l.physical_quantity ?? '—'}</td>
+            {row.lines.filter(l => matches([l.article,l.sku,l.item_group])).map(l => <tr key={l.id}>{[l.item_group,l.article,l.unit].map((v,i) => <td key={i} style={{padding:8}}>{v}{i === 1 && (l.batches || []).map(b => <div key={b.id} style={{marginTop:6,fontSize:12}}>Batch {b.batch_number || 'Unlabelled'} · Expiry {b.expiry_date || '—'} {editable && row.status === 'counting' ? <input aria-label={'Batch quantity '+b.id} type="number" min="0" step="0.0001" value={batchCounts[b.id] ?? ''} onChange={e => setBatchCounts(old => ({...old,[b.id]:e.target.value}))} style={{width:95}}/> : <span>Physical: {b.physical_quantity ?? '—'}{b.system_quantity !== undefined && ' · System: '+b.system_quantity}</span>}</div>)}</td>)}<td style={{padding:8}}>{editable && row.status === 'counting' ? <input aria-label={'Physical quantity '+l.article} inputMode="decimal" type="number" min="0" step="0.0001" value={counts[l.id] ?? ''} onChange={e => setCounts(old => ({...old,[l.id]:e.target.value}))} style={{width:110}}/> : l.physical_quantity ?? '—'}</td>
               {(row.status === 'submitted' || row.booked) && <>{[l.system_quantity,l.variance,l.unit_cost,l.variance_value,l.closing_value].map((v,i) => <td key={i} style={{padding:8}}>{v}</td>)}<td>{editable ? <input aria-label={'Investigation '+l.article} value={notes[l.id] ?? ''} onChange={e => setNotes(old => ({...old,[l.id]:e.target.value}))}/> : l.note}</td></>}
             </tr>)}
           </tbody></table></div>

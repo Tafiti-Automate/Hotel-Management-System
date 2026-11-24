@@ -537,7 +537,7 @@ class StoreKeeperAssignmentViewSet(CreatedByModelMixin, ModelViewSet):
 
 
 class InventoryBalanceViewSet(ReadOnlyModelViewSet):
-    queryset = InventoryBalance.objects.select_related("item", "store")
+    queryset = InventoryBalance.objects.select_related("item__category", "item__base_unit", "store__branch")
     serializer_class = InventoryBalanceSerializer
     filterset_fields = ("item", "store")
     search_fields = ("item__name", "item__sku", "store__name")

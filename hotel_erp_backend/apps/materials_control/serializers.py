@@ -78,6 +78,7 @@ class WasteRecordSerializer(CleanModelSerializer):
 
 
 class RecipeSerializer(CleanModelSerializer):
+    production_department_name = serializers.CharField(source="production_department.name", read_only=True, allow_null=True)
     outlet_name = serializers.CharField(source="outlet.name", read_only=True)
     total_cost = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     cost_per_yield = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)

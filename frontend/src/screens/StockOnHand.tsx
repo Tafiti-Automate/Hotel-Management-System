@@ -31,6 +31,7 @@ export default function StockOnHand() {
   const [unpostedGrns, setUnpostedGrns] = useState<Row[]>([])
   const [storeId, setStoreId] = useState('')
   const [query, setQuery] = useState('')
+  const [searchDraft, setSearchDraft] = useState('')
   const [articleId, setArticleId] = useState('')
   const [majorGroup, setMajorGroup] = useState('')
   const [category, setCategory] = useState('')
@@ -226,20 +227,21 @@ export default function StockOnHand() {
 
     <section className="soh-panel">
       <div className="soh-toolbar">
-        <div className="soh-search">
+        <form className="soh-search" onSubmit={(event) => { event.preventDefault(); setQuery(searchDraft) }}>
           <Icon name="search" size={17} />
           <input
             aria-label="Quickly find an article or SKU"
             list="soh-article-suggestions"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            value={searchDraft}
+            onChange={(event) => setSearchDraft(event.target.value)}
             placeholder="Quick find an article or SKU…"
           />
-          {query && <button className="soh-search-clear" type="button" aria-label="Clear article search" onClick={() => setQuery('')}><Icon name="close" size={15} /></button>}
+          {searchDraft && <button className="soh-search-clear" type="button" aria-label="Clear article search" onClick={() => { setQuery(''); setSearchDraft('') }}><Icon name="close" size={15} /></button>}
           <datalist id="soh-article-suggestions">
             {articleOptions.map((article) => <option key={article.id} value={article.label} />)}
           </datalist>
-        </div>
+        </form>
+        <button className="soh-filter" type="button" onClick={() => setQuery(searchDraft)}><Icon name="search" size={16} />Search</button>
         <select className="soh-store-select" value={storeId} onChange={(event) => setStoreId(event.target.value)}>
           <option value="">All stores</option>
           {storeOptions.map((store) => <option key={id(store.id)} value={id(store.id)}>{id(store.name)}</option>)}
@@ -276,26 +278,25 @@ export default function StockOnHand() {
             <div className="soh-table-wrap">
               <table className="soh-table">
                 <thead><tr>
-                  <th>Article</th><th>Store</th><th className="num">SOH</th><th className="num" title="Cumulative stock physically issued to departments or transferred out of this store; excludes pending reservations.">Issued / transferred</th><th className="num">Available</th><th>UOM</th><th className="num">Amount / unit</th><th className="num">{evaluation === 'exp' ? 'Expiry value' : evaluation === 'epi' ? 'EPI value' : evaluation === 'price' ? 'Price value' : 'AVE value'}</th><th>Status</th>
+                  <th>Article</th><th>Store</th><th className="num" title="Cumulative stock physically issued to departments or transferred out of this store; excludes pending reservations.">Issued / transferred</th><th className="num">Available</th><th>UOM</th><th className="num">Amount / unit</th><th className="num">{evaluation === 'exp' ? 'Expiry value' : evaluation === 'epi' ? 'EPI value' : evaluation === 'price' ? 'Price value' : 'AVE value'}</th><th>Status</th>
                 </tr></thead>
                 <tbody>{visible.map((row) => <tr key={id(row.id)} onClick={() => setSelected(row)}>
                   <td><strong>{id(row.item_name) || 'Article'}</strong><span>{id(row.item_sku) || '—'}{row.category_name ? ` · ${id(row.category_name)}` : ''}</span></td>
                   <td><strong>{id(row.store_name) || 'Store'}</strong><span>{id(row.branch_name)}</span></td>
-                  <td className="num strong">{displayQuantity(row, row.quantity_in_stock)}</td>
                   <td className="num">{displayQuantity(row, row.issued_transferred_quantity)}</td>
                   <td className="num strong">{displayQuantity(row, row.available_quantity)}</td>
                   <td>{displayUnit(row)}</td>
-                  <td className="num">{money(num(row.unit_amount))}</td>
+                  <td className="num">{money(num(row.unit_amount) * (articleUnit(row) ? num(articleUnit(row)?.conversionFactor) : 1))}</td>
                   <td className="num value">{money(num(row.total_value))}</td>
                   <td><StockStatus row={row} /></td>
                 </tr>)}</tbody>
-                <tfoot><tr><td colSpan={7}>Total value of displayed Stock on Hand</td><td className="num">{money(inventoryValue)}</td><td /></tr></tfoot>
+                <tfoot><tr><td colSpan={6}>Total value of displayed stock</td><td className="num">{money(inventoryValue)}</td><td /></tr></tfoot>
               </table>
             </div>
 
             <div className="soh-mobile-list">{visible.map((row) => <button className="soh-mobile-card" key={id(row.id)} onClick={() => setSelected(row)}>
               <div className="soh-mobile-head"><div><strong>{id(row.item_name) || 'Article'}</strong><span>{id(row.item_sku)} · {id(row.store_name)}</span></div><StockStatus row={row} /></div>
-              <div className="soh-mobile-metrics"><Metric label="SOH" value={`${displayQuantity(row, row.quantity_in_stock)} ${displayUnit(row)}`} /><Metric label="Available" value={displayQuantity(row, row.available_quantity)} /><Metric label="Amount / unit" value={money(num(row.unit_amount))} /><Metric label="Total" value={money(num(row.total_value))} /></div>
+              <div className="soh-mobile-metrics"><Metric label="Issued / transferred" value={`${displayQuantity(row, row.issued_transferred_quantity)} ${displayUnit(row)}`} /><Metric label="Available" value={displayQuantity(row, row.available_quantity)} /><Metric label="Amount / unit" value={money(num(row.unit_amount) * (articleUnit(row) ? num(articleUnit(row)?.conversionFactor) : 1))} /><Metric label="Total" value={money(num(row.total_value))} /></div>
             </button>)}</div>
           </>}
     </section>
@@ -303,20 +304,19 @@ export default function StockOnHand() {
     {selected && <><button className="soh-drawer-backdrop" aria-label="Close stock details" onClick={() => setSelected(null)} /><aside className="soh-drawer">
       <div className="soh-drawer-head"><div><span>Stock balance</span><h2>{id(selected.item_name)}</h2><p>{id(selected.item_sku)} · {id(selected.store_name)}</p></div><button onClick={() => setSelected(null)} aria-label="Close"><Icon name="close" size={18} /></button></div>
       <div className="soh-drawer-grid">
-        <Detail label="Stock on Hand" value={`${displayQuantity(selected, selected.quantity_in_stock)} ${displayUnit(selected)}`} />
         <Detail label="Reserved (pending allocation)" value={displayQuantity(selected, selected.quantity_reserved)} />
         <Detail label="Quarantined (supplier returns)" value={displayQuantity(selected, selected.quantity_quarantined)} />
         <Detail label="Issued / transferred to date" value={displayQuantity(selected, selected.issued_transferred_quantity)} />
         <Detail label="Available" value={displayQuantity(selected, selected.available_quantity)} />
-        <Detail label="Amount / unit" value={money(num(selected.unit_amount))} />
+        <Detail label="Amount / unit" value={money(num(selected.unit_amount) * (articleUnit(selected) ? num(articleUnit(selected)?.conversionFactor) : 1))} />
         <Detail label="Total stock value" value={money(num(selected.total_value))} strong />
         <Detail label="Available value" value={money(num(selected.available_value))} />
         <Detail label="Reorder level" value={qty(selected.reorder_level)} />
         <Detail label="Last received" value={id(selected.last_received_date) || '—'} />
         <Detail label="Last balance update" value={updatedAt(selected.last_updated)} />
-        <Detail label="Cost basis" value="Weighted current GRN batch cost" />
+        <Detail label="Cost basis" value="Recorded store weighted-average cost" />
       </div>
-      <div className="soh-drawer-note"><Icon name="info" size={16} /><span>Issued / transferred is cumulative outbound movement, not currently reserved stock. Reserved and quarantined stock remain physically on hand and reduce Available quantity. Cost is weighted from the remaining posted GRN batches.</span></div>
+      <div className="soh-drawer-note"><Icon name="info" size={16} /><span>Issued / transferred is cumulative outbound movement, not currently reserved stock. Reserved and quarantined stock remain physically on hand and reduce Available quantity. Cost uses the recorded store weighted-average cost.</span></div>
     </aside></>}
   </div>
 }
