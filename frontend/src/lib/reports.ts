@@ -297,6 +297,11 @@ const summaryAmounts: Record<string, { key: string; label: string }[]> = {
   valuation: [{ key: 'stock_value', label: 'Stock value' }],
   directWorkspace: [{ key: 'value', label: 'Recorded receipt value' }],
   monthlyReport: [{ key: 'sales', label: 'Sales' }, { key: 'collected', label: 'Collected' }, { key: 'outstanding', label: 'Outstanding' }],
+  costOfSalesLocation: [{ key:'sales',label:'Net POS sales' }, { key:'cogs',label:'Recorded COGS' }, {key:'profit',label:'Gross contribution'}],
+  warehouseStatistics: [{key:'value',label:'Stock value'}],
+  majorGroupLists: [{key:'value',label:'Stock value'}],
+  receiptsJournal: [{key:'value',label:'Received value'}],
+  supplierInvoices: [{key:'subtotal',label:'Subtotal'}, {key:'tax',label:'Tax'}, {key:'total',label:'Invoice total'}],
 }
 const groupLabels = ['department', 'store', 'supplier', 'status', 'receipt status', 'posting', 'location', 'category', 'major group', 'document', 'source', 'month', 'group', 'item', 'article']
 
@@ -317,23 +322,19 @@ export function presentReport(source: BuiltReport, reportId: string, search: str
   const group = options.find(option => option.index === groupIndex) || options[0]
   const lineAmount = rows.some(row => row.data && 'line_value' in row.data)
   const candidates = lineAmount ? [{ key: 'line_value', label: 'Recorded line value' }] : (summaryAmounts[reportId] || [])
-  const amounts = candidates.filter(field =>
-    rows.length > 0 && rows.every(row => {
-      const value = row.data?.[field.key]
-      return value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value))
-    })
-  )
+  const amounts = candidates.filter(field => rows.some(row => row.data && field.key in row.data))
+  const validAmount = (value: unknown) => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value))
   const articleGrouped = group?.label.toLowerCase() === 'article' && rows.every(row => row.data?.article && row.data?.unit)
   const quantities = articleGrouped ? [
     {key:'requested',label:'Requested qty'}, {key:'approved',label:'Approved qty'}, {key:'issued',label:'Issued qty'},
     {key:'ordered',label:'Ordered qty'}, {key:'delivered',label:'Delivered qty'}, {key:'accepted',label:'Accepted qty'}, {key:'rejected',label:'Rejected qty'},
   ].filter(field => rows.length && rows.every(row => row.data?.[field.key] != null && row.data[field.key] !== '' && Number.isFinite(Number(row.data[field.key])))) : []
-  const groups = new Map<string, {count: number; amounts: number[]; quantities: number[]}>()
+  const groups = new Map<string, {count: number; amounts: number[]; missing: boolean[]; quantities: number[]}>()
   for (const row of rows) {
     const key = articleGrouped ? [row.data?.article, row.data?.sku, row.data?.unit].filter(Boolean).join(' · ') : group ? row.cells[group.index]?.text || 'Not specified' : 'All matching records'
-    const bucket = groups.get(key) || {count: 0, amounts: amounts.map(() => 0), quantities: quantities.map(() => 0)}
+    const bucket = groups.get(key) || {count: 0, amounts: amounts.map(() => 0), missing: amounts.map(() => false), quantities: quantities.map(() => 0)}
     bucket.count += 1
-    amounts.forEach((field, i) => { bucket.amounts[i] += Number(row.data?.[field.key]) })
+    amounts.forEach((field, i) => { const value = row.data?.[field.key]; if (validAmount(value)) bucket.amounts[i] += Number(value); else bucket.missing[i] = true })
     quantities.forEach((field, i) => { bucket.quantities[i] += Number(row.data?.[field.key]) })
     groups.set(key, bucket)
   }
@@ -341,15 +342,15 @@ export function presentReport(source: BuiltReport, reportId: string, search: str
     ...source,
     title: source.title + ' — Summary',
     subtitle: 'Grouped report records in the same authorized and filtered scope. ' +
-      (amounts.length || quantities.length ? 'Only additive recorded amounts and same-article, same-unit quantities are summarized.' : 'Record counts only; non-additive quantities, costs and rates are not totaled.'),
+      (amounts.length || quantities.length ? 'Only additive recorded amounts and same-article, same-unit quantities are summarized. Incomplete amounts are not reported as zero.' : 'Record counts only; non-additive quantities, costs and rates are not totaled.'),
     grid: ['minmax(200px, 1.4fr)', 'minmax(100px, .7fr)', ...quantities.map(() => 'minmax(120px, 1fr)'), ...amounts.map(() => 'minmax(140px, 1fr)')].join(' '),
     columns: head([{ t: group?.label || 'Scope' }, { t: 'Records', a: 'right' }, ...quantities.map(field => ({t: field.label, a: 'right' as const})), ...amounts.map(field => ({t: field.label, a: 'right' as const}))]),
     rows: Array.from(groups.entries()).sort(([left], [right]) => left.localeCompare(right)).map(([key, bucket]) => ({
-      cells: [rcell(key, undefined, true), rcell(bucket.count, 'right'), ...bucket.quantities.map(quantity => rcell(quantity.toFixed(4), 'right')), ...bucket.amounts.map(amount => rcell(money(amount), 'right'))],
+      cells: [rcell(key, undefined, true), rcell(bucket.count, 'right'), ...bucket.quantities.map(quantity => rcell(quantity.toFixed(4), 'right')), ...bucket.amounts.map((amount,i) => rcell(bucket.missing[i] ? 'Not available' : money(amount), 'right'))],
     })),
     hasTotals: groups.size > 0,
     totals: [rcell('Total matching records', undefined, true), rcell(rows.length, 'right'),
       ...quantities.map(() => rcell('—', 'right')),
-      ...amounts.map((field) => rcell(money(rows.reduce((total, row) => total + Number(row.data?.[field.key]), 0)), 'right'))],
+      ...amounts.map((field) => rcell(rows.every(row => validAmount(row.data?.[field.key])) ? money(rows.reduce((total, row) => total + Number(row.data?.[field.key]), 0)) : 'Not available', 'right'))],
   }
 }

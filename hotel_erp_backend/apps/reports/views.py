@@ -252,10 +252,10 @@ def apply_store_scope(queryset, request, *, store_field="store"):
     roles = user_role_names(request.user)
 
     if is_report_administrator(request.user):
-        if store_id:
-            return queryset.filter(**{f"{store_field}_id": store_id})
         if branch_id:
-            return queryset.filter(**{f"{store_field}__branch_id": branch_id})
+            queryset = queryset.filter(**{f"{store_field}__branch_id": branch_id})
+        if store_id:
+            queryset = queryset.filter(**{f"{store_field}_id": store_id})
         return queryset
 
     if "Store Keeper" in roles:
@@ -299,11 +299,23 @@ def apply_date_scope(queryset, request, *, field="created_at"):
         if value is None:
             raise ValidationError({parameter: "Enter a valid date in YYYY-MM-DD format."})
         suffix = "gte" if parameter == "date_from" else "lte"
-        filters[f"accounting_date__{suffix}" if accounting else f"{field}__{lookup}__{suffix}"] = value
+        field_type = queryset.model
+        path = field.split("__")
+        for component in path[:-1]:
+            field_type = field_type._meta.get_field(component).related_model
+        date_field = field_type._meta.get_field(path[-1])
+        from django.db.models import DateField, DateTimeField
+        is_date = isinstance(date_field, DateField) and not isinstance(date_field, DateTimeField)
+        filters[f"accounting_date__{suffix}" if accounting else f"{field}__{suffix}" if is_date else f"{field}__{lookup}__{suffix}"] = value
     return queryset.filter(**filters)
 
 
 def weighted_average_cost(item, store):
+    # The inventory posting engine maintains WAC even for non-batch stock.
+    # Legacy batch-only records are a fallback, not a replacement for WAC.
+    cost = InventoryBalance.objects.filter(item=item, store=store).values_list("weighted_average_cost", flat=True).first()
+    if cost is not None and cost > 0:
+        return cost
     batches = InventoryBatch.objects.filter(
         item=item,
         store=store,
@@ -972,7 +984,7 @@ class MaterialsAnalysisReportView(ReportAPIView):
             "articlePotentialUsage": self.article_potential_usage,
             "menuEngineering": self.sales_statistics,
             "requirementsUsage": self.requirements_usage,
-            "costOfSalesLocation": self.sales_by_store,
+            "costOfSalesLocation": self.pos_cost_of_sales,
             "warehouseStatistics": self.warehouse_statistics,
             "costCenterComparison": self.sales_by_store,
             "dailyFood": self.sales_by_category,
@@ -1266,6 +1278,62 @@ class MaterialsAnalysisReportView(ReportAPIView):
         response.data["subtitle"] = "Current stock requirements derived from configured reorder thresholds and live stock on hand."
         return response
 
+    def pos_cost_of_sales(self, request, report_kind):
+        """Posted POS recipe cost evidence; never infer a cost from turnover."""
+        from apps.materials_control.models import POSSaleLine
+        lines = apply_store_scope(
+            POSSaleLine.objects.select_related("batch__outlet", "mapping__recipe")
+            .filter(inventory_changes_applied=True),
+            request, store_field="batch__outlet",
+        )
+        lines = apply_date_scope(lines, request, field="batch__business_date")
+        details, grouped = [], {}
+        for line in lines.order_by("batch__business_date", "batch__outlet__name", "external_reference"):
+            store = str(line.batch.outlet)
+            cost = line.cost_of_goods_sold
+            group = grouped.setdefault(str(line.batch.outlet_id), {
+                "store": store, "lines": 0, "sales": Decimal("0.00"), "cost": Decimal("0.00"), "unpriced": 0,
+            })
+            group["lines"] += 1
+            group["sales"] += line.net_sales
+            if cost is None:
+                group["unpriced"] += 1
+            else:
+                group["cost"] += cost
+            details.append({
+                "store": store, "date": line.batch.business_date, "reference": line.external_reference,
+                "article": line.mapping.recipe.name if line.mapping_id else line.external_name or line.external_plu,
+                "sku": line.external_plu, "unit": "portion", "quantity": str(line.quantity),
+                "sales": decimal_string(line.net_sales), "cogs": decimal_string(cost) if cost is not None else None,
+                "profit": decimal_string(line.net_sales - cost) if cost is not None else None,
+                "status": "Valued" if cost is not None else "Missing historical cost",
+            })
+        rows = [{
+            "store": row["store"], "lines": row["lines"], "sales": decimal_string(row["sales"]),
+            "cogs": decimal_string(row["cost"]) if not row["unpriced"] else None,
+            "profit": decimal_string(row["sales"] - row["cost"]) if not row["unpriced"] else None,
+            "unpriced": row["unpriced"],
+        } for row in grouped.values()]
+        def column(key, label, kind="text"):
+            return {"key": key, "label": label, "kind": kind}
+        response = analysis_response(
+            "Cost of Sales by Location (POS recipes)",
+            "Processed POS sales and captured recipe COGS. Unvalued lines suppress location-level COGS and contribution; not a complete departmental P&L.",
+            [column("store", "Store"), column("lines", "Lines", "number"), column("sales", "Net sales", "money"),
+             column("cogs", "Recorded COGS", "money"), column("profit", "Gross contribution", "money"),
+             column("unpriced", "Missing cost", "number")], rows,
+            notice="Department consumption and non-recipe sales are separate cost sources. Do not treat this report as complete hotel cost of sales.",
+        )
+        response.data["detail_columns"] = [
+            column("store", "Store"), column("date", "Date"), column("reference", "Reference"),
+            column("article", "Recipe"), column("sku", "PLU"), column("unit", "UOM"),
+            column("quantity", "Portions", "number"), column("sales", "Net sales", "money"),
+            column("cogs", "Recorded COGS", "money"), column("profit", "Gross contribution", "money"),
+            column("status", "Status"),
+        ]
+        response.data["detail_results"] = details
+        return response
+
     def sales_by_store(self, request, report_kind):
         grouped = {}
         for sale in analysis_sales(request).filter(is_cancelled=False):
@@ -1278,13 +1346,48 @@ class MaterialsAnalysisReportView(ReportAPIView):
         return analysis_response(title, subtitle, [{"key": "store", "label": "Store / cost center"}, {"key": "receipts", "label": "Receipts", "kind": "number"}, {"key": "sales", "label": "Sales", "kind": "money"}, {"key": "paid", "label": "Collected", "kind": "money"}, {"key": "outstanding", "label": "Outstanding", "kind": "money"}], rows)
 
     def warehouse_statistics(self, request, report_kind):
-        balances = apply_store_scope(InventoryBalance.objects.select_related("item", "store"), request)
-        grouped = {}
+        balances = apply_store_scope(InventoryBalance.objects.select_related("item__base_unit", "item__category", "store"), request)
+        return self._stock_group_report(balances, by_group=False)
+
+    def _stock_group_report(self, balances, *, by_group):
+        grouped, details = {}, []
         for balance in balances:
-            row = grouped.setdefault(str(balance.store_id), {"store": str(balance.store), "articles": 0, "on_hand": Decimal("0.00"), "reserved": Decimal("0.00"), "value": Decimal("0.00"), "below_reorder": 0})
-            row["articles"] += 1; row["on_hand"] += balance.quantity_in_stock; row["reserved"] += balance.quantity_reserved; row["value"] += balance.quantity_in_stock * weighted_average_cost(balance.item, balance.store); row["below_reorder"] += int(balance.is_below_reorder)
-        rows = [{**row, "on_hand": decimal_string(row["on_hand"]), "reserved": decimal_string(row["reserved"]), "value": decimal_string(row["value"])} for row in grouped.values()]
-        return analysis_response("Warehouse Statistics", "Live stock position, value and reorder exposure by store.", [{"key": "store", "label": "Store"}, {"key": "articles", "label": "Articles", "kind": "number"}, {"key": "on_hand", "label": "SOH", "kind": "number"}, {"key": "reserved", "label": "Reserved", "kind": "number"}, {"key": "value", "label": "Stock value", "kind": "money"}, {"key": "below_reorder", "label": "Below reorder", "kind": "number"}], rows)
+            group = balance.item.category.parent or balance.item.category
+            group_key = str(group.pk if by_group else balance.store_id)
+            key, label = ("group", str(group)) if by_group else ("store", str(balance.store))
+            bucket = grouped.setdefault(group_key, {key: label, "articles": 0, "value": Decimal("0.00"), "missing": 0, "below_reorder": 0})
+            cost = weighted_average_cost(balance.item, balance.store)
+            known = balance.quantity_in_stock == 0 or cost > 0
+            value = balance.quantity_in_stock * cost
+            bucket["articles"] += 1
+            bucket["value"] += value
+            bucket["missing"] += int(not known)
+            bucket["below_reorder"] += int(balance.is_below_reorder)
+            details.append({
+                "store": str(balance.store), "group": str(group), "article": balance.item.name, "sku": balance.item.sku,
+                "unit": balance.item.base_unit.abbreviation if balance.item.base_unit_id else balance.item.unit,
+                "available": str(balance.available_quantity), "reserved": str(balance.quantity_reserved),
+                "value": decimal_string(value) if known else None,
+                "status": "Below reorder" if balance.is_below_reorder else "Available",
+            })
+        key, heading = ("group", "Major group") if by_group else ("store", "Store")
+        rows = [{**row, "value": decimal_string(row["value"]) if not row["missing"] else None} for row in grouped.values()]
+        response = analysis_response(
+            "Major Group Lists" if by_group else "Warehouse Statistics",
+            "Inventory article positions and recorded valuation. Unlike units are never added together; missing costs suppress group valuation.",
+            [{"key": key, "label": heading}, {"key": "articles", "label": "Article positions", "kind": "number"},
+             {"key": "value", "label": "Stock value", "kind": "money"}, {"key": "missing", "label": "Missing valuation", "kind": "number"},
+             {"key": "below_reorder", "label": "Below reorder", "kind": "number"}], rows,
+        )
+        response.data["detail_columns"] = [
+            {"key": k, "label": label, "kind": kind} for k, label, kind in (
+                ("store", "Store", "text"), ("group", "Major group", "text"), ("article", "Article", "text"),
+                ("sku", "SKU", "text"), ("unit", "UOM", "text"), ("available", "Available", "number"),
+                ("reserved", "Reserved", "number"), ("value", "Stock value", "money"), ("status", "Status", "text"),
+            )
+        ]
+        response.data["detail_results"] = details
+        return response
 
     def sales_by_category(self, request, report_kind):
         sale_ids = analysis_sales(request).filter(inventory_changes_applied=True, is_cancelled=False).values_list("id", flat=True)
@@ -1300,14 +1403,8 @@ class MaterialsAnalysisReportView(ReportAPIView):
         return analysis_response(title, subtitle, [{"key": "group", "label": "Major group"}, {"key": "articles", "label": "Articles", "kind": "number"}, {"key": "quantity", "label": "Sold qty", "kind": "number"}, {"key": "sales", "label": "Sales value", "kind": "money"}], rows)
 
     def major_group_lists(self, request, report_kind):
-        balances = apply_store_scope(InventoryBalance.objects.select_related("item__category", "store"), request)
-        grouped = {}
-        for balance in balances:
-            group = balance.item.category.parent or balance.item.category
-            row = grouped.setdefault(str(group.id), {"group": str(group), "articles": 0, "on_hand": Decimal("0.00"), "value": Decimal("0.00")})
-            row["articles"] += 1; row["on_hand"] += balance.quantity_in_stock; row["value"] += balance.quantity_in_stock * weighted_average_cost(balance.item, balance.store)
-        rows = [{**row, "on_hand": decimal_string(row["on_hand"]), "value": decimal_string(row["value"])} for row in grouped.values()]
-        return analysis_response("Major Group Lists", "Current inventory count and weighted value by Major Group.", [{"key": "group", "label": "Major group"}, {"key": "articles", "label": "Articles", "kind": "number"}, {"key": "on_hand", "label": "SOH", "kind": "number"}, {"key": "value", "label": "Stock value", "kind": "money"}], rows)
+        balances = apply_store_scope(InventoryBalance.objects.select_related("item__category", "item__base_unit", "store"), request)
+        return self._stock_group_report(balances, by_group=True)
 
     def fb_result(self, request, report_kind):
         sales = analysis_sales(request).filter(is_cancelled=False)

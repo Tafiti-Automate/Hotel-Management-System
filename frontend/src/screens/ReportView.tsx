@@ -115,7 +115,7 @@ export default function ReportView({ selectedReportId }: { selectedReportId?: st
 
   const registerReport = operationalReportId ? buildOperationalReport(operationalReportId, livePayload) : buildReport(reportId, filteredData)
   const sourceReport = operationalReportId && Array.isArray(livePayload.detail_columns)
-    ? buildOperationalReport(operationalReportId, {title: registerReport.title, subtitle: 'Article-level records from the permitted document register', columns: livePayload.detail_columns, results: livePayload.detail_results})
+    ? buildOperationalReport(operationalReportId, {title: registerReport.title, subtitle: registerReport.subtitle + ' · Detailed records', notice: livePayload.notice, columns: livePayload.detail_columns, results: livePayload.detail_results})
     : registerReport
   const groupOptions = summaryGroupOptions(sourceReport)
   const groupValue = groupOptions.some(option => option.index === groupIndex) ? groupIndex : groupOptions[0]?.index ?? -1

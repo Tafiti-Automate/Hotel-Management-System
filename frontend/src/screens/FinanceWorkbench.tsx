@@ -1,3 +1,4 @@
+import SearchableSelect from '../components/SearchableSelect'
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { Icon } from '../components/Icon'
 import { HelpLabel } from '../components/HelpLabel'
@@ -334,7 +335,7 @@ function Panel({ title, note, children }: { title: string; note: string; childre
 function Field({ label, children }: { label: string; children: ReactNode }) { return <label style={{ display: 'block', marginBottom: 10 }}><HelpLabel label={label} style={labelStyle} />{children}</label> }
 function Two({ children }: { children: ReactNode }) { return <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>{children}</div> }
 function Input({ value, change, type = 'text' }: { value: unknown; change: (value: string) => void; type?: string }) { return <input type={type} value={sid(value)} onChange={(e) => change(e.target.value)} style={control} /> }
-function Select({ value, change, rows, label = (row: Row) => sid(row.name), optional = false }: { value: unknown; change: (value: string) => void; rows: Row[]; label?: (row: Row) => string; optional?: boolean }) { return <select value={sid(value)} onChange={(e) => change(e.target.value)} style={control}><option value="">{optional ? 'None' : 'Select…'}</option>{rows.map((row) => <option key={sid(row.id)} value={sid(row.id)}>{label(row)}</option>)}</select> }
+function Select({ value, change, rows, label = (row: Row) => sid(row.name), optional = false }: { value: unknown; change: (value: string) => void; rows: Row[]; label?: (row: Row) => string; optional?: boolean }) { return <SearchableSelect value={sid(value)} onChange={change} style={control} placeholder={optional ? 'None' : 'Select…'} options={rows.map(row=>({value:sid(row.id),label:label(row)}))}/> }
 function Action({ children, click, disabled, tone = 'accent' }: any) { return <button onClick={click} disabled={disabled} style={{ ...action, opacity: disabled ? .45 : 1, background: tone === 'good' ? 'var(--good)' : 'var(--accent)' }}>{children}</button> }
 function Rule() { return <div style={{ borderTop: '1px solid var(--border)', margin: '16px 0' }} /> }
 

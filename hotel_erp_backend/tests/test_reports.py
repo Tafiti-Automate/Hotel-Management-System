@@ -204,3 +204,44 @@ def test_return_reconciliation_register_enforces_role_and_valid_type():
     denied = APIClient()
     denied.force_authenticate(ap)
     assert denied.get("/api/v1/reports/return-reconciliation/?type=supplier").status_code == 403
+
+
+@pytest.mark.django_db
+def test_warehouse_reports_keep_unlike_units_separate_and_use_posted_wac():
+    user = get_user_model().objects.create_superuser(username="wh-wac", employee_code="WH-WAC", password="test-password")
+    branch = Branch.objects.create(name="Warehouse property")
+    store = StoreLocation.objects.create(branch=branch, name="Warehouse")
+    category = Category.objects.create(name="Warehouse supplies")
+    for name, unit, quantity, cost in (("Oil", "litre", "3.1250", "1000.0000"), ("Soap", "each", "4", "500.0000")):
+        item = Item.objects.create(category=category, name=name, sku="WH-"+name, unit=unit)
+        InventoryBalance.objects.create(item=item, store=store, quantity_in_stock=Decimal(quantity), weighted_average_cost=Decimal(cost))
+    client = APIClient()
+    client.force_authenticate(user)
+    response = client.get("/api/v1/reports/analysis/warehouseStatistics/")
+    assert response.status_code == 200, response.data
+    assert response.data["results"][0]["value"] == "5125.00"
+    assert "on_hand" not in response.data["results"][0]
+    assert {row["unit"] for row in response.data["detail_results"]} == {"litre", "each"}
+    assert len(response.data["detail_results"]) == 2
+
+
+@pytest.mark.django_db
+def test_pos_cost_report_uses_frozen_cost_and_never_invents_missing_values():
+    from datetime import date
+    from apps.materials_control.models import POSImportBatch, POSSaleLine
+    user = get_user_model().objects.create_superuser(username="pos-cost-report", employee_code="POS-COST-RPT", password="test-password")
+    branch = Branch.objects.create(name="POS cost property")
+    store = StoreLocation.objects.create(branch=branch, name="Restaurant")
+    batch = POSImportBatch.objects.create(outlet=store, business_date=date(2026,11,24), source_reference="Z1")
+    for ref, cost in (("A", Decimal("400.00")), ("B", None)):
+        POSSaleLine.objects.create(batch=batch, external_plu=ref, external_reference=ref, quantity=Decimal("1"),
+                                   net_sales=Decimal("1000.00"), cost_of_goods_sold=cost, inventory_changes_applied=True)
+    client = APIClient()
+    client.force_authenticate(user)
+    response = client.get("/api/v1/reports/analysis/costOfSalesLocation/?date_from=2026-11-24&date_to=2026-11-24")
+    assert response.status_code == 200, response.data
+    row = response.data["results"][0]
+    assert row["sales"] == "2000.00"
+    assert row["cogs"] is None and row["profit"] is None and row["unpriced"] == 1
+    assert [detail["cogs"] for detail in response.data["detail_results"]] == ["400.00", None]
+    assert client.get("/api/v1/reports/analysis/costOfSalesLocation/?date_from=2026-11-25").data["results"] == []

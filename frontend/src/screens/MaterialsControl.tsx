@@ -1,3 +1,4 @@
+import SearchableSelect from '../components/SearchableSelect'
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Icon } from '../components/Icon'
 import {
@@ -183,8 +184,8 @@ function RecipeControl() {
         <div className="mc-card-head"><div><h2>New recipe standard</h2><p>Create the yield and food-cost target, then add its ingredients.</p></div><Icon name="restaurant_menu" size={20} /></div>
         <div className="mc-fields two">
           <label>Recipe name *<input required value={recipe.name} onChange={(event) => setRecipe({ ...recipe, name: event.target.value })} /></label>
-          <label>Production department *<select required value={recipe.production_department} onChange={(event) => setRecipe({ ...recipe, production_department: event.target.value })}><option value="">Select department</option>{(app.data.departments as Row[]).filter(row => row.is_active !== false).map((row) => <option key={id(row.id)} value={id(row.id)}>{id(row.name)}</option>)}</select></label>
-          <label>Ingredient stock source *<select required value={recipe.outlet} onChange={(event) => setRecipe({ ...recipe, outlet: event.target.value })}><option value="">Select source store</option>{(app.data.locations as Row[]).filter(row => row.is_active !== false && !row.is_virtual_transit).map((row) => <option key={id(row.id)} value={id(row.id)}>{id(row.name)}</option>)}</select><small>Physical source for ingredient costing and POS stock depletion; does not change department ownership.</small></label>
+          <label>Production department *<SearchableSelect required value={recipe.production_department} onChange={value=>setRecipe({...recipe,production_department:value})} placeholder="Select department" searchLabel="Search departments" options={(app.data.departments as Row[]).filter(row=>row.is_active!==false).map(row=>({value:id(row.id),label:id(row.name)}))}/></label>
+          <label>Ingredient stock source *<SearchableSelect required value={recipe.outlet} onChange={value=>setRecipe({...recipe,outlet:value})} placeholder="Select source store" searchLabel="Search stores" options={(app.data.locations as Row[]).filter(row=>row.is_active!==false&&!row.is_virtual_transit).map(row=>({value:id(row.id),label:id(row.name)}))}/><small>Physical source for ingredient costing and POS stock depletion; does not change department ownership.</small></label>
           <label>Yield quantity *<input required min="0.0001" step="0.0001" type="number" value={recipe.yield_quantity} onChange={(event) => setRecipe({ ...recipe, yield_quantity: event.target.value })} /></label>
           <label>Yield unit *<input required value={recipe.yield_unit} onChange={(event) => setRecipe({ ...recipe, yield_unit: event.target.value })} /></label>
           <label>Target food cost % *<input required min="0.01" max="100" step="0.01" type="number" value={recipe.target_food_cost_percent} onChange={(event) => setRecipe({ ...recipe, target_food_cost_percent: event.target.value })} /></label>

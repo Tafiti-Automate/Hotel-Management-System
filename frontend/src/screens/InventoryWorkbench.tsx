@@ -1,3 +1,4 @@
+import SearchableSelect from '../components/SearchableSelect'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Icon } from '../components/Icon'
 import { HelpLabel } from '../components/HelpLabel'
@@ -1361,7 +1362,7 @@ function StablePicker({ value, change, rows, label = (r: Row) => id(r.name), emp
   </div>
 }
 
-function Select({ value, change, rows, label = (r: Row) => id(r.name), optional = false, emptyLabel, disabled = false }: { value: unknown; change: (value: string) => void; rows: Row[]; label?: (row: Row) => string; optional?: boolean; emptyLabel?: string; disabled?: boolean }) { return <select className="inventory-control" disabled={disabled} value={id(value)} onChange={(e) => change(e.target.value)} style={{ ...control, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? .65 : 1 }}><option value="">{emptyLabel || (optional ? 'None' : 'Select…')}</option>{rows.map((row) => <option key={id(row.id)} value={id(row.id)}>{label(row)}</option>)}</select> }
+function Select({ value, change, rows, label = (r: Row) => id(r.name), optional = false, emptyLabel, disabled = false }: { value: unknown; change: (value: string) => void; rows: Row[]; label?: (row: Row) => string; optional?: boolean; emptyLabel?: string; disabled?: boolean }) { return <SearchableSelect className="inventory-control" disabled={disabled} value={id(value)} onChange={change} style={control} placeholder={emptyLabel || (optional ? 'None' : 'Select…')} options={rows.map(row=>({value:id(row.id),label:label(row)}))}/> }
 function Action({ children, click, disabled, tone = 'accent' }: any) { return <button className="inventory-primary-action" type="button" onClick={click} disabled={disabled} style={{ ...action, opacity: disabled ? .45 : 1, background: tone === 'good' ? 'var(--good)' : tone === 'danger' ? 'var(--bad)' : 'var(--accent)' }}>{children}</button> }
 function Rule() { return <div className="inventory-form-rule" style={{ borderTop: '1px solid var(--border)', margin: '16px 0' }} /> }
 function Hint({ children }: { children: ReactNode }) { return <div className="inventory-form-hint" role="note" style={{ padding: 9, color: 'var(--warn)', background: 'var(--warn-soft)', borderRadius: 6, fontSize: 11 }}>{children}</div> }

@@ -35,6 +35,7 @@ export default function EnterpriseTable<T extends { id?: string }>({
 }) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [search, setSearch] = useState('')
+  const [searchDraft, setSearchDraft] = useState('')
   const [selection, setSelection] = useState<RowSelectionState>({})
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize })
   const definitions = useMemo<ColumnDef<T>[]>(() => [
@@ -80,9 +81,13 @@ export default function EnterpriseTable<T extends { id?: string }>({
 
   return <section className="mc-dense-panel" aria-label={label}>
     <div className="mc-dense-toolbar tw:flex tw:items-center tw:justify-between tw:gap-3 tw:flex-wrap">
-      <div className="mc-search-wrap"><Icon name="search" size={15}/><input
-        aria-label={'Search ' + label} value={search} onChange={(event) => setSearch(event.target.value)}
+      <div style={{display:'flex',alignItems:'center',gap:6}}><div className="mc-search-wrap"><Icon name="search" size={15}/><input
+        aria-label={'Search ' + label} value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)}
+        onKeyDown={event=>{if(event.key==='Enter'){event.preventDefault();setSearch(searchDraft);setPagination(current=>({...current,pageIndex:0}))}}}
         placeholder={'Find ' + label.toLowerCase() + '…'} /></div>
+        <button type="button" className="mc-action" onClick={()=>{setSearch(searchDraft);setPagination(current=>({...current,pageIndex:0}))}}>Search</button>
+        {(search || searchDraft) && <button type="button" className="mc-action" onClick={()=>{setSearch('');setSearchDraft('');setPagination(current=>({...current,pageIndex:0}))}}>Clear</button>}
+      </div>
       <div className="mc-toolbar-end">{actions}<span className="mc-count">{table.getFilteredRowModel().rows.length.toLocaleString()} records</span>
         <span className="mc-key-hint">↑ ↓ Navigate · Enter Open</span></div>
     </div>
@@ -116,7 +121,7 @@ export default function EnterpriseTable<T extends { id?: string }>({
         <strong>{search ? 'No matching records' : emptyTitle}</strong>
         <p>{search ? 'Try another search term or clear the current search.' : emptyText}</p>
         {(search || onEmptyAction) && <button type="button" className="mc-action mc-action-primary" onClick={() => {
-          if (search) { setSearch(''); setPagination((current) => ({ ...current, pageIndex: 0 })) }
+          if (search) { setSearch(''); setSearchDraft(''); setPagination((current) => ({ ...current, pageIndex: 0 })) }
           else onEmptyAction?.()
         }}>{search ? 'Clear search' : emptyActionLabel || 'Refresh records'}</button>}
       </div></td></tr>}

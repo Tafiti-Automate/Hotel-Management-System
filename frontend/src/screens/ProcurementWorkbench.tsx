@@ -1,3 +1,4 @@
+import SearchableSelect from '../components/SearchableSelect'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Icon } from '../components/Icon'
 import ConfirmTransaction from '../components/ConfirmTransaction'
@@ -2180,7 +2181,7 @@ function SectionLabel({ children }: { children: ReactNode }) { return <div style
 function Two({ children }: { children: ReactNode }) { return <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9 }}>{children}</div> }
 function Input({ value, onChange, type = 'text', placeholder = '' }: { value: unknown; onChange: (value: string) => void; type?: string; placeholder?: string }) { return <input type={type} value={String(value ?? '')} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} style={control} /> }
 function Select({ value, onChange, rows, label = (row: Row) => id(row.name), optional = false }: { value: unknown; onChange: (value: string) => void; rows: Row[]; label?: (row: Row) => string; optional?: boolean }) {
-  return <select value={String(value ?? '')} onChange={(e) => onChange(e.target.value)} style={control}><option value="">{optional ? 'None' : 'Select…'}</option>{rows.map((row: Row) => <option key={id(row.id)} value={id(row.id)}>{label(row)}</option>)}</select>
+  return <SearchableSelect value={String(value ?? '')} onChange={onChange} style={control} placeholder={optional ? 'None' : 'Select…'} options={rows.map(row=>({value:id(row.id),label:label(row)}))}/>
 }
 function Action({ children, onClick, disabled, tone = 'accent' }: any) { return <button disabled={disabled} onClick={onClick} style={{ ...action, background: tone === 'good' ? 'var(--good)' : tone === 'danger' ? 'var(--bad)' : 'var(--accent)', opacity: disabled ? .45 : 1 }}>{children}</button> }
 function CompactAction({ children, onClick, disabled, tone = 'neutral' }: any) { return <button type="button" disabled={disabled} onClick={onClick} style={{ ...secondary, minWidth: 0, color: tone === 'danger' ? 'var(--bad)' : 'var(--text-muted)', borderColor: tone === 'danger' ? 'rgba(220,38,38,.35)' : 'var(--border)', opacity: disabled ? .45 : 1 }}>{children}</button> }
