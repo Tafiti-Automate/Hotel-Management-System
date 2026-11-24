@@ -158,6 +158,8 @@ EMAIL_USE_SSL = os.environ.get("EMAIL_USE_SSL", "False").lower() in {
 }
 EMAIL_TIMEOUT = int(os.environ.get("EMAIL_TIMEOUT", "20"))
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "procurement@localhost").strip()
+PASSWORD_RESET_FRONTEND_URL = os.environ.get("PASSWORD_RESET_FRONTEND_URL", "").strip()
+PASSWORD_RESET_TIMEOUT = int(os.environ.get("PASSWORD_RESET_TIMEOUT", "1800"))
 PROCUREMENT_MIN_QUOTATIONS = int(os.environ.get("PROCUREMENT_MIN_QUOTATIONS", "3"))
 PROCUREMENT_QUOTATION_THRESHOLD = float(
     os.environ.get("PROCUREMENT_QUOTATION_THRESHOLD", "1000000")
@@ -186,6 +188,8 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_THROTTLE_RATES": {
         "login": os.environ.get("LOGIN_THROTTLE_RATE", "10/min"),
+        "password_reset_request": "5/hour",
+        "password_reset_confirm": "10/hour",
     },
 }
 

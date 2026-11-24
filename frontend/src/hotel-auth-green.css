@@ -1,0 +1,25 @@
+.hotel-auth-page{min-height:100svh;display:grid;place-content:center;justify-items:center;padding:36px 24px;position:relative;overflow:hidden;background:linear-gradient(125deg,#e2f3ec,#bde4d3);color:#153a2d;font-family:Inter,Arial,sans-serif;isolation:isolate;box-sizing:border-box}
+.hotel-auth-page::before{content:"";position:absolute;z-index:-1;inset:16% -15% -60% -15%;background:#f5faf8;border-radius:0 100% 0 0;transform:rotate(12deg)}
+.hotel-auth-stage{position:relative;width:min(1060px,calc(100vw - 48px));min-height:clamp(460px,56vw,596px);display:grid;place-items:center;background:linear-gradient(150deg,#fff,#e1f4e9);overflow:hidden;box-shadow:0 24px 45px #155f4930}
+.hotel-auth-art{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.hotel-auth-brand{position:absolute;top:27px;left:32px;color:#fff;display:flex;align-items:center;gap:10px;font-size:23px;font-weight:400;letter-spacing:.25em;z-index:1}
+.hotel-auth-brand b{font-weight:700;letter-spacing:.1em}.hotel-auth-brand span{width:4px;height:26px;background:#6ed6a5}
+.hotel-auth-perspective{perspective:1200px;width:min(390px,calc(100% - 40px));position:relative;margin:76px 0 45px}
+.hotel-auth-flipper{display:grid;transform-style:preserve-3d;transition:transform .65s cubic-bezier(.22,.61,.36,1);transform:rotateY(0)}
+.hotel-auth-flipper.is-flipped{transform:rotateY(180deg)}
+.hotel-auth-card{grid-area:1/1;align-self:stretch;backface-visibility:hidden;-webkit-backface-visibility:hidden;padding:26px 28px;background:linear-gradient(145deg,#eef8f3,#e2f2eb);border:1px solid #ffffffb0;border-radius:15px;box-shadow:0 12px 28px #084d3829;box-sizing:border-box;min-width:0}
+.hotel-auth-back{transform:rotateY(180deg)}.hotel-auth-card[aria-hidden="true"]{pointer-events:none}
+.hotel-auth-card h1{font-size:20px;line-height:1.3;letter-spacing:-.035em;text-align:center;color:#084f39;font-weight:700;margin:0 0 23px}
+.hotel-auth-card form{display:grid;gap:7px}.hotel-auth-card label{font-size:12px;color:#156449;font-weight:600}
+.hotel-auth-card input:not([type=checkbox]){width:100%;height:41px;border:1px solid #d2e5dc;border-radius:6px;background:#fff;color:#183a30;padding:0 11px;font:inherit;font-size:13px;box-shadow:0 3px 7px #134a3710;box-sizing:border-box;margin-bottom:9px}
+.hotel-auth-card input::placeholder{color:#71877e}.hotel-auth-card input:focus-visible,.hotel-auth-card button:focus-visible{outline:2px solid #117d52;outline-offset:3px}
+.hotel-auth-password{position:relative}.hotel-auth-password input{padding-right:54px!important}.hotel-auth-password button{position:absolute;right:9px;top:10px}
+.hotel-auth-card button:not(.hotel-auth-submit){border:0;background:transparent;color:#075e40;font:inherit;font-size:12px;font-weight:700;cursor:pointer;padding:3px}
+.hotel-auth-options{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 13px;flex-wrap:wrap}
+.hotel-auth-options label{display:flex;align-items:center;gap:7px;color:#28433a;font-weight:400}.hotel-auth-options input{accent-color:#108253;width:16px;height:16px;margin:0}
+.hotel-auth-submit{width:100%;min-height:42px;margin-top:8px;border:0;border-radius:999px;background:linear-gradient(100deg,#11985e,#07573e);color:#fff;font:inherit;font-size:13px;font-weight:700;letter-spacing:.025em;cursor:pointer;box-shadow:0 4px 10px #0b6d4420}
+.hotel-auth-card button:disabled{opacity:.6;cursor:not-allowed}.hotel-auth-instruction{text-align:center;font-size:13px;line-height:1.55;color:#425f54;margin:-10px 0 22px}.hotel-auth-back-link{margin-top:10px;justify-self:center}
+.hotel-auth-notice,.hotel-auth-error{font-size:12px;line-height:1.5;padding:9px;border-radius:6px;margin:0 0 10px;background:#d4ede0;color:#12583b;overflow-wrap:anywhere}.hotel-auth-error{background:#fce7e7;color:#982b34}
+.hotel-auth-credit{color:#456c5c;margin-top:18px;font-size:11px}
+@media(max-width:600px){.hotel-auth-page{padding:18px 12px}.hotel-auth-stage{width:calc(100vw - 24px);min-height:550px}.hotel-auth-brand{top:23px;left:22px;font-size:19px}.hotel-auth-perspective{width:calc(100% - 32px);max-width:390px}.hotel-auth-card{padding:23px 20px}.hotel-auth-card h1{font-size:19px}}
+@media(prefers-reduced-motion:reduce){.hotel-auth-flipper{transition:none}}

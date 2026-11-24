@@ -46,6 +46,8 @@ import '../src/grn-reference-exact.css'
 /* Kalibu-style HR and payroll management: scoped to hr-workspace. */
 import '../src/hr-workspaces.css'
 
+import '../src/hotel-auth-green.css'
+
 export const metadata: Metadata = {
   title: 'Hotel ERP',
   description: 'Hotel operations, procurement, inventory, finance and administration workspace.',

@@ -1,4 +1,15 @@
+import logging
+from urllib.parse import urlencode, urlsplit
+from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth.tokens import default_token_generator
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.mail import send_mail
+from django.core.validators import validate_email
+from django.db import transaction
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Count
 from rest_framework import status
@@ -86,6 +97,11 @@ class LoginView(APIView):
             if candidate is not None:
                 user = authenticate(request, username=candidate.username, password=password)
 
+        if user is None and "@" in identifier:
+            candidates = list(User.objects.filter(email__iexact=identifier, is_active=True)[:2])
+            if len(candidates) == 1:
+                user = authenticate(request, username=candidates[0].username, password=password)
+
         if user is None or not user.is_active:
             record_audit(
                 action="login_failed",
@@ -121,6 +137,63 @@ class LoginView(APIView):
             created_by=user,
         )
         return Response({"token": token.key, "user": _user_payload(user, request)})
+
+
+class PasswordResetRequestView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "password_reset_request"
+
+    def post(self, request):
+        email = str(request.data.get("email", "")).strip()
+        try:
+            validate_email(email)
+        except DjangoValidationError:
+            return Response({"detail": "Enter a valid email address."}, status=400)
+        url = settings.PASSWORD_RESET_FRONTEND_URL
+        parsed = urlsplit(url)
+        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path.rstrip("/") != "/login" or not settings.EMAIL_HOST and settings.EMAIL_BACKEND.endswith("smtp.EmailBackend"):
+            return Response({"detail": "Email password recovery is not configured. Contact your system administrator."}, status=503)
+        # Duplicate email addresses cannot safely identify one staff account.
+        candidates = list(User.objects.filter(email__iexact=email, is_active=True)[:2])
+        if len(candidates) == 1 and candidates[0].has_usable_password():
+            user = candidates[0]
+            link = url + "#" + urlencode({"uid": urlsafe_base64_encode(force_bytes(user.pk)), "token": default_token_generator.make_token(user)})
+            try:
+                send_mail("Hotel ERP password reset", "A password reset was requested for your Hotel ERP account.\n\nOpen this link to choose a new password:\n" + link + "\n\nIf you did not request this, ignore this email.", settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=False)
+            except Exception:
+                logging.getLogger(__name__).warning("Password reset email delivery failed")
+        return Response({"detail": "If an eligible account matches, reset instructions will be sent."})
+
+
+class PasswordResetConfirmView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "password_reset_confirm"
+
+    @transaction.atomic
+    def post(self, request):
+        try:
+            uid = force_str(urlsafe_base64_decode(str(request.data.get("uid", ""))))
+            user = User.objects.select_for_update().get(pk=uid, is_active=True)
+        except (ValueError, TypeError, OverflowError, User.DoesNotExist, DjangoValidationError):
+            user = None
+        token = str(request.data.get("token", ""))
+        if user is None or not user.has_usable_password() or not default_token_generator.check_token(user, token):
+            return Response({"detail": "This reset link is invalid or expired. Request a new link."}, status=400)
+        password = str(request.data.get("password", ""))
+        if not password or len(password) > 256:
+            return Response({"detail": "Enter a valid new password."}, status=400)
+        try:
+            validate_password(password, user)
+        except DjangoValidationError as error:
+            return Response({"detail": " ".join(error.messages)}, status=400)
+        user.set_password(password)
+        user.save(update_fields=["password"])
+        Token.objects.filter(user=user).delete()
+        return Response({"detail": "Password changed successfully."})
 
 
 class CurrentUserView(APIView):

@@ -328,6 +328,16 @@ async function registerServerSession(token: string, remember: boolean): Promise<
   }
 }
 
+export async function passwordRecovery(action: 'request' | 'confirm', body: Record<string,string>): Promise<void> {
+  const response = await fetch(`${apiRoot()}/auth/password-reset/${action}/`, {
+    method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    const result = await response.json().catch(() => ({}))
+    throw new Error(typeof result.detail === 'string' ? result.detail : 'Password recovery could not be completed. Please try again.')
+  }
+}
+
 export async function login(username: string, password: string, remember = true): Promise<AuthUser> {
   const response = await fetch(`${apiRoot()}/auth/login/`, {
     method: 'POST',
