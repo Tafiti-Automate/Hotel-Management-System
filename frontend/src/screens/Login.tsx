@@ -86,6 +86,6 @@ export default function Login() {
         </div>
       </div>
     </div>
-    <small className="hotel-auth-credit">Powered by Tafiti Automate</small>
+    <footer className="hotel-auth-credit">Powered by Tafiti Automate</footer>
   </main>
 }

@@ -64,5 +64,6 @@ export default function Launchpad() {
 
       <section className="neo-launchpad-footnote"><Icon name="info" size={16} /><span>Only business areas permitted for your account are shown here.</span></section>
     </main>
+    <footer className="hotel-system-footer">Powered by Tafiti Automate</footer>
   </div>
 }

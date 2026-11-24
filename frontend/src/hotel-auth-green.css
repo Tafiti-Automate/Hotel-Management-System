@@ -23,3 +23,8 @@
 .hotel-auth-credit{color:#456c5c;margin-top:18px;font-size:11px}
 @media(max-width:600px){.hotel-auth-page{padding:18px 12px}.hotel-auth-stage{width:calc(100vw - 24px);min-height:550px}.hotel-auth-brand{top:23px;left:22px;font-size:19px}.hotel-auth-perspective{width:calc(100% - 32px);max-width:390px}.hotel-auth-card{padding:23px 20px}.hotel-auth-card h1{font-size:19px}}
 @media(prefers-reduced-motion:reduce){.hotel-auth-flipper{transition:none}}
+
+/* Shared attribution: stays in the shell layout, never overlays data or controls. */
+.hotel-system-footer{flex:0 0 auto;box-sizing:border-box;width:100%;padding:10px 16px;text-align:center;font-size:11px;line-height:1.5;color:var(--text-muted);background:var(--surface);border-top:1px solid var(--border)}
+.neo-launchpad{display:flex;flex-direction:column;min-height:100vh}.neo-launchpad-main{flex:1 0 auto}.neo-launchpad>.hotel-system-footer{margin-top:auto}
+@media print{.hotel-system-footer,.hotel-auth-credit{display:none!important}}

@@ -196,6 +196,7 @@ export default function AppShell() {
           </WorkspaceErrorBoundary>
         </EnterpriseDocumentHotspots>
       </main>
+      <footer className="hotel-system-footer">Powered by Tafiti Automate</footer>
     </div>
   </div></DocumentDrawerProvider>
 }
