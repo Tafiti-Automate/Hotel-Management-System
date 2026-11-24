@@ -1,3 +1,4 @@
+import { stockSignal, signalStyle, recordedNumber } from '../lib/operationalSignals'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { errorMessage, readBackendRecords } from '../lib/api'
@@ -35,7 +36,7 @@ export default function StockOnHand() {
   const [articleId, setArticleId] = useState('')
   const [majorGroup, setMajorGroup] = useState('')
   const [category, setCategory] = useState('')
-  const [stockState, setStockState] = useState<'all' | 'positive' | 'zero' | 'below-minimum'>('all')
+  const [stockState, setStockState] = useState<'all' | 'positive' | 'zero' | 'below-minimum' | 'critical'>('all')
   const [sortBy, setSortBy] = useState<'article' | 'store' | 'quantity' | 'value'>('article')
   const [lowOnly, setLowOnly] = useState(false)
   const [withSubStores, setWithSubStores] = useState(false)
@@ -127,16 +128,20 @@ export default function StockOnHand() {
       if (articleId && id(row.item) !== articleId) return false
       if (majorGroup && categoryToMajor.get(id(row.category_name)) !== majorGroup) return false
       if (category && id(row.category_name) !== category) return false
-      if (lowOnly && !Boolean(row.is_below_reorder)) return false
-      if (stockState === 'positive' && num(row.quantity_in_stock) <= 0) return false
-      if (stockState === 'zero' && num(row.quantity_in_stock) !== 0) return false
-      if (stockState === 'below-minimum' && !Boolean(row.is_below_reorder)) return false
+      const health = stockSignal(row.available_quantity,row.quantity_in_stock,row.reorder_level)
+      const available = recordedNumber(row.available_quantity)
+      const needsAttention = ['pending','attention','danger'].includes(health.tone)
+      if (lowOnly && !needsAttention) return false
+      if (stockState === 'positive' && (available===null || available<=0)) return false
+      if (stockState === 'zero' && available!==0) return false
+      if (stockState === 'below-minimum' && !needsAttention) return false
+      if (stockState === 'critical' && health.label!=='Critical stock') return false
       if (!needle) return true
       return [row.item_name, row.item_sku, `${id(row.item_name)} · ${id(row.item_sku)}`, row.category_name, row.store_name, row.base_unit_name]
         .some((value) => id(value).toLowerCase().includes(needle))
     })
     return filtered.sort((left, right) => {
-      if (sortBy === 'quantity') return num(left.quantity_in_stock) - num(right.quantity_in_stock)
+      if (sortBy === 'quantity') return num(left.available_quantity) - num(right.available_quantity)
       if (sortBy === 'value') return num(right.total_value) - num(left.total_value)
       if (sortBy === 'store') return id(left.store_name).localeCompare(id(right.store_name)) || id(left.item_name).localeCompare(id(right.item_name))
       return id(left.item_name).localeCompare(id(right.item_name)) || id(left.store_name).localeCompare(id(right.store_name))
@@ -150,7 +155,7 @@ export default function StockOnHand() {
     : unpostedGrns
   const inventoryValue = visible.reduce((total, row) => total + num(row.total_value), 0)
   const availableValue = visible.reduce((total, row) => total + num(row.available_value), 0)
-  const lowCount = visible.filter((row) => Boolean(row.is_below_reorder)).length
+  const lowCount = visible.filter(row=>['pending','attention','danger'].includes(stockSignal(row.available_quantity,row.quantity_in_stock,row.reorder_level).tone)).length
   const stockedCount = visible.filter((row) => num(row.quantity_in_stock) > 0).length
   const selectedStore = storeOptions.find((store) => id(store.id) === storeId)
   const articleUnit = (row: Row) => {
@@ -184,7 +189,7 @@ export default function StockOnHand() {
       <Kpi label="Inventory value" value={money(inventoryValue)} detail={selectedStore ? id(selectedStore.name) : 'All visible stores'} />
       <Kpi label="Available value" value={money(availableValue)} detail="Excludes reserved and quarantined stock" />
       <Kpi label="Stocked Articles" value={String(stockedCount)} detail={`${visible.length} balance record${visible.length === 1 ? '' : 's'}`} />
-      <Kpi label="Low / reorder" value={String(lowCount)} detail="Needs Store Keeper attention" warn={lowCount > 0} />
+      <Kpi label="Stock alerts" value={String(lowCount)} detail="Low, critical or unavailable positions" warn={lowCount > 0} />
     </section>
 
     {relevantUnposted.length > 0 && <section role="status"
@@ -217,8 +222,8 @@ export default function StockOnHand() {
         <div className="soh-option-sets">
           <fieldset><legend>Show</legend><label><input type="radio" checked readOnly />Articles</label><label className="disabled"><input type="radio" disabled />Deposits</label></fieldset>
           <fieldset><legend>Use</legend><label><input type="radio" checked={useBaseUnits} onChange={() => setUseBaseUnits(true)} />Base Units</label><label><input type="radio" checked={!useBaseUnits} onChange={() => setUseBaseUnits(false)} />Units</label></fieldset>
-          <fieldset className="soh-filter-set"><legend>Filter</legend><label><input type="checkbox" checked={stockState === 'positive'} onChange={(event) => setStockState(event.target.checked ? 'positive' : 'all')} />SOH &gt; 0</label><label><input type="checkbox" checked={stockState === 'zero'} onChange={(event) => setStockState(event.target.checked ? 'zero' : 'all')} />SOH = 0</label><label><input type="checkbox" checked={lowOnly || stockState === 'below-minimum'} onChange={(event) => { setLowOnly(event.target.checked); if (!event.target.checked && stockState === 'below-minimum') setStockState('all') }} />SOH &lt; MIN</label><label><input type="checkbox" checked={stockState === 'below-minimum'} onChange={(event) => setStockState(event.target.checked ? 'below-minimum' : 'all')} />SOH &lt; OPT</label><label className="disabled"><input type="checkbox" disabled />Only closed Articles</label><label><input type="checkbox" checked={Boolean(storeId)} onChange={(event) => { if (!event.target.checked) setStoreId('') }} />Articles with Storage Loc.</label></fieldset>
-          <fieldset><legend>Sorted by</legend><label><input type="radio" checked={sortBy === 'article'} onChange={() => setSortBy('article')} />Article</label><label><input type="radio" checked={sortBy === 'store'} onChange={() => setSortBy('store')} />Storage Location</label><label><input type="radio" checked={sortBy === 'quantity'} onChange={() => setSortBy('quantity')} />Lowest SOH</label><label><input type="radio" checked={sortBy === 'value'} onChange={() => setSortBy('value')} />Stock Value</label></fieldset>
+          <fieldset className="soh-filter-set"><legend>Filter</legend><label><input type="checkbox" checked={stockState === 'positive'} onChange={(event) => setStockState(event.target.checked ? 'positive' : 'all')} />Available &gt; 0</label><label><input type="checkbox" checked={stockState === 'zero'} onChange={(event) => setStockState(event.target.checked ? 'zero' : 'all')} />Available = 0</label><label><input type="checkbox" checked={lowOnly || stockState === 'below-minimum'} onChange={(event) => { setLowOnly(event.target.checked); if (!event.target.checked && stockState === 'below-minimum') setStockState('all') }} />Stock alerts</label><label><input type="checkbox" checked={stockState === 'below-minimum'} onChange={(event) => setStockState(event.target.checked ? 'below-minimum' : 'all')} />At / below reorder</label><label className="disabled"><input type="checkbox" disabled />Only closed Articles</label><label><input type="checkbox" checked={Boolean(storeId)} onChange={(event) => { if (!event.target.checked) setStoreId('') }} />Articles with Storage Loc.</label></fieldset>
+          <fieldset><legend>Sorted by</legend><label><input type="radio" checked={sortBy === 'article'} onChange={() => setSortBy('article')} />Article</label><label><input type="radio" checked={sortBy === 'store'} onChange={() => setSortBy('store')} />Storage Location</label><label><input type="radio" checked={sortBy === 'quantity'} onChange={() => setSortBy('quantity')} />Lowest availability</label><label><input type="radio" checked={sortBy === 'value'} onChange={() => setSortBy('value')} />Stock Value</label></fieldset>
           <fieldset><legend>Evaluation by</legend><label><input type="radio" checked={evaluation === 'ave'} onChange={() => setEvaluation('ave')} />AVE</label><label><input type="radio" checked={evaluation === 'price'} onChange={() => setEvaluation('price')} />Price</label><label><input type="radio" checked={evaluation === 'epi'} onChange={() => setEvaluation('epi')} />EPI</label><label><input type="radio" checked={evaluation === 'exp'} onChange={() => setEvaluation('exp')} />Exp.</label></fieldset>
         </div>
         <footer className="soh-option-footer"><span>{isCostController ? 'Read-only inventory oversight for stores within your property.' : withSubStores ? 'Assigned stores are included in this control.' : 'Live results only include stores assigned to your account.'}</span><button type="button" onClick={() => setOptionsOpen(false)}>Apply</button></footer>
@@ -252,9 +257,10 @@ export default function StockOnHand() {
         </select>
         <select className="soh-store-select" aria-label="Filter by stock position" value={stockState} onChange={(event) => setStockState(event.target.value as typeof stockState)}>
           <option value="all">All stock positions</option>
-          <option value="positive">SOH &gt; 0</option>
-          <option value="zero">SOH = 0</option>
-          <option value="below-minimum">SOH at / below minimum</option>
+          <option value="positive">Available stock &gt; 0</option>
+          <option value="zero">No available stock</option>
+          <option value="below-minimum">All stock alerts</option>
+          <option value="critical">Critical stock</option>
         </select>
         <button className={`soh-filter ${lowOnly ? 'active' : ''}`} type="button" onClick={() => setLowOnly((value) => !value)}>
           <Icon name="warning" size={16} />Low stock only
@@ -262,7 +268,7 @@ export default function StockOnHand() {
         <select className="soh-store-select soh-sort-select" aria-label="Sort stock results" value={sortBy} onChange={(event) => setSortBy(event.target.value as typeof sortBy)}>
           <option value="article">Sort: Article</option>
           <option value="store">Sort: Store</option>
-          <option value="quantity">Sort: Lowest SOH</option>
+          <option value="quantity">Sort: Lowest availability</option>
           <option value="value">Sort: Highest value</option>
         </select>
       </div>
@@ -284,7 +290,7 @@ export default function StockOnHand() {
                   <td><strong>{id(row.item_name) || 'Article'}</strong><span>{id(row.item_sku) || '—'}{row.category_name ? ` · ${id(row.category_name)}` : ''}</span></td>
                   <td><strong>{id(row.store_name) || 'Store'}</strong><span>{id(row.branch_name)}</span></td>
                   <td className="num">{displayQuantity(row, row.issued_transferred_quantity)}</td>
-                  <td className="num strong">{displayQuantity(row, row.available_quantity)}</td>
+                  <td className="num strong">{displayQuantity(row, row.available_quantity)}<StockLevel row={row}/></td>
                   <td>{displayUnit(row)}</td>
                   <td className="num">{money(num(row.unit_amount) * (articleUnit(row) ? num(articleUnit(row)?.conversionFactor) : 1))}</td>
                   <td className="num value">{money(num(row.total_value))}</td>
@@ -327,9 +333,14 @@ function Kpi({ label, value, detail, warn = false }: { label: string; value: str
 function Metric({ label, value }: { label: string; value: string }) { return <div><span>{label}</span><strong>{value}</strong></div> }
 function Detail({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) { return <div><span>{label}</span><strong className={strong ? 'accent' : ''}>{value}</strong></div> }
 function StockStatus({ row }: { row: Row }) {
-  const zero = num(row.quantity_in_stock) <= 0
-  const low = Boolean(row.is_below_reorder)
-  return <span className={`soh-status ${zero ? 'zero' : low ? 'low' : 'good'}`}>{zero ? 'Out of stock' : low ? 'Low stock' : 'In stock'}</span>
+  const status=stockSignal(row.available_quantity,row.quantity_in_stock,row.reorder_level)
+  return <span style={signalStyle(status.tone)}>{status.label}</span>
+}
+function StockLevel({row}:{row:Row}) {
+  const a=recordedNumber(row.available_quantity),r=recordedNumber(row.reorder_level)
+  if(a===null||r===null||r<=0)return null
+  const status=stockSignal(row.available_quantity,row.quantity_in_stock,row.reorder_level)
+  return <div style={{display:'grid',gap:3,marginTop:4,minWidth:80}}><div role="meter" aria-label="Available quantity relative to reorder level" aria-valuemin={0} aria-valuemax={r} aria-valuenow={Math.min(r,Math.max(0,a))} aria-valuetext={a+' available; reorder level '+r} style={{height:4,background:'var(--border)',borderRadius:4,overflow:'hidden'}}><div style={{height:'100%',width:Math.max(0,Math.min(100,a/r*100))+'%',background:signalStyle(status.tone).color}}/></div><small style={{color:'var(--text-muted)',fontSize:10}}>Reorder: {qty(r)} base units</small></div>
 }
 function Empty({ icon, title, text }: { icon: string; title: string; text: string }) {
   return <div className="soh-empty"><span><Icon name={icon} size={22} /></span><strong>{title}</strong><p>{text}</p></div>

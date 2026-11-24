@@ -1,3 +1,5 @@
+import { operationalStatus, signalPalette } from './operationalSignals'
+
 // Shared theme and formatting helpers.
 
 export type Mode = 'light' | 'dark'
@@ -188,15 +190,8 @@ export function statusPresentation(value: string): StatusPresentation {
 
 /** Inline style for a canonical status badge. */
 export function chipStyleFor(value: string): React.CSSProperties {
-  const { tone } = statusPresentation(value)
-  const tones = {
-    good: ['var(--good)', 'var(--good-soft)', 'rgba(6, 95, 70, .22)'],
-    warn: ['var(--warn)', 'var(--warn-soft)', 'rgba(146, 64, 14, .22)'],
-    bad: ['var(--bad)', 'var(--bad-soft)', 'rgba(159, 18, 57, .22)'],
-    info: ['#075985', '#E0F2FE', 'rgba(7, 89, 133, .22)'],
-    neutral: ['var(--text-muted)', 'var(--surface-2)', 'var(--border)'],
-  } as const
-  const [color, background, borderColor] = tones[tone]
+  const { color, background } = signalPalette[operationalStatus(value).tone]
+  const borderColor = color + '30'
   return {
     display: 'inline-flex',
     alignItems: 'center',

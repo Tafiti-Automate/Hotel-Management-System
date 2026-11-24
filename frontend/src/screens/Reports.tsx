@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect,useMemo,useState } from 'react'
 import { Icon } from '../components/Icon'
 import { canViewReport, reportIdsForUser } from '../lib/access'
 import { reports, type ReportCard } from '../lib/data'
 import { useApp } from '../state/AppContext'
+import { reportPreferenceKey,readReportPreferences,emptyReportPreferences,type ReportPreferences } from '../lib/reportPreferences'
 
 function scopeForRole(role: string) {
   const key = role.trim().toLowerCase()
@@ -46,6 +47,11 @@ export default function Reports() {
   const app = useApp()
   const [search, setSearch] = useState('')
   const [searchDraft, setSearchDraft] = useState('')
+  const [filter,setFilter]=useState<'all'|'favorites'|'recent'>('all')
+  const [prefState,setPrefState]=useState<{key:string;preferences:ReportPreferences}>({key:'',preferences:emptyReportPreferences()})
+  const prefKey=reportPreferenceKey(app.user.id,app.user.role,app.currentBranch||app.user.branchId||'all-permitted')
+  const preferences=prefState.key===prefKey?prefState.preferences:emptyReportPreferences()
+  useEffect(()=>{setPrefState({key:prefKey,preferences:readReportPreferences(prefKey)});setFilter('all')},[prefKey])
   const allowedIds = reportIdsForUser(app.user)
   const scope = scopeForRole(app.user.role)
 
@@ -56,9 +62,11 @@ export default function Reports() {
 
   const visibleReports = useMemo(() => {
     const query = search.trim().toLowerCase()
-    if (!query) return permittedReports
-    return permittedReports.filter((report) => [report.title, report.desc, report.grp].some((value) => value.toLowerCase().includes(query)))
-  }, [permittedReports, search])
+    const ids=filter==='favorites'?preferences.favorites:filter==='recent'?preferences.recent:null
+    let rows=permittedReports.filter(report=>(!ids||ids.includes(report.id))&&(!query||[report.title,report.desc,report.grp].some(value=>value.toLowerCase().includes(query))))
+    if(filter==='recent')rows=rows.slice().sort((a,b)=>preferences.recent.indexOf(a.id)-preferences.recent.indexOf(b.id))
+    return rows
+  }, [permittedReports, search,filter,preferences.favorites,preferences.recent])
 
   const groups = useMemo(() => {
     const byArea = new Map<string, ReportCard[]>()
@@ -105,6 +113,7 @@ export default function Reports() {
         </form>
       </header>
 
+      {prefKey && <nav aria-label="Report shortcuts" style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12}}>{([['all','All reports'],['favorites','Favourites'],['recent','Recently opened']] as const).map(([id,label])=><button key={id} type="button" aria-pressed={filter===id} onClick={()=>setFilter(id)} style={{padding:'7px 12px',borderRadius:6,border:'1px solid var(--border)',background:filter===id?'var(--accent)':'var(--surface)',color:filter===id?'#fff':'var(--text)',cursor:'pointer',fontWeight:650}}>{label}</button>)}</nav>}
       {groups.length > 0 ? (
         <div className="tafiti-report-groups">
           {groups.map(([area, areaReports]) => (
@@ -128,7 +137,7 @@ export default function Reports() {
                   >
                     <span className="tafiti-report-link-icon"><Icon name={index % 2 ? 'description' : 'bar_chart'} size={15} /></span>
                     <span className="tafiti-report-link-copy">
-                      <strong>{report.title}</strong>
+                      <strong>{report.title}{preferences.favorites.includes(report.id)&&<span title="Favourite" style={{marginLeft:6,color:'var(--warn)'}}>★</span>}</strong>
                       <small>{report.desc}</small>
                     </span>
                     {report.controlledDocument && <em>{documentLabel(report)}</em>}
@@ -143,7 +152,7 @@ export default function Reports() {
         <div className="reports-empty-state tafiti-card-empty">
           <span><Icon name="search" size={22} /></span>
           <strong>No reports found</strong>
-          <p>{search ? 'Try a different report name or clear the search.' : 'No reports are available for your current role.'}</p>
+          <p>{search ? 'Try a different report name or clear the search.' : filter==='favorites'?'Open a report and add it to your favourites.':filter==='recent'?'Recently opened permitted reports will appear here.':'No reports are available for your current role.'}</p>
           {search && <button type="button" onClick={() => {setSearch('');setSearchDraft('')}}>Clear search</button>}
         </div>
       )}

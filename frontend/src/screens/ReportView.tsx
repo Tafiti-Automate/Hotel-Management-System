@@ -4,8 +4,9 @@ import RecordDetailDrawer from '../components/RecordDetailDrawer'
 import { canViewReport } from '../lib/access'
 import { errorMessage, fetchOperationalReport, isOperationalReport } from '../lib/api'
 import { reports, type EntityKey } from '../lib/data'
-import { buildOperationalReport, buildReport, presentReport, summaryGroupOptions, expiryPalette } from '../lib/reports'
+import { buildOperationalReport, buildReport, presentReport, summaryGroupOptions, expiryPalette, reportVisualPalette } from '../lib/reports'
 import { useApp } from '../state/AppContext'
+import { reportPreferenceKey,readReportPreferences,updateReportPreferences,emptyReportPreferences,type SavedCriteria,type ReportPreferences } from '../lib/reportPreferences'
 
 const exportBtn: CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 7, height: 38, padding: '0 14px', border: '1px solid var(--border)',
@@ -66,8 +67,23 @@ export default function ReportView({ selectedReportId }: { selectedReportId?: st
   const [liveError, setLiveError] = useState('')
   const [selectedReportRow, setSelectedReportRow] = useState<Record<string, unknown> | null>(null)
 
+  const [prefState,setPrefState]=useState<{key:string;preferences:ReportPreferences}>({key:'',preferences:emptyReportPreferences()})
+  const [prefNotice,setPrefNotice]=useState('')
   const reportId = selectedReportId || app.reportId || 'valuation'
   const authorized = Boolean((selectedReportId || app.reportId) && canViewReport(app.user, reportId))
+  const prefKey=reportPreferenceKey(app.user.id,app.user.role,app.currentBranch || app.user.branchId || 'all-permitted')
+  const preferences=prefState.key===prefKey?prefState.preferences:emptyReportPreferences()
+  useEffect(()=>{
+    setPrefNotice('')
+    if(!authorized||!prefKey){setPrefState({key:prefKey,preferences:emptyReportPreferences()});return}
+    const result=updateReportPreferences(prefKey,old=>({...old,recent:[reportId,...old.recent.filter(id=>id!==reportId)]}))
+    setPrefState({key:prefKey,preferences:result.preferences})
+  },[authorized,prefKey,reportId])
+  const editPreferences=(edit:(old:ReportPreferences)=>ReportPreferences,message:string)=>{
+    const result=updateReportPreferences(prefKey,edit)
+    setPrefState({key:prefKey,preferences:result.preferences})
+    setPrefNotice(result.persisted?message:'Browser storage unavailable; preferences cannot be saved.')
+  }
   const reportDefinition = reports.find((entry) => entry.id === reportId)
   const operationalReportId = isOperationalReport(reportId) ? reportId : null
   const live = Boolean(operationalReportId)
@@ -120,7 +136,10 @@ export default function ReportView({ selectedReportId }: { selectedReportId?: st
   const groupOptions = summaryGroupOptions(sourceReport)
   const groupValue = groupOptions.some(option => option.index === groupIndex) ? groupIndex : (reportId === 'aging' ? groupOptions.find(option=>option.label==='Status')?.index : undefined) ?? groupOptions[0]?.index ?? -1
   const report = presentReport(sourceReport, reportId, searchQuery, mode, groupValue)
-  useEffect(() => { setSearchDraft(''); setSearchQuery(''); setMode('detail'); setGroupIndex(-1) }, [reportId])
+  useEffect(() => {
+    setStore('');setCategory('');setDateFrom('');setDateTo('');setItem('');setDepartment('');setEmployee('');setSupplier('');
+    setDocumentType('');setActionType('');setReportStatus('');setValueMin('');setSearchDraft('');setSearchQuery('');setMode('detail');setGroupIndex(-1);setPage(1)
+  }, [reportId,prefKey])
   const pageSize = 25
   const pageCount = Math.max(1, Math.ceil(report.rows.length / pageSize))
   const visibleRows = report.rows.slice((page - 1) * pageSize, page * pageSize)
@@ -163,6 +182,30 @@ export default function ReportView({ selectedReportId }: { selectedReportId?: st
     setEmployee(''); setSupplier(''); setDocumentType(''); setActionType(''); setReportStatus(''); setValueMin(''); setSearchDraft(''); setSearchQuery(''); setPage(1)
   }
 
+  const saveCriteria=()=>{
+    const saved:SavedCriteria={store:supportsStore?store:'',category:supportsCategory?category:'',item:supportsItem?item:'',
+      department:supportsDepartment?department:'',supplier:supportsSupplier?supplier:'',
+      dateFrom:supportsDates?dateFrom:'',dateTo:supportsDates?dateTo:'',status:supportsStatus?reportStatus:'',
+      documentType:supportsDocumentFilters?documentType:'',actionType:supportsDocumentFilters?actionType:'',
+      valueMin:supportsValueMinimum?valueMin:'',mode,groupIndex:groupValue}
+    editPreferences(old=>({...old,saved:{...old.saved,[reportId]:saved}}),'Criteria saved on this browser. Search text and employee selection are not stored.')
+  }
+  const loadCriteria=()=>{
+    const saved=readReportPreferences(prefKey).saved[reportId]
+    if(!saved){setPrefNotice('No saved criteria for this report.');return}
+    // Saved IDs must still be within the current selection lists; never widen permissions.
+    const permitted=(id:string,rows:{id?:unknown}[])=>rows.some(row=>String(row.id)===id)?id:''
+    setStore(supportsStore?permitted(saved.store,app.data.locations):'')
+    setCategory(supportsCategory?permitted(saved.category,app.data.categories):'')
+    setItem(supportsItem?permitted(saved.item,app.data.items):'')
+    setDepartment(supportsDepartment?permitted(saved.department,app.data.departments):'')
+    setSupplier(supportsSupplier?permitted(saved.supplier,app.data.suppliers):'')
+    setDateFrom(supportsDates?saved.dateFrom:'');setDateTo(supportsDates?saved.dateTo:'')
+    setReportStatus(supportsStatus?saved.status:'');setDocumentType(supportsDocumentFilters?saved.documentType:'')
+    setActionType(supportsDocumentFilters?saved.actionType:'');setValueMin(supportsValueMinimum?saved.valueMin:'')
+    setEmployee('');setSearchDraft('');setSearchQuery('');setMode(saved.mode);setGroupIndex(saved.groupIndex);setPage(1)
+    setPrefNotice('Saved criteria applied. Review dates and filters before exporting.')
+  }
   const applyDatePreset = (preset: 'today' | 'week' | 'month') => {
     const today = new Date()
     const start = new Date(today)
@@ -186,8 +229,8 @@ export default function ReportView({ selectedReportId }: { selectedReportId?: st
   const exportExcel = () => {
     const escape = (value: unknown) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     const metadataRows = [['Report', report.title], ['View', mode], ['Search', searchQuery || 'All matching records'], ['Prepared for', `${app.user.name} · ${app.user.role}`], ['Scope', scope], ['Generated', generatedAt.toLocaleString('en-UG')], []]
-    const tones = Object.keys(expiryPalette)
-    const styles = tones.map((status,index)=>'<Style ss:ID="Expiry'+index+'"><Font ss:Color="'+expiryPalette[status].color+'" ss:Bold="1"/><Interior ss:Color="'+expiryPalette[status].background+'" ss:Pattern="Solid"/></Style>').join('')
+    const tones = Object.keys(reportVisualPalette)
+    const styles = tones.map((status,index)=>'<Style ss:ID="Expiry'+index+'"><Font ss:Color="'+reportVisualPalette[status].color+'" ss:Bold="1"/><Interior ss:Color="'+reportVisualPalette[status].background+'" ss:Pattern="Solid"/></Style>').join('')
     const tableRows = [...metadataRows.map(row=>row.map(text=>({text,expiryTone:undefined as string|undefined}))), report.columns.map(column=>({text:column.label,expiryTone:undefined as string|undefined})), ...report.rows.map(row=>row.cells), ...(report.hasTotals ? [report.totals] : [])]
     const xml = `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles>${styles}</Styles><Worksheet ss:Name="Report"><Table>${tableRows.map((row) => `<Row>${row.map((cell) => `<Cell${cell.expiryTone && tones.includes(cell.expiryTone) ? ` ss:StyleID="Expiry${tones.indexOf(cell.expiryTone)}"` : ""}><Data ss:Type="String">${escape(cell.text)}</Data></Cell>`).join('')}</Row>`).join('')}</Table></Worksheet></Workbook>`
     download(new Blob([xml], { type: 'application/vnd.ms-excel' }), `${baseFilename}.xls`)
@@ -198,7 +241,7 @@ export default function ReportView({ selectedReportId }: { selectedReportId?: st
     if (!popup) { app.showWorkflowAlert('PDF export blocked', 'Allow pop-ups for this site, then try again.', 'warning'); return }
     const escapeHtml = (value: unknown) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
     const head = report.columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join('')
-    const body = [...report.rows.map(row => row.cells), ...(report.hasTotals ? [report.totals] : [])].map(cells => `<tr>${cells.map(cell => `<td${cell.expiryTone && expiryPalette[cell.expiryTone] ? ' style="color:'+expiryPalette[cell.expiryTone].color+';background:'+expiryPalette[cell.expiryTone].background+';font-weight:bold;print-color-adjust:exact;-webkit-print-color-adjust:exact"' : ''}>${escapeHtml(cell.text)}</td>`).join('')}</tr>`).join('')
+    const body = [...report.rows.map(row => row.cells), ...(report.hasTotals ? [report.totals] : [])].map(cells => `<tr>${cells.map(cell => `<td${cell.expiryTone && reportVisualPalette[cell.expiryTone] ? ' style="color:'+reportVisualPalette[cell.expiryTone].color+';background:'+reportVisualPalette[cell.expiryTone].background+';font-weight:bold;print-color-adjust:exact;-webkit-print-color-adjust:exact"' : ''}>${escapeHtml(cell.text)}</td>`).join('')}</tr>`).join('')
     const criteria = [dateFrom ? `From ${dateFrom}` : '', dateTo ? `To ${dateTo}` : '', selectedStoreName ? `Store: ${selectedStoreName}` : '', selectedCategoryName ? `Category: ${selectedCategoryName}` : '', searchQuery ? `Search: ${searchQuery}` : '', `View: ${mode}`].filter(Boolean).join(' · ') || 'Current report scope'
     const controlledNote = reportId === 'purchaseOrders' ? '<div class="notice"><strong>Controlled LPO copies:</strong> The register records the controlled-copy position of each LPO. Printing or downloading an individual LPO continues to issue <strong>ORIGINAL COPY</strong> first and <strong>COPY OF ORIGINAL</strong> thereafter.</div>' : ''
     popup.document.write(`<html><head><title>${escapeHtml(report.title)}</title><style>@page{size:A4 landscape;margin:10mm}*{box-sizing:border-box}body{margin:0;color:#111827;font-family:Arial,sans-serif;font-size:8.5pt}header{display:flex;justify-content:space-between;gap:24px;padding-bottom:10px;border-bottom:2px solid #111827}h1{margin:0;font-size:17pt;letter-spacing:-.2px}p{margin:4px 0 0;color:#4b5563}.meta{text-align:right;color:#4b5563;font-size:7.8pt;line-height:1.5}.criteria{margin:10px 0;color:#374151;font-size:8pt}.notice{margin:0 0 10px;padding:7px 9px;border:1px solid #d1d5db;background:#f9fafb;font-size:7.8pt;line-height:1.4}table{border-collapse:collapse;width:100%;table-layout:auto}tr{break-inside:avoid}th,td{border:1px solid #cbd5e1;padding:5px 6px;text-align:left;vertical-align:top;word-break:break-word}th{background:#f3f4f6;text-transform:uppercase;font-size:7pt;letter-spacing:.2px}footer{margin-top:10px;padding-top:6px;border-top:1px solid #e5e7eb;color:#6b7280;font-size:7pt;display:flex;justify-content:space-between}.internal{font-weight:700;color:#374151}</style></head><body><header><div><h1>${escapeHtml(report.title)}</h1><p>${escapeHtml(report.subtitle)}</p></div><div class="meta"><strong>${escapeHtml(app.currentBranch || 'Hotel Management System')}</strong><br>Prepared for ${escapeHtml(app.user.name)} · ${escapeHtml(app.user.role)}<br>${escapeHtml(generatedAt.toLocaleString('en-UG'))}</div></header><div class="criteria"><strong>Scope:</strong> ${escapeHtml(scope)} · <strong>Criteria:</strong> ${escapeHtml(criteria)} · <strong>Records:</strong> ${report.rows.length}</div>${controlledNote}<table><thead><tr>${head}</tr></thead><tbody>${body || `<tr><td colspan="${report.columns.length}">No records match the selected criteria.</td></tr>`}</tbody></table><footer><span class="internal">Internal report</span><span>${escapeHtml(report.title)} · Generated by Hotel Management System</span></footer><script>window.onload=()=>window.print()</script></body></html>`)
@@ -247,6 +290,7 @@ export default function ReportView({ selectedReportId }: { selectedReportId?: st
           <div className="report-view-meta"><span>{report.rows.length} record{report.rows.length === 1 ? '' : 's'}</span>{live && <span className="report-live-status"><i />Live report</span>}</div>
         </div>
         <div className="report-export-actions">
+          {prefKey && <button type="button" style={exportBtn} aria-pressed={preferences.favorites.includes(reportId)} onClick={()=>editPreferences(old=>({...old,favorites:old.favorites.includes(reportId)?old.favorites.filter(id=>id!==reportId):[...old.favorites,reportId]}),preferences.favorites.includes(reportId)?'Removed from favourites.':'Added to favourites.')}><Icon name={preferences.favorites.includes(reportId)?'star':'star_border'} size={16}/>{preferences.favorites.includes(reportId)?'Favourite':'Add favourite'}</button>}
           <button disabled={liveLoading || Boolean(liveError)} onClick={exportPdf} style={exportBtn}><Icon name="picture_as_pdf" size={16} />PDF</button>
           <button disabled={liveLoading || Boolean(liveError)} onClick={exportExcel} style={exportBtn}><Icon name="table_view" size={16} />Excel</button>
           <button disabled={liveLoading || Boolean(liveError)} onClick={exportCsv} style={exportBtn}><Icon name="download" size={16} />CSV</button>
@@ -257,6 +301,7 @@ export default function ReportView({ selectedReportId }: { selectedReportId?: st
       {reportDefinition?.controlledDocument === 'grn' && <ReportNotice icon="description" title="GRN source document" text="Receipt and posting remain separate states. Open the GRN source record for the approved document." />}
       {report.emptyDetail && <ReportNotice icon="info" title="Reporting status" text={report.emptyDetail} />}
 
+      {prefNotice && <p role="status" style={{color:'var(--text-muted)',fontSize:12,margin:'6px 0'}}>{prefNotice}</p>}
       <section className="report-filter-shell">
         <div className="report-filter-toolbar" style={{ flexWrap: 'wrap', gap: 8 }}>
           <form style={{display:'flex',gap:6,alignItems:'center',flex:'1 1 250px'}} onSubmit={event => {event.preventDefault(); setSearchQuery(searchDraft); setPage(1); setSelectedReportRow(null)}}>
@@ -279,6 +324,7 @@ export default function ReportView({ selectedReportId }: { selectedReportId?: st
           </div>}
           <span style={filterChip}><Icon name="visibility" size={14} />{scope}</span>
           <div className="report-filter-toolbar-spacer" />
+          {prefKey && <><button type="button" style={exportBtn} onClick={saveCriteria}><Icon name="bookmark_add" size={15}/>Save criteria</button>{preferences.saved[reportId] && <><button type="button" style={exportBtn} onClick={loadCriteria}>Use saved criteria</button><button type="button" style={exportBtn} onClick={()=>editPreferences(old=>{const saved={...old.saved};delete saved[reportId];return {...old,saved}},'Saved criteria removed.')}>Forget saved criteria</button></>}</>}
           {activeFilterCount > 0 && <button type="button" className="report-clear-filters" onClick={clearFilters}><Icon name="filter_alt_off" size={15} />Clear filters</button>}
           {live && <button type="button" className="report-refresh-button" disabled={liveLoading} onClick={() => setRefreshKey((value) => value + 1)}><Icon name="sync" size={15} />{liveLoading ? 'Refreshing…' : 'Refresh'}</button>}
         </div>

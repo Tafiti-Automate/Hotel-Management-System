@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react'
 import type { EntityKey, Row } from './data'
 import type { OperationalReportId } from './api'
 import { money } from './theme'
+import { operationalStatus, signalPalette, varianceSignal, type SignalTone } from './operationalSignals'
 
 export interface ReportCell { text: string; style: CSSProperties; expiryTone?: string }
 
@@ -13,6 +14,16 @@ export const expiryPalette: Record<string, {color:string; background:string}> = 
   'Valid': {color:'#166534',background:'#dcfce7'},
   'Missing expiry': {color:'#9a3412',background:'#ffedd5'},
   'Not applicable': {color:'#475569',background:'#e2e8f0'},
+}
+// Export palette shares the same colour pair for browser, spreadsheet and print.
+export const reportVisualPalette:Record<string,{color:string;background:string}> = {...expiryPalette,...Object.fromEntries(Object.entries(signalPalette).map(([key,value])=>['signal:'+key,value]))}
+function toneCell(value:string,tone:SignalTone,align?:'right'):ReportCell {
+  const cell=rcell(value,align,true)
+  return {...cell,expiryTone:'signal:'+tone,style:{...cell.style,...signalPalette[tone],fontWeight:700}}
+}
+function statusCell(value:unknown):ReportCell {
+  const signal=operationalStatus(value)
+  return toneCell(signal.label,signal.tone)
 }
 function expiryCell(value: string, status: string, align?: 'right'): ReportCell {
   const cell = rcell(value, align, true)
@@ -98,6 +109,12 @@ export function buildOperationalReport(
         const kind = text(column.kind)
         const value = row[text(column.key)]
         const rendered = kind === 'money' && value !== null && value !== undefined && value !== '' ? money(number(value)) : text(value, '—')
+        const key=text(column.key)
+        if(['status','receipt_status','posting_status','fulfillment_status','payment_status'].includes(key))return statusCell(value)
+        if(['monthlyStoreBalance','stockTakeLinewise'].includes(id)&&['variance','variance_value'].includes(key)) {
+          const signal=varianceSignal(value)
+          return toneCell(rendered+' · '+signal.label,signal.tone,'right')
+        }
         return rcell(rendered, kind === 'money' || kind === 'number' ? 'right' : undefined, index === 0)
       }),
     }))
@@ -110,7 +127,7 @@ export function buildOperationalReport(
     R.columns = head([{ t: 'Request' }, { t: 'Date' }, { t: 'Department' }, { t: 'Requester' }, { t: 'Store' }, { t: 'Items', a: 'right' }, { t: 'Status' }])
     R.rows = records(payload.results).map((row) => ({ data: row, cells: [
       rcell(text(row.reference), undefined, true), rcell(text(row.date).slice(0, 10)), rcell(text(row.department)),
-      rcell(text(row.requester)), rcell(text(row.store, '—')), rcell(number(row.item_count), 'right'), rcell(title(row.status)),
+      rcell(text(row.requester)), rcell(text(row.store, '—')), rcell(number(row.item_count), 'right'), statusCell(row.status),
     ] }))
   } else if (id === 'storeIssues') {
     R.title = 'Stock Issue Register'; R.subtitle = 'Stock issues raised against approved department requests'
@@ -118,7 +135,7 @@ export function buildOperationalReport(
     R.columns = head([{ t: 'Issue' }, { t: 'Date' }, { t: 'Request' }, { t: 'Department' }, { t: 'Store' }, { t: 'Issued by' }, { t: 'Items', a: 'right' }, { t: 'Status' }])
     R.rows = records(payload.results).map((row) => ({ data: row, cells: [
       rcell(text(row.reference), undefined, true), rcell(text(row.date).slice(0, 10)), rcell(text(row.request_reference)),
-      rcell(text(row.department)), rcell(text(row.store)), rcell(text(row.actor, '—')), rcell(number(row.item_count), 'right'), rcell(title(row.status)),
+      rcell(text(row.department)), rcell(text(row.store)), rcell(text(row.actor, '—')), rcell(number(row.item_count), 'right'), statusCell(row.status),
     ] }))
   } else if (id === 'purchaseRequisitions') {
     R.title = 'Purchase Requisition Register'; R.subtitle = 'Controlled procurement requisitions by department, value and status'
@@ -126,7 +143,7 @@ export function buildOperationalReport(
     R.columns = head([{ t: 'Requisition' }, { t: 'Date' }, { t: 'Department' }, { t: 'Requester' }, { t: 'Items', a: 'right' }, { t: 'Value', a: 'right' }, { t: 'Status' }])
     R.rows = records(payload.results).map((row) => ({ data: row, cells: [
       rcell(text(row.reference), undefined, true), rcell(text(row.date).slice(0, 10)), rcell(text(row.department)),
-      rcell(text(row.requester)), rcell(number(row.item_count), 'right'), rcell(money(number(row.value)), 'right'), rcell(title(row.status)),
+      rcell(text(row.requester)), rcell(number(row.item_count), 'right'), rcell(money(number(row.value)), 'right'), statusCell(row.status),
     ] }))
   } else if (id === 'purchaseOrders') {
     R.title = 'LPO Register'; R.subtitle = 'Local Purchase Orders with supplier, value, status and controlled-copy position'
@@ -135,7 +152,7 @@ export function buildOperationalReport(
     R.rows = records(payload.results).map((row) => ({ data: row, cells: [
       rcell(text(row.reference), undefined, true), rcell(text(row.date).slice(0, 10)), rcell(text(row.supplier)),
       rcell(text(row.department, '—')), rcell(text(row.expected_date, '—')), rcell(money(number(row.value)), 'right'),
-      rcell(title(row.status)), rcell(text(row.copy_classification, 'ORIGINAL COPY')),
+      statusCell(row.status), rcell(text(row.copy_classification, 'ORIGINAL COPY')),
     ] }))
     R.hasTotals = true
     R.totals = [rcell('Total LPO value', undefined, true), rcell(''), rcell(''), rcell(''), rcell(''), rcell(money(number(payload.total_value)), 'right'), rcell(''), rcell('')]
@@ -146,7 +163,7 @@ export function buildOperationalReport(
     R.rows = records(payload.results).map((row) => ({ data: row, cells: [
       rcell(text(row.reference), undefined, true), rcell(text(row.date).slice(0, 10)), rcell(text(row.lpo_reference)),
       rcell(text(row.supplier)), rcell(text(row.actor, '—')), rcell(number(row.item_count), 'right'),
-      rcell(title(row.status)), rcell(text(row.posted_at) ? 'Posted' : 'Received'),
+      statusCell(row.status), statusCell(text(row.posted_at) ? 'Posted' : 'Received'),
     ] }))
   } else if (id === 'valuation') {
     R.title = 'Stock Valuation'; R.subtitle = 'Live weighted-average stock value from inventory batches'
@@ -213,7 +230,7 @@ export function buildOperationalReport(
     R.columns = head([{ t: 'Date' }, { t: 'Document' }, { t: 'Reference' }, { t: 'Action' }, { t: 'Status' }, { t: 'Actor' }, { t: 'Location' }, { t: 'Value', a: 'right' }, { t: 'Detail' }])
     R.rows = records(payload.results).map((row) => ({ data: row, cells: [
       rcell(text(row.date).slice(0, 19).replace('T', ' ')), rcell(title(row.document_type)), rcell(text(row.reference), undefined, true),
-      rcell(title(row.action)), rcell(title(row.status)), rcell(text(row.actor, '—')),
+      rcell(title(row.action)), statusCell(row.status), rcell(text(row.actor, '—')),
       rcell(text(row.store_workspace || row.department || row.branch, '—')),
       rcell(row.value === '' ? '—' : money(number(row.value)), 'right'), rcell(text(row.detail, '—')),
     ] }))
@@ -227,7 +244,7 @@ export function buildOperationalReport(
       ['Supplier return', records(payload.supplier_returns)],
     ]
     R.rows = groups.flatMap(([label, rows]) => rows.map((row) => ({ cells: [
-      rcell(label, undefined, true), rcell(title(row.status)), rcell(number(row.count), 'right'),
+      rcell(label, undefined, true), statusCell(row.status), rcell(number(row.count), 'right'),
       rcell(row.total_amount === undefined ? '—' : money(number(row.total_amount)), 'right'),
     ] })))
   }
@@ -374,7 +391,7 @@ export function presentReport(source: BuiltReport, reportId: string, search: str
     grid: ['minmax(200px, 1.4fr)', 'minmax(100px, .7fr)', ...quantities.map(() => 'minmax(120px, 1fr)'), ...amounts.map(() => 'minmax(140px, 1fr)')].join(' '),
     columns: head([{ t: group?.label || 'Scope' }, { t: 'Records', a: 'right' }, ...quantities.map(field => ({t: field.label, a: 'right' as const})), ...amounts.map(field => ({t: field.label, a: 'right' as const}))]),
     rows: Array.from(groups.entries()).sort(([left], [right]) => left.localeCompare(right)).map(([key, bucket]) => ({
-      cells: [reportId === 'aging' && group?.label === 'Status' ? expiryCell(key,key) : rcell(key, undefined, true), rcell(bucket.count, 'right'), ...bucket.quantities.map(quantity => rcell(quantity.toFixed(4), 'right')), ...bucket.amounts.map((amount,i) => rcell(bucket.missing[i] ? 'Not available' : money(amount), 'right'))],
+      cells: [group?.label === 'Status' ? (reportId==='aging'?expiryCell(key,key):statusCell(key)) : rcell(key, undefined, true), rcell(bucket.count, 'right'), ...bucket.quantities.map(quantity => rcell(quantity.toFixed(4), 'right')), ...bucket.amounts.map((amount,i) => rcell(bucket.missing[i] ? 'Not available' : money(amount), 'right'))],
     })),
     hasTotals: groups.size > 0,
     totals: [rcell('Total matching records', undefined, true), rcell(rows.length, 'right'),

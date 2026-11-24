@@ -1,3 +1,4 @@
+import { operationalStatus, signalStyle } from '../lib/operationalSignals'
 import SearchableSelect from '../components/SearchableSelect'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Icon } from '../components/Icon'
@@ -1249,23 +1250,9 @@ const departmentName = (app: any, value: unknown) => id(app.data.departments.fin
 const employeeName = (app: any, value: unknown) => id(app.data.employees.find((r: Row) => id(r.id) === id(value))?.name) || id(value)
 function Panel({ title, note, children }: { title: string; note: string; children: ReactNode }) { return <div className="inventory-action-form"><header className="inventory-action-form-header"><div style={{ fontSize: 14, fontWeight: 800 }}>{title}</div><div style={{ ...muted, margin: '4px 0 0', lineHeight: 1.5 }}>{note}</div></header><div className="inventory-action-form-body">{children}</div></div> }
 function StatusBadge({ value }: { value: string }) {
-  const status = id(value).trim().toLowerCase().replace(/\s+/g, '_')
-  const label = statusLabel(status)
-  const palette: Record<string, { fg: string; bg: string; icon: string }> = {
-    draft: { fg: 'var(--text-muted)', bg: 'var(--surface-2)', icon: 'edit_note' },
-    pending_department_approval: { fg: 'var(--warn)', bg: 'var(--warn-soft)', icon: 'approval' },
-    submitted: { fg: 'var(--accent)', bg: 'var(--accent-soft)', icon: 'inventory' },
-    approved: { fg: 'var(--accent)', bg: 'var(--accent-soft)', icon: 'check_circle' },
-    partially_approved: { fg: 'var(--warn)', bg: 'var(--warn-soft)', icon: 'pending_actions' },
-    awaiting_procurement: { fg: '#7C3AED', bg: 'rgba(124,58,237,.12)', icon: 'shopping_cart' },
-    partially_issued: { fg: '#D97706', bg: 'rgba(217,119,6,.12)', icon: 'outbox' },
-    issued: { fg: 'var(--good)', bg: 'var(--good-soft)', icon: 'task_alt' },
-    completed: { fg: 'var(--good)', bg: 'var(--good-soft)', icon: 'verified' },
-    rejected: { fg: 'var(--bad)', bg: 'var(--bad-soft)', icon: 'cancel' },
-    cancelled: { fg: 'var(--text-muted)', bg: 'var(--surface-2)', icon: 'block' },
-  }
-  const tone = palette[status] || { fg: 'var(--accent)', bg: 'var(--accent-soft)', icon: 'info' }
-  return <span className="inventory-status-badge" style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 9px', borderRadius: 999, color: tone.fg, background: tone.bg, fontSize: 9.5, fontWeight: 800 }}><Icon name={tone.icon} size={13} color={tone.fg} />{label}</span>
+  const status = operationalStatus(value)
+  const icons = {good:'check_circle',pending:'schedule',attention:'warning',danger:'error',progress:'local_shipping',financial:'verified',neutral:'info'}
+  return <span className="inventory-status-badge" style={{...signalStyle(status.tone),flexShrink:0,gap:5}}><Icon name={icons[status.tone]} size={13} color={signalStyle(status.tone).color}/>{statusLabel(id(value))}</span>
 }
 function RequestTimeline({ row, app }: { row: Row; app: any }) {
   const events = [

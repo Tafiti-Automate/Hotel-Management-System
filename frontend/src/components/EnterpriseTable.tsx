@@ -1,3 +1,4 @@
+import { operationalStatus, signalStyle } from '../lib/operationalSignals'
 import { useMemo, useState, type ReactNode } from 'react'
 import {
   flexRender, getCoreRowModel, getFilteredRowModel, getPaginationRowModel,
@@ -53,7 +54,9 @@ export default function EnterpriseTable<T extends { id?: string }>({
       header: column.label,
       cell: ({ row, getValue }) => column.render
         ? column.render(row.original)
-        : String(getValue() ?? '—'),
+        : /^(status|posting_status|fulfillment_status|payment_status|receipt_status|approval_status)$/.test(column.id)
+          ? <span style={signalStyle(operationalStatus(getValue()).tone)}>{operationalStatus(getValue()).label}</span>
+          : String(getValue() ?? '—'),
       enableSorting: column.sortable !== false,
     })),
   ], [columns, onSelectionChange])

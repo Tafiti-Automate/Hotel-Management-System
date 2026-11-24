@@ -1,0 +1,11 @@
+# Intelligent operations UX — first increment
+
+- Shared operational signal palette: exact status mapping, explicit text, unknown neutral. Existing procurement status chips and inventory badges share the new palette; general enterprise tables use it when rendering default status columns. Fixed foreground/background colour pairs are designed for readable contrast in both modes.
+- Stock availability uses available quantity and the configured store reorder level, distinguishing depleted physical stock from allocated/held stock. Critical means available <= 50% of a positive reorder level (display-only default). Meter is relative to reorder level, not storage capacity. Search and stock filters remain; no separate SOH column restored.
+- Month-end review shows variance sign and unresolved amounts. Dynamic stocktake reports retain colour markers in Excel and PDF; colour is not a substitute for quantity/value.
+- Supplier invoice register shows outstanding balance due-date countdown based on Kampala calendar days; unknown balance/due date is not falsely classified as paid or overdue. Financial records and permissions unchanged.
+- Existing dashboards retain actual role-specific records; Cost Control quick links include month-end inventory and reports. Existing workflow timelines and preventive warnings are preserved.
+
+New tests cover boundaries, contrast and report rendering. CI and browser acceptance are required. Full module-by-module adoption, actual filtered dashboard drilldowns, invoice ageing report totals, configurable thresholds, barcode scanning, draft recovery, and comprehensive keyboard/dark-mode visual testing remain subsequent work. No changes to inventory ledger, approvals, permissions, or GL posting.
+
+Report preferences: favourites, recent report IDs and explicitly saved criteria are scoped to the current authenticated user, role and property on this browser. Report results, free-text searches and employee choices are not saved. Saved record IDs are revalidated against current selection lists; backend permissions remain authoritative. Saved criteria require explicit application; users can remove them. No cloud synchronisation or automatic report scheduling is introduced.

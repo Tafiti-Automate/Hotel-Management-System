@@ -1,6 +1,7 @@
 import { Icon } from '../components/Icon'
 import { useApp } from '../state/AppContext'
 import { money } from '../lib/theme'
+import { operationalStatus, signalStyle } from '../lib/operationalSignals'
 
 type Tone = 'blue' | 'green' | 'amber' | 'red' | 'purple'
 interface Metric { label: string; value: string; hint: string; icon: string; tone: Tone; route: string; routeLabel: string }
@@ -82,7 +83,7 @@ export default function DashboardV2() {
           {view.activities.slice(0, 7).map((activity) => <button type="button" key={`${activity.id}-${activity.title}`} className="neo-activity-row" onClick={() => app.navTo(activity.route, activity.routeLabel)}>
             <span className={`neo-activity-status tone-${toneForStatus(activity.status)}`}><Icon name={iconForStatus(activity.status)} size={15} /></span>
             <span className="neo-activity-copy"><strong>{activity.title}</strong><small>{activity.detail}</small></span>
-            <span className="neo-activity-meta"><em>{friendlyStatus(activity.status)}</em><time>{activity.time}</time></span>
+            <span className="neo-activity-meta"><em style={signalStyle(operationalStatus(activity.status).tone)}>{friendlyStatus(activity.status)}</em><time>{activity.time}</time></span>
             <Icon name="chevron_right" size={15} />
           </button>)}
           {!view.activities.length && <div className="neo-dashboard-empty"><span><Icon name="task_alt" size={22} /></span><strong>Nothing needs your attention right now</strong><small>New workflow records will appear here when they reach your queue.</small></div>}
@@ -193,7 +194,7 @@ function buildDashboard(role: string, data: any): DashboardView {
       eyebrow: 'Cost control', title: 'Request control', description: 'Validate approved department demand against stock and master data before Stores issues.',
       metrics: [metric('Awaiting control', control.length, 'HOD-approved requests', 'fact_check', 'amber', 'workflow-stores', 'Request control'), metric('Suppliers', suppliers.length, 'Active supplier records', 'local_shipping', 'blue', 'suppliers', 'Suppliers'), metric('Articles', items.length, 'Catalogue records', 'inventory_2', 'green', 'items', 'Articles'), metric('Stock lines', balances.length, 'Available inventory positions', 'warehouse', 'purple', 'reports', 'Reports')],
       activities: activity(storeRequests, 'workflow-stores', 'Request control', 'Request'), queueTitle: 'Cost Control queue', queueHint: 'Department requests ready for quantity and availability review.', queueRoute: 'workflow-stores', queueLabel: 'Request control',
-      quickLinks: [quick('Request control', 'Review HOD-approved quantities', 'fact_check', 'workflow-stores', 'Request control'), quick('Waste audit', 'Review operational loss', 'delete_sweep', 'waste-control', 'Waste control'), quick('Recipe costing', 'Control yields and food cost', 'menu_book', 'recipes-production', 'Recipe costing'), quick('POS depletion', 'Post sales-driven usage', 'point_of_sale', 'pos-control', 'POS depletion')],
+      quickLinks: [quick('Request control', 'Review HOD-approved quantities', 'fact_check', 'workflow-stores', 'Request control'), quick('Waste audit', 'Review operational loss', 'delete_sweep', 'waste-control', 'Waste control'), quick('Recipe costing', 'Control yields and food cost', 'menu_book', 'recipes-production', 'Recipe costing'), quick('Month-end inventory', 'Prepare and reconcile physical counts', 'fact_check', 'month-end-stocktake', 'Month-end inventory'), quick('Reports', 'Purchase, stock, sales and results', 'bar_chart', 'reports', 'Reports'), quick('POS depletion', 'Post sales-driven usage', 'point_of_sale', 'pos-control', 'POS depletion')],
       context: [{ label: 'Departments', value: String(departments.length) }],
     }
   }
