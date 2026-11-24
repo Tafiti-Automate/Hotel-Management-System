@@ -1,3 +1,4 @@
+import SearchableSelect from '../components/SearchableSelect'
 import { varianceSignal, signalStyle, operationalStatus } from '../lib/operationalSignals'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createBackendRecord, errorMessage, readBackendRecords, readBackendPayload, runBackendAction } from '../lib/api'
@@ -70,12 +71,18 @@ export default function MonthEndStocktake() {
   const departmentReady = cycle?.inventories.every(r => !r.department_cost || (!r.department_cost.missing_valuations && (!r.department_cost.lines.length || Boolean(classifications[String(r.id)]))))
   const completeDraft = (l: Line) => Boolean(counts[l.id]?.trim()) && (l.batches || []).every(b => Boolean(batchCounts[b.id]?.trim()))
   const changedDraft = (l: Line) => (counts[l.id] ?? '') !== (l.physical_quantity ?? '') || (l.batches || []).some(b => (batchCounts[b.id] ?? '') !== (b.physical_quantity ?? ''))
+  const draftKey = editable && row?.status === 'counting' && app.user.id ? 'hotel:count-draft:v1:'+JSON.stringify([app.user.id,app.user.role,app.currentBranch || app.user.branchId || app.user.branchName,cycle?.id,row.id]) : ''
+  const baseline = JSON.stringify((row?.lines || []).map(l=>[l.id,l.physical_quantity,(l.batches||[]).map(b=>[b.id,b.physical_quantity])]))
+  const [draftReady,setDraftReady]=useState('')
+  const [recoverable,setRecoverable]=useState(false)
+  const [storageFailed,setStorageFailed]=useState(false)
+  const draftIdentity= draftKey ? JSON.stringify([draftKey,baseline]) : ''
   const dirty = Boolean(editable && row && (row.status === 'counting' ? row.lines.some(changedDraft) : row.status === 'submitted' && row.lines.some(l => (notes[l.id] ?? '') !== (l.note || ''))))
-  const confirmLeave = () => !dirty || window.confirm('Unsaved physical counts or investigation notes will be lost. Continue without saving?')
+  const confirmLeave = () => !dirty || window.confirm('Unsaved changes are not posted. Leave without saving to the server?')
   useEffect(() => {
     if (!dirty) return
     const unload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
-    const navigate = (event: Event) => { if (!window.confirm('Unsaved stocktake changes will be lost. Leave without saving?')) event.preventDefault() }
+    const navigate = (event: Event) => { if (!window.confirm('Unsaved stocktake changes are not posted. Leave without saving to the server?')) event.preventDefault() }
     window.addEventListener('beforeunload', unload)
     window.addEventListener('hotel:before-navigation', navigate)
     return () => { window.removeEventListener('beforeunload', unload); window.removeEventListener('hotel:before-navigation', navigate) }
@@ -94,7 +101,32 @@ export default function MonthEndStocktake() {
     setCounts(Object.fromEntries((row?.lines || []).map(l => [l.id, l.physical_quantity ?? ''])))
     setNotes(Object.fromEntries((row?.lines || []).map(l => [l.id, l.note || ''])))
     setBatchCounts(Object.fromEntries((row?.lines || []).flatMap(l => (l.batches || []).map(b => [b.id, b.physical_quantity ?? '']))))
-  }, [row])
+    setDraftReady('')
+    setRecoverable(false)
+    setStorageFailed(false)
+    if(draftKey){
+      try {
+        const raw=sessionStorage.getItem(draftKey)
+        if(raw && JSON.parse(raw).baseline===baseline)setRecoverable(true)
+        else { if(raw)sessionStorage.removeItem(draftKey);setDraftReady(draftIdentity) }
+      } catch {setStorageFailed(true);setDraftReady(draftIdentity)}
+    }
+  }, [row,draftKey,baseline,draftIdentity])
+  useEffect(()=>{
+    if(!draftKey||draftReady!==draftIdentity||!dirty||recoverable)return
+    try { sessionStorage.setItem(draftKey,JSON.stringify({baseline,counts,batchCounts})) }
+    catch {setStorageFailed(true)}
+  },[draftKey,draftReady,draftIdentity,dirty,recoverable,baseline,counts,batchCounts])
+  const recoverDraft=()=>{
+    try{
+      const raw=JSON.parse(sessionStorage.getItem(draftKey)||'null')
+      if(!raw||raw.baseline!==baseline||!row)throw Error('Draft no longer matches this inventory')
+      const safe=(v:unknown)=>typeof v==='string'&&/^\\d*(\\.\\d{0,4})?$/.test(v)?v:undefined
+      setCounts(Object.fromEntries(row.lines.map(l=>[l.id,safe(raw.counts?.[l.id])??l.physical_quantity??''])))
+      setBatchCounts(Object.fromEntries(row.lines.flatMap(l=>(l.batches||[]).map(b=>[b.id,safe(raw.batchCounts?.[b.id])??b.physical_quantity??'']))))
+    }catch{setStorageFailed(true)}
+    setRecoverable(false);setDraftReady(draftIdentity)
+  }
   async function act(task: () => Promise<unknown>, message: string) {
     if (operationRunning.current) return
     operationRunning.current = true
@@ -102,6 +134,7 @@ export default function MonthEndStocktake() {
     try {
       const result = await task() as Cycle
       setCycles(previous => [result, ...previous.filter(c => c.id !== result.id)])
+      if(draftKey){try{sessionStorage.removeItem(draftKey)}catch{setStorageFailed(true)}}
       setSelected(result.id); setNotice(message)
     } catch (e) { setError(errorMessage(e)) } finally { operationRunning.current = false; setBusy(false) }
   }
@@ -178,7 +211,7 @@ export default function MonthEndStocktake() {
     </section>
     {cycle && <section className="mc-card" style={{display:'grid',gridTemplateColumns:'minmax(180px, 280px) minmax(0,1fr)',gap:16}}>
       <aside><h2>Inventories</h2>{cycle.inventories.map(r => <button key={r.id} className="mc-secondary" aria-pressed={r.id === row?.id} style={{display:'block',width:'100%',textAlign:'left',marginBottom:6}} disabled={busy} onClick={() => {if(r.id===row?.id||confirmLeave())setLocation(r.id)}}>{r.location_name} · <span style={signalStyle(operationalStatus(r.status).tone)}>{dateLabel(r.status)}</span></button>)}</aside>
-      {row && <main style={{minWidth:0}}><h2>{row.location_name}</h2>{dirty && <p role="status" style={{...signalStyle('attention'),display:'block'}}>Unsaved changes · Save before leaving this inventory.</p>}
+      {row && <main style={{minWidth:0}}><h2>{row.location_name}</h2>{recoverable && <div role="status" style={{padding:10,border:'1px solid var(--border)',marginBottom:8}}><strong>Unsubmitted count draft available in this browser tab</strong><p>Restore it only if it matches your physical count sheet.</p><button type="button" className="mc-primary" onClick={recoverDraft}>Restore draft</button> <button type="button" className="mc-secondary" onClick={()=>{try{sessionStorage.removeItem(draftKey)}catch{setStorageFailed(true)}setRecoverable(false);setDraftReady(draftIdentity)}}>Discard draft</button></div>}{storageFailed&&<p role="status">Browser draft recovery unavailable. Save quantities to the server before leaving.</p>}{dirty && <p role="status" style={{...signalStyle('attention'),display:'block'}}>Unsaved changes · Save before leaving this inventory.</p>}
         <form style={{display:'flex',gap:8,marginBottom:12}} onSubmit={e=>{e.preventDefault();setArticleQuery(articleSearch)}}><input aria-label="Search inventory articles" placeholder="Article, group or reference" value={articleSearch} onChange={e=>setArticleSearch(e.target.value)}/><button type="submit" className="mc-secondary">Search</button><button type="button" className="mc-secondary" onClick={()=>{setArticleSearch('');setArticleQuery('')}}>Clear</button></form>
         {row.treatment === 'consumption_zero' ? <>
           <p>Consumption department · Closing inventory 0.0000. Recorded net cost is classified by Finance, not charged again.</p>
@@ -194,11 +227,11 @@ export default function MonthEndStocktake() {
             {editable && row.status === 'count_pending' && <button className="mc-primary" disabled={busy} onClick={() => action('prepare',{inventory:row.id})}>Prepare count sheet</button>}
             {row.status !== 'count_pending' && <button className="mc-secondary" onClick={() => print('count')}>Print blind sheet</button>}
             {editable && row.status !== 'count_pending' && <button className="mc-secondary" disabled={busy} onClick={() => {if(window.confirm('Refresh the snapshot and discard every previous physical count for this location?')) action('refresh',{inventory:row.id,discard_counts:true})}}>Refresh & recount</button>}
-            {editable && row.status === 'counting' && <><div style={{display:'flex',gap:6,flexWrap:'wrap'}}><select aria-label="Add unexpected article" value={foundArticle} onChange={e=>setFoundArticle(e.target.value)}><option value="">Add physically found article</option>{app.data.items.filter(item=>item.is_active!==false&&!row.lines.some(line=>line.sku===String(item.sku))&&matches([item.name,item.sku])).map(item=><option key={String(item.id)} value={String(item.id)}>{String(item.name)} · {String(item.sku)}</option>)}</select><input aria-label="Found article physical quantity" type="number" min="0" step="0.0001" value={foundQty} onChange={e=>setFoundQty(e.target.value)}/><button className="mc-secondary" disabled={busy||!foundArticle||!/^\d+(\.\d{1,4})?$/.test(foundQty)||row.lines.some(changedDraft)} onClick={()=>{action('add-article',{inventory:row.id,item:foundArticle,physical_quantity:foundQty},'Additional article counted');setFoundArticle('');setFoundQty('')}}>Add article</button></div><button className="mc-primary" disabled={busy || !row.lines.some(completeDraft)} onClick={() => action('save-count',{inventory:row.id,lines:row.lines.filter(completeDraft).map(l => ({id:l.id,physical_quantity:counts[l.id],batches:(l.batches || []).map(b => ({id:b.id,physical_quantity:batchCounts[b.id]}))}))},'Physical quantities saved')}>Save quantities</button><button className="mc-secondary" disabled={busy || row.lines.some(l => l.physical_quantity === null || changedDraft(l))} onClick={() => {if(row.lines.length || window.confirm('Confirm that the physical location is empty.')) action('submit',{inventory:row.id,confirm_empty:!row.lines.length},'Count submitted for variance review')}}>Submit saved count</button></>}
+            {editable && row.status === 'counting' && <><div style={{display:'flex',gap:6,flexWrap:'wrap'}}><SearchableSelect value={foundArticle} onChange={setFoundArticle} disabled={busy||recoverable} placeholder="Add physically found article" searchLabel="Search unexpected article by name or code" options={app.data.items.filter(item=>item.is_active!==false&&!row.lines.some(line=>line.sku===String(item.sku))&&matches([item.name,item.sku])).map(item=>({value:String(item.id),label:String(item.name)+' · '+String(item.sku)}))}/><input aria-label="Found article physical quantity" type="number" min="0" step="0.0001" value={foundQty} onChange={e=>setFoundQty(e.target.value)}/><button className="mc-secondary" disabled={busy||!foundArticle||!/^\d+(\.\d{1,4})?$/.test(foundQty)||row.lines.some(changedDraft)} onClick={()=>{action('add-article',{inventory:row.id,item:foundArticle,physical_quantity:foundQty},'Additional article counted');setFoundArticle('');setFoundQty('')}}>Add article</button></div><button className="mc-primary" disabled={busy || recoverable || !row.lines.some(completeDraft)} onClick={() => action('save-count',{inventory:row.id,lines:row.lines.filter(completeDraft).map(l => ({id:l.id,physical_quantity:counts[l.id],batches:(l.batches || []).map(b => ({id:b.id,physical_quantity:batchCounts[b.id]}))}))},'Physical quantities saved')}>Save quantities</button><button className="mc-secondary" disabled={busy || row.lines.some(l => l.physical_quantity === null || changedDraft(l))} onClick={() => {if(row.lines.length || window.confirm('Confirm that the physical location is empty.')) action('submit',{inventory:row.id,confirm_empty:!row.lines.length},'Count submitted for variance review')}}>Submit saved count</button></>}
             {editable && row.status === 'submitted' && <button className="mc-primary" disabled={busy || !row.lines.some(l => notes[l.id]?.trim())} onClick={() => action('investigate',{inventory:row.id,lines:row.lines.filter(l => notes[l.id]?.trim()).map(l => ({id:l.id,note:notes[l.id]}))},'Investigation notes saved')}>Save variance notes</button>}
           </div>
           <div style={{overflow:'auto',maxHeight:'65vh'}}><table style={{width:'100%',borderCollapse:'collapse',fontVariantNumeric:'tabular-nums'}}><thead><tr>{['Item group','Article','Unit','Physical quantity',...(row.status === 'submitted' || row.booked ? ['System','Difference','Unit cost','Difference value','Closing value','Investigation'] : [])].map(h => <th key={h} style={{position:'sticky',top:0,zIndex:1,background:'var(--surface-2)',textAlign:'left',padding:8,borderBottom:'1px solid var(--border)'}}>{h}</th>)}</tr></thead><tbody>
-            {row.lines.filter(l => matches([l.article,l.sku,l.item_group])).map(l => <tr key={l.id}>{[l.item_group,l.article,l.unit].map((v,i) => <td key={i} style={{padding:8}}>{v}{i === 1 && (l.batches || []).map(b => <div key={b.id} style={{marginTop:6,fontSize:12}}>Batch {b.batch_number || 'Unlabelled'} · Expiry {b.expiry_date || '—'} {editable && row.status === 'counting' ? <input aria-label={'Batch quantity '+b.id} type="number" min="0" step="0.0001" value={batchCounts[b.id] ?? ''} onChange={e => setBatchCounts(old => ({...old,[b.id]:e.target.value}))} style={{width:95}}/> : <span>Physical: {b.physical_quantity ?? '—'}{b.system_quantity !== undefined && ' · System: '+b.system_quantity}</span>}</div>)}</td>)}<td style={{padding:8}}>{editable && row.status === 'counting' ? <input aria-label={'Physical quantity '+l.article} inputMode="decimal" type="number" min="0" step="0.0001" value={counts[l.id] ?? ''} onChange={e => setCounts(old => ({...old,[l.id]:e.target.value}))} style={{width:110}}/> : l.physical_quantity ?? '—'}</td>
+            {row.lines.filter(l => matches([l.article,l.sku,l.item_group])).map(l => <tr key={l.id}>{[l.item_group,l.article,l.unit].map((v,i) => <td key={i} style={{padding:8}}>{v}{i === 1 && (l.batches || []).map(b => <div key={b.id} style={{marginTop:6,fontSize:12}}>Batch {b.batch_number || 'Unlabelled'} · Expiry {b.expiry_date || '—'} {editable && row.status === 'counting' && !recoverable ? <input aria-label={'Batch quantity '+b.id} type="number" min="0" step="0.0001" value={batchCounts[b.id] ?? ''} onChange={e => setBatchCounts(old => ({...old,[b.id]:e.target.value}))} style={{width:95}}/> : <span>Physical: {b.physical_quantity ?? '—'}{b.system_quantity !== undefined && ' · System: '+b.system_quantity}</span>}</div>)}</td>)}<td style={{padding:8}}>{editable && row.status === 'counting' ? <input aria-label={'Physical quantity '+l.article} inputMode="decimal" type="number" min="0" step="0.0001" value={counts[l.id] ?? ''} onChange={e => setCounts(old => ({...old,[l.id]:e.target.value}))} style={{width:110}}/> : l.physical_quantity ?? '—'}</td>
               {(row.status === 'submitted' || row.booked) && <>{[l.system_quantity,l.variance,l.unit_cost,l.variance_value,l.closing_value].map((v,i) => <td key={i} style={{padding:8}}>{i===1||i===3?<span style={{...signalStyle(varianceSignal(v).tone),fontVariantNumeric:'tabular-nums'}}>{v??'Not valued'}{i===1?' · '+varianceSignal(v).label:''}</span>:v??'—'}</td>)}<td>{editable ? <input aria-label={'Investigation '+l.article} value={notes[l.id] ?? ''} onChange={e => setNotes(old => ({...old,[l.id]:e.target.value}))}/> : l.note}</td></>}
             </tr>)}
           </tbody></table></div>
