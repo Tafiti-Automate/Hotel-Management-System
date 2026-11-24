@@ -334,6 +334,9 @@ export async function passwordRecovery(action: 'request' | 'confirm', body: Reco
   })
   if (!response.ok) {
     const result = await response.json().catch(() => ({}))
+    if (response.status === 429) throw new Error('Too many attempts. Please try again later.')
+    if (response.status >= 500 || action === 'request' && response.status !== 400) throw new Error('Unable to process your request at the moment. Please try again later.')
+    if (action === 'request') throw new Error('Enter a valid email address and try again.')
     throw new Error(typeof result.detail === 'string' ? result.detail : 'Password recovery could not be completed. Please try again.')
   }
 }

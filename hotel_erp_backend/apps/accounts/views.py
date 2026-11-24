@@ -154,7 +154,8 @@ class PasswordResetRequestView(APIView):
         url = settings.PASSWORD_RESET_FRONTEND_URL
         parsed = urlsplit(url)
         if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path.rstrip("/") != "/login" or not settings.EMAIL_HOST and settings.EMAIL_BACKEND.endswith("smtp.EmailBackend"):
-            return Response({"detail": "Email password recovery is not configured. Contact your system administrator."}, status=503)
+            logging.getLogger(__name__).warning("Password recovery unavailable: frontend URL or email configuration invalid")
+            return Response({"detail": "Unable to process your request at the moment. Please try again later."}, status=503)
         # Duplicate email addresses cannot safely identify one staff account.
         candidates = list(User.objects.filter(email__iexact=email, is_active=True)[:2])
         if len(candidates) == 1 and candidates[0].has_usable_password():
