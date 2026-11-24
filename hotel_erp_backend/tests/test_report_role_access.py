@@ -132,3 +132,25 @@ def test_materials_analysis_catalogue_enforces_its_own_report_role_access():
     client.force_authenticate(user=make_role_user("Department Head"))
     denied = client.get("/api/v1/reports/analysis/purchasePrices/")
     assert denied.status_code == 403
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("role", ["Cost Controller", "Financial Manager"])
+def test_shared_materials_catalogue_report_access(role):
+    client = APIClient()
+    client.force_authenticate(user=make_role_user(role))
+    from apps.reports.views import MATERIALS_SHARED_REPORT_IDS, REPORT_ROLE_ACCESS
+    for report in MATERIALS_SHARED_REPORT_IDS:
+        assert role in REPORT_ROLE_ACCESS[report]
+    for report in ("issueDeviation", "issueDeviationReason", "requestTransfer", "monthlyStoreBalance", "dailyOutOfStock", "stockForecast", "articleDocumentHistory", "bookingJournal", "stockCover", "stockTakeLinewise", "usageStatistics", "consumptionInventory", "salesTaxAnalysis", "supplierInvoices", "fbBudget"):
+        response = client.get(f"/api/v1/reports/analysis/{report}/")
+        assert response.status_code == 200, (report, response.data)
+        assert response.data["results"] == []
+
+
+@pytest.mark.django_db
+def test_new_materials_reports_do_not_grant_department_head_access():
+    client = APIClient()
+    client.force_authenticate(user=make_role_user("Department Head"))
+    for report in ("issueDeviation", "issueDeviationReason", "requestTransfer", "monthlyStoreBalance", "dailyOutOfStock", "stockForecast", "articleDocumentHistory", "bookingJournal", "stockCover", "stockTakeLinewise", "usageStatistics", "consumptionInventory",):
+        assert client.get(f"/api/v1/reports/analysis/{report}/").status_code == 403

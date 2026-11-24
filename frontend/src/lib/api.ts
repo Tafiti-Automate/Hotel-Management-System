@@ -1056,6 +1056,7 @@ export type OperationalReportId =
   | 'menuEngineering' | 'requirementsUsage' | 'costOfSalesLocation' | 'warehouseStatistics'
   | 'costCenterComparison' | 'dailyFood' | 'groupAnalysis' | 'majorGroupLists' | 'fbResult'
   | 'monthlyReport' | 'lastEstimate' | 'fbBudget'
+  | 'issueDeviation' | 'issueDeviationReason' | 'requestTransfer' | 'monthlyStoreBalance' | 'dailyOutOfStock' | 'stockForecast' | 'articleDocumentHistory' | 'bookingJournal' | 'stockCover' | 'stockTakeLinewise' | 'usageStatistics' | 'consumptionInventory'
 
 export interface OperationalReportFilters {
   branch?: string
@@ -1120,6 +1121,18 @@ const operationalReportPaths: Record<OperationalReportId, string> = {
   monthlyReport: 'reports/analysis/monthlyReport',
   lastEstimate: 'reports/analysis/lastEstimate',
   fbBudget: 'reports/analysis/fbBudget',
+  issueDeviation: 'reports/analysis/issueDeviation',
+  issueDeviationReason: 'reports/analysis/issueDeviationReason',
+  requestTransfer: 'reports/analysis/requestTransfer',
+  monthlyStoreBalance: 'reports/analysis/monthlyStoreBalance',
+  dailyOutOfStock: 'reports/analysis/dailyOutOfStock',
+  stockForecast: 'reports/analysis/stockForecast',
+  articleDocumentHistory: 'reports/analysis/articleDocumentHistory',
+  bookingJournal: 'reports/analysis/bookingJournal',
+  stockCover: 'reports/analysis/stockCover',
+  stockTakeLinewise: 'reports/analysis/stockTakeLinewise',
+  usageStatistics: 'reports/analysis/usageStatistics',
+  consumptionInventory: 'reports/analysis/consumptionInventory',
 }
 
 export function isOperationalReport(id: string): id is OperationalReportId {

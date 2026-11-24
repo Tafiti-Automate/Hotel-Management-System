@@ -245,3 +245,41 @@ def test_pos_cost_report_uses_frozen_cost_and_never_invents_missing_values():
     assert row["cogs"] is None and row["profit"] is None and row["unpriced"] == 1
     assert [detail["cogs"] for detail in response.data["detail_results"]] == ["400.00", None]
     assert client.get("/api/v1/reports/analysis/costOfSalesLocation/?date_from=2026-11-25").data["results"] == []
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("role", ["Cost Controller", "Financial Manager"])
+def test_client_report_catalogue_scope_and_booked_inventory_values(role):
+    from datetime import date
+    from django.contrib.auth.models import Group
+    from apps.departments.models import Department
+    from apps.employees.models import Employee
+    from apps.inventory.models import MonthEndCycle, MonthEndInventory
+    user = get_user_model().objects.create_user(username="catalogue-reader", employee_code="CAT-READ", password="test-password")
+    user.groups.add(Group.objects.get_or_create(name=role)[0])
+    department = Department.objects.create(name="Cost review")
+    own = Branch.objects.create(name="Own report property")
+    other = Branch.objects.create(name="Other report property")
+    Employee.objects.create(user=user, department=department, branch=own, designation=role)
+    category = Category.objects.create(name="Catalogue articles")
+    item = Item.objects.create(category=category, name="Catalogue rice", sku="CAT-RICE", unit="kg", reorder_level=Decimal("2"))
+    for branch in (own, other):
+        store = StoreLocation.objects.create(branch=branch, name=branch.name + " store")
+        InventoryBalance.objects.create(store=store, item=item, quantity_in_stock=Decimal("0"), weighted_average_cost=Decimal("1000"))
+        cycle = MonthEndCycle.objects.create(branch=branch, cutoff=date(2026,10,31), memo_reference="CAT", memo="Count", status="booked", created_by=user)
+        MonthEndInventory.objects.create(cycle=cycle, store=store, location_name=store.name, count_snapshot=[{
+            "sku":item.sku,"article":item.name,"unit":"kg","physical_quantity":"3.1250","system_quantity":"4.0000","unit_cost":"1000.0000","note":"Count variance"
+        }])
+    client = APIClient()
+    client.force_authenticate(user=user)
+    response = client.get("/api/v1/reports/analysis/monthlyStoreBalance/")
+    assert response.status_code == 200, response.data
+    assert len(response.data["results"]) == 1
+    row = response.data["results"][0]
+    assert row["store"] == own.name + " store"
+    assert Decimal(row["closing_value"]) == Decimal("3125")
+    assert Decimal(row["variance_value"]) == Decimal("-875")
+    assert row["opening_value"] is None
+    assert client.get("/api/v1/reports/analysis/monthlyStoreBalance/", {"branch":str(other.pk)}).data["results"] == []
+    assert len(client.get("/api/v1/reports/analysis/dailyOutOfStock/").data["results"]) == 1
+    assert client.get("/api/v1/reports/analysis/stockCover/").data["results"][0]["cover"] is None

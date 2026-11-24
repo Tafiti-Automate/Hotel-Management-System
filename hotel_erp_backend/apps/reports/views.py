@@ -161,6 +161,12 @@ REPORT_ROLE_ACCESS = {
     "fbBudget": {"Financial Manager", "General Manager"},
 }
 
+# Client-approved read-only catalogue for Cost Control and Finance.
+# This does not grant approval, payment, or journal mutation permissions.
+MATERIALS_SHARED_REPORT_IDS = ("purchasePrices", "purchaseStatisticsItem", "reorderProposal", "purchaseStatisticsSupplier", "purchaseReceivingDeviation", "abcAnalysis", "priceVariance", "receiptsJournal", "purchaseOrders", "supplierInvoices", "goodsReceipts", "stockMovementControl", "movement", "consumption", "salesOverview", "salesStatistics", "salesTaxAnalysis", "salesActivity", "articlePotentialUsage", "menuEngineering", "requirementsUsage", "costOfSalesLocation", "warehouseStatistics", "costCenterComparison", "dailyFood", "groupAnalysis", "majorGroupLists", "fbResult", "monthlyReport", "lastEstimate", "fbBudget", "issueDeviation", "issueDeviationReason", "requestTransfer", "monthlyStoreBalance", "dailyOutOfStock", "stockForecast", "articleDocumentHistory", "bookingJournal", "stockCover", "stockTakeLinewise", "usageStatistics", "consumptionInventory",)
+for _report_id in MATERIALS_SHARED_REPORT_IDS:
+    REPORT_ROLE_ACCESS.setdefault(_report_id, set()).update({"Cost Controller", "Financial Manager"})
+
 CONTROL_REPORT_KEYS = {
     "daily": "dailyActivities",
     "pending": "pendingActions",
@@ -994,11 +1000,205 @@ class MaterialsAnalysisReportView(ReportAPIView):
             "monthlyReport": self.monthly_report,
             "lastEstimate": self.last_estimate,
             "fbBudget": self.fb_budget,
+            "issueDeviation": self.issue_deviation,
+            "issueDeviationReason": self.issue_deviation,
+            "requestTransfer": self.request_transfer,
+            "monthlyStoreBalance": self.month_end_stock,
+            "dailyOutOfStock": self.out_of_stock,
+            "stockForecast": self.stock_projection,
+            "articleDocumentHistory": self.ledger_register,
+            "bookingJournal": self.ledger_register,
+            "stockCover": self.stock_projection,
+            "stockTakeLinewise": self.month_end_stock,
+            "usageStatistics": self.ledger_register,
+            "consumptionInventory": self.consumption_inventory,
         }
         builder = builders.get(report_kind)
         if not builder:
             raise ValidationError({"report_kind": "Unknown Materials analysis report."})
         return builder(request, report_kind)
+
+
+    @staticmethod
+    def _columns(spec):
+        return [{"key": key, "label": label, "kind": kind} for key, label, kind in spec]
+
+    def _request_lines(self, request):
+        from apps.inventory.models import StoreRequisitionItem
+        lines = apply_store_scope(StoreRequisitionItem.objects.select_related(
+            "requisition__store", "requisition__department", "item__base_unit",
+        ), request, store_field="requisition__store")
+        lines = apply_date_scope(lines, request, field="requisition__created_at")
+        lines = apply_category_scope(lines, request)
+        if request.query_params.get("item"):
+            lines = lines.filter(item_id=request.query_params["item"])
+        if request.query_params.get("department"):
+            lines = lines.filter(requisition__department_id=request.query_params["department"])
+        return lines
+
+    @staticmethod
+    def _base_unit(item):
+        return item.base_unit.abbreviation if item.base_unit_id else item.unit
+
+    def issue_deviation(self, request, report_kind):
+        rows = []
+        for line in self._request_lines(request).exclude(requisition__status="draft"):
+            req = line.requisition
+            rows.append({"reference": req.requisition_no, "date": req.created_at, "store": str(req.store or ""),
+                         "department": str(req.department), "article": line.item.name, "sku": line.item.sku,
+                         "unit": self._base_unit(line.item), "requested": str(line.base_quantity_requested),
+                         "approved": str(line.quantity_approved), "issued": str(line.quantity_issued),
+                         "deviation": str(line.quantity_approved - line.quantity_issued),
+                         "reason": line.rejection_stage or ("Storekeeper comment" if line.storekeeper_comment else "Not recorded"),
+                         "remarks": line.rejection_reason or line.storekeeper_comment or line.remarks,
+                         "status": req.status})
+        title = "Issue/Transfer Deviation per Reason Code" if report_kind == "issueDeviationReason" else "Issue/Transfer Deviation Statistics"
+        return analysis_response(title, "Department request line deviations (approved less issued). Reason codes use recorded workflow stages, not inferred causes; inter-store transfer variance evidence is not yet recorded separately.", self._columns([
+            ("reference","Request","text"),("date","Date","text"),("store","Store","text"),("department","Department","text"),
+            ("article","Article","text"),("sku","SKU","text"),("unit","UOM","text"),
+            ("requested","Requested","number"),("approved","Approved","number"),("issued","Issued","number"),
+            ("deviation","Approved less issued","number"),("reason","Reason","text"),("remarks","Remarks","text"),("status","Status","text"),
+        ]), rows)
+
+    def request_transfer(self, request, report_kind):
+        from apps.inventory.models import StockTransferItem
+        rows = []
+        department = request.query_params.get("department")
+        for line in self._request_lines(request):
+            req = line.requisition
+            rows.append({"reference":req.requisition_no,"date":req.created_at,"source":"Department request",
+                         "store":str(req.store or ""),"destination":str(req.department),"article":line.item.name,
+                         "sku":line.item.sku,"unit":self._base_unit(line.item),"requested":str(line.base_quantity_requested),
+                         "issued":str(line.quantity_issued),"status":req.status})
+        if not department:
+            lines = apply_store_scope(StockTransferItem.objects.select_related(
+                "stock_transfer__from_store","stock_transfer__to_store","item__base_unit",
+            ), request, store_field="stock_transfer__from_store")
+            lines = apply_date_scope(lines, request, field="stock_transfer__created_at")
+            lines = apply_category_scope(lines, request)
+            if request.query_params.get("item"):
+                lines = lines.filter(item_id=request.query_params["item"])
+            for line in lines:
+                tr = line.stock_transfer
+                rows.append({"reference":str(tr.pk),"date":tr.created_at,"source":"Inter-store transfer",
+                             "store":str(tr.from_store),"destination":str(tr.to_store),"article":line.item.name,
+                             "sku":line.item.sku,"unit":self._base_unit(line.item),"requested":str(line.base_quantity),
+                             "issued":str(line.base_quantity) if tr.dispatched_at or tr.inventory_changes_applied else "0.0000",
+                             "status":tr.status})
+        return analysis_response("Request and Transfer Report","Requested and dispatched quantities; dispatch is not proof of departmental pickup.",self._columns([
+            ("reference","Reference","text"),("date","Date","text"),("source","Source","text"),("store","Store","text"),
+            ("destination","Destination","text"),("article","Article","text"),("sku","SKU","text"),("unit","UOM","text"),
+            ("requested","Requested","number"),("issued","Dispatched / issued","number"),("status","Status","text"),
+        ]),rows)
+
+    def _stock_positions(self, request):
+        rows = apply_store_scope(InventoryBalance.objects.select_related("store","item__base_unit"), request)
+        rows = apply_category_scope(rows, request).filter(store__is_active=True,store__is_virtual_transit=False)
+        if request.query_params.get("item"):
+            rows = rows.filter(item_id=request.query_params["item"])
+        return rows
+
+    def out_of_stock(self, request, report_kind):
+        rows = [{"date":timezone.localdate(),"store":str(b.store),"article":b.item.name,"sku":b.item.sku,
+                 "unit":self._base_unit(b.item),"available":str(b.available_quantity)}
+                for b in self._stock_positions(request) if b.available_quantity <= 0]
+        return analysis_response("Daily Out of Stock Report","Current available quantity at or below zero, not a historical daily snapshot.",
+            self._columns([("date","As of","text"),("store","Store","text"),("article","Article","text"),("sku","SKU","text"),
+                           ("unit","UOM","text"),("available","Available","number")]),rows)
+
+    @staticmethod
+    def _usage_sources():
+        return (LedgerReferenceType.STOCK_ISSUE, LedgerReferenceType.TRANSIT_PICKUP, LedgerReferenceType.POS_DEPLETION,
+                LedgerReferenceType.SALE, LedgerReferenceType.WASTE)
+
+    def stock_projection(self, request, report_kind):
+        today = timezone.localdate()
+        start = today - timedelta(days=30)
+        # Use dispatch rather than pickup for the physical issuing store; never
+        # count both sides of the virtual transit movement.
+        sources = (LedgerReferenceType.STOCK_ISSUE, LedgerReferenceType.TRANSIT_DISPATCH,
+                   LedgerReferenceType.POS_DEPLETION, LedgerReferenceType.SALE, LedgerReferenceType.WASTE)
+        movements = apply_store_scope(StockLedger.objects.with_accounting_date().filter(
+            accounting_date__gte=start,accounting_date__lt=today,quantity_out__gt=0,
+            reference_type__in=sources,store__is_virtual_transit=False),request)
+        used = {(row["store_id"],row["item_id"]):row["qty"] for row in movements.values("store_id","item_id").annotate(qty=Sum("quantity_out"))}
+        rows = []
+        for b in self._stock_positions(request):
+            quantity = used.get((b.store_id,b.item_id),Decimal("0"))
+            daily = quantity / Decimal("30")
+            rows.append({"store":str(b.store),"article":b.item.name,"sku":b.item.sku,"unit":self._base_unit(b.item),
+                         "available":str(b.available_quantity),"usage":str(quantity),"daily":str(daily.quantize(Decimal("0.0001"))),
+                         "cover":str((max(b.available_quantity,Decimal("0"))/daily).quantize(Decimal("0.01"))) if daily else None,
+                         "forecast":str((b.available_quantity-quantity).quantize(Decimal("0.0001"))) if daily else None})
+        return analysis_response("Stock Cover Report" if report_kind=="stockCover" else "Stock on Hand Forecast",
+            "Indicative 30-day historical run rate; no future purchase orders, seasonality or demand reservations are added. No usage evidence means no forecast.",
+            self._columns([("store","Store","text"),("article","Article","text"),("sku","SKU","text"),("unit","UOM","text"),
+                ("available","Available","number"),("usage","Past 30-day usage","number"),("daily","Daily rate","number"),
+                ("cover","Days of cover","number"),("forecast","Projected 30-day available","number")]),rows)
+
+    def ledger_register(self, request, report_kind):
+        queryset = apply_store_scope(StockLedger.objects.select_related("store","item__base_unit"),request)
+        queryset = apply_category_scope(queryset,request)
+        queryset = apply_date_scope(queryset,request)
+        if request.query_params.get("item"):
+            queryset = queryset.filter(item_id=request.query_params["item"])
+        if report_kind=="usageStatistics":
+            queryset = queryset.filter(quantity_out__gt=0,reference_type__in=self._usage_sources())
+        rows = [{"date":m.accounting_date,"posted_at":m.created_at,"source":m.reference_type,"reference":str(m.reference_id),
+                 "store":str(m.store or ""),"article":m.item.name,"sku":m.item.sku,"unit":self._base_unit(m.item),
+                 "quantity_in":str(m.quantity_in),"quantity_out":str(m.quantity_out),
+                 "value":str(m.total_cost_snapshot) if m.total_cost_snapshot is not None else None,"remarks":m.note}
+                for m in queryset.order_by("accounting_date","created_at","pk")]
+        titles = {"articleDocumentHistory":"Article History by Document Date","bookingJournal":"Booking Journal","usageStatistics":"Usage Statistics"}
+        return analysis_response(titles[report_kind],
+            "Posted stock ledger, sorted by accounting date. The accounting date is not a verified source-document issue date. Missing historical cost remains blank; no external GL journal is posted.",
+            self._columns([("date","Accounting date","text"),("posted_at","Posted at","text"),("source","Source","text"),
+                ("reference","Reference","text"),("store","Store","text"),("article","Article","text"),("sku","SKU","text"),("unit","UOM","text"),
+                ("quantity_in","In","number"),("quantity_out","Out","number"),("value","Movement value","money"),("remarks","Remarks","text")]),rows)
+
+    def _booked_inventory(self, request):
+        from apps.inventory.models import MonthEndInventory
+        rows = apply_branch_scope(MonthEndInventory.objects.filter(cycle__status="booked").select_related("cycle","store","department"),
+                                  request,branch_field="cycle__branch")
+        rows = apply_date_scope(rows,request,field="cycle__cutoff")
+        if request.query_params.get("store"):
+            rows=rows.filter(store_id=request.query_params["store"])
+        if request.query_params.get("department"):
+            rows=rows.filter(department_id=request.query_params["department"])
+        return rows
+
+    def month_end_stock(self, request, report_kind):
+        from apps.inventory.models import MonthEndInventory
+        rows=[]
+        for inv in self._booked_inventory(request).filter(store__isnull=False):
+            previous=MonthEndInventory.objects.filter(cycle__branch=inv.cycle.branch,
+                cycle__cutoff=inv.cycle.cutoff.replace(day=1)-timedelta(days=1),cycle__status="booked",store=inv.store).first()
+            opening={line["sku"]:line for line in previous.count_snapshot} if previous else {}
+            for line in inv.count_snapshot:
+                actual=Decimal(line["physical_quantity"]); system=Decimal(line["system_quantity"]); cost=Decimal(line["unit_cost"])
+                prior=opening.get(line["sku"])
+                rows.append({"date":inv.cycle.cutoff,"store":inv.location_name,"article":line["article"],"sku":line["sku"],"unit":line["unit"],
+                    "opening_value":str(Decimal(prior["physical_quantity"])*Decimal(prior["unit_cost"])) if prior else None,
+                    "system_quantity":str(system),"physical_quantity":str(actual),"variance":str(actual-system),
+                    "variance_value":str((actual-system)*cost),"closing_value":str(actual*cost),"remarks":line["note"]})
+        return analysis_response("Stock Take Linewise" if report_kind=="stockTakeLinewise" else "Monthly Store Balance Sheet",
+            "Booked cutoff snapshots only. Prior opening values are available only where matching booked evidence exists. Movement reconciliation is available in the month-end workspace.",
+            self._columns([("date","Cutoff","text"),("store","Store","text"),("article","Article","text"),("sku","SKU","text"),("unit","UOM","text"),
+                ("opening_value","Opening value","money"),("system_quantity","System qty","number"),("physical_quantity","Physical qty","number"),
+                ("variance","Variance","number"),("variance_value","Variance value","money"),("closing_value","Closing value","money"),("remarks","Remarks","text")]),rows)
+
+    def consumption_inventory(self, request, report_kind):
+        rows=[]
+        for inv in self._booked_inventory(request).filter(department__isnull=False):
+            snapshot=inv.department_cost_snapshot
+            for line in snapshot.get("lines",[]):
+                rows.append({"date":line["date"],"month":inv.cycle.cutoff.strftime("%Y-%m"),"department":inv.location_name,
+                             "classification":snapshot.get("classification",""),"source":line["source"],"reference":line["reference"],
+                             "article":line["article"],"sku":line["sku"],"unit":line["unit"],"quantity":line["quantity"],"value":line["value"]})
+        return analysis_response("Consumption on Inventory","Booked zero-closing department consumption, including recorded issues, direct receipts and return reversals. Physical store variances are reported separately in Stock Take Linewise. Not an additional expense posting.",
+            self._columns([("date","Date","text"),("month","Month","text"),("department","Department","text"),("classification","Classification","text"),
+                ("source","Source","text"),("reference","Reference","text"),("article","Article","text"),("sku","SKU","text"),
+                ("unit","UOM","text"),("quantity","Quantity","number"),("value","Net recorded cost","money")]),rows)
 
     def purchase_prices(self, request, report_kind):
         queryset = SupplierItemPrice.objects.select_related("supplier", "item__category", "unit").filter(is_active=True)
@@ -1438,11 +1638,16 @@ class MaterialsAnalysisReportView(ReportAPIView):
         return analysis_response("Last Estimate", "Latest procurement requisition estimates in the current branch scope.", [{"key": "requisition", "label": "Requisition"}, {"key": "date", "label": "Created"}, {"key": "department", "label": "Department"}, {"key": "requester", "label": "Requester"}, {"key": "estimate", "label": "Estimated value", "kind": "money"}, {"key": "status", "label": "Status"}], rows)
 
     def fb_budget(self, request, report_kind):
-        return analysis_response(
-            "F&B Budget", "No approved F&B budget has been posted in this ERP instance.",
-            [{"key": "status", "label": "Status"}], [],
-            notice="Budget figures are intentionally not inferred from sales, expenses or purchase estimates. Add an approved budget workflow before this report can show financial values.",
-        )
+        from apps.materials_control.models import CostCenterBudget
+        budgets = apply_branch_scope(CostCenterBudget.objects.filter(is_active=True).select_related("department","branch"), request)
+        budgets = apply_date_scope(budgets, request, field="period_month")
+        if request.query_params.get("department"):
+            budgets = budgets.filter(department_id=request.query_params["department"])
+        rows = [{"month":budget.period_month,"department":str(budget.department),"budget":str(budget.spending_cap),
+                 "committed":str(budget.committed_spend),"remaining":str(budget.remaining_amount)} for budget in budgets]
+        return analysis_response("F&B Budget","Configured cost-center purchasing caps and commitments. Select the F&B department; this is not a verified food-cost budget or an actual-versus-budget P&L.",
+            self._columns([("month","Month","text"),("department","Department","text"),("budget","Budget cap","money"),
+                           ("committed","Purchase commitments","money"),("remaining","Remaining cap","money")]),rows)
 
 
 def control_row(**values):

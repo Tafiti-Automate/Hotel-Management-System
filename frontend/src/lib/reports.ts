@@ -292,6 +292,10 @@ export function buildReport(id: string, data: Record<EntityKey, Row[]>): BuiltRe
 // Only explicitly additive, raw monetary fields are aggregated. Unit costs,
 // percentages, running balances and quantities with mixed UOMs are not summed.
 const summaryAmounts: Record<string, { key: string; label: string }[]> = {
+  monthlyStoreBalance: [{key:'opening_value',label:'Opening value'},{key:'variance_value',label:'Variance value'},{key:'closing_value',label:'Closing value'}],
+  stockTakeLinewise: [{key:'variance_value',label:'Variance value'},{key:'closing_value',label:'Closing value'}],
+  consumptionInventory: [{key:'value',label:'Net recorded cost'}],
+  fbBudget: [{key:'budget',label:'Budget cap'},{key:'committed',label:'Purchase commitments'},{key:'remaining',label:'Remaining cap'}],
   purchaseRequisitions: [{ key: 'value', label: 'Requisition value' }],
   purchaseOrders: [{ key: 'value', label: 'LPO value' }],
   valuation: [{ key: 'stock_value', label: 'Stock value' }],
@@ -303,7 +307,7 @@ const summaryAmounts: Record<string, { key: string; label: string }[]> = {
   receiptsJournal: [{key:'value',label:'Received value'}],
   supplierInvoices: [{key:'subtotal',label:'Subtotal'}, {key:'tax',label:'Tax'}, {key:'total',label:'Invoice total'}],
 }
-const groupLabels = ['department', 'store', 'supplier', 'status', 'receipt status', 'posting', 'location', 'category', 'major group', 'document', 'source', 'month', 'group', 'item', 'article']
+const groupLabels = ['department', 'store', 'supplier', 'status', 'receipt status', 'posting', 'location', 'category', 'major group', 'document', 'source', 'month', 'group', 'item', 'article', 'reason', 'classification', 'destination']
 
 export function summaryGroupOptions(report: BuiltReport) {
   return report.columns.flatMap((column, index) => groupLabels.includes(column.label.toLowerCase()) ? [{ label: column.label, index }] : [])
@@ -322,12 +326,14 @@ export function presentReport(source: BuiltReport, reportId: string, search: str
   const group = options.find(option => option.index === groupIndex) || options[0]
   const lineAmount = rows.some(row => row.data && 'line_value' in row.data)
   const candidates = lineAmount ? [{ key: 'line_value', label: 'Recorded line value' }] : (summaryAmounts[reportId] || [])
-  const amounts = candidates.filter(field => rows.some(row => row.data && field.key in row.data))
+  // Stock at a cutoff is a balance, not a flow: never total across months.
+  const multipleCutoffs = ['monthlyStoreBalance','stockTakeLinewise'].includes(reportId) && new Set(rows.map(row=>String(row.data?.date ?? ''))).size > 1
+  const amounts = multipleCutoffs ? [] : candidates.filter(field => rows.some(row => row.data && field.key in row.data))
   const validAmount = (value: unknown) => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value))
-  const articleGrouped = group?.label.toLowerCase() === 'article' && rows.every(row => row.data?.article && row.data?.unit)
+  const articleGrouped = !multipleCutoffs && group?.label.toLowerCase() === 'article' && rows.every(row => row.data?.article && row.data?.unit)
   const quantities = articleGrouped ? [
     {key:'requested',label:'Requested qty'}, {key:'approved',label:'Approved qty'}, {key:'issued',label:'Issued qty'},
-    {key:'ordered',label:'Ordered qty'}, {key:'delivered',label:'Delivered qty'}, {key:'accepted',label:'Accepted qty'}, {key:'rejected',label:'Rejected qty'},
+    {key:'deviation',label:'Deviation qty'}, {key:'quantity_in',label:'In'}, {key:'quantity_out',label:'Out'}, {key:'quantity',label:'Quantity'}, {key:'physical_quantity',label:'Physical qty'}, {key:'variance',label:'Variance qty'}, {key:'ordered',label:'Ordered qty'}, {key:'delivered',label:'Delivered qty'}, {key:'accepted',label:'Accepted qty'}, {key:'rejected',label:'Rejected qty'},
   ].filter(field => rows.length && rows.every(row => row.data?.[field.key] != null && row.data[field.key] !== '' && Number.isFinite(Number(row.data[field.key])))) : []
   const groups = new Map<string, {count: number; amounts: number[]; missing: boolean[]; quantities: number[]}>()
   for (const row of rows) {

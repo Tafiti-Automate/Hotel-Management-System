@@ -8,7 +8,7 @@ function scopeForRole(role: string) {
   const key = role.trim().toLowerCase()
   if (key === 'department head') return 'My department'
   if (key === 'store keeper') return 'Assigned stores'
-  if (key === 'cost controller') return 'Procurement controls'
+  if (key === 'cost controller') return 'Current property · Cost Control'
   if (key === 'system administrator') return 'Permitted properties'
   return 'Current property'
 }
@@ -45,6 +45,7 @@ function areaIcon(area: string) {
 export default function Reports() {
   const app = useApp()
   const [search, setSearch] = useState('')
+  const [searchDraft, setSearchDraft] = useState('')
   const allowedIds = reportIdsForUser(app.user)
   const scope = scopeForRole(app.user.role)
 
@@ -65,8 +66,12 @@ export default function Reports() {
       const rows = byArea.get(report.grp) || []
       rows.push(report)
       byArea.set(report.grp, rows)
+      // The original MC menu exposes the same Booking Journal in two groups.
+      if (report.id === 'bookingJournal') byArea.set('Result', [...(byArea.get('Result') || []), report])
     })
-    return Array.from(byArea.entries()).sort(([a], [b]) => a.localeCompare(b))
+    const order = ['Purchase Analysis','Stock Analysis','Sales Analysis','Result']
+    const rank = (name: string) => order.includes(name) ? order.indexOf(name) : order.length
+    return Array.from(byArea.entries()).sort(([a], [b]) => rank(a)-rank(b) || a.localeCompare(b))
   }, [visibleReports])
 
   return (
@@ -87,16 +92,17 @@ export default function Reports() {
           </div>
         </div>
 
-        <label className="tafiti-report-search">
+        <form className="tafiti-report-search" onSubmit={event=>{event.preventDefault();setSearch(searchDraft)}}>
           <Icon name="search" size={15} />
           <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            value={searchDraft}
+            onChange={(event) => setSearchDraft(event.target.value)}
             placeholder="Search reports…"
             aria-label="Search reports"
           />
-          {search && <button type="button" onClick={() => setSearch('')} aria-label="Clear report search"><Icon name="close" size={14} /></button>}
-        </label>
+          <button type="submit" aria-label="Find reports">Search</button>
+          {searchDraft && <button type="button" onClick={() => {setSearch('');setSearchDraft('')}} aria-label="Clear report search"><Icon name="close" size={14} /></button>}
+        </form>
       </header>
 
       {groups.length > 0 ? (
@@ -138,7 +144,7 @@ export default function Reports() {
           <span><Icon name="search" size={22} /></span>
           <strong>No reports found</strong>
           <p>{search ? 'Try a different report name or clear the search.' : 'No reports are available for your current role.'}</p>
-          {search && <button type="button" onClick={() => setSearch('')}>Clear search</button>}
+          {search && <button type="button" onClick={() => {setSearch('');setSearchDraft('')}}>Clear search</button>}
         </div>
       )}
     </section>

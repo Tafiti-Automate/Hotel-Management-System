@@ -198,6 +198,11 @@ export const roleReportIds: Record<string, string[]> = {
   'receiving clerk': ['purchaseOrders', 'goodsReceipts', 'pendingActions', 'exceptions', 'directWorkspace', 'receiptsJournal'],
 }
 
+const materialsSharedReports = ["purchasePrices", "purchaseStatisticsItem", "reorderProposal", "purchaseStatisticsSupplier", "purchaseReceivingDeviation", "abcAnalysis", "priceVariance", "receiptsJournal", "purchaseOrders", "supplierInvoices", "goodsReceipts", "stockMovementControl", "movement", "consumption", "salesOverview", "salesStatistics", "salesTaxAnalysis", "salesActivity", "articlePotentialUsage", "menuEngineering", "requirementsUsage", "costOfSalesLocation", "warehouseStatistics", "costCenterComparison", "dailyFood", "groupAnalysis", "majorGroupLists", "fbResult", "monthlyReport", "lastEstimate", "fbBudget", "issueDeviation", "issueDeviationReason", "requestTransfer", "monthlyStoreBalance", "dailyOutOfStock", "stockForecast", "articleDocumentHistory", "bookingJournal", "stockCover", "stockTakeLinewise", "usageStatistics", "consumptionInventory"]
+for (const role of ['cost controller', 'financial manager']) {
+  roleReportIds[role] = Array.from(new Set([...roleReportIds[role], ...materialsSharedReports]))
+}
+
 export function reportIdsForUser(user: AccessUser): string[] {
   if (user.isSuperuser || roleKey(user) === 'system administrator') return ['*']
   return roleReportIds[roleKey(user)] || []
