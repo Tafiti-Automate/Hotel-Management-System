@@ -1,3 +1,4 @@
+import OverviewAnalytics from '../components/OverviewAnalytics'
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { errorMessage, readBackendRecords, runBackendAction } from '../lib/api'
 import type { Row } from '../lib/data'
@@ -171,6 +172,7 @@ export default function FrontOfficeWorkspace({ section }: { section: string }) {
       <div className="hs-metric"><span>Arrivals on {businessDate}</span><strong>{hasDataAccess('reservations') ? reservations.filter(r => isReserved(r) && day(r.arrival_date) === businessDate).length : 'Restricted'}</strong></div>
       <div className="hs-metric"><span>Due to depart</span><strong>{hasDataAccess('reservations') ? reservations.filter(r => isCheckedIn(r) && day(r.departure_date) === businessDate).length : 'Restricted'}</strong></div>
     </div>
+    {section==='front-office-dashboard'&&<OverviewAnalytics title="Reservations analytics" scope={property} ready={!loading&&!failures.length&&Boolean(property)&&hasDataAccess('reservations')} dateLabel="Scheduled arrival date" groups={[{label:'Reservations',rows:reservations.map(r=>({...r,analytics_date:r.arrival_date}))}]}/>}
     <div className="hs-inline-actions" style={{margin:'12px 0'}}>
       <button type="button" className="hs-button hs-button-primary" onClick={() => go('front-desk-reservations', 'Reservation Management')}>Reservations Desk</button>
       <button type="button" className="hs-button" onClick={() => go('front-desk-rooms', 'Room Management')}>Room Management</button>

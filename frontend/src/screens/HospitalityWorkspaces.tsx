@@ -1,3 +1,4 @@
+import OverviewAnalytics from '../components/OverviewAnalytics'
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Icon } from '../components/Icon'
 import { createBackendRecord, errorMessage, readBackendPayload, readBackendRecords, runBackendAction } from '../lib/api'
@@ -282,6 +283,7 @@ export function BarPosWorkspace() {
       subtitle="Manage open-check records for outlets assigned to your employee account." refresh={() => void load()} busy={busy || saving}/>
     <Notice message={error}/><Notice message={success} kind="success"/>
     <div className="hs-stats"><Metric label="Assigned outlets" value={outlets.length}/><Metric label="Open checks" value={selectedChecks.filter(r => r.status === 'open').length}/><Metric label="Recorded checks" value={selectedChecks.length}/></div>
+    <OverviewAnalytics title="Outlet check analytics" scope={String(app.user.id)+':'+outlet} ready={!busy&&!error&&Boolean(outlet)} dateLabel="Check creation date" groups={[{label:'POS checks',rows:selectedChecks}]}/>
     <div className="hs-columns">
       <section className="hs-panel">
         <div className="hs-panel-head"><h2>Outlet and new check</h2><span>Assignment required</span></div>

@@ -1,3 +1,4 @@
+import OverviewAnalytics from '../components/OverviewAnalytics'
 import { Icon } from '../components/Icon'
 import { Avatar } from '../components/Avatar'
 import { useApp } from '../state/AppContext'
@@ -45,6 +46,7 @@ export default function HRDashboard() {
         ))}
       </div>
 
+      <OverviewAnalytics title="Workforce analytics" scope={String(app.user.id)} ready={app.apiStatus==='live'} dateLabel="Employee joining date" groups={Array.from(new Set(employees.map(e=>String(e.department||'Unassigned')))).map(label=>({label,rows:employees.filter(e=>String(e.department||'Unassigned')===label).map(e=>({...e,analytics_date:e.dateJoined}))}))}/>
       <div className="hr-main-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.5fr) minmax(280px,.7fr)', gap: 16, marginTop: 16 }}>
         <section style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 15, boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
           <div style={{ padding: '16px 17px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
