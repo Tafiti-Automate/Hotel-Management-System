@@ -283,3 +283,33 @@ def test_client_report_catalogue_scope_and_booked_inventory_values(role):
     assert client.get("/api/v1/reports/analysis/monthlyStoreBalance/", {"branch":str(other.pk)}).data["results"] == []
     assert len(client.get("/api/v1/reports/analysis/dailyOutOfStock/").data["results"]) == 1
     assert client.get("/api/v1/reports/analysis/stockCover/").data["results"][0]["cover"] is None
+
+
+@pytest.mark.django_db
+def test_expiry_report_calendar_days_and_status_boundaries():
+    from datetime import timedelta
+    from django.utils import timezone
+    user=get_user_model().objects.create_superuser(username="expiry-status",employee_code="EXP-STATUS",password="test-password")
+    branch=Branch.objects.create(name="Expiry hotel")
+    store=StoreLocation.objects.create(branch=branch,name="Expiry store")
+    cat=Category.objects.create(name="Expiry food")
+    tracked=Item.objects.create(category=cat,name="Milk",sku="EXP-MILK",unit="L",reorder_level=Decimal("0"),expiry_tracking=True)
+    untracked=Item.objects.create(category=cat,name="Paper",sku="EXP-PAPER",unit="each",reorder_level=Decimal("0"))
+    today=timezone.localdate()
+    expected={-3:"Expired",0:"Expires today",1:"Critical",7:"Critical",8:"Expiring soon",30:"Expiring soon",31:"Valid"}
+    for days in expected:
+        InventoryBatch.objects.create(store=store,item=tracked,batch_number=str(days),quantity=Decimal("2.1234"),
+            remaining_quantity=Decimal("2.1234"),unit_cost=Decimal("100"),expiry_date=today+timedelta(days=days))
+    for item in (tracked,untracked):
+        InventoryBatch.objects.create(store=store,item=item,quantity=Decimal("1"),remaining_quantity=Decimal("1"),unit_cost=Decimal("100"))
+    InventoryBatch.objects.create(store=store,item=tracked,quantity=Decimal("1"),remaining_quantity=Decimal("0"),unit_cost=Decimal("100"),expiry_date=today)
+    client=APIClient();client.force_authenticate(user)
+    response=client.get("/api/v1/reports/expiry/")
+    assert response.status_code==200,response.data
+    rows=response.data["results"]
+    assert len(rows)==9
+    assert {row["days_remaining"]:row["status"] for row in rows if row["days_remaining"] is not None}==expected
+    assert {row["status"] for row in rows if row["days_remaining"] is None}=={"Missing expiry","Not applicable"}
+    assert rows[0]["remaining_quantity"]=="2.1234"
+    assert len(client.get("/api/v1/reports/expiry/",{"status":"Critical"}).data["results"])==2
+    assert len(client.get("/api/v1/reports/expiry/",{"days":7}).data["results"])==4

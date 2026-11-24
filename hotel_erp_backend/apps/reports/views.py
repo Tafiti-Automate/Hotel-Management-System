@@ -751,44 +751,65 @@ class LowStockReportView(ReportAPIView):
 
 class ExpiryReportView(ReportAPIView):
     report_key = "aging"
+
     def get(self, request):
-        raw_days = request.query_params.get("days", "30")
-        try:
-            days = int(raw_days)
-        except (TypeError, ValueError):
-            raise ValidationError({"days": "Enter a whole number of days."})
-        if days < 0:
-            raise ValidationError({"days": "Days cannot be negative."})
-        requested_end_date = request.query_params.get("date_to")
-        end_date = parse_date(requested_end_date) if requested_end_date else None
-        if requested_end_date and end_date is None:
-            raise ValidationError({"date_to": "Enter a valid date in YYYY-MM-DD format."})
-        end_date = end_date or (timezone.localdate() + timedelta(days=days))
-        queryset = InventoryBatch.objects.select_related("item", "store").filter(
-            expiry_date__isnull=False,
-            expiry_date__lte=end_date,
-            remaining_quantity__gt=Decimal("0.00"),
-        )
-        date_from = request.query_params.get("date_from")
-        if date_from:
-            start_date = parse_date(date_from)
+        today = timezone.localdate()
+        raw_days = request.query_params.get("days")
+        end_date = None
+        if raw_days is not None:
+            try:
+                days = int(raw_days)
+                if not 0 <= days <= 36500:
+                    raise ValueError
+                end_date = today + timedelta(days=days)
+            except (TypeError, ValueError, OverflowError):
+                raise ValidationError({"days": "Enter a whole number between 0 and 36500."})
+        requested_end = request.query_params.get("date_to")
+        if requested_end:
+            end_date = parse_date(requested_end)
+            if end_date is None:
+                raise ValidationError({"date_to": "Enter a valid date in YYYY-MM-DD format."})
+        queryset = InventoryBatch.objects.select_related("item__base_unit", "store").filter(remaining_quantity__gt=0)
+        if end_date:
+            queryset = queryset.filter(expiry_date__lte=end_date)
+        if request.query_params.get("date_from"):
+            start_date = parse_date(request.query_params["date_from"])
             if start_date is None:
                 raise ValidationError({"date_from": "Enter a valid date in YYYY-MM-DD format."})
             queryset = queryset.filter(expiry_date__gte=start_date)
-        queryset = apply_store_scope(queryset, request)
-        queryset = apply_category_scope(queryset, request)
-        rows = [
-            {
-                "item": str(batch.item),
-                "sku": batch.item.sku,
-                "store": str(batch.store),
-                "remaining_quantity": decimal_string(batch.remaining_quantity),
-                "unit_cost": decimal_string(batch.unit_cost),
-                "expiry_date": batch.expiry_date,
-            }
-            for batch in queryset.order_by("expiry_date", "item__name")
-        ]
-        return Response({"until": end_date, "results": rows})
+        queryset = apply_category_scope(apply_store_scope(queryset, request), request)
+        if request.query_params.get("item"):
+            queryset = queryset.filter(item_id=request.query_params["item"])
+        status_filter = request.query_params.get("status")
+        statuses = ("Expired", "Expires today", "Critical", "Expiring soon", "Valid", "Missing expiry", "Not applicable")
+        if status_filter and status_filter not in statuses:
+            raise ValidationError({"status": "Select a valid expiry status."})
+        rows = []
+        for batch in queryset.order_by("expiry_date", "item__name", "pk"):
+            days = (batch.expiry_date - today).days if batch.expiry_date else None
+            if days is None:
+                status = "Missing expiry" if batch.item.expiry_tracking else "Not applicable"
+            elif days < 0:
+                status = "Expired"
+            elif days == 0:
+                status = "Expires today"
+            elif days <= 7:
+                status = "Critical"
+            elif days <= 30:
+                status = "Expiring soon"
+            else:
+                status = "Valid"
+            if status_filter and status_filter != status:
+                continue
+            rows.append({"item":batch.item.name,"article":batch.item.name,"sku":batch.item.sku,
+                         "batch":batch.batch_number,"store":str(batch.store),
+                         "unit":batch.item.base_unit.abbreviation if batch.item.base_unit_id else batch.item.unit,
+                         "remaining_quantity":str(batch.remaining_quantity),"unit_cost":decimal_string(batch.unit_cost),
+                         "expiry_date":batch.expiry_date,"days_remaining":days,"status":status})
+        priority = {status: index for index,status in enumerate(("Expired","Expires today","Missing expiry","Critical","Expiring soon","Valid","Not applicable"))}
+        rows.sort(key=lambda row:(priority[row["status"]], row["days_remaining"] if row["days_remaining"] is not None else 0, row["article"]))
+        return Response({"as_of":today,"until":end_date,"results":rows})
+
 
 
 class ConsumptionReportView(ReportAPIView):
@@ -1235,6 +1256,28 @@ class MaterialsAnalysisReportView(ReportAPIView):
                 {"key": "effective_from", "label": "Effective from"},
             ], rows,
         )
+
+    def reorder_proposal(self, request, report_kind):
+        queryset = apply_store_scope(InventoryBalance.objects.select_related("item", "store", "item__category"), request)
+        queryset = apply_category_scope(queryset, request)
+        if request.query_params.get("item"):
+            queryset = queryset.filter(item_id=request.query_params["item"])
+        rows = []
+        for balance in queryset:
+            rule = ReorderRule.objects.filter(item=balance.item, store=balance.store, is_active=True).first() or ReorderRule.objects.filter(item=balance.item, store__isnull=True, is_active=True).first()
+            minimum = rule.minimum_level if rule else (balance.reorder_level or balance.item.reorder_level)
+            if balance.quantity_in_stock <= minimum:
+                rows.append({
+                    "article": str(balance.item), "sku": balance.item.sku, "store": str(balance.store),
+                    "on_hand": decimal_string(balance.quantity_in_stock), "minimum": decimal_string(minimum),
+                    "proposal": decimal_string(rule.reorder_quantity if rule else Decimal("0.00")),
+                    "supplier": str(rule.preferred_supplier) if rule and rule.preferred_supplier else "",
+                })
+        return analysis_response(
+            "Re-Order Proposal", "Live proposal for balances at or below their configured reorder minimum.",
+            [{"key": "article", "label": "Article"}, {"key": "sku", "label": "SKU"}, {"key": "store", "label": "Store"}, {"key": "on_hand", "label": "SOH", "kind": "number"}, {"key": "minimum", "label": "Minimum", "kind": "number"}, {"key": "proposal", "label": "Proposed order", "kind": "number"}, {"key": "supplier", "label": "Preferred supplier"}], rows,
+        )
+
 
     def _purchase_detail(self, request):
         rows = []

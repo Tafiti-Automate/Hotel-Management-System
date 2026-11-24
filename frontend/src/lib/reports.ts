@@ -3,7 +3,22 @@ import type { EntityKey, Row } from './data'
 import type { OperationalReportId } from './api'
 import { money } from './theme'
 
-export interface ReportCell { text: string; style: CSSProperties }
+export interface ReportCell { text: string; style: CSSProperties; expiryTone?: string }
+
+export const expiryPalette: Record<string, {color:string; background:string}> = {
+  'Expired': {color:'#991b1b',background:'#fee2e2'},
+  'Expires today': {color:'#9f1239',background:'#ffe4e6'},
+  'Critical': {color:'#9a3412',background:'#ffedd5'},
+  'Expiring soon': {color:'#854d0e',background:'#fef3c7'},
+  'Valid': {color:'#166534',background:'#dcfce7'},
+  'Missing expiry': {color:'#9a3412',background:'#ffedd5'},
+  'Not applicable': {color:'#475569',background:'#e2e8f0'},
+}
+function expiryCell(value: string, status: string, align?: 'right'): ReportCell {
+  const cell = rcell(value, align, true)
+  const tone = expiryPalette[status]
+  return tone ? {...cell, expiryTone:status, style:{...cell.style,...tone,fontWeight:700}} : cell
+}
 export interface ReportColumn { label: string; style: CSSProperties }
 export interface BuiltReport {
   title: string
@@ -162,13 +177,17 @@ export function buildOperationalReport(
       rcell(`${title(row.reference_type)} ${text(row.reference_id).slice(0, 8)}`), rcell(number(row.running_balance), 'right'),
     ] }))
   } else if (id === 'aging') {
-    R.title = 'Stock Expiry'; R.subtitle = `Live non-depleted batches expiring by ${text(payload.until, 'the selected date')}`
-    R.grid = 'minmax(0,1.5fr) 1fr 1.2fr 100px 110px 110px'
-    R.columns = head([{ t: 'Item' }, { t: 'SKU' }, { t: 'Store' }, { t: 'Quantity', a: 'right' }, { t: 'Unit cost', a: 'right' }, { t: 'Expiry' }])
-    R.rows = records(payload.results).map((row) => ({ cells: [
-      rcell(text(row.item), undefined, true), rcell(text(row.sku)), rcell(text(row.store)),
-      rcell(number(row.remaining_quantity), 'right'), rcell(money(number(row.unit_cost)), 'right'), rcell(text(row.expiry_date)),
-    ] }))
+    R.title = 'Batch & Expiry Position'; R.subtitle = 'As of ' + text(payload.as_of,'—') + (payload.until ? ' · Expiry through '+text(payload.until) : ' · All remaining recorded batches')
+    R.grid = 'minmax(145px,1.5fr) 100px 120px minmax(130px,1.2fr) 90px 65px 105px 110px 110px 145px'
+    R.columns = head([{t:'Article'},{t:'SKU'},{t:'Batch'},{t:'Store'},{t:'Quantity',a:'right'},{t:'UOM'},{t:'Unit cost',a:'right'},{t:'Expiry date'},{t:'Days remaining',a:'right'},{t:'Status'}])
+    R.rows = records(payload.results).map(row => {
+      const status = text(row.status,'Unknown')
+      return {data:row,cells:[
+        rcell(text(row.article || row.item),undefined,true),rcell(text(row.sku)),rcell(text(row.batch,'—')),rcell(text(row.store)),
+        rcell(text(row.remaining_quantity),'right'),rcell(text(row.unit,'—')),rcell(money(number(row.unit_cost)),'right'),
+        rcell(text(row.expiry_date,'—')),expiryCell(text(row.days_remaining,'—'),status,'right'),expiryCell(status,status),
+      ]}
+    })
   } else if (id === 'consumption') {
     R.title = 'Stock Consumption'; R.subtitle = 'Live outbound quantities grouped by article, store and source'
     R.grid = 'minmax(0,1.6fr) 1fr 1.3fr 1.2fr 110px'
@@ -355,7 +374,7 @@ export function presentReport(source: BuiltReport, reportId: string, search: str
     grid: ['minmax(200px, 1.4fr)', 'minmax(100px, .7fr)', ...quantities.map(() => 'minmax(120px, 1fr)'), ...amounts.map(() => 'minmax(140px, 1fr)')].join(' '),
     columns: head([{ t: group?.label || 'Scope' }, { t: 'Records', a: 'right' }, ...quantities.map(field => ({t: field.label, a: 'right' as const})), ...amounts.map(field => ({t: field.label, a: 'right' as const}))]),
     rows: Array.from(groups.entries()).sort(([left], [right]) => left.localeCompare(right)).map(([key, bucket]) => ({
-      cells: [rcell(key, undefined, true), rcell(bucket.count, 'right'), ...bucket.quantities.map(quantity => rcell(quantity.toFixed(4), 'right')), ...bucket.amounts.map((amount,i) => rcell(bucket.missing[i] ? 'Not available' : money(amount), 'right'))],
+      cells: [reportId === 'aging' && group?.label === 'Status' ? expiryCell(key,key) : rcell(key, undefined, true), rcell(bucket.count, 'right'), ...bucket.quantities.map(quantity => rcell(quantity.toFixed(4), 'right')), ...bucket.amounts.map((amount,i) => rcell(bucket.missing[i] ? 'Not available' : money(amount), 'right'))],
     })),
     hasTotals: groups.size > 0,
     totals: [rcell('Total matching records', undefined, true), rcell(rows.length, 'right'),
