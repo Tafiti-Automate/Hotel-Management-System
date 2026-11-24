@@ -61,7 +61,7 @@ export default function Login() {
       <div className="hotel-auth-perspective">
         <div className={'hotel-auth-flipper'+(mode!=='login'?' is-flipped':'')}>
           <section className="hotel-auth-card hotel-auth-front" aria-hidden={mode!=='login'} inert={mode!=='login'}>
-            <h1>Login to Hotel ERP</h1>
+            <h1>LOGIN</h1>
             {mode==='login'&&<>{authMessage&&!notice&&<p role="status" className="hotel-auth-notice">{authMessage}</p>}{notice&&<p role="status" className="hotel-auth-notice">{notice}</p>}{error&&<p role="alert" className="hotel-auth-error">{error}</p>}</>}
             <form onSubmit={submit}>
               <label htmlFor={userId}>Username or email</label>
