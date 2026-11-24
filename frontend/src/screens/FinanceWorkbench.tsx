@@ -1,6 +1,6 @@
 import { invoiceDueSignal, operationalStatus, signalStyle, invoiceAgeBuckets, invoiceAgeBucket, recordedNumber, calendarDateInKampala } from '../lib/operationalSignals'
 import SearchableSelect from '../components/SearchableSelect'
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Icon } from '../components/Icon'
 import { HelpLabel } from '../components/HelpLabel'
 import RecordDetailDrawer from '../components/RecordDetailDrawer'
@@ -31,6 +31,7 @@ export default function FinanceWorkbench() {
   const [form, setForm] = useState<Row>({})
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
+  const operationRunning = useRef(false)
   const [error, setError] = useState('')
   const [paymentPathHint, setPaymentPathHint] = useState('')
   const isAccountsPayable = app.user.role.trim().toLowerCase() === 'accounts payable clerk'
@@ -76,10 +77,12 @@ export default function FinanceWorkbench() {
   }, [app.currentBranch, app.data.locations, data, isGeneralManager])
 
   const execute = async (operation: () => Promise<unknown>, message: string) => {
+    if(operationRunning.current)return
+    operationRunning.current=true
     setBusy(true); setError('')
     try { await operation(); await load(); setForm({}); app.showToast(message) }
     catch (reason) { const detail = errorMessage(reason); setError(detail); app.showWorkflowAlert('Finance operation blocked', detail) }
-    finally { setBusy(false) }
+    finally { operationRunning.current=false; setBusy(false) }
   }
 
   const suppliers = useMemo(() => new Map(app.data.suppliers.map((row) => [sid(row.id), sid(row.name)])), [app.data.suppliers])

@@ -280,11 +280,14 @@ export default function ProcurementWorkbench() {
     setForm({ order: id(unseenApproved[0].id) })
   }, [stage, loading, role, scopedData.orders])
 
+  const operationRunning = useRef(false)
   const run = async (
     operation: () => Promise<unknown>,
     success: string,
     nextForm?: Row | ((result: unknown) => Row),
   ) => {
+    if(operationRunning.current)return
+    operationRunning.current=true
     setBusy(true)
     setMessage('')
     try {
@@ -302,6 +305,7 @@ export default function ProcurementWorkbench() {
           : 'Action could not be completed'
       app.showWorkflowAlert(alertTitle, detail)
     } finally {
+      operationRunning.current=false
       setBusy(false)
     }
   }

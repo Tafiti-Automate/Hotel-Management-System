@@ -710,6 +710,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     logout: () => endSession(),
     gotoModules: () => {
+      if (!window.dispatchEvent(new Event('hotel:before-navigation', {cancelable:true}))) return
       if (canSwitchModules(user)) {
         patch({ screen: 'launchpad' })
         return
@@ -718,6 +719,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       patch({ screen: 'app', activeModule: landing.route.startsWith('hr-') ? 'hr' : 'operations', route: landing.route, navActive: landing.route, crumb: landing.crumb })
     },
     navTo: (route, label) => {
+      if (route !== state.route && !window.dispatchEvent(new Event('hotel:before-navigation', {cancelable:true}))) return
       if (!canAccessRoute(user, route)) {
         showWorkflowAlert('Access restricted', `${label || 'This area'} is not available to the ${user.role} role.`, 'warning')
         return
@@ -730,7 +732,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setAccent: (accentName) => patch({ accentName }),
     setDensity: (density) => patch({ density }),
     toggleBranch: () => setState((s) => ({ ...s, branchOpen: !s.branchOpen, settingsOpen: false })),
-    selectBranch: (currentBranch) => patch({ currentBranch, branchOpen: false }),
+    selectBranch: (currentBranch) => { if(window.dispatchEvent(new Event('hotel:before-navigation', {cancelable:true}))) patch({ currentBranch, branchOpen: false }) },
     toggleSettings: () => setState((s) => ({ ...s, settingsOpen: !s.settingsOpen, branchOpen: false })),
     closePop: () => patch({ branchOpen: false, settingsOpen: false }),
     setSearchTerm: (searchTerm) => patch({ searchTerm }),

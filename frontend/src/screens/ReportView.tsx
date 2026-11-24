@@ -350,9 +350,9 @@ export default function ReportView({ selectedReportId }: { selectedReportId?: st
           <div><strong>Results</strong><span>{activeFilterCount ? `${report.rows.length} matching record${report.rows.length === 1 ? '' : 's'}` : `${report.rows.length} record${report.rows.length === 1 ? '' : 's'} in current scope`}</span></div>
           {liveError && <button type="button" onClick={() => setRefreshKey((value) => value + 1)}>Retry</button>}
         </div>
-        <div className="report-results-scroll">
+        <div className="report-results-scroll" style={{overflow:'auto',maxHeight:'65vh'}}>
           <div style={{ minWidth: 820 }}>
-            <div className="report-table-header" style={{ display: 'grid', gridTemplateColumns: report.grid, borderBottom: '1px solid var(--border)', padding: '0 8px', background: 'var(--surface-2)' }}>
+            <div className="report-table-header" style={{ position:'sticky',top:0,zIndex:2,display: 'grid', gridTemplateColumns: report.grid, borderBottom: '1px solid var(--border)', padding: '0 8px', background: 'var(--surface-2)' }}>
               {report.columns.map((col, i) => <div key={i} style={col.style}>{col.label}</div>)}
             </div>
             {liveLoading && <ReportState icon="sync" title="Loading report" detail="Retrieving the latest records for your working scope…" />}
