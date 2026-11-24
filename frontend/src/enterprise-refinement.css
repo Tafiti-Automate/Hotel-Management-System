@@ -37,3 +37,15 @@
 .application-root.screen-app.mode-dark[data-ui-version="hotel-inventory-control-v1"] .neo-workspace :is(.neo-dashboard-card,.neo-metric-card,.finance-table-card,.finance-action-panel,.procurement-queue-card,.procurement-detail-panel,.ds-panel,.ds-card,.soh-panel,.mc-dense-panel,.mc-form-panel){background:var(--surface)!important;color:var(--text)!important;border-color:var(--border)!important}
 @media(max-width:680px){.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] .neo-dashboard-intro{flex-wrap:wrap}.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] .neo-metric-card{min-height:88px!important;padding:10px!important}.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] .neo-metric-copy strong{font-size:20px!important}.application-root.screen-app[data-ui-version="hotel-inventory-control-v1"] .neo-activity-row{grid-template-columns:28px minmax(0,1fr) minmax(80px,110px) 12px;gap:6px}}
 @media(prefers-reduced-motion:reduce){.application-root.screen-app .neo-metric-card{transition:none!important}}
+
+.hotel-notification-controls{display:flex;flex-wrap:wrap;gap:6px;padding:10px;border-bottom:1px solid var(--border);background:var(--surface)}
+.hotel-notification-controls button,.hotel-incoming-banner button{border:1px solid var(--border);background:var(--surface-2);color:var(--text);border-radius:6px;padding:6px 9px;font-size:11px;cursor:pointer}
+.hotel-notification-controls button[aria-pressed=true]{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.hotel-notification-banners{position:fixed;right:18px;top:76px;z-index:1100;width:min(380px,calc(100vw - 32px));display:grid;gap:8px;pointer-events:none}
+.hotel-incoming-banner{pointer-events:auto;display:grid;grid-template-columns:24px minmax(0,1fr) 30px;align-items:start;gap:10px;padding:13px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:8px;box-shadow:0 5px 20px #0002;font-size:13px}
+.hotel-incoming-banner[data-warning=true]{border-left-color:var(--warn)}
+.hotel-incoming-banner p{margin:5px 0 10px;font-size:12px;line-height:1.45;overflow-wrap:anywhere}
+.hotel-incoming-banner strong{font-size:13px;overflow-wrap:anywhere}
+.hotel-incoming-banner>button{padding:4px}
+@media(max-width:680px){.hotel-notification-banners{right:12px;top:68px}}
+@media print{.hotel-notification-banners{display:none!important}}
