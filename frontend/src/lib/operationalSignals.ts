@@ -72,3 +72,14 @@ export function invoiceDueSignal(balance:unknown,dueDate:unknown,status:unknown,
   if(days===0)return {label:'Due today',tone:'attention'}
   return {label:'Due in '+days+' day'+(days===1?'':'s'),tone:days<=7?'pending':'good'}
 }
+
+export const invoiceAgeBuckets = ['Not yet due / due today','1–30 days overdue','31–60 days overdue','61–90 days overdue','Over 90 days overdue','Needs reconciliation','No outstanding / excluded'] as const
+export type InvoiceAgeBucket = typeof invoiceAgeBuckets[number]
+export function invoiceAgeBucket(balance:unknown,dueDate:unknown,status:unknown,asOf=calendarDateInKampala()):InvoiceAgeBucket {
+  const signal=invoiceDueSignal(balance,dueDate,status,asOf)
+  if(signal.label==='Not payable'||signal.label==='No outstanding balance')return invoiceAgeBuckets[6]
+  if(['Balance not confirmed','Balance requires reconciliation','Due date missing'].includes(signal.label))return invoiceAgeBuckets[5]
+  const days=daysUntil(dueDate,asOf)
+  if(days===null)return invoiceAgeBuckets[5]
+  return days>=0?invoiceAgeBuckets[0]:days>=-30?invoiceAgeBuckets[1]:days>=-60?invoiceAgeBuckets[2]:days>=-90?invoiceAgeBuckets[3]:invoiceAgeBuckets[4]
+}

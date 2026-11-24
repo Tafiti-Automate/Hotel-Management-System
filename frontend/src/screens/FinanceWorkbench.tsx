@@ -1,4 +1,4 @@
-import { invoiceDueSignal, operationalStatus, signalStyle } from '../lib/operationalSignals'
+import { invoiceDueSignal, operationalStatus, signalStyle, invoiceAgeBuckets, invoiceAgeBucket, recordedNumber, calendarDateInKampala } from '../lib/operationalSignals'
 import SearchableSelect from '../components/SearchableSelect'
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { Icon } from '../components/Icon'
@@ -306,22 +306,41 @@ function MethodPanel({ form, setForm, busy, execute }: any) {
 
 function FinanceTable({ tab, data, suppliers }: { tab: FinanceTab; data: Record<string, Row[]>; suppliers: Map<string, string> }) {
   const [selectedRow, setSelectedRow] = useState<Row | null>(null)
-  const rows = tab === 'invoices' ? data.invoices : tab === 'payments' ? data.payments : tab === 'expenses' ? data.expenses : tab === 'banking' ? data.transactions : data.methods
+  const [ageFilter,setAgeFilter]=useState<string>('')
+  const asOf=calendarDateInKampala()
+  const ageOf=(row:Row)=>invoiceAgeBucket(row.balance_due,row.due_date,row.status,asOf)
+  const allRows = tab === 'invoices' ? data.invoices : tab === 'payments' ? data.payments : tab === 'expenses' ? data.expenses : tab === 'banking' ? data.transactions : data.methods
+  const rows=tab==='invoices'&&ageFilter?allRows.filter(row=>ageOf(row)===ageFilter):allRows
   const cells = (row: Row) => tab === 'invoices'
-    ? [sid(row.invoice_number), suppliers.get(sid(row.supplier)) || sid(row.supplier), money(row.total_amount), sid(row.status)]
+    ? [sid(row.invoice_number), suppliers.get(sid(row.supplier)) || sid(row.supplier), recordedNumber(row.balance_due)===null?'Not confirmed':money(row.balance_due), sid(row.status)]
     : tab === 'payments' ? [sid(row.reference), money(row.amount), sid(row.payment_date), sid(row.status)]
     : tab === 'expenses' ? [sid(row.reference) || 'Expense', money(row.amount), sid(row.date), sid(row.description)]
     : tab === 'banking' ? [sid(row.reference), money(row.amount), sid(row.transaction_type), sid(row.date)]
     : [sid(row.name), sid(row.description), row.is_default ? 'Default' : 'Available', row.is_active ? 'Active' : 'Inactive']
   const titles: Record<FinanceTab, string> = { invoices: 'Supplier invoices', payments: 'Supplier payments', expenses: 'Operating expenses', banking: 'Bank transactions', methods: 'Payment methods' }
   const headers: Record<FinanceTab, string[]> = {
-    invoices: ['Invoice', 'Supplier', 'Amount', 'Status'],
+    invoices: ['Invoice', 'Supplier', 'Outstanding', 'Status'],
     payments: ['Reference', 'Amount', 'Payment date', 'Status'],
     expenses: ['Reference', 'Amount', 'Date', 'Description'],
     banking: ['Reference', 'Amount', 'Type', 'Date'],
     methods: ['Method', 'Description', 'Default', 'Status'],
   }
   return <>
+    {tab==='invoices' && <section style={{...card,padding:12,marginBottom:12}}>
+      <strong>Invoice ageing · {asOf}</strong>
+      <p style={{fontSize:12,color:'var(--text-muted)'}}>Recorded outstanding balances by due date. Unverified or inconsistent records are separated; not a reconciled GL statement.</p>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(145px,1fr))',gap:8}}>
+        {invoiceAgeBuckets.slice(0,6).map((bucket,index)=>{
+          const records=allRows.filter(row=>ageOf(row)===bucket)
+          const total=records.reduce((sum,row)=>sum+Math.max(0,recordedNumber(row.balance_due)??0),0)
+          return <button type="button" key={bucket} aria-pressed={ageFilter===bucket} onClick={()=>setAgeFilter(ageFilter===bucket?'':bucket)} style={{...secondary,display:'grid',textAlign:'left',height:'auto',padding:10,borderColor:ageFilter===bucket?'var(--accent)':'var(--border)'}}>
+            <span style={signalStyle(index===0?'good':index===5?'attention':'danger')}>{bucket}</span>
+            <strong>{money(total)}</strong><small>{records.length} records{index===5?' · known positive balances only':''}</small>
+          </button>
+        })}
+      </div>
+      {ageFilter&&<button type="button" style={{...secondary,marginTop:8}} onClick={()=>setAgeFilter('')}>Clear ageing filter</button>}
+    </section>}
     <section className="finance-table-card" style={{ ...card, overflow: 'hidden' }}>
       <div className="finance-table-title"><div><strong>{titles[tab]}</strong><span>{rows.length} record{rows.length === 1 ? '' : 's'}</span></div></div>
       <div className="finance-table-head">{headers[tab].map((header) => <span key={header}>{header}</span>)}<span aria-hidden="true" /></div>

@@ -1016,6 +1016,8 @@ function RfqComparisonPanel({ requisitionId, revision, busy, run, retainForm }: 
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [requisitionId, revision])
+  const qualified = (report?.quotes ?? []).filter(quote => quote.qualified && String(quote.comparable_total ?? '').trim() !== '' && Number.isFinite(Number(quote.comparable_total)) && Number(quote.comparable_total) >= 0)
+  const lowest = qualified.length ? Math.min(...qualified.map(quote=>Number(quote.comparable_total))) : null
   return <section style={{ border: '1px solid var(--border)', borderRadius: 9, padding: 12, marginBottom: 16 }}>
     <strong style={{ display: 'block', fontSize: 12, marginBottom: 5 }}>Competitive RFQ comparison</strong>
     <p style={{ margin: '0 0 10px', color: 'var(--text-muted)', fontSize: 11 }}>
@@ -1037,6 +1039,11 @@ function RfqComparisonPanel({ requisitionId, revision, busy, run, retainForm }: 
             {quote.selected ? 'Awarded' : quote.qualified ? 'Qualified' : quote.blockers.join(' ')}
             {quote.valid_until ? ' · Expires ' + quote.valid_until : ''}
           </small>
+          <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+            {quote.qualified && Number(quote.rank) === 1 && <span style={chipStyleFor('Approved')}>Rank 1 · evaluated offer</span>}
+            {qualified.includes(quote) && lowest !== null && <span style={chipStyleFor(Number(quote.comparable_total) === lowest ? 'Approved' : 'Open')}>{Number(quote.comparable_total) === lowest ? 'Lowest comparable total' : money(Number(quote.comparable_total)-lowest)+' above lowest'}</span>}
+            {!quote.qualified && <span style={chipStyleFor('Rejected')}>Excluded from price comparison</span>}
+          </div>
           {quote.qualified && !quote.selected && <ConfirmTransaction
             title="Award this supplier quotation?"
             description={'Record this quotation as the selected commercial offer for ' + quote.supplier_name + '. The requisition and supplier pricing evidence will be locked.'}
