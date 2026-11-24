@@ -292,6 +292,9 @@ export function buildReport(id: string, data: Record<EntityKey, Row[]>): BuiltRe
 // Only explicitly additive, raw monetary fields are aggregated. Unit costs,
 // percentages, running balances and quantities with mixed UOMs are not summed.
 const summaryAmounts: Record<string, { key: string; label: string }[]> = {
+  purchaseStatisticsItem: [{key:'value',label:'Approved net value'}],
+  purchaseStatisticsSupplier: [{key:'value',label:'Approved net value'}],
+  purchaseReceivingDeviation: [{key:'value',label:'Approved net value'}],
   monthlyStoreBalance: [{key:'opening_value',label:'Opening value'},{key:'variance_value',label:'Variance value'},{key:'closing_value',label:'Closing value'}],
   stockTakeLinewise: [{key:'variance_value',label:'Variance value'},{key:'closing_value',label:'Closing value'}],
   consumptionInventory: [{key:'value',label:'Net recorded cost'}],

@@ -1,7 +1,7 @@
 from datetime import timedelta
 from decimal import Decimal
 
-from django.db.models import Count, Sum
+from django.db.models import Count, Sum, Q
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from rest_framework.permissions import BasePermission
@@ -37,7 +37,7 @@ from apps.approvals.models import ApprovalWorkflow
 from apps.audit_logs.models import AuditLog
 from apps.finance.models import Expense, SupplierInvoice
 from apps.sales.models import Sale, SaleItem
-from core.constants.choices import LedgerReferenceType
+from core.constants.choices import LedgerReferenceType, POStatus, GoodsReceiptStatus
 
 
 def classify_menu_recipes(grouped):
@@ -940,13 +940,13 @@ def analysis_purchase_lines(request):
         "purchase_order__supplier",
         "purchase_order__store",
         "purchase_order__requisition__branch",
-        "item__category",
+        "item__category", "item__base_unit", "destination_store", "destination_department",
         "unit",
-    )
+    ).filter(purchase_order__status__in=(POStatus.APPROVED, POStatus.ISSUED, POStatus.PARTIALLY_RECEIVED, POStatus.RECEIVED))
     queryset = apply_branch_scope(queryset, request, branch_field="purchase_order__requisition__branch")
     queryset = apply_date_scope(queryset, request, field="purchase_order__created_at")
     if request.query_params.get("store"):
-        queryset = queryset.filter(purchase_order__store_id=request.query_params["store"])
+        queryset = queryset.filter(Q(destination_store_id=request.query_params["store"]) | Q(destination_store__isnull=True, destination_department__isnull=True, purchase_order__store_id=request.query_params["store"]))
     if request.query_params.get("supplier"):
         queryset = queryset.filter(purchase_order__supplier_id=request.query_params["supplier"])
     if request.query_params.get("category"):
@@ -1210,7 +1210,7 @@ class MaterialsAnalysisReportView(ReportAPIView):
                 ("unit","UOM","text"),("quantity","Quantity","number"),("value","Net recorded cost","money")]),rows)
 
     def purchase_prices(self, request, report_kind):
-        queryset = SupplierItemPrice.objects.select_related("supplier", "item__category", "unit").filter(is_active=True)
+        queryset = SupplierItemPrice.objects.select_related("supplier", "item__category", "unit").filter(is_active=True,effective_from__lte=timezone.localdate()).filter(Q(quotation_valid_until__isnull=True)|Q(quotation_valid_until__gte=timezone.localdate()))
         if request.query_params.get("supplier"):
             queryset = queryset.filter(supplier_id=request.query_params["supplier"])
         if request.query_params.get("category"):
@@ -1236,64 +1236,56 @@ class MaterialsAnalysisReportView(ReportAPIView):
             ], rows,
         )
 
-    def purchase_statistics_item(self, request, report_kind):
-        grouped = {}
-        for line in analysis_purchase_lines(request).order_by("item__name"):
-            row = grouped.setdefault(str(line.item_id), {"article": str(line.item), "sku": line.item.sku, "major_group": str(line.item.category.parent or line.item.category), "orders": 0, "quantity": Decimal("0.00"), "value": Decimal("0.00")})
-            row["orders"] += 1
-            row["quantity"] += line.approved_quantity or Decimal("0.00")
-            row["value"] += line.line_total
-        rows = [{**row, "quantity": decimal_string(row["quantity"]), "value": decimal_string(row["value"])} for row in grouped.values()]
-        return analysis_response(
-            "Purchase Statistics per Article", "Approved LPO quantities and values grouped by article.",
-            [{"key": "article", "label": "Article"}, {"key": "sku", "label": "SKU"}, {"key": "major_group", "label": "Major group"}, {"key": "orders", "label": "LPO lines", "kind": "number"}, {"key": "quantity", "label": "Approved qty", "kind": "number"}, {"key": "value", "label": "Approved value", "kind": "money"}], rows,
-        )
-
-    def reorder_proposal(self, request, report_kind):
-        queryset = apply_store_scope(InventoryBalance.objects.select_related("item", "store", "item__category"), request)
-        queryset = apply_category_scope(queryset, request)
-        if request.query_params.get("item"):
-            queryset = queryset.filter(item_id=request.query_params["item"])
+    def _purchase_detail(self, request):
         rows = []
-        for balance in queryset:
-            rule = ReorderRule.objects.filter(item=balance.item, store=balance.store, is_active=True).first() or ReorderRule.objects.filter(item=balance.item, store__isnull=True, is_active=True).first()
-            minimum = rule.minimum_level if rule else (balance.reorder_level or balance.item.reorder_level)
-            if balance.quantity_in_stock <= minimum:
-                rows.append({
-                    "article": str(balance.item), "sku": balance.item.sku, "store": str(balance.store),
-                    "on_hand": decimal_string(balance.quantity_in_stock), "minimum": decimal_string(minimum),
-                    "proposal": decimal_string(rule.reorder_quantity if rule else Decimal("0.00")),
-                    "supplier": str(rule.preferred_supplier) if rule and rule.preferred_supplier else "",
-                })
-        return analysis_response(
-            "Re-Order Proposal", "Live proposal for balances at or below their configured reorder minimum.",
-            [{"key": "article", "label": "Article"}, {"key": "sku", "label": "SKU"}, {"key": "store", "label": "Store"}, {"key": "on_hand", "label": "SOH", "kind": "number"}, {"key": "minimum", "label": "Minimum", "kind": "number"}, {"key": "proposal", "label": "Proposed order", "kind": "number"}, {"key": "supplier", "label": "Preferred supplier"}], rows,
-        )
+        for line in analysis_purchase_lines(request).order_by("purchase_order__supplier__name","item__name"):
+            po = line.purchase_order
+            rows.append({"reference":po.lpo_number or po.po_number,"date":po.created_at,"supplier":str(po.supplier),
+                         "article":line.item.name,"sku":line.item.sku,"unit":self._base_unit(line.item),
+                         "store":str(line.destination_store or (po.store if not line.destination_department_id else "") or ""),
+                         "department":str(line.destination_department or ""),"ordered":str(line.approved_base_quantity),
+                         "value":str(line.line_total),"status":po.status})
+        return rows
+
+    def _purchase_columns(self):
+        return self._columns([("reference","LPO","text"),("date","Order date","text"),("supplier","Supplier","text"),
+            ("article","Article","text"),("sku","SKU","text"),("unit","Base UOM","text"),
+            ("store","Store","text"),("department","Department","text"),("ordered","Approved base qty","number"),
+            ("value","Approved net value","money"),("status","Status","text")])
+
+    def purchase_statistics_item(self, request, report_kind):
+        return analysis_response("Purchase Statistics per Article","Approved LPO line evidence in base units. Group by article for summary.",self._purchase_columns(),self._purchase_detail(request))
 
     def purchase_statistics_supplier(self, request, report_kind):
-        grouped = {}
-        for line in analysis_purchase_lines(request).order_by("purchase_order__supplier__name"):
-            row = grouped.setdefault(str(line.purchase_order.supplier_id), {"supplier": str(line.purchase_order.supplier), "orders": set(), "lines": 0, "quantity": Decimal("0.00"), "value": Decimal("0.00")})
-            row["orders"].add(str(line.purchase_order_id)); row["lines"] += 1
-            row["quantity"] += line.approved_quantity or Decimal("0.00"); row["value"] += line.line_total
-        rows = [{"supplier": row["supplier"], "orders": len(row["orders"]), "lines": row["lines"], "quantity": decimal_string(row["quantity"]), "value": decimal_string(row["value"])} for row in grouped.values()]
-        return analysis_response(
-            "Purchase Statistics per Supplier", "Approved purchase activity grouped by supplier.",
-            [{"key": "supplier", "label": "Supplier"}, {"key": "orders", "label": "LPOs", "kind": "number"}, {"key": "lines", "label": "Lines", "kind": "number"}, {"key": "quantity", "label": "Approved qty", "kind": "number"}, {"key": "value", "label": "Approved value", "kind": "money"}], rows,
-        )
+        return analysis_response("Purchase Statistics per Supplier","Approved LPO line evidence. Group by supplier for summary; unlike units are not totaled.",self._purchase_columns(),self._purchase_detail(request))
 
     def purchase_receiving_deviation(self, request, report_kind):
-        grouped = {}
-        for line in analysis_purchase_lines(request).prefetch_related("receipt_items"):
-            row = grouped.setdefault(str(line.purchase_order.supplier_id), {"supplier": str(line.purchase_order.supplier), "ordered": Decimal("0.00"), "received": Decimal("0.00"), "variance": Decimal("0.00"), "value": Decimal("0.00")})
-            ordered = line.approved_quantity or Decimal("0.00")
-            received = sum((receipt.quantity_received for receipt in line.receipt_items.exclude(goods_receipt__status="cancelled")), Decimal("0.00"))
-            row["ordered"] += ordered; row["received"] += received; row["variance"] += received - ordered; row["value"] += line.line_total
-        rows = [{**row, "ordered": decimal_string(row["ordered"]), "received": decimal_string(row["received"]), "variance": decimal_string(row["variance"]), "value": decimal_string(row["value"])} for row in grouped.values()]
-        return analysis_response(
-            "Purchase / Receiving Deviation per Supplier", "Quantity variance between approved LPO lines and non-cancelled GRN lines.",
-            [{"key": "supplier", "label": "Supplier"}, {"key": "ordered", "label": "LPO qty", "kind": "number"}, {"key": "received", "label": "GRN qty", "kind": "number"}, {"key": "variance", "label": "Variance", "kind": "number"}, {"key": "value", "label": "LPO value", "kind": "money"}], rows,
-        )
+        rows=[]
+        for line in analysis_purchase_lines(request).prefetch_related("receipt_items__inspection_items","receipt_items__goods_receipt"):
+            ordered=line.approved_base_quantity
+            delivered=accepted=rejected=Decimal("0")
+            incomplete=False
+            for receipt in line.receipt_items.all():
+                if receipt.goods_receipt.status != GoodsReceiptStatus.POSTED:
+                    continue
+                delivered+=receipt.base_quantity
+                decision=next(iter(receipt.inspection_items.all()),None)
+                if (not decision or decision.quantity_received != receipt.base_quantity or
+                        decision.quantity_accepted+decision.quantity_rejected != receipt.base_quantity):
+                    incomplete=True
+                    continue
+                accepted+=decision.quantity_accepted;rejected+=decision.quantity_rejected
+            po=line.purchase_order
+            rows.append({"reference":po.lpo_number or po.po_number,"supplier":str(po.supplier),"article":line.item.name,
+                         "sku":line.item.sku,"unit":self._base_unit(line.item),"ordered":str(ordered),
+                         "delivered":str(delivered),"accepted":None if incomplete else str(accepted),
+                         "rejected":None if incomplete else str(rejected),"deviation":None if incomplete else str(accepted-ordered),
+                         "value":str(line.line_total),"status":"Missing inspection evidence" if incomplete else po.status})
+        return analysis_response("Purchase/Receiving Deviation per Supplier","Approved quantities compared with posted receipt inspections; unknown acceptance is not assumed.",
+            self._columns([("reference","LPO","text"),("supplier","Supplier","text"),("article","Article","text"),("sku","SKU","text"),
+                ("unit","Base UOM","text"),("ordered","Approved base qty","number"),("delivered","Posted delivered","number"),
+                ("accepted","Accepted","number"),("rejected","Rejected","number"),("deviation","Accepted less ordered","number"),
+                ("value","Approved net value","money"),("status","Status","text")]),rows)
 
     def abc_analysis(self, request, report_kind):
         balances = apply_store_scope(InventoryBalance.objects.select_related("item", "store", "item__category"), request)
@@ -1320,7 +1312,9 @@ class MaterialsAnalysisReportView(ReportAPIView):
         )
 
     def price_variance(self, request, report_kind):
-        prices = SupplierItemPrice.objects.select_related("item__category", "supplier").filter(is_active=True)
+        prices = SupplierItemPrice.objects.select_related("item__category", "supplier").filter(is_active=True,effective_from__lte=timezone.localdate()).filter(Q(quotation_valid_until__isnull=True)|Q(quotation_valid_until__gte=timezone.localdate()))
+        if request.query_params.get("supplier"):
+            prices=prices.filter(supplier_id=request.query_params["supplier"])
         if request.query_params.get("category"):
             prices = prices.filter(item__category_id=request.query_params["category"])
         if request.query_params.get("item"):

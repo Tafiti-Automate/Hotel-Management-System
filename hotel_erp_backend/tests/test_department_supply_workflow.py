@@ -151,9 +151,21 @@ def test_received_grn_immediately_updates_soh_without_duplicate_keeper_post(ctx)
     ).count() == 1
     assert keeper.post(f"/api/v1/grns/{grn}/post-to-inventory/", {}, format="json").status_code == 400
 
+    controller = APIClient(); controller.force_authenticate(ctx["cu"])
+    for report in ("purchaseStatisticsItem", "purchaseStatisticsSupplier"):
+        result = controller.get(f"/api/v1/reports/analysis/{report}/")
+        assert result.status_code == 200, result.data
+        assert len(result.data["results"]) == 1
+        assert Decimal(result.data["results"][0]["ordered"]) == Decimal("4")
+        assert Decimal(result.data["results"][0]["value"]) == Decimal("4000")
+    result = controller.get("/api/v1/reports/analysis/purchaseReceivingDeviation/")
+    assert result.status_code == 200, result.data
+    assert Decimal(result.data["results"][0]["accepted"]) == Decimal("4")
+    assert Decimal(result.data["results"][0]["deviation"]) == 0
+
 
 @pytest.mark.django_db
-def test_store_keeper_transfer_and_count_controls_are_assigned_store_scoped(ctx):
+def test_store_keeper_transfer_scope_and_cost_controller_count_ownership(ctx):
     unassigned = StoreLocation.objects.create(branch=ctx["branch"], name="Unassigned Store Workflow")
     visible_transfer = StockTransfer.objects.create(
         from_store=ctx["main"], to_store=ctx["other"], requested_by=ctx["ke"],
@@ -171,8 +183,11 @@ def test_store_keeper_transfer_and_count_controls_are_assigned_store_scoped(ctx)
     transfer_rows = transfers.data.get("results", transfers.data)
     assert {row["id"] for row in transfer_rows} == {str(visible_transfer.pk)}
     counts = keeper.get("/api/v1/stock-counts/")
-    count_rows = counts.data.get("results", counts.data)
-    assert {str(row["store"]) for row in count_rows} == {str(ctx["main"].pk)}
+    assert counts.status_code == 403
+    controller = APIClient(); controller.force_authenticate(ctx["cu"])
+    response = controller.get("/api/v1/stock-counts/")
+    assert response.status_code == 200
+    assert {str(row["store"]) for row in response.data["results"]} == {str(ctx["main"].pk), str(ctx["other"].pk)}
     ledgers = keeper.get("/api/v1/stock-ledger/")
     ledger_rows = ledgers.data.get("results", ledgers.data)
     assert {str(row["store"]) for row in ledger_rows} == {str(ctx["main"].pk)}
@@ -198,8 +213,10 @@ def test_store_keeper_transfer_and_count_controls_are_assigned_store_scoped(ctx)
     created_count = keeper.post(
         "/api/v1/stock-counts/", {"store": str(ctx["main"].pk), "conducted_by": str(ctx["ke"].pk)}, format="json",
     )
+    assert created_count.status_code == 403
+    created_count = controller.post("/api/v1/stock-counts/", {"store": str(ctx["main"].pk)}, format="json")
     assert created_count.status_code == 201, created_count.data
-    assert str(created_count.data["conducted_by"]) == str(ctx["ke"].pk)
+    assert str(created_count.data["conducted_by"]) == str(ctx["ce"].pk)
 
 
 @pytest.mark.django_db
