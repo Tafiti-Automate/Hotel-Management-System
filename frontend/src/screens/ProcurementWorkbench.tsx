@@ -1579,6 +1579,17 @@ function LpoSummary({ order, lines, names, supplierEmail, quantityValue, quantit
       {totalOverride == null && <ReadOnlyValue label="VAT (selected Articles)" value={money(order.vat_total)} />}
       {totalOverride == null && <ReadOnlyValue label="Total incl. VAT" value={money(order.gross_total ?? order.total_amount)} />}
     </div>
+    <div style={{padding:11,borderTop:'1px solid var(--border)',fontSize:12}}>
+      <strong>Next action</strong>
+      <p style={{margin:'5px 0 0',color:'var(--text-muted)'}}>{(() => {
+        const status = id(order.status)
+        if (status === 'pending_approval') {
+          const pending = currentApprovalStep(order)
+          return pending && id(pending.stage_name) ? id(pending.stage_name).replace(/Purchasing Manager/gi,'Procurement Manager') + ': review the pending approval in the authorized queue.' : 'Awaiting approval. Open the authorized approval queue to confirm ownership.'
+        }
+        return ({draft:'Procurement: review and submit the LPO for approval.',approved:'Procurement: download and release the approved LPO.',issued:'Receiving: record the supplier delivery when it arrives.',partially_received:'Receiving: review outstanding quantities and record subsequent deliveries.',received:'Delivery recorded. Review GRN posting and invoice matching separately.',rejected:'Order rejected. Review the recorded decision.',cancelled:'Order cancelled.'} as Record<string,string>)[status] || 'Review the current record for outstanding actions.'
+      })()}</p>
+    </div>
     {approvalSteps.length > 0 && (() => {
       const firstPending = approvalSteps.findIndex((step) => id(step.status) === 'pending')
       return <div className="lpo-approval-track-wrap"><div className="lpo-approval-track-label">Approval workflow</div><div className="lpo-approval-track">{approvalSteps.map((step, index) => {

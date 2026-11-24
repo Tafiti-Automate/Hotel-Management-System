@@ -1255,13 +1255,27 @@ function StatusBadge({ value }: { value: string }) {
   return <span className="inventory-status-badge" style={{...signalStyle(status.tone),flexShrink:0,gap:5}}><Icon name={icons[status.tone]} size={13} color={signalStyle(status.tone).color}/>{statusLabel(id(value))}</span>
 }
 function RequestTimeline({ row, app }: { row: Row; app: any }) {
+  const guidance: Record<string, string> = {
+    draft: 'Requester: complete and submit the requisition.',
+    pending_department_approval: 'Department Head: review the requested quantities.',
+    submitted: 'Review queue: verify approved demand and stock availability.',
+    approved: 'Stores: prepare the approved quantities for issue.',
+    partially_approved: 'Review the approved quantities and any outstanding demand.',
+    awaiting_procurement: 'Procurement: review the shortage handoff.',
+    partially_issued: 'Stores: review the remaining quantities before further issue.',
+    issued: 'Review the issue and any outstanding pickup confirmation.',
+    completed: 'Requisition completed.',
+    rejected: 'Requisition rejected. Review the recorded decision.',
+    cancelled: 'Requisition cancelled.',
+  }
+  const status = id(row.status)
   const events = [
     { label: 'Created', detail: employeeName(app, row.requested_by), at: id(row.created_at) },
     row.department_approved_at && { label: 'Department approved', detail: employeeName(app, row.department_approved_by), at: id(row.department_approved_at) },
     row.approved_at && { label: 'Forwarded by Store Keeper', detail: employeeName(app, row.approved_by), at: id(row.approved_at) },
     row.issued_at && { label: 'Issued', detail: '', at: id(row.issued_at) },
   ].filter(Boolean) as Array<{ label: string; detail: string; at: string }>
-  return <section style={{ marginTop: 22 }}><h3 style={{ margin: '0 0 10px', fontSize: 13 }}>Activity</h3><div style={{ borderLeft: '2px solid var(--border)', marginLeft: 6 }}>{events.map((event) => <div key={`${event.label}-${event.at}`} style={{ position: 'relative', padding: '0 0 14px 18px' }}><span style={{ position: 'absolute', left: -6, top: 3, width: 10, height: 10, borderRadius: 10, background: 'var(--accent)', border: '2px solid var(--surface)' }} /><div style={{ color: 'var(--text)', fontSize: 11.5, fontWeight: 750 }}>{event.label}</div><div style={{ marginTop: 2, color: 'var(--text-muted)', fontSize: 10.5 }}>{[event.detail, formatDateTime(event.at)].filter(Boolean).join(' · ')}</div></div>)}</div></section>
+  return <section style={{ marginTop: 22 }}><h3 style={{ margin: '0 0 10px', fontSize: 13 }}>Transaction tracking</h3><div style={{padding:12,marginBottom:12,border:'1px solid var(--border)',borderRadius:7,background:'var(--surface-2)'}}><StatusBadge value={status}/><p style={{margin:'8px 0 0',color:'var(--text-muted)',fontSize:12}}>{guidance[status] || 'Review the record for the current workflow action.'}</p></div><h4 style={{margin:'0 0 10px',fontSize:12}}>Recorded activity</h4><div style={{ borderLeft: '2px solid var(--border)', marginLeft: 6 }}>{events.map((event) => <div key={`${event.label}-${event.at}`} style={{ position: 'relative', padding: '0 0 14px 18px' }}><span style={{ position: 'absolute', left: -6, top: 3, width: 10, height: 10, borderRadius: 10, background: 'var(--accent)', border: '2px solid var(--surface)' }} /><div style={{ color: 'var(--text)', fontSize: 11.5, fontWeight: 750 }}>{event.label}</div><div style={{ marginTop: 2, color: 'var(--text-muted)', fontSize: 10.5 }}>{[event.detail, formatDateTime(event.at)].filter(Boolean).join(' · ')}</div></div>)}</div></section>
 }
 function InfoBox({ label, value }: { label: string; value: unknown }) { return <div className="inventory-info-box" style={{ padding: '9px 10px', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface-2)' }}><div style={{ color: 'var(--text-faint)', fontSize: 9.5, fontWeight: 750, textTransform: 'uppercase' }}>{label}</div><div style={{ marginTop: 3, color: 'var(--text)', fontSize: 13, fontWeight: 750 }}>{id(value)}</div></div> }
 function SectionLabel({ children }: { children: ReactNode }) { return <div style={{ margin: '4px 0 10px', color: 'var(--text)', fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em' }}>{children}</div> }

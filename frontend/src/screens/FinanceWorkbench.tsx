@@ -237,7 +237,17 @@ function PaymentPanel({ data, form, setForm, busy, execute, invoiceLabel, role }
     <Rule />
     <Field label="Payment instruction"><Select value={form.payment} change={(v) => setForm({ payment: v })} rows={data.payments.filter((r: Row) => !['cancelled', 'posted'].includes(sid(r.status)))} label={(row: Row) => `${sid(row.reference)} · ${money(row.amount)} · ${sid(row.status)}`} /></Field>
     {payment && <div style={{padding:'10px 12px',borderRadius:7,background:'var(--surface-2)',fontSize:12,marginBottom:10}}>
-      <strong>Current status: {sid(payment.status).replaceAll('_',' ')}</strong>
+      <strong>Payment instruction tracking</strong>
+      <div style={{marginTop:8,display:'flex',flexWrap:'wrap',gap:6}}>
+        {['draft','submitted','approved','released'].map(stage => {
+          const current = sid(payment.status)
+          const evidence = stage === 'approved' ? Boolean(payment.approved_at) : stage === 'released' ? Boolean(payment.released_at) : false
+          const label = current === stage ? 'Current' : evidence ? 'Recorded' : 'Not confirmed here'
+          return <span key={stage} style={signalStyle(operationalStatus(current === stage ? current : evidence ? 'completed' : 'unknown').tone)}>{stage.replace(/^./,letter=>letter.toUpperCase())} · {label}</span>
+        })}
+      </div>
+      <p style={{margin:'8px 0 0',color:'var(--text-muted)'}}>{({draft:'Accounts Payable: submit the instruction.',submitted:'Finance: independently authorize the instruction.',approved:'Authorized release officer: release for bank execution.',released:'Await verified bank settlement; release does not confirm payment.',cancelled:'Instruction cancelled.'} as Record<string,string>)[sid(payment.status)] || 'Review the recorded payment status.'}</p>
+      <strong style={{display:'block',marginTop:8}}>Current status: {sid(payment.status).replaceAll('_',' ')}</strong>
       <div style={{color:'var(--text-muted)',marginTop:4}}>Payment request {sid(payment.reference)} · {money(payment.amount)}. This invoice remains outstanding until independently verified settlement is implemented.</div>
     </div>}
     {payment && (ap || finance || releaseOfficer) && (() => {
