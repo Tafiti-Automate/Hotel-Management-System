@@ -1634,6 +1634,12 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                 if employee and order_branch_id and employee.branch_id != order_branch_id:
                     raise PermissionDenied("This LPO belongs to a different branch.")
 
+                # Accepted goods post immediately, requiring the same OPEN
+                # fiscal-period lock as independently posted GRNs. Missing
+                # periods or a concurrent close block the entire receipt.
+                from apps.inventory.stores_fulfillment import require_open_period
+                require_open_period(order_branch_id, received_date)
+
                 order_lines = {
                     str(line.pk): line
                     for line in PurchaseOrderItem.objects.select_for_update().filter(
@@ -1656,6 +1662,8 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                         raise ValidationError({"lines": "Received quantities must be valid numbers."}) from error
                     if not quantity.is_finite() or quantity < Decimal("0.00"):
                         raise ValidationError({"lines": "Counted quantities must be finite and non-negative."})
+                    if quantity.as_tuple().exponent < -4:
+                        raise ValidationError({"lines": "Received quantity supports at most four decimal places."})
                     try:
                         rejected = Decimal(str(entry.get("quantity_rejected") or "0"))
                     except Exception as error:
@@ -1663,6 +1671,8 @@ class PurchaseOrderViewSet(CreatedByModelMixin, ModelViewSet):
                     rejection_reason = str(entry.get("rejection_reason") or "").strip()
                     if not rejected.is_finite() or rejected < 0 or rejected > quantity:
                         raise ValidationError({"lines": "Rejected quantity cannot exceed counted quantity."})
+                    if rejected.as_tuple().exponent < -4:
+                        raise ValidationError({"lines": "Rejected quantity supports at most four decimal places."})
                     if rejected and not rejection_reason:
                         raise ValidationError({"lines": "Enter a reason for every rejected quantity."})
                     if quantity <= Decimal("0.00"):
@@ -2397,8 +2407,10 @@ class GoodsReceiptNoteViewSet(CreatedByModelMixin, ModelViewSet):
             raise PermissionDenied("Only an active, assigned Receiving Clerk can create or post a GRN.")
         if receipt and (
             receipt.received_by_id != employee.pk
-            or receipt.purchase_order.store.branch.hotel_id != employee.branch.hotel_id
+            or receipt.purchase_order.requisition.branch_id != employee.branch_id
         ):
+            # The LPO header store is optional. The requisition property is
+            # authoritative for GRN ownership and cannot be null-dereferenced.
             raise PermissionDenied("Only the Receiving Clerk who opened this property's GRN can change it.")
         if purchase_order and purchase_order.requisition.branch_id != employee.branch_id:
             raise PermissionDenied("The selected LPO belongs to another property.")
@@ -2723,8 +2735,17 @@ class SupplierReturnViewSet(CreatedByModelMixin, ModelViewSet):
         if not user_has_role(user, "Cost Controller") or not employee or not employee.is_active or not employee.branch_id:
             raise PermissionDenied("Only the Cost Controller may process supplier returns.")
         target_store = store or (supplier_return.store if supplier_return is not None else None)
-        if target_store is not None and target_store.branch.hotel_id != employee.branch.hotel_id:
-            raise PermissionDenied("Supplier return belongs to a different hotel.")
+        if target_store is not None:
+            # Properties without a parent Hotel must be compared by branch ID.
+            # Comparing two NULL hotel IDs would otherwise expose all such
+            # independent properties to one Cost Controller.
+            actor_hotel_id = employee.branch.hotel_id
+            if actor_hotel_id:
+                allowed = target_store.branch.hotel_id == actor_hotel_id
+            else:
+                allowed = getattr(target_store, "branch_id", None) == employee.branch_id
+            if not allowed:
+                raise PermissionDenied("Supplier return belongs to a different hotel/property.")
         return employee
 
     def get_queryset(self):
@@ -2733,18 +2754,34 @@ class SupplierReturnViewSet(CreatedByModelMixin, ModelViewSet):
         employee = getattr(user, "employee_profile", None)
         if not user_has_role(user, "Cost Controller") or not employee or not employee.is_active or not employee.branch_id:
             return queryset.none()
-        return queryset.filter(store__branch__hotel_id=employee.branch.hotel_id)
+        hotel_id = employee.branch.hotel_id
+        if hotel_id:
+            return queryset.filter(store__branch__hotel_id=hotel_id)
+        return queryset.filter(store__branch_id=employee.branch_id)
 
     def perform_create(self, serializer):
         receipt = serializer.validated_data["goods_receipt"]
         store = serializer.validated_data["store"]
         employee = self._require_storekeeper_owner(store=store)
-        if (
-            receipt.status != GoodsReceiptStatus.POSTED
-            or receipt.purchase_order.store_id != store.pk
-            or receipt.purchase_order.requisition.branch_id != employee.branch_id
-        ):
-            raise ValidationError("Return requires a posted GRN belonging to the assigned source store.")
+        if receipt.status != GoodsReceiptStatus.POSTED:
+            raise ValidationError("Return requires a posted GRN.")
+        # Supplier returns must originate from the same hotel as the GRN.
+        # The optional PO header store is NOT proof of a line destination.
+        origin_branch = receipt.purchase_order.requisition.branch
+        if employee.branch.hotel_id:
+            same_property = origin_branch.hotel_id == employee.branch.hotel_id
+        else:
+            same_property = origin_branch.pk == employee.branch_id
+        if not same_property:
+            raise PermissionDenied("Supplier GRN belongs to a different hotel/property.")
+        if not receipt.items.filter(
+            store_id=store.pk,
+            inventory_changes_applied=True,
+            inspection_items__quantity_accepted__gt=0,
+        ).exists():
+            raise ValidationError(
+                "Return requires accepted, posted GRN inventory in the selected source store."
+            )
         serializer.save(returned_by=employee, created_by=self.request.user)
 
 
@@ -2809,7 +2846,9 @@ class SupplierReturnItemViewSet(CreatedByModelMixin, ModelViewSet):
         employee = getattr(user, "employee_profile", None)
         if not user_has_role(user, "Cost Controller") or not employee or not employee.is_active or not employee.branch_id:
             return queryset.none()
-        return queryset.filter(supplier_return__store__branch__hotel_id=employee.branch.hotel_id)
+        if employee.branch.hotel_id:
+            return queryset.filter(supplier_return__store__branch__hotel_id=employee.branch.hotel_id)
+        return queryset.filter(supplier_return__store__branch_id=employee.branch_id)
 
     def _require_draft_return(self, supplier_return):
         employee = SupplierReturnViewSet._require_storekeeper_owner(

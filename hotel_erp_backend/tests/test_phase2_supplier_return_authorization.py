@@ -15,7 +15,7 @@ def _user(*, active=True, branch_id=1, hotel_id=5):
 
 
 def _supplier_return(*, hotel_id=5, status="draft", applied=False):
-    store = SimpleNamespace(pk=10, id=10, branch=SimpleNamespace(hotel_id=hotel_id))
+    store = SimpleNamespace(pk=10, id=10, branch_id=1, branch=SimpleNamespace(pk=1, hotel_id=hotel_id))
     return SimpleNamespace(store=store, status=status, inventory_changes_applied=applied)
 
 
@@ -67,16 +67,28 @@ def test_supplier_return_lines_cannot_be_changed_for_another_hotel():
         with pytest.raises(PermissionDenied, match="different hotel"):
             view._require_draft_return(_supplier_return(hotel_id=9))
 
+def _posted_receipt(*, origin_hotel=5, origin_branch=2, has_posted_stock=True):
+    def posted_accepted_lines(**filters):
+        # A line marked as processed is not proof of accepted SOH: fully
+        # rejected lines have zero stock movement and must not be returnable.
+        accepted_gate = filters.get("inspection_items__quantity_accepted__gt") == 0
+        return SimpleNamespace(exists=lambda: has_posted_stock and accepted_gate)
+    lines = SimpleNamespace(filter=posted_accepted_lines)
+    source_branch = SimpleNamespace(pk=origin_branch, hotel_id=origin_hotel)
+    return SimpleNamespace(
+        status="posted",
+        purchase_order=SimpleNamespace(
+            store_id=None,
+            requisition=SimpleNamespace(branch=source_branch),
+        ),
+        items=lines,
+    )
+
+
 def test_supplier_return_creation_allows_other_branch_of_same_hotel():
     view = SupplierReturnViewSet()
     view.request = SimpleNamespace(user=_user(branch_id=1, hotel_id=5))
-    receipt = SimpleNamespace(
-        status="posted",
-        purchase_order=SimpleNamespace(
-            store_id=10,
-            store=SimpleNamespace(branch=SimpleNamespace(hotel_id=5)),
-        ),
-    )
+    receipt = _posted_receipt(origin_hotel=5, origin_branch=2)
     serializer = SimpleNamespace(
         validated_data={"goods_receipt": receipt, "store": _supplier_return().store},
         save=lambda **kwargs: kwargs,
@@ -88,16 +100,38 @@ def test_supplier_return_creation_allows_other_branch_of_same_hotel():
 def test_supplier_return_creation_rejects_another_hotel():
     view = SupplierReturnViewSet()
     view.request = SimpleNamespace(user=_user(hotel_id=5))
-    receipt = SimpleNamespace(
-        status="posted",
-        purchase_order=SimpleNamespace(
-            store_id=10,
-            store=SimpleNamespace(branch=SimpleNamespace(hotel_id=9)),
-        ),
-    )
     serializer = SimpleNamespace(
-        validated_data={"goods_receipt": receipt, "store": _supplier_return().store},
+        validated_data={
+            "goods_receipt": _posted_receipt(origin_hotel=9),
+            "store": _supplier_return().store,
+        },
     )
     with patch("apps.procurement.views.user_has_role", return_value=True):
-        with pytest.raises(ValidationError, match="posted GRN"):
+        with pytest.raises(PermissionDenied, match="different hotel"):
             view.perform_create(serializer)
+
+
+def test_supplier_return_rejects_source_store_without_posted_grn_lines():
+    view = SupplierReturnViewSet()
+    view.request = SimpleNamespace(user=_user())
+    serializer = SimpleNamespace(
+        validated_data={
+            "goods_receipt": _posted_receipt(has_posted_stock=False),
+            "store": _supplier_return().store,
+        },
+    )
+    with patch("apps.procurement.views.user_has_role", return_value=True):
+        with pytest.raises(ValidationError, match="accepted, posted GRN"):
+            view.perform_create(serializer)
+
+
+def test_without_hotel_parent_supplier_return_requires_same_branch():
+    view = SupplierReturnViewSet()
+    view.request = SimpleNamespace(user=_user(branch_id=1, hotel_id=None))
+    allowed = _supplier_return(hotel_id=None)
+    denied = _supplier_return(hotel_id=None)
+    denied.store.branch_id = 2
+    with patch("apps.procurement.views.user_has_role", return_value=True):
+        assert view._require_storekeeper_owner(allowed).pk == 17
+        with pytest.raises(PermissionDenied, match="different hotel/property"):
+            view._require_storekeeper_owner(denied)

@@ -287,6 +287,9 @@ def apply_category_scope(queryset, request, *, item_field="item"):
 
 
 def apply_date_scope(queryset, request, *, field="created_at"):
+    accounting = queryset.model is StockLedger and field == "created_at"
+    if accounting:
+        queryset = queryset.with_accounting_date()
     filters = {}
     for parameter, lookup in (("date_from", "date"), ("date_to", "date")):
         raw_value = request.query_params.get(parameter)
@@ -296,7 +299,7 @@ def apply_date_scope(queryset, request, *, field="created_at"):
         if value is None:
             raise ValidationError({parameter: "Enter a valid date in YYYY-MM-DD format."})
         suffix = "gte" if parameter == "date_from" else "lte"
-        filters[f"{field}__{lookup}__{suffix}"] = value
+        filters[f"accounting_date__{suffix}" if accounting else f"{field}__{lookup}__{suffix}"] = value
     return queryset.filter(**filters)
 
 
@@ -797,7 +800,7 @@ class StockCardReportView(ReportAPIView):
             start_date = parse_date(date_from)
             if start_date is None:
                 raise ValidationError({"date_from": "Enter a valid date in YYYY-MM-DD format."})
-            opening = queryset.filter(created_at__date__lt=start_date).aggregate(
+            opening = queryset.with_accounting_date().filter(accounting_date__lt=start_date).aggregate(
                 quantity_in=Sum("quantity_in"),
                 quantity_out=Sum("quantity_out"),
             )
@@ -808,11 +811,12 @@ class StockCardReportView(ReportAPIView):
         queryset = apply_date_scope(queryset, request)
 
         rows = []
-        for movement in queryset.order_by("created_at", "id"):
+        for movement in queryset.order_by("accounting_date", "created_at", "id"):
             running_balance += movement.net_quantity
             rows.append(
                 {
-                    "date": movement.created_at,
+                    "date": movement.accounting_date,
+                    "posted_at": movement.created_at,
                     "item": str(movement.item),
                     "store": str(movement.store) if movement.store else "",
                     "quantity_in": decimal_string(movement.quantity_in),
@@ -1415,7 +1419,7 @@ class ControlReportView(ReportAPIView):
         rows = []
         for move in StockLedger.objects.select_related("item__category", "store__branch", "created_by").all():
             quantity = move.quantity_in if move.quantity_in else -move.quantity_out
-            rows.append(control_row(date=move.created_at, document_type=move.reference_type, reference=str(move.reference_id), action="Stock in" if quantity > 0 else "Stock out", status="posted", actor=(move.created_by.get_full_name() or move.created_by.username) if move.created_by else "System", branch=str(move.store.branch or "") if move.store_id else "", store_workspace=str(move.store or ""), item=str(move.item), quantity=decimal_string(quantity), detail=move.note, drilldown_type=move.reference_type, drilldown_id=str(move.reference_id), _date=move.created_at.date(), _branch_id=str(move.store.branch_id or "") if move.store_id else "", _store_id=str(move.store_id or ""), _employee_id=employee_id_for_user(move.created_by), _item_id=str(move.item_id), _category_id=str(move.item.category_id)))
+            rows.append(control_row(date=move.created_at, document_type=move.reference_type, reference=str(move.reference_id), action="Stock in" if quantity > 0 else "Stock out", status="posted", actor=(move.created_by.get_full_name() or move.created_by.username) if move.created_by else "System", branch=str(move.store.branch or "") if move.store_id else "", store_workspace=str(move.store or ""), item=str(move.item), quantity=decimal_string(quantity), detail=move.note, drilldown_type=move.reference_type, drilldown_id=str(move.reference_id), _date=move.business_date or timezone.localtime(move.created_at).date(), _branch_id=str(move.store.branch_id or "") if move.store_id else "", _store_id=str(move.store_id or ""), _employee_id=employee_id_for_user(move.created_by), _item_id=str(move.item_id), _category_id=str(move.item.category_id)))
         return rows
 
     def approval_rows(self, request):

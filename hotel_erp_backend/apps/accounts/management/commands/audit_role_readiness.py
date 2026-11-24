@@ -1,10 +1,10 @@
-"""Read-only acceptance preflight for the ten approved hotel operational roles."""
+"""Read-only readiness audit for the ERP or its ten Materials Control roles."""
 import json
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.management.base import BaseCommand, CommandError
 
-from apps.accounts.role_templates import SYSTEM_ROLE_NAMES
+from apps.accounts.role_templates import SYSTEM_ROLE_NAMES, MATERIALS_CONTROL_ROLE_NAMES
 from apps.inventory.models import StoreKeeperAssignment
 
 
@@ -20,12 +20,17 @@ class Command(BaseCommand):
             "--strict", action="store_true",
             help="Exit unsuccessfully when a required operational role has no ready user.",
         )
+        parser.add_argument(
+            "--materials-control", action="store_true",
+            help="Audit only the ten inventory/procurement operational roles, not HR and Payroll.",
+        )
 
     def handle(self, *args, **options):
         failures = []
         role_results = []
         json_output = options.get('json', False)
-        for role in SYSTEM_ROLE_NAMES:
+        roles = MATERIALS_CONTROL_ROLE_NAMES if options.get("materials_control") else SYSTEM_ROLE_NAMES
+        for role in roles:
             group = Group.objects.filter(name=role).first()
             if not group:
                 failures.append(f"{role}: group missing; run setup_hotel_roles after deployment")
@@ -84,14 +89,14 @@ class Command(BaseCommand):
                 "schema_version": 1,
                 "read_only": True,
                 "all_roles_ready": not failures,
-                "ready_role_count": len(SYSTEM_ROLE_NAMES) - len(failures),
-                "required_role_count": len(SYSTEM_ROLE_NAMES),
+                "ready_role_count": len(roles) - len(failures),
+                "required_role_count": len(roles),
                 "roles": role_results,
             }, sort_keys=True))
         else:
             self.stdout.write(
-                f"Role readiness: {len(SYSTEM_ROLE_NAMES) - len(failures)}/"
-                f"{len(SYSTEM_ROLE_NAMES)} canonical roles have a usable account"
+                f"Role readiness: {len(roles) - len(failures)}/"
+                f"{len(roles)} canonical roles have a usable account"
             )
         if failures and options["strict"]:
             raise CommandError("Role acceptance is blocked: " + "; ".join(failures))

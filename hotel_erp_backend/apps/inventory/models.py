@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
+from django.db.models.functions import Coalesce, TruncDate
 from django.utils import timezone
 
 from core.constants.choices import (
@@ -686,7 +687,15 @@ class SupplierItemPriceHistory(BaseModel):
         return f"{self.supplier} - {self.item}: {self.unit_price} until {self.effective_to}"
 
 
+class StockLedgerQuerySet(models.QuerySet):
+    def with_accounting_date(self):
+        return self.annotate(accounting_date=Coalesce("business_date", TruncDate("created_at")))
+
+
 class StockLedger(BaseModel):
+    objects = StockLedgerQuerySet.as_manager()
+    business_date = models.DateField(null=True, blank=True, editable=False, db_index=True,
+                                    help_text="Explicit cutoff date for controlled month-end variance posting.")
     item = models.ForeignKey(
         Item,
         on_delete=models.PROTECT,
@@ -960,7 +969,16 @@ class StockTransfer(BaseModel):
                         f"Insufficient stock for {item.item} in {transfer.from_store}."
                     )
                 departure_wac = source_balance.weighted_average_cost
-                known_cost = departure_wac > Decimal("0")
+                # Reject unvalued dispatch before any source quantity moves.
+                # Otherwise Finance would discover the missing valuation only
+                # at receipt, leaving stock stranded in virtual transit.
+                if departure_wac <= Decimal("0"):
+                    raise ValidationError(
+                        f"Missing verified historical cost for {item.item} in "
+                        f"{transfer.from_store}. Cost Control must resolve its "
+                        "valuation before dispatching this transfer."
+                    )
+                known_cost = True
                 source_balance.quantity_in_stock -= item.base_quantity
                 source_balance.save(update_fields=["quantity_in_stock", "updated_at"])
 
@@ -1002,7 +1020,33 @@ class StockTransfer(BaseModel):
                 reference_id=transfer.id, store=transfer.from_store,
                 quantity_out__gt=Decimal("0"),
             ))
-            for item in transfer.items.select_related("item").all():
+            transfer_lines = list(transfer.items.select_related("item").all())
+            expected_by_item = {}
+            for line in transfer_lines:
+                expected_by_item[line.item_id] = (
+                    expected_by_item.get(line.item_id, Decimal("0")) + line.base_quantity
+                )
+            # Check dispatch evidence BEFORE crediting any destination balance.
+            # The same article can appear in several purchase/issue units, so
+            # verify aggregate BASE units per article rather than per line.
+            for item_id, expected in expected_by_item.items():
+                source_lines = [row for row in dispatch_rows if row.item_id == item_id]
+                source_quantity = sum((row.quantity_out for row in source_lines), Decimal("0"))
+                if expected <= 0 or source_quantity != expected:
+                    raise ValidationError(
+                        "Transfer dispatch ledger does not reconcile to approved "
+                        "base quantities. Receipt is blocked; investigate source stock."
+                    )
+                if not all(
+                    row.unit_cost_snapshot is not None
+                    and row.total_cost_snapshot is not None
+                    for row in source_lines
+                ):
+                    raise ValidationError(
+                        "Transfer source valuation is missing. Finance must resolve "
+                        "the historical cost before receiving this transfer."
+                    )
+            for item in transfer_lines:
                 item_dispatch = [row for row in dispatch_rows if row.item_id == item.item_id]
                 priced = bool(item_dispatch) and all(
                     row.unit_cost_snapshot is not None for row in item_dispatch
@@ -2680,11 +2724,13 @@ class StockCount(BaseModel):
         self.status = StockCountStatus.CANCELLED
         self.save(update_fields=["status", "updated_at"])
 
-    def apply_variances(self):
+    def apply_variances(self, *, month_end_cutoff=None):
         if self.inventory_changes_applied:
             raise ValidationError("Stock count variances have already been applied.")
         with transaction.atomic():
             stock_count = StockCount.objects.select_for_update().get(pk=self.pk)
+            if month_end_cutoff is not None and stock_count.count_date != month_end_cutoff:
+                raise ValidationError("Stock count date must match the month-end cutoff.")
             if stock_count.status != StockCountStatus.APPROVED:
                 raise ValidationError("Only approved stock counts can be applied.")
             if stock_count.items.filter(physical_quantity__isnull=True).exists():
@@ -2731,6 +2777,7 @@ class StockCount(BaseModel):
                     quantity_out=abs(variance) if variance < 0 else Decimal("0.00"),
                     reference_type=LedgerReferenceType.STOCK_COUNT,
                     reference_id=stock_count.id,
+                    business_date=month_end_cutoff,
                     unit_cost_snapshot=count_wac if known_wac else None,
                     total_cost_snapshot=(abs(variance) * count_wac).quantize(Decimal("0.0001")) if known_wac else None,
                     wac_before=count_wac if known_wac else None,
@@ -2767,3 +2814,51 @@ class StockCountItem(BaseModel):
 
     def __str__(self):
         return f"{self.stock_count} - {self.item}"
+
+
+class MonthEndCycle(models.Model):
+    """Approved location roster and schedule; does not itself post inventory."""
+
+    branch = models.ForeignKey("departments.Branch", on_delete=models.PROTECT)
+    cutoff = models.DateField()
+    memo_reference = models.CharField(max_length=100)
+    memo = models.TextField()
+    status = models.CharField(max_length=20, default="planned")
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="approved_month_end_cycles")
+    approved_at = models.DateTimeField(null=True, blank=True)
+    approval_note = models.TextField(blank=True)
+    booked_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="booked_month_end_cycles")
+    booked_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=("branch", "cutoff"), name="unique_month_end_branch_cutoff"),
+        ]
+        ordering = ("-cutoff",)
+
+
+class MonthEndInventory(models.Model):
+    """One location per month. Department rows represent already-consumed stock."""
+
+    cycle = models.ForeignKey(MonthEndCycle, on_delete=models.PROTECT, related_name="inventories")
+    store = models.ForeignKey(StoreLocation, on_delete=models.PROTECT, null=True, blank=True)
+    department = models.ForeignKey("departments.Department", on_delete=models.PROTECT, null=True, blank=True)
+    location_name = models.CharField(max_length=100)
+    prepared_at = models.DateTimeField(null=True, blank=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    count_snapshot = models.JSONField(default=list, blank=True)
+    stock_count = models.OneToOneField(StockCount, on_delete=models.PROTECT, null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(models.Q(store__isnull=False, department__isnull=True)
+                           | models.Q(store__isnull=True, department__isnull=False)),
+                name="month_end_exactly_one_location",
+            ),
+            models.UniqueConstraint(fields=("cycle", "store"), name="unique_month_end_cycle_store"),
+            models.UniqueConstraint(fields=("cycle", "department"), name="unique_month_end_cycle_department"),
+        ]
+        ordering = ("location_name", "pk")

@@ -884,6 +884,25 @@ class FiscalPeriod(BaseModel):
             business_date__range=(self.start_date, self.end_date),
         ).exclude(status=POSImportBatch.STATUS_PROCESSED)
         blockers = []
+        from calendar import monthrange
+        from apps.inventory.models import MonthEndCycle, StoreLocation, StockLedger
+        if self.end_date.day == monthrange(self.end_date.year, self.end_date.month)[1]:
+            cycle = MonthEndCycle.objects.filter(branch=self.branch, cutoff=self.end_date).first()
+            has_stores = StoreLocation.objects.filter(branch=self.branch, is_active=True, is_virtual_transit=False).exists()
+            if (has_stores or cycle) and (not cycle or cycle.status != "booked"):
+                blockers.append("Complete and book the month-end inventory for this property.")
+            if cycle and cycle.status == "booked":
+                if StockLedger.objects.with_accounting_date().filter(
+                    store__branch=self.branch, created_at__gt=cycle.booked_at,
+                    accounting_date__lte=self.end_date,
+                ).exists():
+                    blockers.append("Stock moved after month-end booking. Finance must reconcile the cutoff before closing.")
+                active_ids = set(StoreLocation.objects.filter(
+                    branch=self.branch, is_active=True, is_virtual_transit=False,
+                ).values_list("pk", flat=True))
+                booked_ids = set(cycle.inventories.filter(store__isnull=False).values_list("store_id", flat=True))
+                if active_ids != booked_ids:
+                    blockers.append("The location roster changed after month-end booking. Reconcile before closing.")
         if unresolved_invoices.exists():
             blockers.append(f"{unresolved_invoices.count()} supplier invoice(s) need matching or cancellation.")
         if unresolved_credits.exists():
@@ -919,10 +938,10 @@ class FiscalPeriod(BaseModel):
         from apps.inventory.models import StockLedger
         from core.constants.choices import LedgerReferenceType
 
-        movements = StockLedger.objects.filter(
+        movements = StockLedger.objects.with_accounting_date().filter(
             store__branch=self.branch,
-            created_at__date__range=(self.start_date, self.end_date),
-        ).order_by("created_at", "pk").values(
+            accounting_date__range=(self.start_date, self.end_date),
+        ).order_by("accounting_date", "created_at", "pk").values(
             "reference_type", "reference_id", "quantity_in", "quantity_out",
             "total_cost_snapshot", "unit_cost_snapshot", "store_id",
         )
@@ -1020,11 +1039,11 @@ class FiscalPeriod(BaseModel):
         configured = {m.source_type: m for m in GLAccountMapping.objects.filter(
             branch=self.branch, is_active=True
         )}
-        movements = StockLedger.objects.filter(
+        movements = StockLedger.objects.with_accounting_date().filter(
             store__branch=self.branch,
-            created_at__date__range=(self.start_date, self.end_date),
-        ).order_by("created_at", "pk").values(
-            "pk", "created_at", "reference_type", "reference_id",
+            accounting_date__range=(self.start_date, self.end_date),
+        ).order_by("accounting_date", "created_at", "pk").values(
+            "pk", "created_at", "accounting_date", "reference_type", "reference_id",
             "quantity_in", "quantity_out", "unit_cost_snapshot", "total_cost_snapshot"
         )
         draft, blockers, excluded = [], [], {}
@@ -1060,7 +1079,7 @@ class FiscalPeriod(BaseModel):
             dr = mapping.debit_account if outgoing else mapping.credit_account
             cr = mapping.credit_account if outgoing else mapping.debit_account
             common = {
-                "date": movement["created_at"].date().isoformat(),
+                "date": movement["accounting_date"].isoformat(),
                 "source": source,
                 "reference": str(movement["reference_id"]),
                 "movement_id": str(movement["pk"]),

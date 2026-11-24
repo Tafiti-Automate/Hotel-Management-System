@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework.routers import DefaultRouter
 
 from apps.inventory.cost_control_api import cost_control_approve
+from apps.inventory.month_end_api import month_end_cycles, month_end_action, month_end_reconciliation
 from apps.inventory.department_request_v2 import (
     StoreRequisitionItemViewSet,
     StoreRequisitionViewSet,
@@ -77,6 +78,9 @@ router.register("stock-counts", StockCountViewSet, basename="stock-count")
 router.register("stock-count-items", StockCountItemViewSet, basename="stock-count-item")
 
 urlpatterns = [
+    path("month-end-cycles/", month_end_cycles, name="month-end-cycles"),
+    path("month-end-cycles/<int:pk>/reconciliation/", month_end_reconciliation, name="month-end-reconciliation"),
+    path("month-end-cycles/<int:pk>/<str:operation>/", month_end_action, name="month-end-action"),
     # Keep this explicit route before the router so Cost Control approval uses
     # the hardened production endpoint while preserving the public API URL.
     path(

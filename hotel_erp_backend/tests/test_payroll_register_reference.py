@@ -144,7 +144,8 @@ def test_xlsx_export_is_landscape_frozen_and_has_numeric_totals():
     assert worksheet["AF6"].value == "0012345678"
     assert worksheet.freeze_panes == "C6"
     assert worksheet.page_setup.orientation == "landscape"
-    assert worksheet.page_setup.paperSize == worksheet.PAPERSIZE_A3
+    # openpyxl may normalize this OOXML numeric code to int on reload.
+    assert str(worksheet.page_setup.paperSize) == str(worksheet.PAPERSIZE_A3)
     assert worksheet.page_setup.fitToWidth == 2
     assert worksheet.print_title_rows == "1:5"
 

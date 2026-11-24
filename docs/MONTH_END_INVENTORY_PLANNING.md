@@ -1,0 +1,7 @@
+# Month-end inventory — planning increment
+
+The first increment creates a property-specific month-end cycle and immutable-by-API location roster from the official memo reference and text. All active non-transit StoreLocation records are physical-count locations (including outlets). Consumption-only departments must be explicitly selected and confirmed; Department is a global master without a property mapping, so the system must not classify by name or invent a roster. Their planned closing inventory is zero, with no physical count or new expense. No stock, count, ledger, or financial postings occur at planning.
+
+GET/POST /api/v1/month-end-cycles/ — Cost Controller creates and reviews own-property cycles; Financial Manager reviews only; technical administrators and unassigned staff denied. Duplicate month/property cycles are blocked.
+
+This is not a bookable workflow yet. Before release: confirm the property cost-centre roster and accounting classifications with the client; implement official memo distribution, actual dated count generation, sorted blind printouts, Cost Controller physical entry, value variance review, refresh/open-booking validation, independent Finance approval, atomic booking, next-month balances, fiscal-close guard, and UI. Do not expose planned zero as a booked balance. Preserve existing cycle counts and direct consumption. Run migration checks, full suites, staging witness and certification before one branch push.

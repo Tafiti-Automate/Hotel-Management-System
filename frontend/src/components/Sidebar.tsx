@@ -93,6 +93,7 @@ const roleNavigation: Record<string, NavGroup[]> = {
       { route: 'pos-reconciliation', label: 'POS reconciliation', icon: 'point_of_sale' },
       { route: 'stocktake-sheet', label: 'Stocktake sessions', icon: 'playlist_add_check' },
       { route: 'stocktake-variance', label: 'Stocktake variances', icon: 'analytics' },
+      { route: 'month-end-stocktake', label: 'Month-end stocktake', icon: 'inventory_2' },
       { route: 'menu-engineering', label: 'Menu sales analysis', icon: 'scatter_plot' },
     ] },
     { heading: 'Master data', items: [
@@ -133,6 +134,7 @@ const roleNavigation: Record<string, NavGroup[]> = {
       { route: 'workflow-pay', label: 'Invoices & payments', icon: 'payments' },
       { route: 'hr-payroll', label: 'Payroll approval', icon: 'account_balance_wallet' },
       { route: 'finance-budgets', label: 'Monthly budgets', icon: 'table_chart' },
+      { route: 'month-end-stocktake', label: 'Month-end inventory approval', icon: 'inventory_2' },
       { route: 'finance-period-close', label: 'Month-end close', icon: 'lock' },
       { route: 'finance-invoice-matching', label: '3-way invoice matching', icon: 'fact_check' },
       { route: 'finance-governance', label: 'Finance governance', icon: 'account_balance' },

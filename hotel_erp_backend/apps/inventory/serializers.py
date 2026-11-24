@@ -588,6 +588,12 @@ class SupplierItemPriceHistorySerializer(serializers.ModelSerializer):
 
 
 class StockLedgerSerializer(serializers.ModelSerializer):
+    accounting_date = serializers.SerializerMethodField()
+
+    def get_accounting_date(self, instance):
+        from django.utils import timezone
+        return (instance.business_date or timezone.localtime(instance.created_at).date()).isoformat()
+
     net_quantity = serializers.DecimalField(
         max_digits=12,
         decimal_places=2,
@@ -607,6 +613,7 @@ class StockLedgerSerializer(serializers.ModelSerializer):
             "reference_id",
             "note",
             "created_at",
+            "accounting_date",
             "updated_at",
             "created_by",
         )

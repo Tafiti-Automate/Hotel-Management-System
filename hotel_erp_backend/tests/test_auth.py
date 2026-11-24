@@ -187,11 +187,13 @@ def test_setup_hotel_roles_creates_operational_groups():
 
     # The original Materials Control role set remains the acceptance baseline;
     # additional dedicated hospitality groups are provisioned independently.
-    from apps.accounts.role_templates import ROLE_SPECS, HOSPITALITY_ROLE_SPECS
+    from apps.accounts.role_templates import (
+        ROLE_SPECS, HOSPITALITY_ROLE_SPECS, MATERIALS_CONTROL_ROLE_NAMES,
+    )
     all_roles = set(Group.objects.values_list("name", flat=True))
     assert set(ROLE_SPECS).issubset(all_roles)
     assert set(HOSPITALITY_ROLE_SPECS).issubset(all_roles)
-    assert set(ROLE_SPECS) == {
+    assert set(MATERIALS_CONTROL_ROLE_NAMES) == {
         "System Administrator",
         "Department Supervisor",
         "Department Head",
@@ -202,6 +204,9 @@ def test_setup_hotel_roles_creates_operational_groups():
         "Accounts Payable Clerk",
         "Procurement Manager",
         "General Manager",
+    }
+    assert set(ROLE_SPECS) == set(MATERIALS_CONTROL_ROLE_NAMES) | {
+        "HR Manager", "Payroll Officer",
     }
     assert not Group.objects.filter(name="Requester").exists()
 

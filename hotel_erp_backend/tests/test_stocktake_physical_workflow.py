@@ -45,7 +45,7 @@ def test_count_requires_physical_entry_and_stays_distinct_from_stock_balance():
     assert response.status_code == 200, response.data
     records = response.data["results"]
     assert len(records) == 1
-    assert records[0]["item"] == str(item.pk)
+    assert str(records[0]["item"]) == str(item.pk)
     assert records[0]["item_name"] == "Count Bottle Water"
     assert records[0]["item_sku"] == "ST-COUNT-WATER-001"
     assert records[0]["unit_name"] == "bottle"

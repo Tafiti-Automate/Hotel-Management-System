@@ -68,3 +68,37 @@ def test_stock_precision_audit_flags_reserved_stock_exceeding_onhand():
     assert any("reserved" in blocker for blocker in report["blockers"])
     with pytest.raises(CommandError, match="did not pass"):
         call_command("audit_inventory_precision", "--strict", stdout=StringIO())
+
+
+@pytest.mark.django_db
+def test_stock_precision_audit_includes_quarantined_quantities_in_integrity_and_hash():
+    _, _, store, item = create_inventory_operations_context()
+    balance = InventoryBalance.objects.get(store=store, item=item)
+    balance.quantity_in_stock = Decimal("10.0000")
+    balance.quantity_reserved = Decimal("1.0000")
+    balance.quantity_quarantined = Decimal("2.0000")
+    balance.save(update_fields=[
+        "quantity_in_stock", "quantity_reserved", "quantity_quarantined",
+    ])
+    before = collect_snapshot()
+    assert not before["blockers"]
+    # The hash must change when a Store Keeper quarantines physical goods.
+    balance.quantity_quarantined = Decimal("3.0000")
+    balance.save(update_fields=["quantity_quarantined"])
+    after = collect_snapshot()
+    assert (before["tables"]["inventory.InventoryBalance"]["sha256"]
+            != after["tables"]["inventory.InventoryBalance"]["sha256"])
+
+    # Corruption in a restored staging copy must fail certification, even
+    # if reserved and quarantined quantities individually fit the balance.
+    InventoryBalance.objects.filter(pk=balance.pk).update(
+        quantity_reserved=Decimal("8.0000"),
+        quantity_quarantined=Decimal("6.0000"),
+    )
+    snapshot = collect_snapshot()
+    assert any(
+        "reserved and quarantined" in problem
+        for problem in snapshot["blockers"]
+    )
+    with pytest.raises(CommandError, match="did not pass"):
+        call_command("audit_inventory_precision", "--strict", stdout=StringIO())

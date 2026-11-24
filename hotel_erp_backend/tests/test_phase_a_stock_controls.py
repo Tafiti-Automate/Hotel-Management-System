@@ -48,7 +48,10 @@ def test_transfer_requires_approval_and_cannot_be_applied_from_legacy_endpoint()
         name="Transfer-controlled flour", sku="TRANSFER-CONTROL-FLOUR", unit="kg",
         reorder_level=Decimal("0.00"),
     )
-    InventoryBalance.objects.create(item=item, store=from_store, quantity_in_stock=Decimal("10.00"))
+    InventoryBalance.objects.create(
+        item=item, store=from_store, quantity_in_stock=Decimal("10.00"),
+        weighted_average_cost=Decimal("1000.0000"),
+    )
     keeper, employee, api = staff("Store Keeper", "transfer", branch, department)
     StoreKeeperAssignment.objects.create(store=from_store, employee=employee)
 
@@ -81,7 +84,9 @@ def test_transfer_requires_approval_and_cannot_be_applied_from_legacy_endpoint()
     response = receiver.post(f"/api/v1/stock-transfers/{transfer.pk}/receive/")
     assert response.status_code == 200, response.data
     assert StockLedger.objects.filter(reference_id=transfer.pk).count() == 2
-    assert InventoryBalance.objects.get(item=item, store=to_store).quantity_in_stock == Decimal("2.00")
+    final_balance = InventoryBalance.objects.get(item=item, store=to_store)
+    assert final_balance.quantity_in_stock == Decimal("2.00")
+    assert final_balance.weighted_average_cost == Decimal("1000.0000")
     assert receiver.post(f"/api/v1/stock-transfers/{transfer.pk}/receive/").status_code == 400
 
     other_branch = Branch.objects.create(name="Transfer destination foreign branch")

@@ -30,6 +30,7 @@ const InventoryWorkbench = lazy(() => import('./InventoryWorkbench'))
 const DepartmentSupplyWorkspace = lazy(() => import('./DepartmentSupplyWorkspace'))
 const StockOnHand = lazy(() => import('./StockOnHand'))
 const StoreInventory = lazy(() => import('./StoreInventory'))
+const MonthEndStocktake = lazy(() => import('./MonthEndStocktake'))
 const StoreAnalysis = lazy(() => import('./StoreAnalysis'))
 const DepartmentRequisitions = lazy(() => import('./DepartmentRequisitions'))
 const MarketLists = lazy(() => import('./MarketLists'))
@@ -134,6 +135,7 @@ export default function AppShell() {
   else if (route === 'admin-articles') content = <EnterpriseArticleMaster />
   else if (route === 'stocktake-sheet') content = <EnterpriseStocktakeSheet />
   else if (route === 'stocktake-variance') content = <EnterpriseStocktakeVariance />
+  else if (route === 'month-end-stocktake') content = <MonthEndStocktake />
   else if (route === 'recipes-detail') content = <EnterpriseRecipeDetail />
   else if (route === 'pos-reconciliation') content = <EnterprisePosReconciliation />
   else if (route === 'waste-new') content = <EnterpriseWasteLogger />

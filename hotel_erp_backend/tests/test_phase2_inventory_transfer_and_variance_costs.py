@@ -114,3 +114,125 @@ def test_stock_count_variance_preserves_known_store_wac():
     assert entry.unit_cost_snapshot == Decimal("1200.0000")
     assert entry.total_cost_snapshot == Decimal("3600.0000")
     assert entry.wac_before == entry.wac_after == Decimal("1200.0000")
+
+
+@pytest.mark.django_db
+def test_transfer_receipt_fails_closed_if_dispatch_ledger_no_longer_reconciles():
+    from django.core.exceptions import ValidationError
+
+    branch = Branch.objects.create(name="Transfer dispatch audit property")
+    source = StoreLocation.objects.create(branch=branch, name="Audit source")
+    destination = StoreLocation.objects.create(branch=branch, name="Audit destination")
+    article = Item.objects.create(
+        category=Category.objects.create(name="Audit transfer articles"),
+        name="Audit transferred article", sku="AUD-TRANSFER-01", unit="kg",
+        reorder_level=Decimal("0"),
+    )
+    source_balance = InventoryBalance.objects.create(
+        item=article, store=source,
+        quantity_in_stock=Decimal("15.0000"),
+        weighted_average_cost=Decimal("2500.0000"),
+    )
+    transfer = StockTransfer.objects.create(from_store=source, to_store=destination)
+    StockTransferItem.objects.create(
+        stock_transfer=transfer, item=article, quantity=Decimal("5.0000"),
+    )
+    keeper = Employee.objects.create(
+        user=get_user_model().objects.create_user(
+            username="transfer-audit-approver", employee_code="TRF-AUD-001",
+            password="test-credential",
+        ),
+        department=Department.objects.create(name="Transfer audit team"),
+        branch=branch, designation="Store Keeper",
+    )
+    transfer.approve(approved_by=keeper)
+    transfer.dispatch(dispatched_by=keeper)
+    outgoing = StockLedger.objects.get(reference_id=transfer.pk, store=source)
+    assert outgoing.quantity_out == Decimal("5.0000")
+    assert source_balance.pk is not None
+
+    # Simulate legacy/corrupt ledger evidence; QuerySet.update() bypasses
+    # model save signals in this isolated test database only.
+    StockLedger.objects.filter(pk=outgoing.pk).update(quantity_out=Decimal("2.0000"))
+    with pytest.raises(ValidationError, match="does not reconcile"):
+        transfer.receive(received_by=keeper)
+    transfer.refresh_from_db()
+    assert transfer.status == "in_transit"
+    assert not InventoryBalance.objects.filter(item=article, store=destination).exists()
+    assert not StockLedger.objects.filter(reference_id=transfer.pk, store=destination).exists()
+
+
+@pytest.mark.django_db
+def test_transfer_receipt_rejects_missing_historical_cost_evidence():
+    from django.core.exceptions import ValidationError
+
+    branch = Branch.objects.create(name="Transfer cost audit property")
+    source = StoreLocation.objects.create(branch=branch, name="Cost source")
+    destination = StoreLocation.objects.create(branch=branch, name="Cost destination")
+    article = Item.objects.create(
+        category=Category.objects.create(name="Transfer cost audit category"),
+        name="Audit cost article", sku="AUD-TRANSFER-02", unit="kg",
+        reorder_level=Decimal("0"),
+    )
+    InventoryBalance.objects.create(
+        item=article, store=source, quantity_in_stock=Decimal("5.0000"),
+        weighted_average_cost=Decimal("2500.0000"),
+    )
+    transfer = StockTransfer.objects.create(from_store=source, to_store=destination)
+    StockTransferItem.objects.create(
+        stock_transfer=transfer, item=article, quantity=Decimal("2.0000"),
+    )
+    keeper = Employee.objects.create(
+        user=get_user_model().objects.create_user(
+            username="transfer-cost-audit-approver", employee_code="TRF-AUD-002",
+            password="test-credential",
+        ),
+        department=Department.objects.create(name="Transfer cost audit team"),
+        branch=branch, designation="Store Keeper",
+    )
+    transfer.approve(approved_by=keeper)
+    transfer.dispatch(dispatched_by=keeper)
+    StockLedger.objects.filter(
+        reference_id=transfer.pk, store=source,
+    ).update(unit_cost_snapshot=None)
+    with pytest.raises(ValidationError, match="source valuation is missing"):
+        transfer.receive(received_by=keeper)
+    assert not InventoryBalance.objects.filter(item=article, store=destination).exists()
+
+
+@pytest.mark.django_db
+def test_transfer_without_source_valuation_never_reaches_transit_or_debits_soh():
+    from django.core.exceptions import ValidationError
+
+    branch = Branch.objects.create(name="Unvalued transfer control")
+    source = StoreLocation.objects.create(branch=branch, name="Source with unknown cost")
+    destination = StoreLocation.objects.create(branch=branch, name="Destination with known cost")
+    item = Item.objects.create(
+        category=Category.objects.create(name="Unvalued transfer item group"),
+        name="Unvalued transfer item", sku="UNVALUED-TRANSFER-01",
+        unit="kg", reorder_level=Decimal("0"),
+    )
+    balance = InventoryBalance.objects.create(
+        store=source, item=item, quantity_in_stock=Decimal("5.0000"),
+        weighted_average_cost=Decimal("0.0000"),
+    )
+    transfer = StockTransfer.objects.create(from_store=source, to_store=destination)
+    StockTransferItem.objects.create(
+        stock_transfer=transfer, item=item, quantity=Decimal("2.0000"),
+    )
+    approver = Employee.objects.create(
+        user=get_user_model().objects.create_user(
+            username="unvalued-transfer-approver",
+            employee_code="UNVALUED-TRF-01", password="test-password",
+        ),
+        branch=branch, department=Department.objects.create(name="Transfer approvers"),
+        designation="Store Keeper",
+    )
+    transfer.approve(approved_by=approver)
+    with pytest.raises(ValidationError, match="Missing verified historical cost"):
+        transfer.dispatch(dispatched_by=approver)
+    transfer.refresh_from_db()
+    balance.refresh_from_db()
+    assert transfer.status == "pending"
+    assert balance.quantity_in_stock == Decimal("5.0000")
+    assert not StockLedger.objects.filter(reference_id=transfer.pk).exists()

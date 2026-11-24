@@ -87,6 +87,17 @@ def create_procurement_context():
     return employee, department, supplier, item
 
 
+def open_receiving_period(branch):
+    from calendar import monthrange
+    from apps.materials_control.models import FiscalPeriod
+    today = timezone.localdate()
+    return FiscalPeriod.objects.create(
+        branch=branch, name=f"Receiving acceptance {branch.pk}",
+        start_date=today.replace(day=1),
+        end_date=today.replace(day=monthrange(today.year, today.month)[1]),
+    )
+
+
 def authorize_order_for_test(order):
     order.status = POStatus.APPROVED
     order.save(update_fields=("status", "updated_at"))
@@ -1472,6 +1483,7 @@ def test_receiving_clerk_workspace_shows_only_ready_branch_lpos_without_prices()
 def test_receiving_clerk_posts_accepted_goods_immediately_without_double_posting():
     employee, department, supplier, item = create_procurement_context()
     branch = Branch.objects.create(name="Direct GRN Branch")
+    open_receiving_period(branch)
     store = StoreLocation.objects.create(branch=branch, name="Main Store")
     employee.branch = branch
     employee.save(update_fields=("branch", "updated_at"))
@@ -1797,6 +1809,7 @@ def test_only_cost_controller_can_create_supplier_catalogue_price():
 def test_receiving_clerk_workspace_keeps_grn_after_lpo_is_fully_received():
     employee, department, supplier, item = create_procurement_context()
     branch = Branch.objects.create(name="Completed GRN History Branch")
+    open_receiving_period(branch)
     store = StoreLocation.objects.create(branch=branch, name="Completed GRN Store")
     employee.branch = branch
     employee.save(update_fields=("branch", "updated_at"))
@@ -2311,6 +2324,7 @@ def test_supplier_pack_quote_keeps_lpo_quantity_in_article_base_uom():
 def test_receiving_rejections_post_only_accepted_quantity_to_inventory():
     employee, department, supplier, item = create_procurement_context()
     branch = Branch.objects.create(name="Blind Receiving Inspection")
+    open_receiving_period(branch)
     store = StoreLocation.objects.create(branch=branch, name="Blind Receiving Store")
     employee.branch = branch
     employee.save(update_fields=("branch", "updated_at"))
@@ -2372,6 +2386,87 @@ def test_receiving_rejections_post_only_accepted_quantity_to_inventory():
 
 
 @pytest.mark.django_db
+def test_fully_rejected_delivery_retains_grn_without_creating_stock_or_consuming_lpo():
+    """A quality rejection cannot increase SOH or prevent later replacement."""
+    employee, department, supplier, item = create_procurement_context()
+    branch = Branch.objects.create(name="Full Rejection Test Property")
+    open_receiving_period(branch)
+    store = StoreLocation.objects.create(branch=branch, name="Rejection Source Store")
+    employee.branch = branch
+    employee.save(update_fields=("branch", "updated_at"))
+    receiving, _ = Group.objects.get_or_create(name="Receiving Clerk")
+    receiving.permissions.add(Permission.objects.get(codename="view_goodsreceiptnote"))
+    employee.user.groups.add(receiving)
+    requisition = PurchaseRequisition.objects.create(
+        requester=employee, department=department, branch=branch,
+        reason="Rejected batch to be replaced", status=PRStatus.APPROVED,
+    )
+    RequisitionItem.objects.create(
+        requisition=requisition, item=item,
+        quantity=Decimal("2.0000"), approved_quantity=Decimal("2.0000"),
+        destination_store=store,
+    )
+    order = PurchaseOrder.objects.create(
+        requisition=requisition, supplier=supplier,
+        ordered_by=employee, store=store,
+    )
+    line = PurchaseOrderItem.objects.create(
+        purchase_order=order, item=item, unit=item.base_unit,
+        quantity=Decimal("2.0000"), unit_cost=Decimal("5000.00"),
+    )
+    authorize_order_for_test(order)
+    order.issue(sent_by=employee, sent_to_email=supplier.email)
+    client = APIClient()
+    client.force_authenticate(employee.user)
+    response = client.post(
+        f"/api/v1/purchase-orders/{order.pk}/receive-delivery/",
+        {
+            "delivery_note_no": "DN-FULLY-REJECTED-001",
+            "lines": [{
+                "purchase_order_item": str(line.pk),
+                "quantity_received": "2.0000",
+                "quantity_rejected": "2.0000",
+                "rejection_reason": "Entire batch damaged in transit",
+            }],
+        },
+        format="json",
+    )
+    assert response.status_code == 201, response.data
+    receipt = GoodsReceiptNote.objects.get(pk=response.data["id"])
+    assert receipt.status == GoodsReceiptStatus.POSTED
+    assert receipt.blind_count_locked_at is not None
+    assert receipt.inspection.status == "rejected"
+    assert receipt.inspection.items.get().quantity_accepted == Decimal("0")
+    assert receipt.items.get().inventory_changes_applied is True
+    assert not InventoryBalance.objects.filter(item=item, store=store).exists()
+    assert not StockLedger.objects.filter(reference_id=receipt.pk).exists()
+    from apps.inventory.models import InventoryBatch
+    assert not InventoryBatch.objects.filter(item=item, store=store).exists()
+    order.refresh_from_db()
+    assert order.status == POStatus.ISSUED
+    assert line.receipt_items.get(goods_receipt=receipt).committed_purchase_quantity == Decimal("0")
+    # A replacement physical delivery with a distinct reference remains valid.
+    replacement = client.post(
+        f"/api/v1/purchase-orders/{order.pk}/receive-delivery/",
+        {
+            "delivery_note_no": "DN-REPLACEMENT-002",
+            "lines": [{
+                "purchase_order_item": str(line.pk),
+                "quantity_received": "2.0000",
+                "quantity_rejected": "0",
+            }],
+        },
+        format="json",
+    )
+    assert replacement.status_code == 201, replacement.data
+    assert InventoryBalance.objects.get(item=item, store=store).quantity_in_stock == Decimal("2.0000")
+    assert StockLedger.objects.filter(
+        reference_id=replacement.data["id"], quantity_in=Decimal("2.0000"),
+    ).count() == 1
+    assert not StockLedger.objects.filter(reference_id=receipt.pk).exists()
+
+
+@pytest.mark.django_db
 def test_blind_receiving_reveals_lpo_quantities_only_after_locked_grn_and_preserves_original_count():
     """Stage 1 stays blind; Stage 2 is read-only and has independent audit notes."""
     from apps.accounts.role_templates import sync_client_roles
@@ -2379,6 +2474,7 @@ def test_blind_receiving_reveals_lpo_quantities_only_after_locked_grn_and_preser
 
     employee, department, supplier, item = create_procurement_context()
     branch = Branch.objects.create(name="Blind Count Audit Property")
+    open_receiving_period(branch)
     store = StoreLocation.objects.create(branch=branch, name="Blind Count Main Store")
     employee.branch = branch
     employee.save(update_fields=("branch", "updated_at"))
@@ -2822,6 +2918,7 @@ def test_multiple_partial_grns_can_share_invoice_with_distinct_delivery_notes():
     """One invoice can accompany several separate Matooke-style deliveries."""
     employee, department, supplier, item = create_procurement_context()
     branch = Branch.objects.create(name="Partial Invoice Reuse Branch")
+    open_receiving_period(branch)
     store = StoreLocation.objects.create(branch=branch, name="Kitchen Receiving Store")
     employee.branch = branch
     employee.save(update_fields=("branch", "updated_at"))

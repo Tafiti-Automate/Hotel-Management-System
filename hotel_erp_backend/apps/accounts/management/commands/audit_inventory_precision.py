@@ -21,7 +21,9 @@ MONEY = Decimal("0.01")
 # supplier or staff names, passwords, contact details or invoice descriptions.
 QUANTITY_FIELDS = {
     "inventory.Item": ("reorder_level", "maximum_level"),
-    "inventory.InventoryBalance": ("quantity_in_stock", "quantity_reserved", "reorder_level"),
+    "inventory.InventoryBalance": (
+        "quantity_in_stock", "quantity_reserved", "quantity_quarantined", "reorder_level",
+    ),
     "inventory.SupplierItemPrice": ("minimum_order_quantity",),
     "inventory.SupplierPriceQuoteProposal": ("fixed_order_quantity",),
     "inventory.StockLedger": ("quantity_in", "quantity_out"),
@@ -120,6 +122,12 @@ def collect_snapshot():
     ).values_list("pk", flat=True).iterator(chunk_size=400):
         blockers.append("A store balance has more reserved stock than its on-hand quantity")
         break
+    if InventoryBalance.objects.filter(
+        quantity_reserved__gt=F("quantity_in_stock") - F("quantity_quarantined")
+    ).exists():
+        blockers.append(
+            "A store balance has more reserved and quarantined stock than its on-hand quantity"
+        )
 
     if InventoryBatch.objects.filter(
         remaining_quantity__gt=F("quantity")

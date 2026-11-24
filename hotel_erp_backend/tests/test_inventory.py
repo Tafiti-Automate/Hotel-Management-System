@@ -304,11 +304,13 @@ def test_stock_transfer_posts_store_balances_and_ledger_entries():
         item=item,
         store=main_store,
         quantity_in_stock=Decimal("120.00"),
+        weighted_average_cost=Decimal("1000.0000"),
     )
     InventoryBalance.objects.create(
         item=item,
         store=kitchen_store,
         quantity_in_stock=Decimal("5.00"),
+        weighted_average_cost=Decimal("1200.0000"),
     )
     transfer = StockTransfer.objects.create(
         from_store=main_store,
@@ -337,7 +339,9 @@ def test_stock_transfer_posts_store_balances_and_ledger_entries():
     transfer_item.refresh_from_db()
     assert transfer_item.base_quantity == Decimal("100.0000")
     assert InventoryBalance.objects.get(item=item, store=main_store).quantity_in_stock == Decimal("20.00")
-    assert InventoryBalance.objects.get(item=item, store=kitchen_store).quantity_in_stock == Decimal("105.00")
+    destination_after = InventoryBalance.objects.get(item=item, store=kitchen_store)
+    assert destination_after.quantity_in_stock == Decimal("105.00")
+    assert destination_after.weighted_average_cost == Decimal("1009.5238")
     assert StockLedger.objects.filter(reference_id=transfer.id).count() == 2
 
 

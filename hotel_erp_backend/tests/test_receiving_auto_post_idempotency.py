@@ -8,7 +8,8 @@ from rest_framework.test import APIClient
 from apps.departments.models import Branch
 from apps.inventory.models import InventoryBalance, StockLedger, StoreLocation
 from apps.procurement.models import (
-    PurchaseOrder, PurchaseOrderItem, PurchaseRequisition, RequisitionItem,
+    GoodsReceiptNote, PurchaseOrder, PurchaseOrderItem,
+    PurchaseRequisition, RequisitionItem,
 )
 from core.constants.choices import PRStatus
 from tests.test_procurement import create_procurement_context, authorize_order_for_test
@@ -51,6 +52,43 @@ def test_receiving_duplicate_delivery_reference_never_reposts_stock():
         "lines": [{"purchase_order_item": str(order_line.pk), "quantity_received": "2.5000"}],
     }
     endpoint = f"/api/v1/purchase-orders/{order.pk}/receive-delivery/"
+    # A valid delivery must fail closed when no OPEN fiscal period exists.
+    missing_period = client.post(endpoint, payload, format="json")
+    assert missing_period.status_code == 400, missing_period.data
+    assert "OPEN fiscal period" in str(missing_period.data)
+    assert not GoodsReceiptNote.objects.exists()
+
+    from calendar import monthrange
+    from apps.materials_control.models import FiscalPeriod
+    from django.utils import timezone
+    now = timezone.localdate()
+    FiscalPeriod.objects.create(
+        branch=branch, name="Duplicate receiving accounting period",
+        start_date=now.replace(day=1),
+        end_date=now.replace(day=monthrange(now.year, now.month)[1]),
+    )
+    # Values with more than four fractional base units must be rejected
+    # without creating a GRN or changing physical stock.
+    invalid_count = client.post(endpoint, {
+        **payload,
+        "delivery_note_no": "DN-INVALID-COUNT",
+        "lines": [{"purchase_order_item": str(order_line.pk),
+                   "quantity_received": "2.50001"}],
+    }, format="json")
+    assert invalid_count.status_code == 400, invalid_count.data
+    assert "four decimal" in str(invalid_count.data)
+    invalid_rejection = client.post(endpoint, {
+        **payload,
+        "delivery_note_no": "DN-INVALID-REJECTION",
+        "lines": [{"purchase_order_item": str(order_line.pk),
+                   "quantity_received": "2.5000",
+                   "quantity_rejected": "0.00001",
+                   "rejection_reason": "Quality hold"}],
+    }, format="json")
+    assert invalid_rejection.status_code == 400, invalid_rejection.data
+    assert "four decimal" in str(invalid_rejection.data)
+    assert not InventoryBalance.objects.filter(item=item, store=store).exists()
+    assert not GoodsReceiptNote.objects.exists()
     accepted = client.post(endpoint, payload, format="json")
     assert accepted.status_code == 201, accepted.data
     assert accepted.data["status"] == "posted"

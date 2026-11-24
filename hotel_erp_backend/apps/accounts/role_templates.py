@@ -342,6 +342,12 @@ ROLE_ALIASES = {
 }
 
 SYSTEM_ROLE_NAMES = tuple(ROLE_SPECS.keys())
+# Ten Materials Control operational actors; HR Manager and Payroll Officer are
+# separately audited for the expanded ERP. Do not discard those actual roles.
+MATERIALS_CONTROL_ROLE_NAMES = tuple(
+    name for name in SYSTEM_ROLE_NAMES
+    if name not in ("HR Manager", "Payroll Officer")
+)
 
 
 def model_permissions(app_label, model_name, actions):

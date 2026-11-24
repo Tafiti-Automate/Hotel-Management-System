@@ -29,7 +29,7 @@ Use a **non-production hotel/property** with a configured accounting period, UOM
 | 4. Vendor quote and source approval | Procurement Manager, delegated approvers | Supplier, quote, validity, unit conversion, budget/threshold decision and audit trail | No self-approval or unauthorized supplier-price edits |
 | 5. Purchase order | Procurement Manager | Approved LPO retains requisition links, quantities, destinations and approved price | Duplicate or premature LPO issue blocked |
 | 6. Physical receiving and inspection | Receiving Clerk | Blind count and inspection evidence retained; accepted/rejected amounts distinct | No confidential commercial price access or other property's GRN edits |
-| 7. Stock receipt | Assigned Store Keeper | Verified GRN increases the correct store stock **once** and writes immutable ledger/WAC snapshot | Inactive accounts, unassigned stores, early posting and duplicate posting blocked |
+| 7. Stock receipt | Receiving Clerk; Store Keeper as independent reviewer | Completing an accepted, blind-locked Receiving Clerk delivery **automatically** increases only accepted Stock on Hand once and writes an immutable WAC/ledger snapshot; Store Keeper reviews evidence, without a mandatory second posting | Unauthorized receiving, rejected quantity posted as stock, cross-property access, failed atomic posting and duplicate posting blocked |
 | 8. Invoice and three-way match | Accounts Payable Clerk | PO, accepted GRN, invoice lines and amounts agree | Incorrect quantity/price and duplicate invoice blocked |
 | 9. Approval and payment | Independent AP actor(s) | Approval, partial and final payment history, outstanding balance and control actor saved | Maker–checker conflicts, overpayment, re-posting blocked |
 | 10. Finance close and exports | Financial Manager | Fiscal close, balanced exports, immutable historical postings and GL checksum witnessed | Backdating into closed period and unauthorized finance access blocked |
@@ -41,7 +41,7 @@ Repeat with a *second property* and an unauthorized user to prove cross-property
 1. Outlet store issue / transfer / pickup acknowledgment: movement ledger and virtual-transit balances reconcile; FEFO and expiration rules hold.
 2. Recipe, POS sales depletion, waste and COGS: source quantity and cost reconcile to the stock ledger, and imports do not duplicate postings.
 3. Blind stock count: theoretical quantity frozen; count edits locked after submit; independent variance approval and posting; resulting GL evidence.
-4. Ten canonical roles: for each role, record permitted page (200), denied action (403 or 404), property scope, and actual permitted mutation.
+4. Ten Materials Control actors (plus HR Manager and Payroll Officer in the expanded 12-role ERP): record permitted page (200), denied action (403 or 404), property scope and actual permitted mutation for each role. Inventory certification uses `audit_role_readiness --materials-control --strict`; full ERP certification audits all 12 roles.
 5. Documents and navigation: invoices, requisitions, GRNs, history and relevant report drilldowns survive reload and reflect the actual backend statuses.
 6. UI feedback: success notices only follow successful server commits; warnings and deletion dialogs identify the affected record; unauthorized and validation errors are actionable.
 7. Exports: compare screen, CSV, printable output, GL totals and bank reconciliation against source transactions.
@@ -51,7 +51,7 @@ Repeat with a *second property* and an unauthorized user to prove cross-property
 Once the release SHA and deployment environment are confirmed, an authorized operator may run from the deployed backend:
 
 ```sh
-python manage.py audit_role_readiness --json --strict
+python manage.py audit_role_readiness --materials-control --json --strict
 ```
 
 This does not provision users, touch stock or certify their permissions. Ensure approved backups and deployment change control before any database migrations or role setup.

@@ -79,8 +79,10 @@ class SupplierReturnRequestViewSet(ModelViewSet):
         GoodsReceiptNote.objects.select_for_update().get(pk=receipt.pk)
         if line.goods_receipt_id != receipt.pk:
             raise ValidationError("The selected article does not belong to this GRN.")
-        if store.pk != receipt.purchase_order.store_id or line.item_id is None:
-            raise ValidationError("Return source store must match the original GRN.")
+        if line.store_id != store.pk or line.item_id is None:
+            # Multi-destination LPOs may have no header store. The posted
+            # received line is the authoritative inventory destination.
+            raise ValidationError("Return source store must match the accepted GRN line.")
         if employee.branch.hotel_id:
             if store.branch.hotel_id != employee.branch.hotel_id:
                 raise PermissionDenied("Cannot report goods for a different hotel.")

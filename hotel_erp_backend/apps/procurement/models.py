@@ -2622,6 +2622,16 @@ class GoodsReceiptItem(BaseModel):
 
             post_quantity = receipt_item.inventory_post_quantity(require_accepted=True)
 
+            if post_quantity == Decimal("0"):
+                # A fully rejected line is a valid completed physical
+                # inspection, not a stock receipt. Preserve immutable GRN
+                # evidence but NEVER create a batch, ledger, store balance,
+                # WAC movement or departmental consumption for rejected goods.
+                receipt_item.inventory_changes_applied = True
+                receipt_item.save(update_fields=["inventory_changes_applied", "updated_at"])
+                self.inventory_changes_applied = True
+                return
+
             if receipt_item.direct_issue_department_id:
                 from apps.inventory.models import DepartmentConsumption
 
@@ -2705,18 +2715,31 @@ class GoodsReceiptItem(BaseModel):
             inspection = None
 
         if not inspection:
+            if require_accepted:
+                raise ValidationError("Inspect and accept or reject every delivered line before posting.")
             return self.base_quantity
 
         inspection_item = inspection.items.filter(goods_receipt_item=self).first()
         if not inspection_item:
-            raise ValidationError("Inspected receipts must include an inspection line before posting.")
-        if inspection_item.quantity_accepted <= Decimal("0.00"):
-            raise ValidationError("Only accepted inspection quantities can be posted to inventory.")
+            raise ValidationError("Every delivered Article requires an inspection decision.")
+        if (
+            inspection_item.quantity_received != self.base_quantity
+            or inspection_item.quantity_accepted < Decimal("0")
+            or inspection_item.quantity_rejected < Decimal("0")
+            or (
+                inspection_item.quantity_accepted + inspection_item.quantity_rejected
+                != inspection_item.quantity_received
+            )
+        ):
+            raise ValidationError("Accepted and rejected quantities must equal the locked physical count.")
         if require_accepted and inspection.status not in (
             GoodsInspectionStatus.ACCEPTED,
             GoodsInspectionStatus.PARTIALLY_ACCEPTED,
+            GoodsInspectionStatus.REJECTED,
         ):
-            raise ValidationError("Goods inspection must be accepted before posting to inventory.")
+            raise ValidationError("Complete the goods inspection before posting the GRN.")
+        # Zero means inspected and entirely rejected. This is a valid GRN
+        # line with no inventory movement, not an error or a phantom receipt.
         return inspection_item.quantity_accepted
 
     def __str__(self):

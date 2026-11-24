@@ -101,9 +101,12 @@ def test_pos_checks_require_assigned_outlet_and_disallow_room_charge(operational
 
 
 @pytest.mark.django_db
-def test_existing_materials_control_readiness_baseline_remains_ten(operational_context):
-    from apps.accounts.role_templates import ROLE_SPECS, HOSPITALITY_ROLE_SPECS
-    assert len(ROLE_SPECS) == 10
+def test_inventory_ten_roles_remain_distinct_from_erp_hr_and_hospitality(operational_context):
+    from apps.accounts.role_templates import (
+        ROLE_SPECS, MATERIALS_CONTROL_ROLE_NAMES, HOSPITALITY_ROLE_SPECS,
+    )
+    assert len(MATERIALS_CONTROL_ROLE_NAMES) == 10
+    assert len(ROLE_SPECS) == 12
     assert len(HOSPITALITY_ROLE_SPECS) == 10
     assert Group.objects.filter(name__in=HOSPITALITY_ROLE_SPECS).count() == 10
 

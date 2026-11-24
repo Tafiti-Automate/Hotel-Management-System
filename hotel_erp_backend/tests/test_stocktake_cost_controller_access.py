@@ -82,12 +82,12 @@ def test_cost_controller_can_read_property_stock_on_hand_without_stock_mutation_
     balances = client.get("/api/v1/inventory-balances/")
     assert balances.status_code == 200, balances.data
     balance_stores = {entry["store"] for entry in balances.data["results"]}
-    assert balance_stores == {str(primary.pk), str(sibling.pk)}
+    assert {str(pk) for pk in balance_stores} == {str(primary.pk), str(sibling.pk)}
 
     stores = client.get("/api/v1/stores/")
     assert stores.status_code == 200, stores.data
     store_ids = {entry["id"] for entry in stores.data["results"]}
-    assert store_ids == {str(primary.pk), str(sibling.pk)}
+    assert {str(pk) for pk in store_ids} == {str(primary.pk), str(sibling.pk)}
 
     # This grant must never allow Cost Control to edit balances or perform
     # operational reservation reconciliation, even with a valid balance ID.
