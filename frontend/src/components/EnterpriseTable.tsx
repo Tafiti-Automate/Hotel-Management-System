@@ -37,6 +37,11 @@ export default function EnterpriseTable<T extends { id?: string }>({
   const [sorting, setSorting] = useState<SortingState>([])
   const [search, setSearch] = useState('')
   const [searchDraft, setSearchDraft] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const statusColumn = columns.find(column => /^(status|posting_status|fulfillment_status|payment_status|receipt_status|approval_status)$/.test(column.id))
+  const statusOptions = useMemo(() => statusColumn ? Array.from(new Set(rows.map(row => operationalStatus(statusColumn.value(row)).label))).sort() : [], [rows, statusColumn])
+  const activeStatus = !onSelectionChange && statusOptions.includes(statusFilter) ? statusFilter : ''
+  const visibleRows = useMemo(() => activeStatus && statusColumn ? rows.filter(row => operationalStatus(statusColumn.value(row)).label === activeStatus) : rows, [rows, activeStatus, statusColumn])
   const [selection, setSelection] = useState<RowSelectionState>({})
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize })
   const definitions = useMemo<ColumnDef<T>[]>(() => [
@@ -61,7 +66,7 @@ export default function EnterpriseTable<T extends { id?: string }>({
     })),
   ], [columns, onSelectionChange])
   const table = useReactTable({
-    data: rows, columns: definitions,
+    data: visibleRows, columns: definitions,
     getRowId: (row, index) => String(row.id || index),
     state: { sorting, globalFilter: search, rowSelection: selection, pagination },
     onSortingChange: setSorting,
@@ -91,25 +96,26 @@ export default function EnterpriseTable<T extends { id?: string }>({
         <button type="button" className="mc-action" onClick={()=>{setSearch(searchDraft);setPagination(current=>({...current,pageIndex:0}))}}>Search</button>
         {(search || searchDraft) && <button type="button" className="mc-action" onClick={()=>{setSearch('');setSearchDraft('');setPagination(current=>({...current,pageIndex:0}))}}>Clear</button>}
       </div>
-      <div className="mc-toolbar-end">{actions}<span className="mc-count">{table.getFilteredRowModel().rows.length.toLocaleString()} records</span>
-        <span className="mc-key-hint">↑ ↓ Navigate · Enter Open</span></div>
+      <div className="mc-toolbar-end">{!onSelectionChange && statusOptions.length > 1 && <label style={{display:'inline-flex',alignItems:'center',gap:6}}>Status <select aria-label={'Filter ' + label + ' by status'} value={activeStatus} onChange={event=>{setStatusFilter(event.target.value);setPagination(current=>({...current,pageIndex:0}))}}><option value="">All statuses</option>{statusOptions.map(status=><option key={status} value={status}>{status}</option>)}</select></label>}{actions}<span className="mc-count">{table.getFilteredRowModel().rows.length.toLocaleString()} records</span>
+        {onOpen && <span className="mc-key-hint">↑ ↓ Navigate · Enter Open</span>}</div>
     </div>
     <div className="mc-dense-scroll"><table className="mc-dense-table">
       <thead>{table.getHeaderGroups().map((group) => <tr key={group.id}>{group.headers.map((header) => <th
         key={header.id} scope="col" style={columns.find((col) => col.id === header.column.id)?.width
           ? { width: columns.find((col) => col.id === header.column.id)?.width } : undefined}
         aria-sort={header.column.getIsSorted() === 'asc' ? 'ascending' : header.column.getIsSorted() === 'desc' ? 'descending' : 'none'}>
-        <button type="button" disabled={!header.column.getCanSort()} onClick={header.column.getToggleSortingHandler()}
+        {header.column.getCanSort() ? <button type="button" onClick={header.column.getToggleSortingHandler()}
           className="mc-sort-head">{flexRender(header.column.columnDef.header, header.getContext())}
           {header.column.getIsSorted() ? <Icon name={header.column.getIsSorted() === 'asc' ? 'arrow_upward' : 'arrow_downward'} size={12} /> : null}
-        </button>
+        </button> : flexRender(header.column.columnDef.header, header.getContext())}
       </th>)}</tr>)}</thead>
       <tbody>{table.getRowModel().rows.map((row) => <tr key={row.id} className={row.getIsSelected() ? 'mc-row-selected' : ''}
         tabIndex={onOpen ? 0 : -1}
         onClick={(event) => { if (onOpen && !(event.target as HTMLElement).closest('button,input,select,a')) onOpen(row.original) }}
         onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return
           if (event.key === 'Enter' && onOpen) { event.preventDefault(); onOpen(row.original) }
-          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          if (onOpen && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
             event.preventDefault()
             const sibling = event.key === 'ArrowDown' ? event.currentTarget.nextElementSibling : event.currentTarget.previousElementSibling
             if (sibling instanceof HTMLElement) sibling.focus()
@@ -121,12 +127,12 @@ export default function EnterpriseTable<T extends { id?: string }>({
       </tr>)}
       {!table.getRowModel().rows.length && <tr><td colSpan={definitions.length}><div className="mc-no-records">
         <span className="mc-empty-icon"><Icon name={search ? 'search_off' : 'inbox'} size={22} /></span>
-        <strong>{search ? 'No matching records' : emptyTitle}</strong>
-        <p>{search ? 'Try another search term or clear the current search.' : emptyText}</p>
-        {(search || onEmptyAction) && <button type="button" className="mc-action mc-action-primary" onClick={() => {
-          if (search) { setSearch(''); setSearchDraft(''); setPagination((current) => ({ ...current, pageIndex: 0 })) }
+        <strong>{search || activeStatus ? 'No matching records' : emptyTitle}</strong>
+        <p>{search || activeStatus ? 'Try another search term or clear the current filters.' : emptyText}</p>
+        {(search || activeStatus || onEmptyAction) && <button type="button" className="mc-action mc-action-primary" onClick={() => {
+          if (search || activeStatus) { setSearch(''); setSearchDraft(''); setStatusFilter(''); setPagination((current) => ({ ...current, pageIndex: 0 })) }
           else onEmptyAction?.()
-        }}>{search ? 'Clear search' : emptyActionLabel || 'Refresh records'}</button>}
+        }}>{search || activeStatus ? 'Clear filters' : emptyActionLabel || 'Refresh records'}</button>}
       </div></td></tr>}
       </tbody>
     </table></div>
