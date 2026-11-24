@@ -1,3 +1,4 @@
+import ValueAnalytics from '../components/ValueAnalytics'
 import OverviewAnalytics from '../components/OverviewAnalytics'
 import { useState } from 'react'
 import { Icon } from '../components/Icon'
@@ -84,6 +85,11 @@ export default function DashboardV2() {
     </section>
 
     <OverviewAnalytics title="Operational analytics" scope={scope} ready={app.apiStatus==='live'} dateLabel="Latest recorded activity date" groups={Array.from(new Set(view.activities.map(a=>a.title.split(' ')[0]))).map(label=>({label:({PR:'Purchase requisitions',LPO:'Purchase orders',GRN:'Goods receipts',Request:'Department requisitions'} as Record<string,string>)[label]||label,rows:view.activities.filter(a=>a.title.split(' ')[0]===label).map(a=>({reference:a.title,status:a.status,analytics_date:a.timestamp?new Date(a.timestamp).toISOString():''}))}))}/>
+    {['cost_controller','store_keeper'].includes(role)&&<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,320px),1fr))',gap:12}}>
+      <ValueAnalytics title="Stock availability by store" description="Number of recorded stock positions with positive available quantity; not stock valuation." monetary={false} scope={scope} records={app.data.balances.filter(r=>Number.isFinite(Number(r.available))&&Number(r.available)>0).map(r=>({label:String(r.item||r.id),group:String(r.store||'Unassigned'),amount:1}))}/>
+      <ValueAnalytics title="Stock availability exceptions" description="Stock positions with zero or negative recorded availability, grouped by store." monetary={false} scope={scope} records={app.data.balances.filter(r=>r.available!==null&&r.available!==undefined&&r.available!==''&&Number.isFinite(Number(r.available))&&Number(r.available)<=0).map(r=>({label:String(r.item||r.id),group:String(r.store||'Unassigned'),amount:1}))}/>
+    </div>}
+    {['procurement_manager','procurement_officer','financial_manager','general_manager'].includes(role)&&<ValueAnalytics title="Recorded LPO book by supplier" description="Recorded UGX order amounts, excluding draft, rejected and cancelled orders. Not recognized expenditure or settled payments; other or unknown currencies excluded." scope={scope} records={app.data.orders.filter(r=>String(r.orderCurrency).toUpperCase()==='UGX'&&!['draft','rejected','cancelled','canceled'].includes(key(r.statusCode||r.status))).map(r=>({label:String(r.id),group:String(r.supplier||'Unknown supplier'),amount:r.recordedTotal}))}/>}
     <section className="neo-dashboard-grid">
       <article className="neo-dashboard-card neo-work-queue">
         <header className="neo-card-head"><div><span>Priority queue</span><h2>{selected?.label ?? view.queueTitle}</h2><p>{selected ? `${queue.length} matching records · ${selected.hint}` : view.queueHint}</p>{selected && <button type="button" onClick={()=>{setSelection(null);setLimit(7)}}>Clear filter</button>}</div><button type="button" onClick={() => app.navTo(selected?.route ?? view.queueRoute, selected?.routeLabel ?? view.queueLabel)}>Open queue <Icon name="arrow_forward" size={14} /></button></header>

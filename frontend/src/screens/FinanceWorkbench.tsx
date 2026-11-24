@@ -1,3 +1,4 @@
+import ValueAnalytics from '../components/ValueAnalytics'
 import { invoiceDueSignal, operationalStatus, signalStyle, invoiceAgeBuckets, invoiceAgeBucket, recordedNumber, calendarDateInKampala } from '../lib/operationalSignals'
 import SearchableSelect from '../components/SearchableSelect'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
@@ -145,6 +146,7 @@ export default function FinanceWorkbench() {
       <FinanceMetric icon="payments" label="Outstanding Payable" value={money(outstandingPayable)} hint="Current supplier invoice balance" />
       <FinanceMetric icon="schedule" label="Payment instructions in progress" value={String(paymentQueue.length)} hint="Not yet confirmed settled by the bank" tone={paymentQueue.length ? 'warning' : 'good'} />
     </section>
+    <ValueAnalytics title="Outstanding invoice balances by ageing" description="Positive recorded balances with valid due dates and consistent statuses. Reconciliation exceptions are separate from these totals." ready={!loading&&!error} scope={JSON.stringify([app.user.id,app.currentBranch])} records={scopedData.invoices.filter(r=>invoiceAgeBuckets.slice(0,5).some(bucket=>bucket===invoiceAgeBucket(r.balance_due,r.due_date,r.status))).map(r=>({label:sid(r.invoice_number),group:invoiceAgeBucket(r.balance_due,r.due_date,r.status),amount:r.balance_due}))}/>
     <div className="finance-workarea-label">Finance work areas</div>
     <div style={{ display: 'flex', gap: 5, marginBottom: 15, flexWrap: 'wrap' }}>{tabs.map(([key, icon, label]) => <button key={key} onClick={() => { setPaymentPathHint(''); setTab(key) }} style={{ ...tabButton, background: tab === key ? 'var(--accent-soft)' : 'var(--surface)', color: tab === key ? 'var(--accent)' : 'var(--text-muted)', borderColor: tab === key ? 'var(--accent)' : 'var(--border)' }}><Icon name={icon} size={17} />{label}</button>)}</div>
     {error && <div style={{ ...card, padding: 12, color: 'var(--bad)', marginBottom: 14, fontSize: 12 }}>{error}</div>}
