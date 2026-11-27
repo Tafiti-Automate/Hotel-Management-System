@@ -11,15 +11,32 @@ const backendOrigin = () => (
     : '')
 ).replace(/\/+$/, '')
 
+// Northflank terminates TLS at its gateway. NextRequest may therefore
+// contain the container's HTTP origin instead of the browser's HTTPS origin.
+// Trust only public hostnames supplied by the platform, never arbitrary
+// X-Forwarded-Host or X-Forwarded-Proto values from a request.
+function northflankOrigins(): string[] {
+  return (process.env.NF_HOSTS || '')
+    .split(',')
+    .map(host => host.trim().toLowerCase())
+    .filter(host => /^[a-z0-9.-]+$/.test(host))
+    .map(host => 'https://' + host)
+}
+
 const cookieOptions = (req: NextRequest) => ({
   httpOnly: true as const,
-  secure: req.nextUrl.protocol === 'https:',
+  secure: req.nextUrl.protocol === 'https:' || northflankOrigins().length > 0,
   sameSite: 'lax' as const,
   path: '/',
 })
 
 function sameOrigin(req: NextRequest) {
   const origin = req.headers.get('origin')
+  const publicOrigins = northflankOrigins()
+  if (publicOrigins.length > 0) {
+    // Browser session mutations on Northflank must originate from this service.
+    return origin !== null && publicOrigins.includes(origin)
+  }
   return !origin || origin === req.nextUrl.origin
 }
 
