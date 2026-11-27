@@ -22,7 +22,7 @@ DEBUG = False
 # Reverse proxy and HTTPS
 # ---------------------------------------------------------
 
-# Vercel and Railway terminate HTTPS before forwarding requests to Django.
+# Vercel, Railway and Northflank terminate HTTPS before forwarding requests to Django.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True
 
@@ -41,6 +41,18 @@ ALLOWED_HOSTS = [
     ).split(",")
     if host.strip()
 ]
+
+
+# Northflank injects the exact public hostnames assigned to this service.
+# Keep host validation enabled; do not allow a wildcard for code.run.
+NORTHFLANK_PUBLIC_HOSTS = [
+    host.strip()
+    for host in os.environ.get("NF_HOSTS", "").split(",")
+    if host.strip()
+]
+for host in NORTHFLANK_PUBLIC_HOSTS:
+    if host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(host)
 
 
 # Support Railway automatically.
@@ -104,6 +116,14 @@ CSRF_TRUSTED_ORIGINS = [
     ).split(",")
     if origin.strip()
 ]
+
+
+# Trust the backend's own Northflank HTTPS origins for Django admin.
+# The separate frontend origin must still be configured explicitly.
+for host in NORTHFLANK_PUBLIC_HOSTS:
+    origin = f"https://{host}"
+    if origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(origin)
 
 
 # Trust the Railway public origin automatically.
