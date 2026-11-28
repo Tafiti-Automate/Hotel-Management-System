@@ -9,6 +9,7 @@ import { DocumentDrawerProvider, EnterpriseDocumentHotspots } from '../features/
 
 const ListView = lazy(() => import('./ListView'))
 const DetailView = lazy(() => import('./DetailView'))
+const FinancialReports = lazy(() => import('./FinancialReports'))
 const Reports = lazy(() => import('./Reports'))
 const ReportView = lazy(() => import('./ReportView'))
 const HotelProfile = lazy(() => import('./HotelProfile'))
@@ -176,6 +177,7 @@ export default function AppShell() {
   else if (route === 'supplierItems') content = <SupplierQuotationOptionOne />
   else if (listRoutes.has(route)) content = <ListView />
   else if (route === 'detail') content = <DetailView />
+  else if (route === 'financial-reports') content = <FinancialReports />
   else if (route === 'reports') content = <Reports />
   else if (route === 'menu-engineering') content = <EnterpriseMenuEngineering />
   else if (route === 'reportview') content = <ReportView />

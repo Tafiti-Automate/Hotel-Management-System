@@ -229,6 +229,7 @@ export function isStoresManager(user: Pick<AccessUser, 'role'>): boolean {
 
 export function canAccessRoute(user: AccessUser, route: string): boolean {
   const role = roleKey(user)
+  if (route === 'financial-reports') return !user.isSuperuser && ['cost controller', 'financial manager', 'general manager'].includes(role)
   // IT may configure and inspect master data, never operate financial or stock transactions.
   if (user.isSuperuser || role === 'system administrator') return adminAllowedRoutes.has(route)
   const requiredRoles = enterpriseRoleRoutes[route]

@@ -221,7 +221,10 @@ export default function Sidebar() {
   const rawGroups = role === 'front office manager'
     ? roleNavigation[role]
     : app.activeModule === 'hr' ? hrNavigation : (roleNavigation[role] || adminNavigation)
-  const groups = rawGroups
+  const financialGroups = app.activeModule !== 'hr' && canAccessRoute(app.user, 'financial-reports')
+    ? [...rawGroups, { heading: 'Financial Reports', items: [{ route: 'financial-reports', label: 'Financial Reports', icon: 'account_balance' }] }]
+    : rawGroups
+  const groups = financialGroups
     .map((group) => ({ ...group, items: group.items.filter((item) => canAccessRoute(app.user, item.route)) }))
     .filter((group) => group.items.length)
 

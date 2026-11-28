@@ -10,6 +10,9 @@ from core.mixins.models import BaseModel
 from core.validators.quantities import validate_non_negative_decimal, validate_positive_decimal
 
 
+from .ledger_models import LedgerAccount, LedgerJournal, LedgerLine  # noqa: F401
+
+
 class PaymentMethod(BaseModel):
     name = models.CharField(max_length=50, unique=True)
     description = models.TextField(blank=True)
