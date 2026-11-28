@@ -1,6 +1,6 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
-from .financial_reports import FinancialStatements, FinancialAccounts, FinancialJournals, FinancialJournalAction
+from .financial_reports import FinancialStatements, FinancialAccounts, FinancialJournals, FinancialJournalAction, FinancialAssets, FinancialAssetDepreciation
 
 from apps.finance.views import (
     BankAccountViewSet,
@@ -33,6 +33,8 @@ router.register("supplier-credit-notes", SupplierCreditNoteViewSet, basename="su
 router.register("supplier-payment-reconciliations", SupplierPaymentReconciliationViewSet, basename="supplier-payment-reconciliation")
 
 urlpatterns = router.urls + [
+    path('financial-reports/assets/', FinancialAssets.as_view()),
+    path('financial-reports/assets/<uuid:asset_id>/depreciation/', FinancialAssetDepreciation.as_view()),
     path('financial-reports/statements/', FinancialStatements.as_view()),
     path('financial-reports/accounts/', FinancialAccounts.as_view()),
     path('financial-reports/journals/', FinancialJournals.as_view()),

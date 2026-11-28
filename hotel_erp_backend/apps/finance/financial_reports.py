@@ -8,6 +8,8 @@ from rest_framework.response import Response
 from .ledger_models import LedgerAccount, LedgerJournal
 from .ledger_service import REPORT_ROLES, _scope, create_account, prepare_journal, approve_journal, post_journal, posted_statements
 from .statement_engine import KINDS, ACTIVITIES
+from .asset_models import CATEGORY_CHOICES
+from .asset_service import register_asset, prepare_depreciation, asset_report
 
 
 class FinancialAccess(BasePermission):
@@ -127,6 +129,8 @@ class FinancialJournals(FinancialBase):
         data.is_valid(raise_exception=True)
         values = dict(data.validated_data)
         values['lines'] = [(l['account'], l['debit'], l['credit']) for l in values['lines']]
+        if values['source_key'].strip().lower().startswith('asset-dep:'):
+            raise ValidationError('Reserved depreciation source reference.')
         journal = checked(prepare_journal, **scope, **values)
         return Response({'id': str(journal.pk), 'status': journal.status}, status=201)
 
@@ -139,3 +143,46 @@ class FinancialJournalAction(FinancialBase):
         journal = checked(approve_journal if action == 'approve' else post_journal,
                           **scope, journal_id=journal_id)
         return Response({'id': str(journal.pk), 'status': journal.status})
+
+
+class AssetInput(serializers.Serializer):
+    tag = serializers.CharField(max_length=80)
+    name = serializers.CharField(max_length=150)
+    category = serializers.ChoiceField(choices=CATEGORY_CHOICES)
+    opening_date = serializers.DateField()
+    cost = serializers.DecimalField(max_digits=18, decimal_places=2, min_value=0)
+    opening_depreciation = serializers.DecimalField(max_digits=18, decimal_places=2, min_value=0)
+    residual_value = serializers.DecimalField(max_digits=18, decimal_places=2, min_value=0)
+    annual_rate = serializers.DecimalField(max_digits=5, decimal_places=2, min_value=0, max_value=100)
+    cost_account = serializers.CharField(max_length=50)
+    accumulated_account = serializers.CharField(max_length=50)
+    expense_account = serializers.CharField(max_length=50)
+    evidence = serializers.CharField(max_length=4000)
+
+
+class FinancialAssets(FinancialBase):
+    def get(self, request):
+        scope = self.scope(request)
+        data = DateInput(data=request.query_params)
+        data.is_valid(raise_exception=True)
+        return Response(checked(asset_report, **scope, **data.validated_data))
+
+    def post(self, request):
+        scope = self.scope(request)
+        data = AssetInput(data=request.data)
+        data.is_valid(raise_exception=True)
+        asset = checked(register_asset, **scope, **data.validated_data)
+        return Response({'id': str(asset.pk), 'tag': asset.tag}, status=201)
+
+
+class DepreciationInput(serializers.Serializer):
+    period_end = serializers.DateField()
+
+
+class FinancialAssetDepreciation(FinancialBase):
+    def post(self, request, asset_id):
+        scope = self.scope(request)
+        data = DepreciationInput(data=request.data)
+        data.is_valid(raise_exception=True)
+        entry = checked(prepare_depreciation, **scope, asset_id=asset_id, **data.validated_data)
+        return Response({'id': str(entry.pk), 'journal': str(entry.journal_id), 'amount': str(entry.amount)}, status=201)

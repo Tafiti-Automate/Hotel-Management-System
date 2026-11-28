@@ -13,7 +13,11 @@ const sections = [
   ['accounts', 'Chart of Accounts'],
   ['journals', 'Financial Reconciliation / Journal Register'],
   ['fixed_assets', 'Fixed Assets Depreciation Schedule'],
+  ['asset_register', 'Fixed Asset Register'],
+  ['asset_reconciliation', 'Fixed Asset Reconciliation'],
 ]
+const assetCategories = [["land","Land & Lease","0"],["building","Buildings","4"],["computers","Computers","20"],["furniture","Furniture","20"],["gym","Gym Equipment","5"],["vehicles","Vehicles","20"],["others","Others","20"],["generators","Generators","10"],["laundry","Laundry Equipment","10"],["kitchen","Kitchen Appliances","10"],["refrigeration","Refrigeration & ACs","10"],["machinery","Machinery","10"],["telephone","Telephones & Mobile Sets","10"],["playground","Playground Equipment","10"],["office","Office Equipment","10"]] as const
+const assetSections = ['fixed_assets', 'asset_register', 'asset_reconciliation']
 const today = () => new Date().toISOString().slice(0, 10)
 
 export default function FinancialReports() {
@@ -25,6 +29,7 @@ export default function FinancialReports() {
   const [data, setData] = useState<Record<string, Row[]>>({})
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [asset, setAsset] = useState({tag:'', name:'', category:'land', opening_date:'', cost:'', opening_depreciation:'0', residual_value:'0', annual_rate:'0', cost_account:'', accumulated_account:'', expense_account:'', evidence:''})
   const [account, setAccount] = useState({ code: '', name: '', kind: 'asset', report_group: '', is_cash: false })
   const [journal, setJournal] = useState({ source_key: '', business_date: today(), evidence: '', is_opening: false, cash_activity: '' })
   const [lines, setLines] = useState([{ account: '', debit: '0', credit: '0' }, { account: '', debit: '0', credit: '0' }])
@@ -36,7 +41,9 @@ export default function FinancialReports() {
       if (section === 'accounts' || section === 'journals') {
         const records = await readBackendRecords(root + '/' + section)
         setData({ [section]: records })
-      } else if (section !== 'fixed_assets') {
+      } else if (assetSections.includes(section)) {
+        setData(await readBackendPayload(root + '/assets?start=' + encodeURIComponent(start) + '&end=' + encodeURIComponent(end)))
+      } else {
         setData(await readBackendPayload(root + '/statements?start=' + encodeURIComponent(start) + '&end=' + encodeURIComponent(end)))
       }
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
@@ -62,12 +69,19 @@ export default function FinancialReports() {
       <label>Report <select value={section} disabled={busy} onChange={e=>{setSection(e.target.value);setData({});setError('')}}>{sections.map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
       <label>From <input type="date" value={start} onChange={e=>{setStart(e.target.value);setData({})}} /></label>
       <label>To <input type="date" value={end} onChange={e=>{setEnd(e.target.value);setData({})}} /></label>
-      <button type="button" disabled={busy || section==='fixed_assets'} onClick={()=>void refresh()}>{busy?'Loading…':'Load report'}</button>
+      <button type="button" disabled={busy} onClick={()=>void refresh()}>{busy?'Loading…':'Load report'}</button>
       <button type="button" disabled={!rows.length||busy} onClick={exportCsv}>Export CSV</button>
       <button type="button" disabled={!rows.length||busy} onClick={()=>window.print()}>Print</button>
     </div>
     {error && <p role="alert">{error}</p>}
-    {section==='fixed_assets' && <p role="status">Fixed asset register and depreciation posting are not yet enabled. No figures are inferred from the sample schedule.</p>}
+    {section==='asset_register' && role==='financial manager' && <form className="space-y-2" onSubmit={e=>{e.preventDefault();void mutate(()=>createBackendRecord(root+'/assets',asset))}}>
+      <h2 className="font-semibold">Register verified opening asset</h2>
+      <label>Category <select value={asset.category} onChange={e=>{const c=assetCategories.find(r=>r[0]===e.target.value);setAsset({...asset,category:e.target.value,annual_rate:c?.[2]||'0'})}}>{assetCategories.map(([k,n,r])=><option key={k} value={k}>{n} ({r}%)</option>)}</select></label>
+      {(['tag','name','opening_date','cost','opening_depreciation','residual_value','annual_rate','cost_account','accumulated_account','expense_account','evidence'] as const).map(k=><label key={k} className="block">{k.replace(/_/g,' ')} <input required value={asset[k]} type={k==='opening_date'?'date':'text'} onChange={e=>setAsset({...asset,[k]:e.target.value})}/></label>)}
+      <p>Confirm the policy and account codes. Registration does not create an opening journal.</p>
+      <button disabled={busy}>Register asset</button>
+    </form>}
+    {section==='asset_register' && rows.length>0 && <div className="space-y-2"><h2>Prepare next monthly depreciation</h2>{rows.map(r=><div key={String(r.id)}>{cell(r.tag)} · {cell(r.next_month_end)} <button disabled={busy||Boolean(r.pending_journal)} onClick={()=>void mutate(()=>runBackendAction(root+'/assets',String(r.id),'depreciation',{period_end:String(r.next_month_end)}))}>{r.pending_journal?'Journal pending':'Prepare depreciation'}</button></div>)}<p>Approve and post prepared depreciation in the journal register.</p></div>}
     {section==='accounts' && role==='financial manager' && <form className="space-y-2" onSubmit={e=>{e.preventDefault();void mutate(()=>createBackendRecord(root+'/accounts',account))}}>
       <h2 className="font-semibold">Create ledger account</h2>
       <label>Code <input required maxLength={50} value={account.code} onChange={e=>setAccount({...account,code:e.target.value})}/></label>
@@ -90,6 +104,6 @@ export default function FinancialReports() {
     </form>}
     {data.notices?.map((n,i)=><p key={i}>{cell(n.label)}</p>)}
     {rows.length>0 && <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr>{columns.map(c=><th key={c} className="text-left p-2">{c.replace(/_/g,' ')}</th>)}{section==='journals'&&<th>Action</th>}</tr></thead><tbody>{rows.map((r,i)=><tr key={String(r.id||i)} className="border-b">{columns.map(c=><td key={c} className="p-2 tabular-nums">{cell(r[c])}</td>)}{section==='journals'&&<td>{role==='general manager'&&r.status==='draft'&&<button disabled={busy} onClick={()=>void mutate(()=>runBackendAction(root+'/journals',String(r.id),'approve'))}>Approve</button>}{role==='financial manager'&&r.status==='approved'&&<button disabled={busy} onClick={()=>void mutate(()=>runBackendAction(root+'/journals',String(r.id),'post'))}>Post</button>}</td>}</tr>)}</tbody></table></div>}
-    {!rows.length && !busy && section!=='fixed_assets' && <p>No report loaded or no records available.</p>}
+    {!rows.length && !busy && <p>No report loaded or no records available.</p>}
   </section>
 }
