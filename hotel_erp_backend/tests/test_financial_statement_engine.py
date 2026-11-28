@@ -39,6 +39,11 @@ class StatementEngineTests(unittest.TestCase):
         self.assertEqual(result['balance_sheet']['difference'], D('0'))
         self.assertEqual(result['cash_flow_direct']['closing_cash'], D('850'))
         self.assertEqual(result['cash_flow_direct']['difference'], D('0'))
+        indirect = result['cash_flow_indirect']
+        self.assertEqual(indirect['operating'], D('150'))
+        self.assertEqual(indirect['account_adjustments'][('asset','Equipment','dep','Accumulated depreciation')], D('30'))
+        self.assertEqual(indirect['difference'], D('0'))
+        self.assertEqual(indirect['cash_reconciliation_difference'], D('0'))
         self.assertEqual(result['balance_sheet']['groups'][('asset', 'Equipment')], D('270'))
 
     def test_rejects_duplicate(self):

@@ -10,6 +10,7 @@ from .ledger_service import REPORT_ROLES, _scope, create_account, prepare_journa
 from .statement_engine import KINDS, ACTIVITIES
 from .asset_models import CATEGORY_CHOICES
 from .asset_service import register_asset, prepare_depreciation, asset_report
+from .reconciliation_service import prepare_reconciliation, confirm_reconciliation, reconciliation_register
 
 
 class FinancialAccess(BasePermission):
@@ -65,7 +66,20 @@ def groups(items):
 
 def report_rows(result):
     pl, bs, cf = (result[k] for k in ('profit_and_loss', 'balance_sheet', 'cash_flow_direct'))
+    indirect = result['cash_flow_indirect']
+    indirect_rows = [row('Net profit / loss', indirect['net_profit'], 'Operating activities'),
+        row('Remove investing / financing profit or loss', indirect['nonoperating_profit_adjustment'], 'Operating adjustments')]
+    indirect_rows += [row(f'{code} — {name} ({group})', amount, 'Noncash balance movements')
+                      for (kind,group,code,name),amount in sorted(indirect['account_adjustments'].items()) if amount]
+    indirect_rows += [row(label, indirect[key], section) for key,label,section in (
+        ('operating','Net cash from operating activities','Operating activities'),
+        ('investing','Net cash from investing activities','Investing activities'),
+        ('financing','Net cash from financing activities','Financing activities'),
+        ('net_movement','Net change in cash','Cash reconciliation'),('opening_cash','Opening cash','Cash reconciliation'),
+        ('closing_cash','Closing cash','Cash reconciliation'),('difference','Difference from direct operating cash','Validation'),
+        ('cash_reconciliation_difference','Cash reconciliation difference','Validation'))]
     return {
+        'cash_flow_indirect': indirect_rows,
         'profit_and_loss': groups(pl['groups']) + [row('Net profit / loss', pl['net_profit'])],
         'balance_sheet': groups(bs['groups']) + [
             row('Prior unclosed earnings', bs['prior_unclosed_earnings'], 'equity'),
@@ -75,7 +89,7 @@ def report_rows(result):
         'cash_flow': [row(k.replace('_', ' ').title(), v) for k, v in cf.items()],
         'trial_balance': [{'label': k, 'debit': str(v['debit']), 'credit': str(v['credit'])}
                           for k, v in sorted(result['trial_balance'].items())],
-        'notices': [{'label': 'Provisional: posted internal journals only. Operational sources and opening balances must be reconciled. Cash flow uses direct classification; indirect format is not yet available.'}],
+        'notices': [{'label': 'Provisional: posted internal journals only. Operational sources and opening balances must be reconciled. Indirect cash flow bridges profit through actual noncash account movements; review working-capital and noncash classifications before final presentation.'}],
     }
 
 
@@ -186,3 +200,32 @@ class FinancialAssetDepreciation(FinancialBase):
         data.is_valid(raise_exception=True)
         entry = checked(prepare_depreciation, **scope, asset_id=asset_id, **data.validated_data)
         return Response({'id': str(entry.pk), 'journal': str(entry.journal_id), 'amount': str(entry.amount)}, status=201)
+
+
+class ReconciliationInput(serializers.Serializer):
+    account_code = serializers.CharField(max_length=50)
+    as_of = serializers.DateField()
+    source_type = serializers.ChoiceField(choices=['bank','cash','inventory','supplier','customer','payroll','other'])
+    source_balance = serializers.DecimalField(max_digits=22, decimal_places=2)
+    evidence = serializers.CharField(max_length=4000)
+
+
+class FinancialReconciliations(FinancialBase):
+    def get(self, request):
+        scope = self.scope(request)
+        data = DateInput(data=request.query_params)
+        data.is_valid(raise_exception=True)
+        return Response(checked(reconciliation_register, **scope, **data.validated_data))
+
+    def post(self, request):
+        scope = self.scope(request)
+        data = ReconciliationInput(data=request.data)
+        data.is_valid(raise_exception=True)
+        entry = checked(prepare_reconciliation, **scope, **data.validated_data)
+        return Response({'id':str(entry.pk)}, status=201)
+
+
+class FinancialReconciliationConfirm(FinancialBase):
+    def post(self, request, entry_id):
+        entry = checked(confirm_reconciliation, **self.scope(request), entry_id=entry_id)
+        return Response({'id':str(entry.pk),'status':'confirmed'})

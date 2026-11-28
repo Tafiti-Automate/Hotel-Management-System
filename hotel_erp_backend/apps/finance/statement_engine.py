@@ -73,6 +73,8 @@ def calculate_statements(accounts: Iterable[Account], journals: Iterable[Journal
     ending = opening.copy()
     movement = opening.copy()
     activities = {kind: ZERO for kind in ACTIVITIES - {'internal_transfer'}}
+    indirect_groups = {}
+    indirect_nonoperating_profit = ZERO
     seen = set()
     opening_count = 0
     for journal in journals:
@@ -92,6 +94,8 @@ def calculate_statements(accounts: Iterable[Account], journals: Iterable[Journal
         elif journal.business_date == opening_date:
             raise ValueError('Opening date is reserved for the opening balance journal.')
         debit = credit = cash_delta = ZERO
+        journal_profit = ZERO
+        journal_balances = {}
         for line in journal.lines:
             if line.account not in chart:
                 raise ValueError('Unknown account.')
@@ -111,6 +115,11 @@ def calculate_statements(accounts: Iterable[Account], journals: Iterable[Journal
                 movement[line.account] += delta
             if account.is_cash:
                 cash_delta += delta
+            elif account.kind in {'revenue', 'expense'}:
+                journal_profit -= delta
+            else:
+                key = (account.kind, account.report_group, account.code, account.name)
+                journal_balances[key] = journal_balances.get(key, ZERO) + delta
         if debit != credit:
             raise ValueError('Unbalanced journal.')
         if not journal.is_opening:
@@ -122,6 +131,14 @@ def calculate_statements(accounts: Iterable[Account], journals: Iterable[Journal
                 raise ValueError('Zero net cash movement must not be classified as a cash flow.')
             if journal.business_date >= start and cash_delta:
                 activities[journal.cash_activity] += cash_delta
+            if journal.business_date >= start:
+                if journal.cash_activity in {'investing', 'financing'}:
+                    indirect_nonoperating_profit -= journal_profit
+                else:
+                    # Preserve exact account identity; do not guess that an asset is working capital.
+                    # Noncash and operating entries are bridged by their actual noncash balance movements.
+                    for key, value in journal_balances.items():
+                        indirect_groups[key] = indirect_groups.get(key, ZERO) - value
     if opening_count != 1:
         raise ValueError('Exactly one verified opening-balance journal is required.')
 
@@ -150,6 +167,7 @@ def calculate_statements(accounts: Iterable[Account], journals: Iterable[Journal
     equity += prior_profit + period_profit
     opening_cash, closing_cash = cash(opening), cash(ending)
     cash_movement = sum(activities.values(), ZERO)
+    bridge = period_profit + indirect_nonoperating_profit + sum(indirect_groups.values(), ZERO)
     return {
         'status': 'arithmetic_only_not_certified',
         'trial_balance': {code: {'debit': max(v, ZERO), 'credit': max(-v, ZERO)} for code, v in ending.items()},
@@ -158,6 +176,11 @@ def calculate_statements(accounts: Iterable[Account], journals: Iterable[Journal
                           'assets': assets, 'liabilities': liabilities, 'equity': equity,
                           'prior_unclosed_earnings': prior_profit, 'period_profit': period_profit,
                           'difference': assets - liabilities - equity},
+        'cash_flow_indirect': {'net_profit': period_profit, 'nonoperating_profit_adjustment': indirect_nonoperating_profit,
+            'account_adjustments': indirect_groups, 'operating': bridge, 'investing': activities['investing'],
+            'financing': activities['financing'], 'net_movement': bridge + activities['investing'] + activities['financing'],
+            'opening_cash': opening_cash, 'closing_cash': closing_cash, 'difference': bridge - activities['operating'],
+            'cash_reconciliation_difference': closing_cash - opening_cash - bridge - activities['investing'] - activities['financing']},
         'cash_flow_direct': {'opening_cash': opening_cash, **activities, 'net_movement': cash_movement,
                              'closing_cash': closing_cash,
                              'difference': closing_cash - opening_cash - cash_movement},

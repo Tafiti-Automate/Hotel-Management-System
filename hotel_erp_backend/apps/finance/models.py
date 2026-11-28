@@ -12,6 +12,7 @@ from core.validators.quantities import validate_non_negative_decimal, validate_p
 
 from .ledger_models import LedgerAccount, LedgerJournal, LedgerLine  # noqa: F401
 from .asset_models import FixedAsset, AssetDepreciation  # noqa: F401
+from .reconciliation_models import AccountReconciliation  # noqa: F401
 
 
 class PaymentMethod(BaseModel):

@@ -8,10 +8,12 @@ const root = 'financial-reports'
 const sections = [
   ['profit_and_loss', 'Profit and Loss Statement'],
   ['balance_sheet', 'Balance Sheet'],
+  ['cash_flow_indirect', 'Cash Flow Statement (indirect)'],
   ['cash_flow', 'Cash Flow Statement (direct classification)'],
   ['trial_balance', 'Trial Balance'],
   ['accounts', 'Chart of Accounts'],
-  ['journals', 'Financial Reconciliation / Journal Register'],
+  ['journals', 'Journal Register'],
+  ['reconciliations', 'Financial Reconciliation'],
   ['fixed_assets', 'Fixed Assets Depreciation Schedule'],
   ['asset_register', 'Fixed Asset Register'],
   ['asset_reconciliation', 'Fixed Asset Reconciliation'],
@@ -30,6 +32,7 @@ export default function FinancialReports() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [asset, setAsset] = useState({tag:'', name:'', category:'land', opening_date:'', cost:'', opening_depreciation:'0', residual_value:'0', annual_rate:'0', cost_account:'', accumulated_account:'', expense_account:'', evidence:''})
+  const [recon, setRecon] = useState({account_code:'',as_of:today(),source_type:'bank',source_balance:'',evidence:''})
   const [account, setAccount] = useState({ code: '', name: '', kind: 'asset', report_group: '', is_cash: false })
   const [journal, setJournal] = useState({ source_key: '', business_date: today(), evidence: '', is_opening: false, cash_activity: '' })
   const [lines, setLines] = useState([{ account: '', debit: '0', credit: '0' }, { account: '', debit: '0', credit: '0' }])
@@ -41,6 +44,8 @@ export default function FinancialReports() {
       if (section === 'accounts' || section === 'journals') {
         const records = await readBackendRecords(root + '/' + section)
         setData({ [section]: records })
+      } else if (section === 'reconciliations') {
+        setData({reconciliations: await readBackendRecords(root + '/reconciliations?start=' + encodeURIComponent(start) + '&end=' + encodeURIComponent(end))})
       } else if (assetSections.includes(section)) {
         setData(await readBackendPayload(root + '/assets?start=' + encodeURIComponent(start) + '&end=' + encodeURIComponent(end)))
       } else {
@@ -82,6 +87,17 @@ export default function FinancialReports() {
       <button disabled={busy}>Register asset</button>
     </form>}
     {section==='asset_register' && rows.length>0 && <div className="space-y-2"><h2>Prepare next monthly depreciation</h2>{rows.map(r=><div key={String(r.id)}>{cell(r.tag)} · {cell(r.next_month_end)} <button disabled={busy||Boolean(r.pending_journal)} onClick={()=>void mutate(()=>runBackendAction(root+'/assets',String(r.id),'depreciation',{period_end:String(r.next_month_end)}))}>{r.pending_journal?'Journal pending':'Prepare depreciation'}</button></div>)}<p>Approve and post prepared depreciation in the journal register.</p></div>}
+    {section==='reconciliations' && ['cost controller','financial manager'].includes(role) && <form className="space-y-2" onSubmit={e=>{e.preventDefault();void mutate(()=>createBackendRecord(root+'/reconciliations',recon))}}>
+      <h2 className="font-semibold">Prepare reconciliation evidence</h2>
+      <label>Ledger account code <input required value={recon.account_code} onChange={e=>setRecon({...recon,account_code:e.target.value})}/></label>
+      <label>As of <input required type="date" value={recon.as_of} onChange={e=>setRecon({...recon,as_of:e.target.value})}/></label>
+      <label>Source <select value={recon.source_type} onChange={e=>setRecon({...recon,source_type:e.target.value})}>{['bank','cash','inventory','supplier','customer','payroll','other'].map(k=><option key={k}>{k}</option>)}</select></label>
+      <label>Supporting balance <input required inputMode="decimal" value={recon.source_balance} onChange={e=>setRecon({...recon,source_balance:e.target.value})}/></label>
+      <label>Evidence / statement reference <textarea required value={recon.evidence} onChange={e=>setRecon({...recon,evidence:e.target.value})}/></label>
+      <p>Use positive normal balances (debit for assets, credit for liabilities and equity). Evidence is manually entered and must be independently checked.</p>
+      <button disabled={busy}>Prepare reconciliation</button>
+    </form>}
+    {section==='reconciliations' && rows.some(r=>r.status==='awaiting_review') && ['financial manager','general manager'].includes(role) && <div className="space-y-2"><h2>Awaiting independent confirmation</h2>{rows.filter(r=>r.status==='awaiting_review').map(r=><div key={String(r.id)}>{cell(r.account)} · {cell(r.as_of)} · {cell(r.evidence)} <button disabled={busy} onClick={()=>void mutate(()=>runBackendAction(root+'/reconciliations',String(r.id),'confirm'))}>Confirm evidence reviewed</button></div>)}</div>}
     {section==='accounts' && role==='financial manager' && <form className="space-y-2" onSubmit={e=>{e.preventDefault();void mutate(()=>createBackendRecord(root+'/accounts',account))}}>
       <h2 className="font-semibold">Create ledger account</h2>
       <label>Code <input required maxLength={50} value={account.code} onChange={e=>setAccount({...account,code:e.target.value})}/></label>
@@ -103,7 +119,7 @@ export default function FinancialReports() {
       <button disabled={busy}>Prepare journal</button>
     </form>}
     {data.notices?.map((n,i)=><p key={i}>{cell(n.label)}</p>)}
-    {rows.length>0 && <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr>{columns.map(c=><th key={c} className="text-left p-2">{c.replace(/_/g,' ')}</th>)}{section==='journals'&&<th>Action</th>}</tr></thead><tbody>{rows.map((r,i)=><tr key={String(r.id||i)} className="border-b">{columns.map(c=><td key={c} className="p-2 tabular-nums">{cell(r[c])}</td>)}{section==='journals'&&<td>{role==='general manager'&&r.status==='draft'&&<button disabled={busy} onClick={()=>void mutate(()=>runBackendAction(root+'/journals',String(r.id),'approve'))}>Approve</button>}{role==='financial manager'&&r.status==='approved'&&<button disabled={busy} onClick={()=>void mutate(()=>runBackendAction(root+'/journals',String(r.id),'post'))}>Post</button>}</td>}</tr>)}</tbody></table></div>}
+    {rows.length>0 && <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr>{columns.map(c=><th key={c} className="text-left p-2">{c.replace(/_/g,' ')}</th>)}{section==='journals'&&<th>Action</th>}</tr></thead><tbody>{rows.map((r,i)=><tr key={String(r.id||i)} className="border-b">{columns.map(c=><td key={c} className="p-2 tabular-nums">{c==='status' ? <span className={['variance','stale'].includes(String(r[c]))?'text-red-600 dark:text-red-400':r[c]==='confirmed'?'text-green-700 dark:text-green-400':''}>{cell(r[c]).replace(/_/g,' ')}</span> : cell(r[c])}</td>)}{section==='journals'&&<td>{role==='general manager'&&r.status==='draft'&&<button disabled={busy} onClick={()=>void mutate(()=>runBackendAction(root+'/journals',String(r.id),'approve'))}>Approve</button>}{role==='financial manager'&&r.status==='approved'&&<button disabled={busy} onClick={()=>void mutate(()=>runBackendAction(root+'/journals',String(r.id),'post'))}>Post</button>}</td>}</tr>)}</tbody></table></div>}
     {!rows.length && !busy && <p>No report loaded or no records available.</p>}
   </section>
 }
